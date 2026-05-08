@@ -1,0 +1,15 @@
+---
+description: After engine or web changes, verify with tests, logs, and Browser MCP smoke.
+alwaysApply: true
+---
+
+# Realm — verify before handing off
+
+When finishing a slice that touches **`engine/`** or **`web/`**:
+
+1. **Tests** — From `engine/` with `PYTHONPATH` set to the engine root (or `pytest` via project config), run `python -m pytest tests -v --tb=short` and report pass/fail counts.
+2. **Run** — If the change affects the solo loop or API/UI, ensure **FastAPI** (`uvicorn realm.api:app` on **8000**) and **Next** (`npm run dev` in `web/` on **3000**) are running or start them; note any startup errors from terminal output.
+3. **Logs** — Skim **browser console** (`browser_console_messages`) and **uvicorn** logs for errors after interactions; mention anything material.
+4. **Browser MCP** — Use **cursor-ide-browser** (`@Browser`): `browser_tabs` → `browser_navigate` to `http://localhost:3000` → wait until the main UI is up → `browser_lock` → `browser_snapshot` (interactive) → click at least **Advance tick** and one other primary action (e.g. claim cell, **Buy 1 grain**, or **Save snapshot**) → fresh snapshot if state changed → `browser_unlock`.
+
+Do not claim the UI works without either Browser confirmation or explicit user confirmation if the MCP is unavailable.
