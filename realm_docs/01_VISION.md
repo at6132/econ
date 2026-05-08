@@ -48,7 +48,7 @@ All of these are valid. All of these emerge from the same primitives.
 ## The platforms
 
 - **Web (primary).** Where serious play happens. Building, programming, contracts, deep market analysis. Desktop-first UI.
-- **Mobile companion (iOS + Android via React Native).** Bloomberg-terminal-in-your-pocket. Monitor markets, accept/reject offers, get alerts, execute quick trades, message contacts. **Not a full game client** — deliberately scoped to "managing your empire on the go."
+- **Mobile companion (iOS + Android via React Native).** A **compact command HUD** for your empire: watch markets, accept/reject offers, alerts, quick trades, messages. Same *density* as desktop where it matters, tuned for thumbs and short sessions. **Not a full game client** — deliberately scoped to "managing your empire on the go."
 
 ## The end-state vision (5–10 years out)
 

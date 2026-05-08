@@ -26,7 +26,7 @@ The fantasy: **"I am a tycoon in a world where the economy is real."** Not numbe
 - **Public persistent multiplayer (later).** Real humans, slow real-time (1 game-day = 1 real-hour), permanent reputation, never pauses.
 - **Competitive seasons / closed cohorts** sit between the two — time-boxed, hand-curated, used for balance testing and marketing.
 
-Mobile is a **companion, not a port** — Bloomberg-terminal-in-your-pocket for monitoring and quick actions, never the place you build a factory.
+Mobile is a **companion, not a port** — a **compact HUD** for monitoring markets, contracts, and alerts plus quick actions, never the place you build a factory.
 
 ---
 
@@ -46,7 +46,7 @@ The full design lives in `realm_docs/`. Read in order; each builds on the previo
 | 07 | [`realm_docs/07_USER_CODE_LAYER.md`](realm_docs/07_USER_CODE_LAYER.md) | Lua services / SaaS-in-the-game (Phase 4+) |
 | 08 | [`realm_docs/08_FIRST_HOUR_SCRIPT.md`](realm_docs/08_FIRST_HOUR_SCRIPT.md) | Minute-by-minute new-player walkthrough |
 | 09 | [`realm_docs/09_TECH_ARCHITECTURE.md`](realm_docs/09_TECH_ARCHITECTURE.md) | Stack, services, data model, scaling |
-| 10 | [`realm_docs/10_UX_AND_2D_VISUAL_LANG.md`](realm_docs/10_UX_AND_2D_VISUAL_LANG.md) | The five core views, mobile flows |
+| 10 | [`realm_docs/10_UX_AND_2D_VISUAL_LANG.md`](realm_docs/10_UX_AND_2D_VISUAL_LANG.md) | 2D game-shell UX, five core views, Frontier, mobile flows |
 | 11 | [`realm_docs/11_BOOTSTRAP_AND_SEEDING.md`](realm_docs/11_BOOTSTRAP_AND_SEEDING.md) | How to avoid the empty-economy problem |
 | 12 | [`realm_docs/12_RISKS_AND_MITIGATIONS.md`](realm_docs/12_RISKS_AND_MITIGATIONS.md) | What can kill the project |
 | 13 | [`realm_docs/13_PHASED_TODO.md`](realm_docs/13_PHASED_TODO.md) | **The build plan and phase test gates — operational doc** |

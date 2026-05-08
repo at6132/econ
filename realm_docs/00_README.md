@@ -25,7 +25,7 @@ This is the complete planning bundle for the game we've been designing. Read in 
 | 07 | `07_USER_CODE_LAYER.md` | The programmable services / SaaS-in-the-game system | The unlock that makes Realm different from every other sim. |
 | 08 | `08_FIRST_HOUR_SCRIPT.md` | Minute-by-minute walkthrough of a new player's first hour | If this isn't fun on paper, the game isn't ready to build. |
 | 09 | `09_TECH_ARCHITECTURE.md` | Stack, services, data model, scaling plan | How the thing actually gets built. |
-| 10 | `10_UX_AND_2D_VISUAL_LANG.md` | World map, plot view, market view, mobile companion | What players actually see. |
+| 10 | `10_UX_AND_2D_VISUAL_LANG.md` | 2D game shell, five core views, Frontier layout, mobile companion | What players actually see. |
 | 11 | `11_BOOTSTRAP_AND_SEEDING.md` | How to avoid the empty-economy problem at launch | A specific risk that has killed every game like this. |
 | 12 | `12_RISKS_AND_MITIGATIONS.md` | Honest list of what can kill this project and what to do about it | Re-read every quarter. |
 | 13 | `13_PHASED_TODO.md` | **The build plan with phases, checklists, and per-phase test gates** | Your operational doc. This is what you work from day-to-day. |

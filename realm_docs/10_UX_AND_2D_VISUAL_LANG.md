@@ -1,24 +1,41 @@
 # 10 — UX and 2D Visual Language
 
-> Realm is 2D forever. The visual job is to communicate dense economic information legibly, not to be cinematic. Real traders use Bloomberg terminals, not 3D dioramas. Lean into that.
+> Realm is 2D forever. The job is to make **a serious economy legible inside a game shell** — the map and world read as a *place*, while markets, contracts, and production stay dense and honest. No 3D walkable dioramas; yes to chunky retro chrome, overlays, and screens full of real numbers.
 
 ---
 
 ## The visual concept
 
+**North star:** late‑90s / early‑00s **strategy and browser sim** — full-viewport **world stage**, menus and command panels as **frames and pop-overs**, not a single spreadsheet canvas. Think **OGame / Travian / Civ-style map ownership** plus **RPG command menus** and **sim depth**, not a bank terminal skin.
+
 Aesthetic reference points:
-- **Bloomberg terminals** — dense, dark, information-rich
-- **Factorio map view** — schematic 2D of complex production
-- **OGame / Travian** — old-school browser sims with clear plot grids
-- **Dwarf Fortress maps** — abstract symbols communicating real meaning
-- **Modern stock-trading apps** (Robinhood, IBKR) — clean charts and order books
-- **Disco Elysium-style UI** for messages and contracts — text-rich, atmospheric
+- **OGame / Travian / tribal conquest sims** — map as the emotional center; chrome around it
+- **Factorio map view** — schematic clarity for production (later: plot schematic mode)
+- **Classic RPG / tactics menus** — framed panels, readable hierarchy, keyboard-friendly lists
+- **Dwarf Fortress maps** — abstract tiles that encode real state
+- **Disco Elysium-style panels** — text-rich contracts and events when we need atmosphere
+- **Order books and charts** — still present where they matter, but **framed as in-world instruments** (bazaar tape, ledger), not a wholesale copy of retail broker apps
 
-Realm is a **workspace, not a scene.** Players have multiple panels open. They arrange their UI like a trader arranges monitors.
+Realm is a **command deck around a world**, not a floating 3D scene. Players live in **map + panels**: the middle stays geographic; commerce, logistics, and pacts open as **slides, tabs, or overlays**.
 
-**Color language:** dark mode default. High contrast. Color-coded everything (terrain, asset categories, profit/loss, alerts).
+**Color language:** dark, high contrast. Terrain and status are color-coded (ownership, alerts, profit/loss). Accent color (gold / cyan) sells the “game HUD” without hiding data.
 
-**Typography:** monospace for numbers, sans-serif for text. Real-world finance UI conventions.
+**Typography:** **Pixel or bitmap-flavored UI faces** for the shell (e.g. bitmap monospace / game fonts); numbers stay tabular and scannable. Readability beats novelty — avoid decorative fonts for long copy.
+
+---
+
+## Solo prototype (Frontier) — canonical layout
+
+The **Next.js Frontier client** is the first expression of this language:
+
+- **Full-viewport** shell; **no max-width “dashboard card.”**
+- **Top strip:** brand, tick / seed / cash, primary actions (e.g. end turn), briefing.
+- **Second row:** grouped **menu chips** (field ops, commerce, realm) — deep navigation without stealing map space.
+- **Center:** **World stage** — animated atmosphere (sky / aurora / light) **behind** the map; **terrain grid** scales with viewport; tick feedback via subtle full-map flash.
+- **Command panel:** **slide-in sheet** from the right (or stacked sheet on narrow viewports) for plot detail, market, logistics, contracts, log, atlas/roadmap.
+- **Atlas:** explicit **live / stub / planned** feature map — honesty about what the engine does.
+
+Later clients (Pixi map, multiplayer) should **preserve** this hierarchy: **world dominant**, **tools peripheral**, **density preserved**.
 
 ---
 
@@ -41,7 +58,7 @@ What you see when you zoom out. The whole continent / globe.
 - Hover any plot → quick stats tooltip
 - Filter overlays: "show me where copper is being produced," "show me unowned plots," "show me current commodity prices by region"
 
-**Visual reference:** Imagine Civilization V's strategic view, but 2D and trading-focused.
+**Visual reference:** Civilization-style **strategic map** as the default emotional anchor — 2D, trading- and production-aware.
 
 ### 2. Plot View
 
@@ -59,16 +76,14 @@ A small Factorio-style tile view of your plot's physical layout. Pretty but not 
 
 ### 3. Market View
 
-The trader's home. Where order books, prices, charts, and your portfolio live.
+Where order books, prices, charts, and your positions live — **presented as a bazaar / ledger screen** inside the same shell (tabs or overlays), not a separate “finance app” identity.
 
-**Layout:**
-- Top: asset selector (commodity, equity, currency)
-- Left: order book (bids and asks, depth)
-- Center: price chart (candlesticks + volume)
-- Right: your position in this asset, your open orders, related news
-- Bottom: trade history
+**Layout (conceptual):**
+- Asset selector (commodity, equity, currency)
+- Order book (bids and asks, depth) + chart + your open interest
+- Trade history
 
-**This is the screen players will spend the most time on.** It needs to feel like a real trading platform.
+**This is still where heavy market players camp** — but the **frame** stays game-native (borders, panels, optional CRT/light scanline restraint), not a clone of a retail broker UI.
 
 ### 4. Business / Contract View
 
@@ -80,7 +95,7 @@ Your books. Your active contracts. Your customers and suppliers.
 - Outgoing / incoming proposals
 - Reputation summary
 
-Sober, spreadsheet-y, dense. This is the CEO's desk.
+**Tone:** ledgers and charters — dense tables are fine; **wrap them in the same RPG/strategy panel chrome** as the rest of the UI.
 
 ### 5. Communications View
 
@@ -95,16 +110,19 @@ Messages, news, events.
 ## Cross-cutting UI elements
 
 ### Top bar
-Always visible: clock (game-time + real-time), cash balance, net worth, current alerts.
+Always visible: clock (game-time + real-time), cash balance, net worth, current alerts, **primary world actions** (e.g. advance time when the design uses manual turns).
 
-### Side dock
-Quick-launchers for each of the five views. One click to swap.
+### Menu strip / dock
+Grouped launchers for map-adjacent workflows (territory, commerce, realm systems). Prefer **one-click depth** over burying everything in a hamburger.
 
-### Command palette
-Cmd-K opens a fuzzy search: "go to copper market," "send message to Margaux," "show my contracts," "place order for iron." Power-user feature, but reveals the depth of the system.
+### Command palette (later)
+Cmd-K fuzzy search remains a power-user affordance: "go to copper market," "show my contracts," etc.
 
 ### Notifications
 Subtle. Bottom-right toaster for non-urgent. Full alert dialog for time-critical (contract about to expire, large price move, urgent message from rival).
+
+### Command panel / overlays
+Detail work happens in **sliding panels, modals, or docked sheets** that **do not shrink the world to a postage stamp** — the map stays the psychological “main screen” where possible.
 
 ---
 
@@ -152,57 +170,57 @@ Designed around five flows. Each must complete in <30 seconds.
 ## UI design principles
 
 ### 1. Information density over decoration
-Show 5x more data than a typical game UI. Players will be looking at numbers, not characters.
+Show more data than a casual mobile game. Players read **numbers and relationships**; decoration supports legibility, not fantasy tourism.
 
 ### 2. Real-time feels alive
-Subtle animation on changes (a price flickering green/red on update). Avoids flashing chaos but communicates that the world is moving.
+Subtle animation on changes (prices, ticks, production complete). **Tick / turn feedback** on the map (flash, ripple, or icon pulse) reinforces that the world moved.
 
 ### 3. Every number is a hyperlink
-A price → click to open market. A player name → click to open profile. A contract ID → click to open contract. Connect the graph.
+A price → market. A player name → profile. A contract ID → contract. Connect the graph.
 
 ### 4. Keyboard shortcuts everywhere
-Power users will live in shortcuts. Discoverable via the command palette and hover-tooltips.
+Power users live in shortcuts. Discoverable via command palette and tooltips.
 
 ### 5. Customizable layouts
 Players can resize panels, dock them, save layouts. (Defer fully customizable layouts to v2 if needed; v1 ships with sensible defaults.)
 
 ### 6. Always show consequences
-Before every action, show: "If you do this, here's what happens. Here's the cost. Here's the expected outcome." No surprises.
+Before every action: cost, effect, expected outcome. No surprises.
 
 ### 7. Failure should be informative
-If an action is rejected, say *why*. "Insufficient capital." "Plot does not have a harbor." "Counterparty's reputation is below your minimum threshold." Players learn from rejection.
+Rejections explain *why* so players learn.
 
 ---
 
 ## What the game is NOT going to look like
 
-- Not a 3D walkable world
-- Not Stardew Valley's pretty pixel art
-- Not RuneScape's medieval avatars
-- Not isometric tycoon (Tycoon games like Two-Point Hospital)
-- Not Crusader Kings' portrait-driven UI
+- Not a **3D walkable** factory or city (no first-person management)
+- Not **generic mobile tycoon** pastel UI that hides the economy
+- Not **isometric dollhouse** as the primary metaphor (Factorio-style *schematic* inside a plot is fine)
+- Not **CK-style portrait theater** as the main screen
 
-If a designer ever pitches "wouldn't it be cool if you could walk around your factory in 3D" — politely decline. The visual language is screens-of-information, not scenes.
+**Allowed and encouraged:** intentional **2D tile maps**, **retro / pixel HUD chrome**, **full-screen world stage**, **stacked menus** — as long as **conservation and clarity** stay king.
 
 ---
 
 ## A note on accessibility
 
-A trading-style UI is inherently dense. Accessibility matters:
+Dense UIs need care:
 - Color is *never the only* indicator (icon + color, not just color)
 - Text is resizable
 - Keyboard-only navigation works everywhere
 - Screen-reader compatible labels
 - High-contrast mode
 - Configurable tick rate / pause for cognitive load
+- Respect **`prefers-reduced-motion`** for atmospheric animations
 
 ---
 
 ## Build order
 
-- **Phase 1:** ugly, functional UIs. Tables. Buttons. No styling. Get the loop working.
-- **Phase 2:** apply the visual language. Pixi.js for the world map. Charts via Recharts.
-- **Phase 3:** polish. Animation. Custom layouts.
+- **Phase 1:** functional loop + **Frontier** shell (HTML/CSS map stage, command panel, honest atlas). Tables and actions first.
+- **Phase 2:** Pixi.js map where needed; charts via Recharts; strengthen motion and feedback.
+- **Phase 3:** polish, layout saves, richer atmosphere (within performance budgets).
 - **Mobile:** parallel track once Phase 2 is done.
 
-Don't waste polish on UI before the mechanics are validated. **A beautiful UI on a broken game is wasted work.**
+Don't waste polish on UI before the mechanics are validated. **A beautiful shell on a broken economy is wasted work.**

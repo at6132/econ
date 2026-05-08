@@ -44,7 +44,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle scanlines + vignette (CRT-ish, not Bloomberg) */
+/* Subtle scanlines + vignette (CRT-ish atmosphere) */
 body::before {
   content: "";
   position: fixed;
