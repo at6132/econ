@@ -1,8 +1,12 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
+import { OnboardingModal } from "./OnboardingModal";
+
+const ONBOARD_KEY = "realm_frontier_onboard_v2";
 
 type PlotDto = {
   id: string;
@@ -103,25 +107,41 @@ type WorldDto = {
   hire_catalog?: HireCatalogRow[];
 };
 
+type TabId = "world" | "market" | "logistics" | "contracts" | "log";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "world", label: "Plot" },
+  { id: "market", label: "Market" },
+  { id: "logistics", label: "Logistics" },
+  { id: "contracts", label: "Contracts" },
+  { id: "log", label: "Log" },
+];
+
 const TERRAIN_COLOR: Record<string, string> = {
-  plains: "#6b8e4e",
-  forest: "#2d5a27",
-  mountain: "#6d6d7a",
-  desert: "#c4a35a",
-  tundra: "#a8c4d4",
-  swamp: "#3d5c40",
-  water_shallow: "#3a6ea5",
-  water_deep: "#1e3a5f",
+  plains: "#5a8f4a",
+  forest: "#1e4a22",
+  mountain: "#5a5d6b",
+  desert: "#c9a85c",
+  tundra: "#8fb8d4",
+  swamp: "#2d4a32",
+  water_shallow: "#2d6ba8",
+  water_deep: "#0f2847",
 };
 
 function terrainColor(t: string): string {
-  return TERRAIN_COLOR[t] ?? "#444";
+  return TERRAIN_COLOR[t] ?? "#3d4450";
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return <h3 className="realm-section-title">{children}</h3>;
 }
 
 export default function HomePage() {
   const [world, setWorld] = useState<WorldDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<TabId>("world");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [shipFrom, setShipFrom] = useState("p-0-0");
   const [shipTo, setShipTo] = useState("p-1-0");
@@ -147,6 +167,16 @@ export default function HomePage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && !localStorage.getItem(ONBOARD_KEY)) {
+        setOnboardingOpen(true);
+      }
+    } catch {
+      setOnboardingOpen(true);
+    }
+  }, []);
+
   const grid = useMemo(() => {
     if (!world?.plots.length) return { w: 0, h: 0, cells: [] as PlotDto[][], cellPx: 36 };
     const w = Math.max(...world.plots.map((p) => p.x)) + 1;
@@ -157,7 +187,7 @@ export default function HomePage() {
     for (const p of world.plots) {
       cells[p.y][p.x] = p;
     }
-    const cellPx = Math.min(36, Math.max(18, Math.floor(520 / Math.max(w, 1))));
+    const cellPx = Math.min(34, Math.max(17, Math.floor(560 / Math.max(w, 1))));
     return { w, h, cells, cellPx };
   }, [world]);
 
@@ -178,6 +208,11 @@ export default function HomePage() {
     return [...ev].reverse();
   }, [world?.event_log]);
 
+  const playerCash =
+    world?.balances_cents["cash:player"] != null
+      ? (world.balances_cents["cash:player"] / 100).toFixed(2)
+      : "—";
+
   async function tick() {
     setBusy(true);
     setError(null);
@@ -196,9 +231,7 @@ export default function HomePage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/claim`, {
-        method: "POST",
-      });
+      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/claim`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
     } catch (e) {
@@ -212,9 +245,7 @@ export default function HomePage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/survey`, {
-        method: "POST",
-      });
+      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/survey`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
     } catch (e) {
@@ -229,10 +260,9 @@ export default function HomePage() {
     setError(null);
     try {
       const q = new URLSearchParams({ recipe_id: recipeId });
-      const r = await fetch(
-        `/api/engine/plots/${encodeURIComponent(plotId)}/produce?${q.toString()}`,
-        { method: "POST" },
-      );
+      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/produce?${q.toString()}`, {
+        method: "POST",
+      });
       if (!r.ok) throw new Error(await r.text());
       await load();
     } catch (e) {
@@ -419,358 +449,444 @@ export default function HomePage() {
     if (!p.owner) {
       void claim(p.id);
       setSelectedPlotId(p.id);
+      setTab("world");
       return;
     }
     if (p.owner === "player") {
       if (!p.surveyed) {
         void survey(p.id);
+        setTab("world");
         return;
       }
       setSelectedPlotId(p.id);
+      setTab("world");
     }
   }
 
-  const playerCash =
-    world?.balances_cents["cash:player"] != null
-      ? (world.balances_cents["cash:player"] / 100).toFixed(2)
-      : "—";
+  function replayBriefing() {
+    try {
+      localStorage.removeItem(ONBOARD_KEY);
+    } catch {
+      /* ignore */
+    }
+    setOnboardingOpen(true);
+  }
 
   return (
-    <main style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: "0 0 8px", fontSize: 22 }}>Realm — Frontier (Phase 1)</h1>
-        <p style={{ margin: 0, opacity: 0.85, fontSize: 14 }}>
-          Engine on port 8000 · <code>npm run dev</code> here · claim → survey → start recipe →
-          advance ticks until outputs land.
-        </p>
-      </header>
+    <main className="realm-shell">
+      <OnboardingModal open={onboardingOpen} onComplete={() => setOnboardingOpen(false)} />
 
       {error ? (
-        <p style={{ color: "#f85149", marginBottom: 12 }} role="alert">
+        <div className="realm-error" role="alert">
           {error}
-        </p>
+        </div>
       ) : null}
 
       {world ? (
-        <section style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 13, marginBottom: 8, opacity: 0.9 }}>
-              Tick <strong>{world.tick}</strong> · Seed <strong>{world.seed}</strong> · Cash{" "}
-              <strong>${playerCash}</strong>
+        <>
+          <header className="realm-hud">
+            <div className="realm-brand">
+              <div className="realm-brand__title">Realm</div>
+              <div className="realm-brand__sub">Frontier · solo prototype</div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)`,
-                gap: 2,
-                border: "1px solid #30363d",
-                padding: 4,
-                background: "#161b22",
-                maxWidth: "100%",
-                overflowX: "auto",
-              }}
-            >
-              {grid.cells.flatMap((row, y) =>
-                row.map((p, x) => {
-                  const sel = p && selectedPlotId === p.id;
-                  return (
-                    <button
-                      key={p?.id ?? `cell-${x}-${y}`}
-                      type="button"
-                      title={`${p?.id ?? ""} ${p?.terrain ?? ""} owner=${p?.owner ?? "none"} surveyed=${p?.surveyed}`}
-                      disabled={busy || !p}
-                      onClick={() => p && onPlotClick(p)}
-                      style={{
-                        width: grid.cellPx,
-                        height: grid.cellPx,
-                        border: sel ? "2px solid #f0883e" : p?.owner ? "2px solid #58a6ff" : "1px solid #21262d",
-                        background: p ? terrainColor(p.terrain) : "#000",
-                        cursor: busy ? "wait" : "pointer",
-                        padding: 0,
-                        outline: sel ? "1px solid #f0883e" : undefined,
-                      }}
-                    />
-                  );
-                }),
-              )}
+            <div className="realm-stat-row">
+              <motion.span
+                key={world.tick}
+                className="realm-pill"
+                initial={{ scale: 1.04, opacity: 0.7 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 500, damping: 28 }}
+              >
+                Tick <strong>{world.tick}</strong>
+              </motion.span>
+              <span className="realm-pill">
+                Seed <strong>{world.seed}</strong>
+              </span>
+              <span className="realm-pill">
+                Cash <strong>${playerCash}</strong>
+              </span>
+              <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={replayBriefing}>
+                Briefing
+              </button>
             </div>
-            <p style={{ fontSize: 12, opacity: 0.75, marginTop: 8, maxWidth: 440 }}>
-              Empty cell: claim. Your unsurveyed plot: survey ($500). Your surveyed plot: select
-              (orange). Then start a recipe in the panel.
-            </p>
-            <button type="button" disabled={busy} onClick={() => void tick()} style={{ marginTop: 8 }}>
-              Advance tick
-            </button>
-          </div>
+          </header>
 
-          <aside style={{ flex: 1, minWidth: 280, fontSize: 13 }}>
-            <h2 style={{ fontSize: 15, marginTop: 0 }}>Plot & production</h2>
-            {selectedPlot ? (
-              <div style={{ marginBottom: 12 }}>
-                <div>
-                  <strong>{selectedPlot.id}</strong> · {selectedPlot.terrain}{" "}
-                  {selectedPlot.surveyed ? "(surveyed)" : "(not surveyed)"}
+          <div className="realm-deck">
+            <div>
+              <div className="realm-map-frame">
+                <div
+                  className="realm-map-grid"
+                  style={{ gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)` }}
+                >
+                  {grid.cells.flatMap((row, y) =>
+                    row.map((p, x) => {
+                      const sel = p && selectedPlotId === p.id;
+                      const mine = p?.owner === "player";
+                      const cls = ["realm-map-cell", sel ? "realm-map-cell--sel" : "", mine ? "realm-map-cell--mine" : ""]
+                        .filter(Boolean)
+                        .join(" ");
+                      return (
+                        <motion.button
+                          key={p?.id ?? `cell-${x}-${y}`}
+                          type="button"
+                          className={cls}
+                          title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
+                          disabled={busy || !p}
+                          onClick={() => p && onPlotClick(p)}
+                          layout
+                          whileTap={{ scale: 0.94 }}
+                          style={{
+                            width: grid.cellPx,
+                            height: grid.cellPx,
+                            background: p ? terrainColor(p.terrain) : "#000",
+                          }}
+                        />
+                      );
+                    }),
+                  )}
                 </div>
-                {selectedPlot.owner === "player" && selectedPlot.surveyed ? (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Recipes</div>
-                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                      {(world.recipes ?? []).map((r) => (
-                        <li key={r.id} style={{ marginBottom: 6 }}>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void produce(selectedPlot.id, r.id)}
-                            style={{ width: "100%", textAlign: "left" }}
-                          >
-                            {r.display_name} ({r.duration_ticks} ticks, labor $
-                            {(r.labor_cents / 100).toFixed(2)})
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    <div style={{ fontWeight: 600, margin: "12px 0 6px" }}>Build (stub, this plot)</div>
-                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                      {(world.building_catalog ?? []).map((b) => (
-                        <li key={b.id} style={{ marginBottom: 6 }}>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void buildOnSelectedPlot(b.id)}
-                            style={{ width: "100%", textAlign: "left" }}
-                          >
-                            {b.label} (${(b.cost_cents / 100).toFixed(2)})
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    {buildingsHere.length > 0 ? (
-                      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
-                        <div style={{ fontWeight: 600 }}>Built here</div>
-                        <ul style={{ paddingLeft: 18, margin: "4px 0 0" }}>
-                          {buildingsHere.map((x, i) => (
-                            <li key={`${x.building_id}-${i}`}>
-                              {x.label} ({x.building_id})
+                <p className="realm-map-hint">
+                  Click empty land to <strong>claim</strong>. Your plot: first click <strong>surveys</strong> ($500),
+                  then select to <strong>produce</strong> or <strong>build</strong>. Orange ring = selected.
+                </p>
+                <div className="realm-cta-row">
+                  <motion.button
+                    type="button"
+                    className="realm-btn realm-btn--primary"
+                    disabled={busy}
+                    onClick={() => void tick()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Advance tick
+                  </motion.button>
+                  <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void marketBuyGrain()}>
+                    Buy 1 grain
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="realm-panel-wrap">
+              <nav className="realm-tabs" aria-label="Command panels">
+                {TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`realm-tab${tab === t.id ? " realm-tab--active" : ""}`}
+                    onClick={() => setTab(t.id)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </nav>
+
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  role="tabpanel"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.2 }}
+                  className="realm-panel-scroll"
+                  style={{ flex: 1, minHeight: 0 }}
+                >
+                  {tab === "world" ? (
+                    <>
+                      <SectionTitle>Selected plot</SectionTitle>
+                      {selectedPlot ? (
+                        <div className="realm-help" style={{ marginBottom: 12 }}>
+                          <strong style={{ color: "var(--realm-text)" }}>{selectedPlot.id}</strong> · {selectedPlot.terrain}{" "}
+                          · {selectedPlot.surveyed ? "surveyed" : "not surveyed"}
+                          {selectedPlot.owner === "player" && selectedPlot.surveyed && selectedPlot.subsurface ? (
+                            <span style={{ display: "block", marginTop: 6, fontSize: 11 }}>
+                              Subsurface grades (ore/clay/coal):{" "}
+                              {Object.entries(selectedPlot.subsurface)
+                                .map(([k, v]) => `${k.replace(/_grade/, "")} ${(v as number).toFixed(2)}`)
+                                .join(" · ")}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="realm-help">Select a plot you own (surveyed) to manage production.</p>
+                      )}
+
+                      {selectedPlot?.owner === "player" && selectedPlot.surveyed ? (
+                        <>
+                          <SectionTitle>Recipes</SectionTitle>
+                          <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
+                            {(world.recipes ?? []).map((r) => (
+                              <li key={r.id} style={{ marginBottom: 6 }}>
+                                <button
+                                  type="button"
+                                  className="realm-list-btn"
+                                  disabled={busy}
+                                  onClick={() => void produce(selectedPlot.id, r.id)}
+                                >
+                                  {r.display_name} · {r.duration_ticks} ticks · labor ${(r.labor_cents / 100).toFixed(2)}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          <SectionTitle>Build on this plot</SectionTitle>
+                          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                            {(world.building_catalog ?? []).map((b) => (
+                              <li key={b.id} style={{ marginBottom: 6 }}>
+                                <button
+                                  type="button"
+                                  className="realm-list-btn"
+                                  disabled={busy}
+                                  onClick={() => void buildOnSelectedPlot(b.id)}
+                                >
+                                  {b.label} · ${(b.cost_cents / 100).toFixed(2)}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          {buildingsHere.length > 0 ? (
+                            <>
+                              <SectionTitle>Built here</SectionTitle>
+                              <ul className="realm-help" style={{ marginTop: 4 }}>
+                                {buildingsHere.map((x, i) => (
+                                  <li key={`${x.building_id}-${i}`}>
+                                    {x.label} ({x.building_id})
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : null}
+                        </>
+                      ) : null}
+
+                      <SectionTitle>Active production</SectionTitle>
+                      {(world.active_production ?? []).length === 0 ? (
+                        <p className="realm-help">None running.</p>
+                      ) : (
+                        <ul className="realm-help" style={{ paddingLeft: 18, margin: 0 }}>
+                          {(world.active_production ?? []).map((a) => (
+                            <li key={a.run_id}>
+                              {a.plot_id} · {a.recipe_id} · {a.ticks_remaining} ticks left
                             </li>
                           ))}
                         </ul>
+                      )}
+
+                      <SectionTitle>Inventory (player)</SectionTitle>
+                      <table className="realm-table">
+                        <thead>
+                          <tr>
+                            <th>Material</th>
+                            <th style={{ textAlign: "right" }}>Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(playerInv)
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([k, v]) => (
+                              <tr key={k}>
+                                <td>{k}</td>
+                                <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)" }}>{v}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </>
+                  ) : null}
+
+                  {tab === "market" ? (
+                    <>
+                      <SectionTitle>Order book</SectionTitle>
+                      {(world.market_asks ?? []).length === 0 ? (
+                        <p className="realm-help">No open asks.</p>
+                      ) : (
+                        <table className="realm-table">
+                          <thead>
+                            <tr>
+                              <th>Mat</th>
+                              <th style={{ textAlign: "right" }}>Qty</th>
+                              <th style={{ textAlign: "right" }}>¢/u</th>
+                              <th>Seller</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(world.market_asks ?? []).map((a) => (
+                              <tr key={a.order_id}>
+                                <td>{a.material}</td>
+                                <td style={{ textAlign: "right" }}>{a.qty}</td>
+                                <td style={{ textAlign: "right" }}>{a.price_per_unit_cents}</td>
+                                <td>{a.party}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                      <SectionTitle>Market depth</SectionTitle>
+                      <div className="realm-chart-card">
+                        <MarketHistoryChart history={world.market_history ?? []} />
                       </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <p style={{ opacity: 0.8 }}>Select a surveyed plot you own.</p>
-            )}
+                      <SectionTitle>List for sale (player)</SectionTitle>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                        <label className="realm-label">
+                          material
+                          <input
+                            className="realm-input"
+                            value={sellMaterial}
+                            onChange={(e) => setSellMaterial(e.target.value)}
+                            style={{ width: 120 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          qty
+                          <input
+                            className="realm-input"
+                            value={sellQty}
+                            onChange={(e) => setSellQty(e.target.value)}
+                            style={{ width: 56 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          ¢/unit
+                          <input
+                            className="realm-input"
+                            value={sellPriceCents}
+                            onChange={(e) => setSellPriceCents(e.target.value)}
+                            style={{ width: 64 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void placeSellOrder()}>
+                          Place ask
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
 
-            <h3 style={{ fontSize: 14, marginBottom: 6 }}>Active production</h3>
-            {(world.active_production ?? []).length === 0 ? (
-              <p style={{ opacity: 0.7 }}>None</p>
-            ) : (
-              <ul style={{ paddingLeft: 18, margin: 0 }}>
-                {(world.active_production ?? []).map((a) => (
-                  <li key={a.run_id}>
-                    {a.plot_id} · {a.recipe_id} · {a.ticks_remaining} ticks left
-                  </li>
-                ))}
-              </ul>
-            )}
+                  {tab === "logistics" ? (
+                    <>
+                      <SectionTitle>In transit</SectionTitle>
+                      {(world.in_transit ?? []).length === 0 ? (
+                        <p className="realm-help">Nothing in flight.</p>
+                      ) : (
+                        <ul className="realm-help" style={{ paddingLeft: 18, margin: 0 }}>
+                          {(world.in_transit ?? []).map((s) => (
+                            <li key={s.id}>
+                              {s.material} ×{s.qty} → {s.dest_plot_id} · arrive tick {s.arrive_tick}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <SectionTitle>Ship goods</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Own both plots. Fee debits cash; goods arrive after distance-based ticks.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                        <label className="realm-label">
+                          from
+                          <input className="realm-input" value={shipFrom} onChange={(e) => setShipFrom(e.target.value)} />
+                        </label>
+                        <label className="realm-label">
+                          to
+                          <input className="realm-input" value={shipTo} onChange={(e) => setShipTo(e.target.value)} />
+                        </label>
+                        <label className="realm-label">
+                          material
+                          <input
+                            className="realm-input"
+                            value={shipMaterial}
+                            onChange={(e) => setShipMaterial(e.target.value)}
+                            style={{ width: 100 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          qty
+                          <input className="realm-input" value={shipQty} onChange={(e) => setShipQty(e.target.value)} style={{ width: 48 }} />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void shipGoods()}>
+                          Dispatch
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
 
-            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Inventory (player)</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #30363d" }}>Material</th>
-                  <th style={{ textAlign: "right", borderBottom: "1px solid #30363d" }}>Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(playerInv)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([k, v]) => (
-                    <tr key={k}>
-                      <td style={{ padding: "4px 0" }}>{k}</td>
-                      <td style={{ textAlign: "right" }}>{v}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                  {tab === "contracts" ? (
+                    <>
+                      <SectionTitle>Hire (employment stub)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Signing bonus creates an <code>employment</code> contract. Hires so far: {(world.stub_hires ?? []).length}
+                      </p>
+                      <ul style={{ listStyle: "none", padding: 0, margin: "0 0 16px" }}>
+                        {(world.hire_catalog ?? []).map((row) => (
+                          <li key={row.party} style={{ marginBottom: 6 }}>
+                            <button
+                              type="button"
+                              className="realm-list-btn"
+                              disabled={busy}
+                              onClick={() => void hireNpc(row.party, row.suggested_signing_cents)}
+                            >
+                              {row.role} — ${(row.suggested_signing_cents / 100).toFixed(2)} bonus
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <SectionTitle>Supply contract (stub)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 8 }}>
+                        Last id: {lastContractId ?? "—"} · open supply:{" "}
+                        {(world.contracts ?? []).filter((c) => (c as { status?: string; kind?: string }).status === "open" && (c as { kind?: string }).kind !== "employment").length}
+                      </p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void proposeContract()}>
+                          Propose with vendor
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void honorContract()}>
+                          Honor last
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
 
-            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Hire (employment stub)</h3>
-            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
-              Signing bonus creates an <code>employment</code> contract row (no output yet). Hires:{" "}
-              {(world.stub_hires ?? []).length}
-            </p>
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
-              {(world.hire_catalog ?? []).map((row) => (
-                <li key={row.party} style={{ marginBottom: 6 }}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void hireNpc(row.party, row.suggested_signing_cents)}
-                    style={{ width: "100%", textAlign: "left", fontSize: 12 }}
-                  >
-                    {row.role} — ${(row.suggested_signing_cents / 100).toFixed(2)} bonus
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Order book (limit asks)</h3>
-            {(world.market_asks ?? []).length === 0 ? (
-              <p style={{ opacity: 0.7 }}>No open asks</p>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 8 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: "left", borderBottom: "1px solid #30363d" }}>Mat</th>
-                    <th style={{ textAlign: "right", borderBottom: "1px solid #30363d" }}>Qty</th>
-                    <th style={{ textAlign: "right", borderBottom: "1px solid #30363d" }}>¢/u</th>
-                    <th style={{ textAlign: "left", borderBottom: "1px solid #30363d" }}>Seller</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(world.market_asks ?? []).map((a) => (
-                    <tr key={a.order_id}>
-                      <td style={{ padding: "4px 0" }}>{a.material}</td>
-                      <td style={{ textAlign: "right" }}>{a.qty}</td>
-                      <td style={{ textAlign: "right" }}>{a.price_per_unit_cents}</td>
-                      <td style={{ paddingLeft: 6 }}>{a.party}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            <button type="button" disabled={busy} onClick={() => void marketBuyGrain()} style={{ marginRight: 8 }}>
-              Buy 1 grain (player)
-            </button>
-
-            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Market depth (best ask ¢/u)</h3>
-            <div style={{ width: "100%", maxWidth: 640, marginBottom: 10 }}>
-              <MarketHistoryChart history={world.market_history ?? []} />
+                  {tab === "log" ? (
+                    <>
+                      <SectionTitle>Action log</SectionTitle>
+                      <div className="realm-log">
+                        {eventLogReversed.length === 0 ? (
+                          <span className="realm-help">No events yet.</span>
+                        ) : (
+                          eventLogReversed.map((e, i) => (
+                            <div key={i} className="realm-log-line">
+                              <span style={{ opacity: 0.5 }}>t{e.tick}</span>{" "}
+                              <span style={{ opacity: 0.65 }}>[{e.kind}]</span> {e.message}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <SectionTitle>Persistence</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Writes <code>saves/realm_dev.sqlite</code> at repo root (path resolved from the engine package).
+                      </p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void persistenceSave()}>
+                          Save snapshot
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void persistenceLoad()}>
+                          Load snapshot
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </motion.div>
+              </AnimatePresence>
             </div>
-
-            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>List for sale (player)</h3>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                material
-                <input
-                  value={sellMaterial}
-                  onChange={(e) => setSellMaterial(e.target.value)}
-                  style={{ width: 100, padding: 4 }}
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                qty
-                <input
-                  value={sellQty}
-                  onChange={(e) => setSellQty(e.target.value)}
-                  style={{ width: 48, padding: 4 }}
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                ¢/unit
-                <input
-                  value={sellPriceCents}
-                  onChange={(e) => setSellPriceCents(e.target.value)}
-                  style={{ width: 56, padding: 4 }}
-                />
-              </label>
-              <button type="button" disabled={busy} onClick={() => void placeSellOrder()} style={{ alignSelf: "flex-end" }}>
-                Place ask
-              </button>
-            </div>
-
-            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>In transit</h3>
-            {(world.in_transit ?? []).length === 0 ? (
-              <p style={{ opacity: 0.7 }}>None</p>
-            ) : (
-              <ul style={{ paddingLeft: 18, margin: "0 0 8px", fontSize: 12 }}>
-                {(world.in_transit ?? []).map((s) => (
-                  <li key={s.id}>
-                    {s.material} ×{s.qty} → {s.dest_plot_id} (arr. tick {s.arrive_tick})
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Ship (player, owned plots)</h3>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                from
-                <input value={shipFrom} onChange={(e) => setShipFrom(e.target.value)} style={{ width: 72, padding: 4 }} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                to
-                <input value={shipTo} onChange={(e) => setShipTo(e.target.value)} style={{ width: 72, padding: 4 }} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                material
-                <input
-                  value={shipMaterial}
-                  onChange={(e) => setShipMaterial(e.target.value)}
-                  style={{ width: 88, padding: 4 }}
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
-                qty
-                <input value={shipQty} onChange={(e) => setShipQty(e.target.value)} style={{ width: 40, padding: 4 }} />
-              </label>
-              <button type="button" disabled={busy} onClick={() => void shipGoods()} style={{ alignSelf: "flex-end" }}>
-                Dispatch
-              </button>
-            </div>
-
-            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Save / load (SQLite)</h3>
-            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
-              Writes <code>saves/realm_dev.sqlite</code> at repo root (from engine cwd).
-            </p>
-            <button type="button" disabled={busy} onClick={() => void persistenceSave()} style={{ marginRight: 8 }}>
-              Save snapshot
-            </button>
-            <button type="button" disabled={busy} onClick={() => void persistenceLoad()}>
-              Load snapshot
-            </button>
-
-            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Contracts (stub)</h3>
-            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
-              Last id: {lastContractId ?? "—"} · open contracts: {(world.contracts ?? []).filter((c) => (c as { status?: string }).status === "open").length}
-            </p>
-            <button type="button" disabled={busy} onClick={() => void proposeContract()} style={{ marginRight: 8 }}>
-              Propose with vendor
-            </button>
-            <button type="button" disabled={busy} onClick={() => void honorContract()}>
-              Honor last
-            </button>
-
-            <h3 style={{ fontSize: 14, marginTop: 18, marginBottom: 6 }}>Action log</h3>
-            <div
-              style={{
-                maxHeight: 220,
-                overflowY: "auto",
-                border: "1px solid #30363d",
-                borderRadius: 4,
-                padding: 8,
-                fontSize: 11,
-                fontFamily: "ui-monospace, monospace",
-                background: "#0d1117",
-              }}
-            >
-              {eventLogReversed.length === 0 ? (
-                <span style={{ opacity: 0.6 }}>No events yet.</span>
-              ) : (
-                eventLogReversed.map((e, i) => (
-                  <div key={i} style={{ marginBottom: 6, lineHeight: 1.35 }}>
-                    <span style={{ opacity: 0.55 }}>t{e.tick}</span>{" "}
-                    <span style={{ opacity: 0.75 }}>[{e.kind}]</span> {e.message}
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
-        </section>
+          </div>
+        </>
       ) : (
-        <p>Loading world…</p>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="realm-help"
+          style={{ fontSize: 15, padding: 24, textAlign: "center" }}
+        >
+          Loading world…
+        </motion.p>
       )}
     </main>
   );

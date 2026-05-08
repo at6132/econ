@@ -30,7 +30,7 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
 
   if (data.length < 1) {
     return (
-      <p style={{ margin: 0, opacity: 0.7, fontSize: 12 }}>
+      <p className="realm-help" style={{ margin: 0 }}>
         No market snapshots yet. Advance ticks to record best ask prices.
       </p>
     );
@@ -39,10 +39,28 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-        <XAxis dataKey="tick" tick={{ fontSize: 10 }} />
-        <YAxis tick={{ fontSize: 10 }} width={36} domain={["auto", "auto"]} />
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <XAxis
+          dataKey="tick"
+          tick={{ fontSize: 10, fill: "#9db0c4" }}
+          stroke="rgba(120,160,200,0.25)"
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: "#9db0c4" }}
+          width={36}
+          domain={["auto", "auto"]}
+          stroke="rgba(120,160,200,0.25)"
+        />
+        <Tooltip
+          contentStyle={{
+            background: "#111822",
+            border: "1px solid rgba(120,160,200,0.25)",
+            borderRadius: 10,
+            fontSize: 12,
+            color: "#e8f0f8",
+          }}
+          labelStyle={{ color: "#6b7d92" }}
+        />
+        <Legend wrapperStyle={{ fontSize: 11, color: "#9db0c4" }} />
         {SERIES.map((m, i) => (
           <Line
             key={m}
