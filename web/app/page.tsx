@@ -1,12 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
 import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
-import { GameSidebar } from "./GameSidebar";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
+import { FrontierTopNav } from "./FrontierTopNav";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 
@@ -151,6 +151,9 @@ export default function HomePage() {
   const [sellQty, setSellQty] = useState("1");
   const [sellPriceCents, setSellPriceCents] = useState("500");
   const [lastContractId, setLastContractId] = useState<string | null>(null);
+  const [commandOpen, setCommandOpen] = useState(true);
+  const mapViewportRef = useRef<HTMLDivElement>(null);
+  const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
 
   const load = useCallback(async () => {
     setError(null);
@@ -177,6 +180,19 @@ export default function HomePage() {
     }
   }, []);
 
+  useEffect(() => {
+    const el = mapViewportRef.current;
+    if (!el) return;
+    const apply = () => {
+      const r = el.getBoundingClientRect();
+      setViewportPx({ w: Math.max(80, r.width), h: Math.max(80, r.height) });
+    };
+    apply();
+    const ro = new ResizeObserver(() => apply());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [world]);
+
   const grid = useMemo(() => {
     if (!world?.plots.length) return { w: 0, h: 0, cells: [] as PlotDto[][], cellPx: 36 };
     const w = Math.max(...world.plots.map((p) => p.x)) + 1;
@@ -187,9 +203,15 @@ export default function HomePage() {
     for (const p of world.plots) {
       cells[p.y][p.x] = p;
     }
-    const cellPx = Math.min(34, Math.max(17, Math.floor(560 / Math.max(w, 1))));
+    const gap = 2;
+    const pad = 20;
+    const innerW = Math.max(60, viewportPx.w - pad * 2);
+    const innerH = Math.max(60, viewportPx.h - pad * 2);
+    const cw = (innerW - gap * Math.max(0, w - 1)) / Math.max(1, w);
+    const ch = (innerH - gap * Math.max(0, h - 1)) / Math.max(1, h);
+    const cellPx = Math.floor(Math.max(14, Math.min(88, Math.min(cw, ch))));
     return { w, h, cells, cellPx };
-  }, [world]);
+  }, [world, viewportPx]);
 
   const selectedPlot = useMemo(
     () => world?.plots.find((p) => p.id === selectedPlotId) ?? null,
@@ -473,7 +495,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="realm-shell">
+    <main className="realm-shell realm-app">
       <OnboardingModal open={onboardingOpen} onComplete={() => setOnboardingOpen(false)} />
 
       {error ? (
@@ -484,95 +506,132 @@ export default function HomePage() {
 
       {world ? (
         <>
-          <header className="realm-hud">
+          <header className="realm-top-strip">
+            <div className="realm-top-strip__hud">
               <div className="realm-brand">
-              <div className="realm-brand__title">Realm</div>
-              <div className="realm-brand__sub">Frontier · solo build</div>
+                <div className="realm-brand__title">Realm</div>
+                <div className="realm-brand__sub">Frontier · solo build</div>
+              </div>
+              <div className="realm-stat-row">
+                <motion.span
+                  key={world.tick}
+                  className="realm-pill"
+                  initial={{ scale: 1.04, opacity: 0.7 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                >
+                  Tick <strong>{world.tick}</strong>
+                </motion.span>
+                <span className="realm-pill">
+                  Seed <strong>{world.seed}</strong>
+                </span>
+                <span className="realm-pill">
+                  Cash <strong>${playerCash}</strong>
+                </span>
+                <motion.button
+                  type="button"
+                  className="realm-btn realm-btn--primary realm-btn--sm"
+                  disabled={busy}
+                  onClick={() => void tick()}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  End turn
+                </motion.button>
+                <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" disabled={busy} onClick={() => void marketBuyGrain()}>
+                  Buy 1 grain
+                </button>
+                <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={() => setCommandOpen((o) => !o)}>
+                  {commandOpen ? "Hide command" : "Command"}
+                </button>
+                <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={replayBriefing}>
+                  Briefing
+                </button>
+              </div>
             </div>
-            <div className="realm-stat-row">
-              <motion.span
-                key={world.tick}
-                className="realm-pill"
-                initial={{ scale: 1.04, opacity: 0.7 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 500, damping: 28 }}
-              >
-                Tick <strong>{world.tick}</strong>
-              </motion.span>
-              <span className="realm-pill">
-                Seed <strong>{world.seed}</strong>
-              </span>
-              <span className="realm-pill">
-                Cash <strong>${playerCash}</strong>
-              </span>
-              <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={replayBriefing}>
-                Briefing
-              </button>
-            </div>
+            <FrontierTopNav
+              active={tab}
+              onSelect={(t) => {
+                setTab(t);
+                setCommandOpen(true);
+              }}
+            />
           </header>
 
-          <div className="realm-game-layout">
-            <GameSidebar active={tab} onSelect={setTab} />
-            <div className="realm-playfield">
-            <div>
-              <div className="realm-map-frame">
-                <div
-                  className="realm-map-grid"
-                  style={{ gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)` }}
-                >
-                  {grid.cells.flatMap((row, y) =>
-                    row.map((p, x) => {
-                      const sel = p && selectedPlotId === p.id;
-                      const mine = p?.owner === "player";
-                      const cls = ["realm-map-cell", sel ? "realm-map-cell--sel" : "", mine ? "realm-map-cell--mine" : ""]
-                        .filter(Boolean)
-                        .join(" ");
-                      return (
-                        <motion.button
-                          key={p?.id ?? `cell-${x}-${y}`}
-                          type="button"
-                          className={cls}
-                          title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
-                          disabled={busy || !p}
-                          onClick={() => p && onPlotClick(p)}
-                          layout
-                          whileTap={{ scale: 0.94 }}
-                          style={{
-                            width: grid.cellPx,
-                            height: grid.cellPx,
-                            background: p ? terrainColor(p.terrain) : "#000",
-                          }}
-                        />
-                      );
-                    }),
-                  )}
-                </div>
-                <p className="realm-map-hint">
-                  Empty tile = <strong>claim</strong>. Your tile again = <strong>survey</strong> (cash). Owned +
-                  surveyed = select to <strong>queue recipes</strong> or <strong>build</strong>. Gold ring = selected.
-                </p>
-                <div className="realm-cta-row">
-                  <motion.button
-                    type="button"
-                    className="realm-btn realm-btn--primary"
-                    disabled={busy}
-                    onClick={() => void tick()}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+          <div className="realm-world-main">
+            <div className="realm-world-stage">
+              <div className="realm-atmosphere" aria-hidden>
+                <div className="realm-atmosphere__sky" />
+                <div className="realm-atmosphere__aurora" />
+                <div className="realm-atmosphere__stars" />
+              </div>
+              <div ref={mapViewportRef} className="realm-map-viewport">
+                <div className="realm-map-frame realm-map-frame--hero">
+                  <motion.div
+                    key={world.tick}
+                    className="realm-tick-ripple"
+                    initial={{ opacity: 0.45 }}
+                    animate={{ opacity: 0 }}
+                    transition={{ duration: 0.55, ease: "easeOut" }}
+                  />
+                  <div
+                    className="realm-map-grid"
+                    style={{ gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)` }}
                   >
-                    End turn
-                  </motion.button>
-                  <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void marketBuyGrain()}>
-                    Buy 1 grain
-                  </button>
+                    {grid.cells.flatMap((row, y) =>
+                      row.map((p, x) => {
+                        const sel = p && selectedPlotId === p.id;
+                        const mine = p?.owner === "player";
+                        const cls = ["realm-map-cell", sel ? "realm-map-cell--sel" : "", mine ? "realm-map-cell--mine" : ""]
+                          .filter(Boolean)
+                          .join(" ");
+                        return (
+                          <motion.button
+                            key={p?.id ?? `cell-${x}-${y}`}
+                            type="button"
+                            className={cls}
+                            title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
+                            disabled={busy || !p}
+                            onClick={() => p && onPlotClick(p)}
+                            layout
+                            whileTap={{ scale: 0.94 }}
+                            style={{
+                              width: grid.cellPx,
+                              height: grid.cellPx,
+                              background: p ? terrainColor(p.terrain) : "#000",
+                            }}
+                          />
+                        );
+                      }),
+                    )}
+                  </div>
                 </div>
               </div>
+              <p className="realm-map-footnote">
+                Empty = <strong>claim</strong> · yours again = <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected
+              </p>
             </div>
 
-            <div className="realm-panel-wrap">
-              <div className="realm-panel-head" aria-live="polite">
-                {panelHeadline(tab)}
-              </div>
+            <AnimatePresence>
+              {commandOpen ? (
+                <motion.aside
+                  key="cmd"
+                  className="realm-panel-pop"
+                  role="complementary"
+                  aria-label="Command panel"
+                  initial={{ opacity: 0, x: 48 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 40 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                >
+                  <div className="realm-panel-pop__head">
+                    <span className="realm-panel-pop__title" aria-live="polite">
+                      {panelHeadline(tab)}
+                    </span>
+                    <button type="button" className="realm-panel-pop__close" onClick={() => setCommandOpen(false)} aria-label="Hide command panel">
+                      ×
+                    </button>
+                  </div>
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -912,8 +971,15 @@ export default function HomePage() {
                   ) : null}
                 </motion.div>
               </AnimatePresence>
-            </div>
-            </div>
+                </motion.aside>
+              ) : null}
+            </AnimatePresence>
+
+            {!commandOpen ? (
+              <button type="button" className="realm-panel-fab" onClick={() => setCommandOpen(true)}>
+                Command
+              </button>
+            ) : null}
           </div>
         </>
       ) : (

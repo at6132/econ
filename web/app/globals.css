@@ -79,16 +79,335 @@ body::after {
   padding: 14px 14px 40px;
 }
 
-.realm-hud {
+.realm-app.realm-shell {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.realm-app .realm-error {
+  margin: 8px 12px 0;
+}
+
+.realm-top-strip {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+  border-bottom: 3px solid #000;
+  background: linear-gradient(180deg, #1e1530 0%, #0c0612 100%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+.realm-top-strip__hud {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 16px;
-  margin-bottom: 12px;
-  padding: 12px 14px;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border-bottom: 2px dashed var(--realm-border);
+}
+
+.realm-top-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+  padding: 8px 14px 10px;
+  overflow-x: auto;
+}
+
+.realm-top-nav__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.realm-top-nav__group-label {
+  font-family: var(--realm-font-display);
+  font-size: 6px;
+  letter-spacing: 0.12em;
+  color: var(--realm-muted);
+  text-transform: uppercase;
+}
+
+.realm-top-nav__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.realm-top-nav__chip {
+  font-family: var(--realm-font);
+  font-size: 17px;
+  padding: 6px 10px;
+  border: 2px solid #000;
+  background: #2a1f3d;
+  color: var(--realm-dim);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+}
+
+.realm-top-nav__chip:hover {
+  filter: brightness(1.1);
+  color: var(--realm-text);
+}
+
+.realm-top-nav__chip--on {
+  background: #3d2d1a;
+  color: var(--realm-accent);
+  box-shadow:
+    2px 2px 0 #000,
+    inset 0 0 0 1px var(--realm-accent-dim);
+}
+
+.realm-world-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  position: relative;
+}
+
+.realm-world-stage {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.realm-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.realm-atmosphere__sky {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 100%, rgba(120, 60, 140, 0.35) 0%, transparent 55%),
+    linear-gradient(185deg, #1a0f32 0%, #0c0618 38%, #05030c 100%);
+  animation: realm-sky-shift 28s ease-in-out infinite alternate;
+}
+
+.realm-atmosphere__aurora {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    95deg,
+    transparent 20%,
+    rgba(110, 231, 255, 0.06) 40%,
+    rgba(255, 216, 74, 0.05) 55%,
+    transparent 75%
+  );
+  animation: realm-aurora-drift 18s linear infinite;
+  opacity: 0.85;
+}
+
+.realm-atmosphere__stars {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 70% 15%, rgba(255, 255, 255, 0.25), transparent),
+    radial-gradient(1px 1px at 40% 8%, rgba(255, 255, 255, 0.2), transparent),
+    radial-gradient(1px 1px at 88% 35%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1px 1px at 25% 40%, rgba(255, 255, 255, 0.15), transparent);
+  animation: realm-twinkle 7s ease-in-out infinite;
+}
+
+@keyframes realm-sky-shift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-2%, -1%) scale(1.03);
+  }
+}
+
+@keyframes realm-aurora-drift {
+  0% {
+    transform: translateX(-6%);
+  }
+  100% {
+    transform: translateX(6%);
+  }
+}
+
+@keyframes realm-twinkle {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .realm-atmosphere__sky,
+  .realm-atmosphere__aurora,
+  .realm-atmosphere__stars {
+    animation: none !important;
+  }
+}
+
+.realm-map-viewport {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px 44px;
+}
+
+.realm-map-frame--hero {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(40, 28, 64, 0.9) 0%, rgba(8, 4, 14, 0.95) 62%, #020105 100%);
+  border: 4px solid #000;
+  box-shadow:
+    var(--realm-shadow-out),
+    0 0 0 2px var(--realm-accent-dim),
+    inset 0 0 48px rgba(0, 0, 0, 0.45);
+}
+
+.realm-tick-ripple {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 216, 74, 0.35) 0%, transparent 55%);
+  mix-blend-mode: screen;
+}
+
+.realm-map-footnote {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  margin: 0;
+  padding: 8px 14px 10px;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--realm-dim);
+  background: linear-gradient(0deg, rgba(6, 3, 12, 0.92) 40%, transparent);
+  text-shadow: 0 1px 2px #000;
+}
+
+.realm-panel-pop {
+  flex-shrink: 0;
+  width: min(400px, 100vw);
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, var(--realm-panel) 0%, var(--realm-panel-deep) 100%);
+  border-left: 3px solid #000;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+.realm-panel-pop__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 3px solid #000;
+  background: #1a1228;
+  flex-shrink: 0;
+}
+
+.realm-panel-pop__title {
+  font-family: var(--realm-font-display);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--realm-accent);
+  text-shadow: 1px 1px 0 #000;
+}
+
+.realm-panel-pop__close {
+  font-family: var(--realm-font);
+  font-size: 28px;
+  line-height: 1;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid #000;
+  background: #2a1f3d;
+  color: var(--realm-dim);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #000;
+}
+
+.realm-panel-pop__close:hover {
+  color: var(--realm-text);
+  filter: brightness(1.1);
+}
+
+.realm-panel-fab {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 70;
+  font-family: var(--realm-font);
+  font-size: 20px;
+  padding: 10px 16px;
   border: 3px solid #000;
-  box-shadow: var(--realm-shadow-out), var(--realm-shadow-in);
+  background: linear-gradient(180deg, #ffe566 0%, var(--realm-accent) 100%);
+  color: #1a0f08;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 #000;
+}
+
+.realm-panel-fab:hover {
+  filter: brightness(1.06);
+}
+
+.realm-panel-fab:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000;
+}
+
+@media (max-width: 900px) {
+  .realm-world-main {
+    flex-direction: column;
+  }
+
+  .realm-panel-pop {
+    width: 100%;
+    max-height: min(48dvh, 420px);
+    border-left: none;
+    border-top: 3px solid #000;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  }
+
+  .realm-map-viewport {
+    min-height: 38dvh;
+    padding-bottom: 36px;
+  }
+}
+
+.realm-brand {
+  flex-shrink: 0;
 }
 
 .realm-brand__title {
@@ -129,160 +448,7 @@ body::after {
   font-weight: 400;
 }
 
-.realm-game-layout {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
-}
-
-@media (max-width: 1040px) {
-  .realm-game-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.realm-playfield {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
-  gap: 10px;
-  align-items: start;
-  min-width: 0;
-}
-
-@media (max-width: 900px) {
-  .realm-playfield {
-    grid-template-columns: 1fr;
-  }
-}
-
-.realm-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 8px;
-  background: linear-gradient(165deg, #1e1530 0%, #0f0a18 100%);
-  border: 3px solid #000;
-  box-shadow: var(--realm-shadow-out), var(--realm-shadow-in);
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-}
-
-@media (max-width: 1040px) {
-  .realm-sidebar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    max-height: none;
-    overflow: visible;
-  }
-
-  .realm-sidebar__brand {
-    width: 100%;
-  }
-
-  .realm-sidebar__group {
-    flex: 1 1 160px;
-    min-width: 140px;
-  }
-}
-
-.realm-sidebar__brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px 10px;
-  border-bottom: 2px dashed var(--realm-border);
-  margin-bottom: 4px;
-}
-
-.realm-sidebar__brand-mark {
-  font-size: 22px;
-  color: var(--realm-accent);
-  text-shadow: 2px 2px 0 #000;
-  line-height: 1;
-}
-
-.realm-sidebar__brand-title {
-  font-family: var(--realm-font-display);
-  font-size: 9px;
-  line-height: 1.4;
-  color: var(--realm-accent);
-  text-shadow: 1px 1px 0 #000;
-}
-
-.realm-sidebar__brand-sub {
-  font-size: 18px;
-  color: var(--realm-muted);
-  margin-top: 2px;
-}
-
-.realm-sidebar__group-head {
-  font-family: var(--realm-font-display);
-  font-size: 7px;
-  line-height: 1.6;
-  letter-spacing: 0.06em;
-  color: var(--realm-muted);
-  text-transform: uppercase;
-  margin: 6px 2px 4px;
-}
-
-.realm-sidebar__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.realm-sidebar__item {
-  width: 100%;
-  text-align: left;
-  font-family: var(--realm-font);
-  font-size: 19px;
-  line-height: 1.2;
-  padding: 8px 8px 6px;
-  margin-bottom: 4px;
-  border: 2px solid #000;
-  background: #2a1f3d;
-  color: var(--realm-text);
-  cursor: pointer;
-  box-shadow: 3px 3px 0 #000;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-
-.realm-sidebar__item:hover {
-  filter: brightness(1.08);
-}
-
-.realm-sidebar__item:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 #000;
-}
-
-.realm-sidebar__item--on {
-  background: #3d2d1a;
-  color: var(--realm-accent);
-  box-shadow:
-    2px 2px 0 #000,
-    inset 0 0 0 1px var(--realm-accent-dim);
-}
-
-.realm-sidebar__item-label {
-  display: block;
-}
-
-.realm-sidebar__item-hint {
-  display: block;
-  font-size: 16px;
-  color: var(--realm-muted);
-  margin-top: 2px;
-}
-
-.realm-sidebar__item--on .realm-sidebar__item-hint {
-  color: #c9a86a;
-}
-
-.realm-map-frame {
+.realm-map-frame:not(.realm-map-frame--hero) {
   position: relative;
   padding: 12px;
   background: repeating-conic-gradient(#181028 0% 25%, #120c1c 0% 50%) 50% / 16px 16px;
@@ -293,7 +459,7 @@ body::after {
 
 .realm-map-grid {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   display: grid;
   gap: 2px;
   width: fit-content;
