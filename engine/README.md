@@ -11,11 +11,11 @@ pip install -e ".[dev]"
 pytest
 ```
 
-Run the HTTP API (stub for the Next.js client):
+Run the HTTP API (from this `engine/` directory):
 
 ```bash
 pip install -e .
-uvicorn realm.api:app --reload --app-dir .
+uvicorn realm.api:app --reload --port 8000
 ```
 
-(`--app-dir .` keeps imports relative to `engine/` where `realm` lives.)
+The Next.js app in `../web` rewrites `/api/engine/*` to this server in dev.
