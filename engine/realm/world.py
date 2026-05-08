@@ -6,9 +6,20 @@ from dataclasses import dataclass, field
 from realm.ids import PartyId, PlotId
 from realm.inventory import Inventory
 from realm.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
+from realm.inventory import MatterErr
 from realm.materials import MaterialId
+from realm.recipes import recipe_public_list
 from realm.rng import make_rng
 from realm.terrain import Terrain
+
+
+@dataclass
+class ActiveProduction:
+    run_id: str
+    party: PartyId
+    plot_id: PlotId
+    recipe_id: str
+    ticks_remaining: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +53,8 @@ class World:
     ledger: Ledger
     inventory: Inventory
     parties: set[PartyId] = field(default_factory=set)
+    active_production: list[ActiveProduction] = field(default_factory=list)
+    next_production_seq: int = 0
 
     def rng(self, purpose: str):
         return make_rng(self.tick, purpose)
@@ -123,6 +136,20 @@ def bootstrap_frontier(
     )
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
+    # Frontier starter stock so production loop is testable without cheats
+    _starter = (
+        (MaterialId("timber"), 12),
+        (MaterialId("coal"), 12),
+        (MaterialId("electricity"), 8),
+        (MaterialId("iron_ore"), 6),
+        (MaterialId("copper_ore"), 6),
+        (MaterialId("clay"), 10),
+        (MaterialId("grain"), 8),
+    )
+    for mid, qty in _starter:
+        ad = inv.add(human, mid, qty)
+        if isinstance(ad, MatterErr):
+            raise ValueError(ad.reason)
     return world
 
 
@@ -158,4 +185,15 @@ def world_public_dict(world: World) -> dict:
         "balances_cents": balances,
         "inventory": inv,
         "parties": [str(x) for x in world.parties],
+        "recipes": recipe_public_list(),
+        "active_production": [
+            {
+                "run_id": a.run_id,
+                "party": str(a.party),
+                "plot_id": str(a.plot_id),
+                "recipe_id": a.recipe_id,
+                "ticks_remaining": a.ticks_remaining,
+            }
+            for a in world.active_production
+        ],
     }

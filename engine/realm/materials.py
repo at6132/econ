@@ -42,6 +42,9 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("electricity"): MaterialDef(
         MaterialId("electricity"), "Electricity (MWh)", 0.0, "energy"
     ),
+    MaterialId("brick"): MaterialDef(
+        MaterialId("brick"), "Fired brick", 1900.0, "construction"
+    ),
 }
 
 

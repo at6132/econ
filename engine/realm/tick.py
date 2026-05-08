@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from realm.production import tick_production
 from realm.world import World
 
 
 def advance_tick(world: World) -> None:
-    """Single authoritative tick: time +1; systems hook in here later."""
+    """One simulation step: production advances, then global tick counter increments."""
+    tick_production(world)
     world.tick += 1

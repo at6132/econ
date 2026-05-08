@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from realm.actions import claim_plot, survey_plot
+from realm.actions import claim_plot, start_production_on_plot, survey_plot
 from realm.ids import PartyId, PlotId
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier, world_public_dict
@@ -43,6 +43,18 @@ def post_tick() -> dict:
 def post_claim(plot_id: str, party: Annotated[str, Query()] = "player") -> dict:
     party_id = PartyId(party)
     r = claim_plot(_world, party_id, PlotId(plot_id))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/plots/{plot_id}/produce")
+def post_produce(
+    plot_id: str,
+    recipe_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    r = start_production_on_plot(_world, PartyId(party), PlotId(plot_id), recipe_id)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)

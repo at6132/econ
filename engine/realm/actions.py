@@ -6,6 +6,7 @@ from typing import Literal, TypedDict, Union
 
 from realm.ids import PartyId, PlotId
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.production import start_production
 from realm.world import Plot, World
 
 
@@ -56,3 +57,12 @@ def survey_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
 
 def plot_by_id(world: World, plot_id: PlotId) -> Plot | None:
     return world.plots.get(plot_id)
+
+
+def start_production_on_plot(
+    world: World, party: PartyId, plot_id: PlotId, recipe_id: str
+) -> ActionResult:
+    r = start_production(world, party, plot_id, recipe_id)
+    if r.get("ok"):
+        return ActionOk(ok=True)
+    return ActionErr(ok=False, reason=str(r.get("reason", "error")))
