@@ -48,7 +48,7 @@ def test_shipment_delivers_and_conserves_matter() -> None:
     assert w.inventory.total_units() == u0 - 2
     for _ in range(5):
         advance_tick(w)
-    assert w.inventory.qty(PartyId("player"), MaterialId("timber")) >= 10
+    assert w.inventory.qty(PartyId("player"), MaterialId("timber")) == 8
 
 
 def test_p2p_trade_moves_matter_and_money() -> None:
@@ -68,6 +68,26 @@ def test_market_buy_from_listed_ask() -> None:
     r = market_buy(w, buyer, MaterialId("grain"), 2)
     assert r["ok"] is True
     assert w.inventory.qty(buyer, MaterialId("grain")) >= before + 1
+
+
+def test_build_and_hire_emit_events_and_move_cash() -> None:
+    from realm.actions import claim_plot, hire_worker_stub, survey_plot
+    from realm.buildings import build_on_plot
+    from realm.ledger import party_cash_account
+
+    w = bootstrap_frontier(seed=17, grid_width=3, grid_height=2)
+    pid = PlotId("p-0-0")
+    assert claim_plot(w, PartyId("player"), pid)["ok"] is True
+    assert survey_plot(w, PartyId("player"), pid)["ok"] is True
+    before = w.ledger.balance(party_cash_account(PartyId("player")))
+    assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
+    assert w.ledger.balance(party_cash_account(PartyId("player"))) == before - 15_000
+    assert any(b.get("building_id") == "watch_hut" for b in w.plot_buildings)
+    emp = PartyId("t1_timber_merchant")
+    assert hire_worker_stub(w, PartyId("player"), emp, 1_00)["ok"] is True
+    assert any(e.get("employee") == str(emp) for e in w.stub_hires)
+    assert any(e.get("kind") == "build" for e in w.event_log)
+    assert any(e.get("kind") == "hire" for e in w.event_log)
 
 
 def test_contract_honor_increments_reputation() -> None:

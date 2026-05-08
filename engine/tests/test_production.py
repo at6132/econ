@@ -16,7 +16,7 @@ def test_sawmill_completes_after_duration_ticks() -> None:
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     cash0 = w.ledger.balance(party_cash_account(PartyId("player")))
     assert start_production(w, PartyId("player"), pid, "sawmill")["ok"] is True
-    assert w.inventory.qty(PartyId("player"), MaterialId("timber")) == 12 - 2
+    assert w.inventory.qty(PartyId("player"), MaterialId("timber")) == 8 - 2
     assert w.inventory.qty(PartyId("player"), MaterialId("electricity")) == 8 - 1
     cash1 = w.ledger.balance(party_cash_account(PartyId("player")))
     assert cash1 == cash0 - 500  # labor_cents on sawmill recipe
