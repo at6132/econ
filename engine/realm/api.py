@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from realm.actions import claim_plot, hire_worker_stub, start_production_on_plot, survey_plot
+from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, start_production_on_plot, survey_plot
 from realm.buildings import build_on_plot
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.markets import cancel_sell_order, market_buy, p2p_trade, place_sell_order
@@ -51,6 +51,11 @@ def health() -> dict[str, str]:
 @app.get("/world")
 def get_world() -> dict:
     return world_public_dict(_world)
+
+
+@app.get("/hire/catalog")
+def get_hire_catalog() -> dict:
+    return {"roles": hire_catalog_public()}
 
 
 @app.post("/tick")

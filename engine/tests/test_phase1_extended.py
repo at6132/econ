@@ -90,6 +90,19 @@ def test_build_and_hire_emit_events_and_move_cash() -> None:
     assert any(e.get("kind") == "hire" for e in w.event_log)
 
 
+def test_bootstrap_default_is_48_plots() -> None:
+    w = bootstrap_frontier(seed=0)
+    assert len(w.plots) == 48
+
+
+def test_market_history_after_ticks() -> None:
+    w = bootstrap_frontier(seed=1, grid_width=2, grid_height=2)
+    assert len(w.market_history) >= 1
+    advance_tick(w)
+    assert len(w.market_history) >= 2
+    assert w.market_history[-1]["tick"] == w.tick
+
+
 def test_contract_honor_increments_reputation() -> None:
     w = bootstrap_frontier(seed=16, grid_width=2, grid_height=2)
     pr = propose_contract_stub(w, PartyId("player"), PartyId("npc_grain_vendor"), "supply")

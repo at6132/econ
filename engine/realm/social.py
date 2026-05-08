@@ -35,7 +35,7 @@ def honor_contract_stub(world: World, contract_id: str) -> dict:
     for c in world.contracts:
         if c.get("id") != contract_id:
             continue
-        if c.get("status") != "open":
+        if c.get("status") not in ("open", "active"):
             return {"ok": False, "reason": "contract not open"}
         c["status"] = "honored"
         for k in ("party_a", "party_b"):

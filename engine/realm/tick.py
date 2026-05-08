@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from realm.agents_tier1 import tick_tier1_agents
+from realm.market_history import record_market_snapshot
 from realm.movement import deliver_transit
 from realm.production import tick_production
 from realm.world import World
@@ -14,3 +15,4 @@ def advance_tick(world: World) -> None:
     tick_production(world)
     tick_tier1_agents(world)
     world.tick += 1
+    record_market_snapshot(world)

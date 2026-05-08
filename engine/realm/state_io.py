@@ -89,6 +89,7 @@ def dump_world(world: World) -> dict[str, Any]:
         "event_log": list(world.event_log),
         "plot_buildings": list(world.plot_buildings),
         "stub_hires": list(world.stub_hires),
+        "market_history": list(world.market_history),
     }
 
 
@@ -177,6 +178,7 @@ def load_world(d: dict[str, Any]) -> World:
         event_log=list(d.get("event_log", [])),
         plot_buildings=list(d.get("plot_buildings", [])),
         stub_hires=list(d.get("stub_hires", [])),
+        market_history=list(d.get("market_history", [])),
     )
     return world
 

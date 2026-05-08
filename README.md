@@ -2,7 +2,7 @@
 
 > A 2D, web-first economic civilization sim where every business, price, currency, and service is invented and run by players — or by AI agents that act like players when you're alone.
 
-**Status:** Phase 1 — Solo engine prototype (in progress). Spec in `realm_docs/`; runnable shell: Python engine + Next.js map.
+**Status:** Phase 1 solo prototype — engine checklist complete (playtest gate in `realm_docs/13_PHASED_TODO.md` still requires external sessions). Spec in `realm_docs/`; runnable shell: Python engine + Next.js map.
 **Designer / builder:** Avi (Sheva Studios).
 **Doc set version:** v1.0.
 

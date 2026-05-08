@@ -76,6 +76,7 @@ class World:
     event_log: list[dict] = field(default_factory=list)
     plot_buildings: list[dict] = field(default_factory=list)
     stub_hires: list[dict] = field(default_factory=list)
+    market_history: list[dict] = field(default_factory=list)
 
     def rng(self, purpose: str):
         return make_rng(self.tick, purpose)
@@ -124,7 +125,7 @@ def bootstrap_frontier(
     *,
     seed: int,
     grid_width: int = 8,
-    grid_height: int = 5,
+    grid_height: int = 6,
     starting_cash_cents: int = 1_000_000,  # $10,000.00
     system_reserve_cents: int = 100_000_000_000,  # $1B — unallocated pool
 ) -> World:
@@ -219,11 +220,41 @@ def bootstrap_frontier(
     pr2 = place_sell_order(world, timber_merch, MaterialId("timber"), 2, 68)
     if not pr2.get("ok"):
         raise ValueError(str(pr2.get("reason")))
+    coal_v = PartyId("t1_coal_vendor")
+    clay_v = PartyId("t1_clay_vendor")
+    elec_b = PartyId("t1_electricity_buyer")
+    for px in (coal_v, clay_v, elec_b):
+        world.parties.add(px)
+        world.reputation[str(px)] = {"honored": 0, "breached": 0}
+    tr_coal = inv.transfer(material=MaterialId("coal"), qty=3, from_party=human, to_party=coal_v)
+    if isinstance(tr_coal, MatterErr):
+        raise ValueError(tr_coal.reason)
+    tr_clay = inv.transfer(material=MaterialId("clay"), qty=3, from_party=human, to_party=clay_v)
+    if isinstance(tr_clay, MatterErr):
+        raise ValueError(tr_clay.reason)
+    eb_cash = party_cash_account(elec_b)
+    world.ledger.ensure_account(eb_cash)
+    tr_eb = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=eb_cash,
+        amount_cents=30_000,
+    )
+    if isinstance(tr_eb, MoneyErr):
+        raise ValueError(tr_eb.reason)
+    pr_coal = place_sell_order(world, coal_v, MaterialId("coal"), 2, 38)
+    if not pr_coal.get("ok"):
+        raise ValueError(str(pr_coal.get("reason")))
+    pr_clay = place_sell_order(world, clay_v, MaterialId("clay"), 2, 54)
+    if not pr_clay.get("ok"):
+        raise ValueError(str(pr_clay.get("reason")))
+    from realm.market_history import record_market_snapshot
+
     log_event(
         world,
         "world",
-        "Frontier ready: seed grain vendor, timber merchant, tier-1 buyers active.",
+        "Frontier ready: 48 plots, seeded commodity books, six tier-1 agent loops.",
     )
+    record_market_snapshot(world)
     return world
 
 
@@ -255,6 +286,8 @@ def world_public_dict(world: World) -> dict:
         str(party): {str(m): q for m, q in mats.items()}
         for party, mats in world.inventory.snapshot().items()
     }
+    from realm.actions import hire_catalog_public
+
     return {
         "seed": world.seed,
         "tick": world.tick,
@@ -291,4 +324,6 @@ def world_public_dict(world: World) -> dict:
         "plot_buildings": list(world.plot_buildings),
         "stub_hires": list(world.stub_hires),
         "building_catalog": building_catalog_public(),
+        "market_history": list(world.market_history[-160:]),
+        "hire_catalog": hire_catalog_public(),
     }

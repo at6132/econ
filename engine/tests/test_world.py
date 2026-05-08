@@ -13,7 +13,8 @@ def test_frontier_bootstrap_money_total() -> None:
     assert w.ledger.balance(player) == 1_000_000
     assert w.ledger.balance(consumer) == 25_000
     assert w.ledger.balance(lumber_buyer) == 50_000
-    assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - 1_000_000 - 25_000 - 50_000
+    assert w.ledger.balance(party_cash_account(PartyId("t1_electricity_buyer"))) == 30_000
+    assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - 1_000_000 - 25_000 - 50_000 - 30_000
 
 
 def test_world_gen_deterministic() -> None:

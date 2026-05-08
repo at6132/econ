@@ -26,11 +26,26 @@ SURVEY_COST_CENTS = 50_000  # $500.00 per first-hour script
 
 HIRABLE_NPCS: frozenset[PartyId] = frozenset(
     {
-        PartyId("t1_lumber_buyer"),
-        PartyId("t1_timber_merchant"),
         PartyId("npc_grain_vendor"),
+        PartyId("t1_timber_merchant"),
+        PartyId("t1_lumber_buyer"),
+        PartyId("t1_coal_vendor"),
+        PartyId("t1_clay_vendor"),
+        PartyId("t1_electricity_buyer"),
     }
 )
+
+
+def hire_catalog_public() -> list[dict[str, str | int]]:
+    """Suggested signing bonuses for the hire panel (Phase 1 stub employment)."""
+    return [
+        {"party": "npc_grain_vendor", "role": "Grain wholesaler", "suggested_signing_cents": 100},
+        {"party": "t1_timber_merchant", "role": "Timber merchant", "suggested_signing_cents": 200},
+        {"party": "t1_lumber_buyer", "role": "Lumber buyer", "suggested_signing_cents": 200},
+        {"party": "t1_coal_vendor", "role": "Coal yard", "suggested_signing_cents": 150},
+        {"party": "t1_clay_vendor", "role": "Clay pit operator", "suggested_signing_cents": 150},
+        {"party": "t1_electricity_buyer", "role": "Industrial power buyer", "suggested_signing_cents": 350},
+    ]
 
 
 def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
@@ -98,21 +113,35 @@ def hire_worker_stub(
     )
     if isinstance(pay, MoneyErr):
         return ActionErr(ok=False, reason=pay.reason)
+    world.next_contract_seq += 1
+    cid = f"c-{world.next_contract_seq}"
+    world.contracts.append(
+        {
+            "id": cid,
+            "party_a": str(employer),
+            "party_b": str(employee),
+            "kind": "employment",
+            "status": "active",
+            "signing_bonus_cents": signing_bonus_cents,
+        }
+    )
     world.stub_hires.append(
         {
             "employer": str(employer),
             "employee": str(employee),
             "signing_bonus_cents": signing_bonus_cents,
+            "contract_id": cid,
             "tick": world.tick,
         }
     )
     log_event(
         world,
         "hire",
-        f"{employer} paid {employee} ${signing_bonus_cents / 100:.2f} signing bonus (stub hire)",
+        f"{employer} hired {employee} (employment {cid}, bonus ${signing_bonus_cents / 100:.2f})",
         employer=str(employer),
         employee=str(employee),
         signing_bonus_cents=signing_bonus_cents,
+        contract_id=cid,
     )
     return ActionOk(ok=True)
 
