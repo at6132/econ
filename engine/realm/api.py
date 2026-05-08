@@ -7,7 +7,8 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from realm.actions import claim_plot, start_production_on_plot, survey_plot
+from realm.actions import claim_plot, hire_worker_stub, start_production_on_plot, survey_plot
+from realm.buildings import build_on_plot
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.markets import cancel_sell_order, market_buy, p2p_trade, place_sell_order
 from realm.movement import dispatch_shipment
@@ -82,6 +83,30 @@ def post_produce(
 @app.post("/plots/{plot_id}/survey")
 def post_survey(plot_id: str, party: Annotated[str, Query()] = "player") -> dict:
     r = survey_plot(_world, PartyId(party), PlotId(plot_id))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/plots/{plot_id}/build")
+def post_build(
+    plot_id: str,
+    building_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    r = build_on_plot(_world, PartyId(party), PlotId(plot_id), building_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/hire")
+def post_hire(
+    employer: Annotated[str, Query()],
+    employee: Annotated[str, Query()],
+    signing_bonus_cents: Annotated[int, Query()],
+) -> dict:
+    r = hire_worker_stub(_world, PartyId(employer), PartyId(employee), signing_bonus_cents)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)

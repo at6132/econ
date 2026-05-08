@@ -86,6 +86,9 @@ def dump_world(world: World) -> dict[str, Any]:
         "market_asks": asks,
         "reputation": dict(world.reputation),
         "contracts": list(world.contracts),
+        "event_log": list(world.event_log),
+        "plot_buildings": list(world.plot_buildings),
+        "stub_hires": list(world.stub_hires),
     }
 
 
@@ -171,6 +174,9 @@ def load_world(d: dict[str, Any]) -> World:
         reputation=dict(d.get("reputation", {})),
         contracts=list(d.get("contracts", [])),
         next_contract_seq=int(d.get("next_contract_seq", 0)),
+        event_log=list(d.get("event_log", [])),
+        plot_buildings=list(d.get("plot_buildings", [])),
+        stub_hires=list(d.get("stub_hires", [])),
     )
     return world
 

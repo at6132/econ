@@ -73,6 +73,9 @@ class World:
     reputation: dict[str, dict[str, int]] = field(default_factory=dict)
     contracts: list[dict] = field(default_factory=list)
     next_contract_seq: int = 0
+    event_log: list[dict] = field(default_factory=list)
+    plot_buildings: list[dict] = field(default_factory=list)
+    stub_hires: list[dict] = field(default_factory=list)
 
     def rng(self, purpose: str):
         return make_rng(self.tick, purpose)
@@ -187,16 +190,46 @@ def bootstrap_frontier(
     )
     if isinstance(tr_c, MoneyErr):
         raise ValueError(tr_c.reason)
+    from realm.event_log import log_event
     from realm.markets import place_sell_order
 
     pr = place_sell_order(world, vendor, MaterialId("grain"), 10, 120)
     if not pr.get("ok"):
         raise ValueError(str(pr.get("reason")))
+    timber_merch = PartyId("t1_timber_merchant")
+    lumber_buyer = PartyId("t1_lumber_buyer")
+    world.parties.add(timber_merch)
+    world.parties.add(lumber_buyer)
+    world.reputation[str(timber_merch)] = {"honored": 0, "breached": 0}
+    world.reputation[str(lumber_buyer)] = {"honored": 0, "breached": 0}
+    tr_tm = inv.transfer(
+        material=MaterialId("timber"), qty=4, from_party=human, to_party=timber_merch
+    )
+    if isinstance(tr_tm, MatterErr):
+        raise ValueError(tr_tm.reason)
+    lb_cash = party_cash_account(lumber_buyer)
+    world.ledger.ensure_account(lb_cash)
+    tr_lb = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=lb_cash,
+        amount_cents=50_000,
+    )
+    if isinstance(tr_lb, MoneyErr):
+        raise ValueError(tr_lb.reason)
+    pr2 = place_sell_order(world, timber_merch, MaterialId("timber"), 2, 68)
+    if not pr2.get("ok"):
+        raise ValueError(str(pr2.get("reason")))
+    log_event(
+        world,
+        "world",
+        "Frontier ready: seed grain vendor, timber merchant, tier-1 buyers active.",
+    )
     return world
 
 
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
+    from realm.buildings import building_catalog_public
     from realm.markets import market_book_public
 
     plots_out: list[dict] = []
@@ -254,4 +287,8 @@ def world_public_dict(world: World) -> dict:
         "market_asks": market_book_public(world),
         "reputation": dict(world.reputation),
         "contracts": list(world.contracts),
+        "event_log": list(world.event_log[-120:]),
+        "plot_buildings": list(world.plot_buildings),
+        "stub_hires": list(world.stub_hires),
+        "building_catalog": building_catalog_public(),
     }

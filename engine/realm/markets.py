@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
@@ -53,6 +54,16 @@ def place_sell_order(
         )
     )
     _asks(world, material).sort(key=lambda o: (o.price_per_unit_cents, o.order_id))
+    log_event(
+        world,
+        "market_list",
+        f"{party} listed {qty}×{material} @ {price_per_unit_cents}¢/u ({oid})",
+        party=str(party),
+        material=str(material),
+        qty=qty,
+        price_per_unit_cents=price_per_unit_cents,
+        order_id=oid,
+    )
     return {"ok": True, "order_id": oid}
 
 
@@ -69,6 +80,15 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
                     return {"ok": False, "reason": ad.reason}
                 if not lst:
                     del world.market_asks_by_material[key]
+                log_event(
+                    world,
+                    "market_cancel",
+                    f"{party} cancelled order {order_id} ({o.qty}×{o.material})",
+                    party=str(party),
+                    order_id=order_id,
+                    material=str(o.material),
+                    qty=o.qty,
+                )
                 return {"ok": True}
     return {"ok": False, "reason": "order not found"}
 
@@ -121,7 +141,17 @@ def market_buy(
         del world.market_asks_by_material[key]
     if spent == 0 and max_qty > 0:
         return {"ok": False, "reason": "no liquidity or insufficient cash"}
-    return {"ok": True, "filled": max_qty - remaining, "spent_cents": spent}
+    filled = max_qty - remaining
+    log_event(
+        world,
+        "market_buy",
+        f"{buyer} bought {filled}×{material} for ${spent / 100:.2f}",
+        buyer=str(buyer),
+        material=str(material),
+        filled=filled,
+        spent_cents=spent,
+    )
+    return {"ok": True, "filled": filled, "spent_cents": spent}
 
 
 def p2p_trade(
@@ -153,6 +183,16 @@ def p2p_trade(
         world.inventory.add(seller, material, qty)
         world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
         return {"ok": False, "reason": ad.reason}
+    log_event(
+        world,
+        "p2p_trade",
+        f"P2P: {seller} sold {qty}×{material} to {buyer} for ${total_price_cents / 100:.2f}",
+        seller=str(seller),
+        buyer=str(buyer),
+        material=str(material),
+        qty=qty,
+        total_price_cents=total_price_cents,
+    )
     return {"ok": True}
 
 

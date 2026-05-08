@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.event_log import log_event
 from realm.ids import PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
@@ -62,6 +63,15 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
             ticks_remaining=recipe.duration_ticks,
         )
     )
+    log_event(
+        world,
+        "production_start",
+        f"{party} started {recipe_id} on {plot_id} (outputs in {recipe.duration_ticks} ticks)",
+        party=str(party),
+        plot_id=str(plot_id),
+        recipe_id=recipe_id,
+        run_id=run_id,
+    )
     return {"ok": True, "run_id": run_id}
 
 
@@ -81,5 +91,14 @@ def tick_production(world: World) -> None:
             if isinstance(ad, MatterErr):
                 # should not happen for positive qty
                 pass
+        log_event(
+            world,
+            "production_done",
+            f"{run.party} finished {run.recipe_id} on {run.plot_id}",
+            party=str(run.party),
+            plot_id=str(run.plot_id),
+            recipe_id=run.recipe_id,
+            run_id=run.run_id,
+        )
     world.active_production = still
 

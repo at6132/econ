@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.event_log import log_event
 from realm.geo import manhattan
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
@@ -68,6 +69,17 @@ def dispatch_shipment(
             arrive_tick=arrive,
         )
     )
+    log_event(
+        world,
+        "ship_dispatch",
+        f"{party} shipped {qty}×{material} → {to_plot_id} (arrive tick {arrive}, fee ${fee / 100:.2f})",
+        party=str(party),
+        material=str(material),
+        qty=qty,
+        dest_plot_id=str(to_plot_id),
+        arrive_tick=arrive,
+        fee_cents=fee,
+    )
     return {"ok": True, "shipment_id": sid, "arrive_tick": arrive, "fee_cents": fee}
 
 
@@ -83,4 +95,14 @@ def deliver_transit(world: World) -> None:
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue
+        log_event(
+            world,
+            "ship_deliver",
+            f"Delivered {s.qty}×{s.material} to {s.party} at {s.dest_plot_id}",
+            party=str(s.party),
+            material=str(s.material),
+            qty=s.qty,
+            dest_plot_id=str(s.dest_plot_id),
+            shipment_id=s.shipment_id,
+        )
     world.in_transit = keep
