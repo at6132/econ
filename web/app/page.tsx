@@ -3,10 +3,20 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { FRONTIER_FEATURES } from "./frontierFeatures";
+import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
+import { GameSidebar } from "./GameSidebar";
+import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 
-const ONBOARD_KEY = "realm_frontier_onboard_v2";
+function panelHeadline(tab: TabId): string {
+  for (const g of FRONTIER_MENU) {
+    const it = g.items.find((i) => i.tab === tab);
+    if (it) return it.label;
+  }
+  return tab;
+}
 
 type PlotDto = {
   id: string;
@@ -107,25 +117,15 @@ type WorldDto = {
   hire_catalog?: HireCatalogRow[];
 };
 
-type TabId = "world" | "market" | "logistics" | "contracts" | "log";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "world", label: "Plot" },
-  { id: "market", label: "Market" },
-  { id: "logistics", label: "Logistics" },
-  { id: "contracts", label: "Contracts" },
-  { id: "log", label: "Log" },
-];
-
 const TERRAIN_COLOR: Record<string, string> = {
-  plains: "#5a8f4a",
-  forest: "#1e4a22",
-  mountain: "#5a5d6b",
-  desert: "#c9a85c",
-  tundra: "#8fb8d4",
-  swamp: "#2d4a32",
-  water_shallow: "#2d6ba8",
-  water_deep: "#0f2847",
+  plains: "#78c850",
+  forest: "#286028",
+  mountain: "#9090a8",
+  desert: "#e8c060",
+  tundra: "#a8d8f0",
+  swamp: "#408850",
+  water_shallow: "#4890d8",
+  water_deep: "#183878",
 };
 
 function terrainColor(t: string): string {
@@ -169,7 +169,7 @@ export default function HomePage() {
 
   useEffect(() => {
     try {
-      if (typeof window !== "undefined" && !localStorage.getItem(ONBOARD_KEY)) {
+      if (typeof window !== "undefined" && !localStorage.getItem(FRONTIER_ONBOARD_STORAGE_KEY)) {
         setOnboardingOpen(true);
       }
     } catch {
@@ -465,7 +465,7 @@ export default function HomePage() {
 
   function replayBriefing() {
     try {
-      localStorage.removeItem(ONBOARD_KEY);
+      localStorage.removeItem(FRONTIER_ONBOARD_STORAGE_KEY);
     } catch {
       /* ignore */
     }
@@ -485,9 +485,9 @@ export default function HomePage() {
       {world ? (
         <>
           <header className="realm-hud">
-            <div className="realm-brand">
+              <div className="realm-brand">
               <div className="realm-brand__title">Realm</div>
-              <div className="realm-brand__sub">Frontier · solo prototype</div>
+              <div className="realm-brand__sub">Frontier · solo build</div>
             </div>
             <div className="realm-stat-row">
               <motion.span
@@ -511,7 +511,9 @@ export default function HomePage() {
             </div>
           </header>
 
-          <div className="realm-deck">
+          <div className="realm-game-layout">
+            <GameSidebar active={tab} onSelect={setTab} />
+            <div className="realm-playfield">
             <div>
               <div className="realm-map-frame">
                 <div
@@ -546,8 +548,8 @@ export default function HomePage() {
                   )}
                 </div>
                 <p className="realm-map-hint">
-                  Click empty land to <strong>claim</strong>. Your plot: first click <strong>surveys</strong> ($500),
-                  then select to <strong>produce</strong> or <strong>build</strong>. Orange ring = selected.
+                  Empty tile = <strong>claim</strong>. Your tile again = <strong>survey</strong> (cash). Owned +
+                  surveyed = select to <strong>queue recipes</strong> or <strong>build</strong>. Gold ring = selected.
                 </p>
                 <div className="realm-cta-row">
                   <motion.button
@@ -558,7 +560,7 @@ export default function HomePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    Advance tick
+                    End turn
                   </motion.button>
                   <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void marketBuyGrain()}>
                     Buy 1 grain
@@ -568,18 +570,9 @@ export default function HomePage() {
             </div>
 
             <div className="realm-panel-wrap">
-              <nav className="realm-tabs" aria-label="Command panels">
-                {TABS.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={`realm-tab${tab === t.id ? " realm-tab--active" : ""}`}
-                    onClick={() => setTab(t.id)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </nav>
+              <div className="realm-panel-head" aria-live="polite">
+                {panelHeadline(tab)}
+              </div>
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -844,6 +837,50 @@ export default function HomePage() {
                     </>
                   ) : null}
 
+                  {tab === "codex" ? (
+                    <div className="realm-codex-grid">
+                      <p className="realm-help" style={{ marginTop: 0 }}>
+                        Atlas tracks what the engine already does vs placeholder systems vs backlog. Add rows in{" "}
+                        <code>frontierFeatures.ts</code>; wire new screens via <code>frontierMenu.ts</code> + panel
+                        blocks in <code>page.tsx</code>.
+                      </p>
+                      {(
+                        [
+                          ["live", "In this build"],
+                          ["stub", "Stubs (thin vertical slice)"],
+                          ["planned", "Coming later"],
+                        ] as const
+                      ).map(([lane, label]) => (
+                        <div key={lane} className={`realm-codex-lane realm-codex-lane--${lane}`}>
+                          <h3 className="realm-codex-lane-title">{label}</h3>
+                          <div className="realm-codex-cards">
+                            {FRONTIER_FEATURES.filter((f) => f.lane === lane).map((f) =>
+                              f.jumpTab ? (
+                              <button
+                                key={f.id}
+                                type="button"
+                                className="realm-codex-card"
+                                onClick={() => {
+                                  setTab(f.jumpTab!);
+                                }}
+                              >
+                                <div className="realm-codex-card__title">{f.title}</div>
+                                <div className="realm-codex-card__detail">{f.detail}</div>
+                                <div className="realm-codex-card__jump">→ Open {panelHeadline(f.jumpTab)}</div>
+                              </button>
+                              ) : (
+                                <div key={f.id} className="realm-codex-card realm-codex-card--static">
+                                  <div className="realm-codex-card__title">{f.title}</div>
+                                  <div className="realm-codex-card__detail">{f.detail}</div>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
                   {tab === "log" ? (
                     <>
                       <SectionTitle>Action log</SectionTitle>
@@ -876,6 +913,7 @@ export default function HomePage() {
                 </motion.div>
               </AnimatePresence>
             </div>
+            </div>
           </div>
         </>
       ) : (
@@ -883,7 +921,7 @@ export default function HomePage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="realm-help"
-          style={{ fontSize: 15, padding: 24, textAlign: "center" }}
+          style={{ fontSize: 22, padding: 24, textAlign: "center" }}
         >
           Loading world…
         </motion.p>

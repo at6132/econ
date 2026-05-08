@@ -3,22 +3,24 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useState } from "react";
 
+import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
+
 const STEPS = [
   {
-    title: "You just landed",
-    body: "This grid is the continent. Empty plots are yours to claim. AI parties already list grain, timber, coal, and clay — the economy is waking up.",
+    title: "New game",
+    body: "This is Frontier — a solo slice of Realm. The map is your overworld: empty tiles are unclaimed frontier. Rivals already post grain and timber on the market.",
   },
   {
-    title: "Claim → survey → build",
-    body: "Click an empty cell to claim it. Click again on your plot to survey ($500) and reveal subsurface hints. Select a surveyed plot to run recipes or place stub buildings.",
+    title: "Claim, survey, build",
+    body: "Click an empty tile to claim it. Click your land again to survey (costs cash) and reveal subsurface hints. On a surveyed plot you queue recipes and drop placeholder buildings.",
   },
   {
-    title: "Time is the engine",
-    body: "Advance tick runs transit, production, and NPC loops. Watch the action log and market depth chart — best ask prices are snapshotted every tick.",
+    title: "You control time",
+    body: "Nothing simulates in the background. Hit Advance tick when you are ready — transit, production timers, and NPC ticks all resolve on your command.",
   },
   {
-    title: "Trade, hire, save",
-    body: "Use the Market tab for the order book. Logistics covers shipping and inventory. Contracts tab has hire bonuses (employment stubs) and supply contracts. Save your SQLite snapshot when you are done.",
+    title: "Menus = depth",
+    body: "Use the left Atlas-style menu: Bazaar for orders, Caravans for shipping, Pacts for hire/contract stubs, Chronicle for the log and save. Atlas lists what is live vs stub vs planned.",
   },
 ];
 
@@ -32,7 +34,7 @@ export function OnboardingModal({ open, onComplete }: Props) {
 
   const finish = useCallback(() => {
     try {
-      localStorage.setItem("realm_frontier_onboard_v2", "1");
+      localStorage.setItem(FRONTIER_ONBOARD_STORAGE_KEY, "1");
     } catch {
       /* ignore */
     }
@@ -53,65 +55,32 @@ export function OnboardingModal({ open, onComplete }: Props) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="onboard-title"
+          className="realm-onboard-backdrop"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            background: "rgba(5, 8, 12, 0.72)",
-            backdropFilter: "blur(8px)",
-          }}
+          transition={{ duration: 0.2 }}
         >
           <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 380, damping: 28 }}
-            style={{
-              width: "min(440px, 100%)",
-              borderRadius: 20,
-              padding: "28px 28px 22px",
-              background: "linear-gradient(165deg, var(--realm-panel) 0%, var(--realm-panel-deep) 100%)",
-              border: "1px solid var(--realm-border)",
-              boxShadow: "var(--realm-glow), 0 24px 80px rgba(0,0,0,0.45)",
-            }}
+            className="realm-onboard-card"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
           >
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "var(--realm-muted)",
-                marginBottom: 8,
-              }}
-            >
-              Frontier briefing · step {step + 1} of {STEPS.length}
+            <div className="realm-onboard-kicker">
+              Player manual · page {step + 1} / {STEPS.length}
             </div>
-            <h2 id="onboard-title" style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 650, letterSpacing: "-0.02em" }}>
+            <h2 id="onboard-title" className="realm-onboard-title">
               {STEPS[step].title}
             </h2>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: "var(--realm-dim)" }}>{STEPS[step].body}</p>
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 24,
-                flexWrap: "wrap",
-                justifyContent: "flex-end",
-              }}
-            >
+            <p className="realm-onboard-body">{STEPS[step].body}</p>
+            <div className="realm-onboard-actions">
               <button type="button" className="realm-btn realm-btn--ghost" onClick={finish}>
-                Skip all
+                Skip
               </button>
               <button type="button" className="realm-btn realm-btn--primary" onClick={next}>
-                {step >= STEPS.length - 1 ? "Enter the world" : "Next"}
+                {step >= STEPS.length - 1 ? "Play" : "Next"}
               </button>
             </div>
           </motion.div>

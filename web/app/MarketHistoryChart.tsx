@@ -16,7 +16,7 @@ export type MarketHistorySnap = {
 };
 
 const SERIES = ["grain", "timber", "coal", "clay", "electricity"] as const;
-const COLORS = ["#79c0ff", "#56d364", "#ffa657", "#d2a8ff", "#ff7b72"];
+const COLORS = ["#6ee7ff", "#7bed9f", "#ffd84a", "#c9a8ff", "#ff8a7a"];
 
 export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }) {
   const data = history.map((h) => {
@@ -41,26 +41,27 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
       <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
         <XAxis
           dataKey="tick"
-          tick={{ fontSize: 10, fill: "#9db0c4" }}
-          stroke="rgba(120,160,200,0.25)"
+          tick={{ fontSize: 11, fill: "#a894c4" }}
+          stroke="rgba(107, 90, 138, 0.5)"
         />
         <YAxis
-          tick={{ fontSize: 10, fill: "#9db0c4" }}
-          width={36}
+          tick={{ fontSize: 11, fill: "#a894c4" }}
+          width={40}
           domain={["auto", "auto"]}
-          stroke="rgba(120,160,200,0.25)"
+          stroke="rgba(107, 90, 138, 0.5)"
         />
         <Tooltip
           contentStyle={{
-            background: "#111822",
-            border: "1px solid rgba(120,160,200,0.25)",
-            borderRadius: 10,
-            fontSize: 12,
-            color: "#e8f0f8",
+            background: "#12081f",
+            border: "2px solid #000",
+            borderRadius: 0,
+            fontSize: 14,
+            color: "#f4ead8",
+            fontFamily: "VT323, ui-monospace, monospace",
           }}
-          labelStyle={{ color: "#6b7d92" }}
+          labelStyle={{ color: "#8a7a98" }}
         />
-        <Legend wrapperStyle={{ fontSize: 11, color: "#9db0c4" }} />
+        <Legend wrapperStyle={{ fontSize: 13, color: "#a894c4", fontFamily: "VT323, ui-monospace, monospace" }} />
         {SERIES.map((m, i) => (
           <Line
             key={m}
