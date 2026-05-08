@@ -46,6 +46,33 @@ type MarketAskDto = {
   price_per_unit_cents: number;
 };
 
+type EventLogEntryDto = {
+  tick: number;
+  kind: string;
+  message: string;
+};
+
+type BuildingCatalogDto = {
+  id: string;
+  label: string;
+  cost_cents: number;
+};
+
+type PlotBuildingDto = {
+  plot_id: string;
+  party: string;
+  building_id: string;
+  label: string;
+  cost_cents: number;
+};
+
+type StubHireDto = {
+  employer: string;
+  employee: string;
+  signing_bonus_cents: number;
+  tick: number;
+};
+
 type WorldDto = {
   seed: number;
   tick: number;
@@ -59,6 +86,10 @@ type WorldDto = {
   market_asks?: MarketAskDto[];
   reputation?: Record<string, { honored: number; breached: number }>;
   contracts?: Record<string, unknown>[];
+  event_log?: EventLogEntryDto[];
+  building_catalog?: BuildingCatalogDto[];
+  plot_buildings?: PlotBuildingDto[];
+  stub_hires?: StubHireDto[];
 };
 
 const TERRAIN_COLOR: Record<string, string> = {
@@ -124,6 +155,16 @@ export default function HomePage() {
   );
 
   const playerInv = world?.inventory["player"] ?? {};
+
+  const buildingsHere = useMemo(() => {
+    if (!selectedPlotId || !world?.plot_buildings) return [];
+    return world.plot_buildings.filter((b) => b.plot_id === selectedPlotId);
+  }, [world?.plot_buildings, selectedPlotId]);
+
+  const eventLogReversed = useMemo(() => {
+    const ev = world?.event_log ?? [];
+    return [...ev].reverse();
+  }, [world?.event_log]);
 
   async function tick() {
     setBusy(true);
@@ -321,6 +362,47 @@ export default function HomePage() {
     }
   }
 
+  async function buildOnSelectedPlot(buildingId: string) {
+    if (!selectedPlotId) {
+      setError("Select a surveyed plot you own.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ building_id: buildingId, party: "player" });
+      const r = await fetch(
+        `/api/engine/plots/${encodeURIComponent(selectedPlotId)}/build?${q.toString()}`,
+        { method: "POST" },
+      );
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function hireNpc(employee: string, signingBonusCents: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        employer: "player",
+        employee,
+        signing_bonus_cents: String(signingBonusCents),
+      });
+      const r = await fetch(`/api/engine/hire?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function onPlotClick(p: PlotDto) {
     if (!p.owner) {
       void claim(p.id);
@@ -433,6 +515,33 @@ export default function HomePage() {
                         </li>
                       ))}
                     </ul>
+                    <div style={{ fontWeight: 600, margin: "12px 0 6px" }}>Build (stub, this plot)</div>
+                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {(world.building_catalog ?? []).map((b) => (
+                        <li key={b.id} style={{ marginBottom: 6 }}>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void buildOnSelectedPlot(b.id)}
+                            style={{ width: "100%", textAlign: "left" }}
+                          >
+                            {b.label} (${(b.cost_cents / 100).toFixed(2)})
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {buildingsHere.length > 0 ? (
+                      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+                        <div style={{ fontWeight: 600 }}>Built here</div>
+                        <ul style={{ paddingLeft: 18, margin: "4px 0 0" }}>
+                          {buildingsHere.map((x, i) => (
+                            <li key={`${x.building_id}-${i}`}>
+                              {x.label} ({x.building_id})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -472,6 +581,22 @@ export default function HomePage() {
                   ))}
               </tbody>
             </table>
+
+            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Hire (stub)</h3>
+            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
+              Signing bonus only (no labor output yet). Hires: {(world.stub_hires ?? []).length}
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              <button type="button" disabled={busy} onClick={() => void hireNpc("npc_grain_vendor", 100)}>
+                Grain vendor ($1)
+              </button>
+              <button type="button" disabled={busy} onClick={() => void hireNpc("t1_timber_merchant", 200)}>
+                Timber merchant ($2)
+              </button>
+              <button type="button" disabled={busy} onClick={() => void hireNpc("t1_lumber_buyer", 200)}>
+                Lumber buyer ($2)
+              </button>
+            </div>
 
             <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Market (limit asks)</h3>
             {(world.market_asks ?? []).length === 0 ? (
@@ -594,6 +719,31 @@ export default function HomePage() {
             <button type="button" disabled={busy} onClick={() => void honorContract()}>
               Honor last
             </button>
+
+            <h3 style={{ fontSize: 14, marginTop: 18, marginBottom: 6 }}>Action log</h3>
+            <div
+              style={{
+                maxHeight: 220,
+                overflowY: "auto",
+                border: "1px solid #30363d",
+                borderRadius: 4,
+                padding: 8,
+                fontSize: 11,
+                fontFamily: "ui-monospace, monospace",
+                background: "#0d1117",
+              }}
+            >
+              {eventLogReversed.length === 0 ? (
+                <span style={{ opacity: 0.6 }}>No events yet.</span>
+              ) : (
+                eventLogReversed.map((e, i) => (
+                  <div key={i} style={{ marginBottom: 6, lineHeight: 1.35 }}>
+                    <span style={{ opacity: 0.55 }}>t{e.tick}</span>{" "}
+                    <span style={{ opacity: 0.75 }}>[{e.kind}]</span> {e.message}
+                  </div>
+                ))
+              )}
+            </div>
           </aside>
         </section>
       ) : (
