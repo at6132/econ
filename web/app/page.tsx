@@ -1,18 +1,35 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
 import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
+import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
-import type { MapFxEvent } from "./mapFxTypes";
+import { cellRoughRadius, cellTextureShift, ownerTint } from "./mapHash";
+import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
+import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 
-const MAP_CELL_GAP = 2;
+const MAP_CELL_GAP = 1;
+const MAP_PAD = 4;
+
+const FX_HUE: Record<MapFxKind, number> = {
+  claim: 52,
+  survey: 188,
+  build: 38,
+  trade: 132,
+  produce: 24,
+  tick: 270,
+  ship: 210,
+  hire: 285,
+  contract: 0,
+};
 
 function panelHeadline(tab: TabId): string {
   for (const g of FRONTIER_MENU) {
@@ -161,13 +178,57 @@ export default function HomePage() {
   const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
   const [mapFx, setMapFx] = useState<MapFxEvent[]>([]);
   const mapFxSeq = useRef(0);
+  const sparkSeqRef = useRef(0);
+  const [sparks, setSparks] = useState<{ id: number; cx: number; cy: number; hue: number }[]>([]);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [mapZoom, setMapZoom] = useState(1);
+  const [mapStyle, setMapStyle] = useState<"terrain" | "satellite" | "political">("terrain");
+  const mapNavSuppress = useRef(false);
+  const panDragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+  const mapPanPointerId = useRef<number | null>(null);
+  const panRef = useRef(pan);
+  const mapZoomRef = useRef(mapZoom);
+  const didPan = useRef(false);
+  const didInitPan = useRef(false);
 
-  const queueFx = useCallback((ev: Omit<MapFxEvent, "id">) => {
-    const id = ++mapFxSeq.current;
-    setMapFx((prev) => [...prev, { id, ...ev }]);
-    window.setTimeout(() => {
-      setMapFx((prev) => prev.filter((e) => e.id !== id));
-    }, 1700);
+  panRef.current = pan;
+  mapZoomRef.current = mapZoom;
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("realm_frontier_map_style");
+      if (v === "satellite" || v === "political" || v === "terrain") setMapStyle(v);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    didInitPan.current = false;
+  }, [world?.seed]);
+
+  useEffect(() => {
+    const el = mapViewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const z0 = mapZoomRef.current;
+      const p = panRef.current;
+      const factor = Math.exp(-e.deltaY * 0.0009);
+      const z1 = Math.min(2.8, Math.max(0.38, z0 * factor));
+      const wx = (cx - p.x) / z0;
+      const wy = (cy - p.y) / z0;
+      const nextPan = { x: cx - wx * z1, y: cy - wy * z1 };
+      mapZoomRef.current = z1;
+      panRef.current = nextPan;
+      setMapZoom(z1);
+      setPan(nextPan);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
   const load = useCallback(async () => {
@@ -219,7 +280,7 @@ export default function HomePage() {
       cells[p.y][p.x] = p;
     }
     const gap = MAP_CELL_GAP;
-    const pad = 20;
+    const pad = 4;
     const innerW = Math.max(60, viewportPx.w - pad * 2);
     const innerH = Math.max(60, viewportPx.h - pad * 2);
     const cw = (innerW - gap * Math.max(0, w - 1)) / Math.max(1, w);
@@ -227,6 +288,47 @@ export default function HomePage() {
     const cellPx = Math.floor(Math.max(14, Math.min(88, Math.min(cw, ch))));
     return { w, h, cells, cellPx };
   }, [world, viewportPx]);
+
+  const gridContentPx = useMemo(() => {
+    if (!world || grid.w === 0) return { w: 0, h: 0 };
+    const w = MAP_PAD * 2 + grid.w * grid.cellPx + Math.max(0, grid.w - 1) * MAP_CELL_GAP;
+    const h = MAP_PAD * 2 + grid.h * grid.cellPx + Math.max(0, grid.h - 1) * MAP_CELL_GAP;
+    return { w, h };
+  }, [world, grid.w, grid.h, grid.cellPx]);
+
+  useLayoutEffect(() => {
+    const el = mapViewportRef.current;
+    if (!world || grid.w === 0 || !el || didInitPan.current) return;
+    const vw = el.clientWidth;
+    const vh = el.clientHeight;
+    const { w: cw, h: ch } = gridContentPx;
+    if (cw < 1 || ch < 1) return;
+    const next = { x: (vw - cw) / 2, y: (vh - ch) / 2 };
+    panRef.current = next;
+    mapZoomRef.current = 1;
+    setPan(next);
+    didInitPan.current = true;
+  }, [world, grid.w, grid.h, grid.cellPx, gridContentPx]);
+
+  const queueFx = useCallback(
+    (ev: Omit<MapFxEvent, "id">) => {
+      playFrontierSfx(ev.kind);
+      void resumeFrontierAudio();
+      const id = ++mapFxSeq.current;
+      setMapFx((prev) => [...prev, { id, ...ev }]);
+      window.setTimeout(() => {
+        setMapFx((prev) => prev.filter((e) => e.id !== id));
+      }, 1700);
+      if (grid.w > 0) {
+        const sid = ++sparkSeqRef.current;
+        const cx = MAP_PAD + ev.gx * (grid.cellPx + MAP_CELL_GAP) + grid.cellPx / 2;
+        const cy = MAP_PAD + ev.gy * (grid.cellPx + MAP_CELL_GAP) + grid.cellPx / 2;
+        setSparks((prev) => [...prev, { id: sid, cx, cy, hue: FX_HUE[ev.kind] ?? 200 }]);
+        window.setTimeout(() => setSparks((prev) => prev.filter((s) => s.id !== sid)), 480);
+      }
+    },
+    [grid.w, grid.cellPx],
+  );
 
   const buildsByPlot = useMemo(() => {
     const m = new Map<string, number>();
@@ -564,6 +666,71 @@ export default function HomePage() {
     }
   }
 
+  function resetMapView() {
+    const el = mapViewportRef.current;
+    if (!el || grid.w === 0) return;
+    const vw = el.clientWidth;
+    const vh = el.clientHeight;
+    const { w: nw, h: nh } = gridContentPx;
+    const next = { x: (vw - nw) / 2, y: (vh - nh) / 2 };
+    mapZoomRef.current = 1;
+    panRef.current = next;
+    setMapZoom(1);
+    setPan(next);
+  }
+
+  function cycleMapStyle() {
+    setMapStyle((s) => {
+      const next = s === "terrain" ? "satellite" : s === "satellite" ? "political" : "terrain";
+      try {
+        localStorage.setItem("realm_frontier_map_style", next);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function onMapPointerDownCapture(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    mapPanPointerId.current = e.pointerId;
+    didPan.current = false;
+    panDragRef.current = { sx: e.clientX, sy: e.clientY, px: panRef.current.x, py: panRef.current.y };
+  }
+
+  function onMapPointerMove(e: React.PointerEvent) {
+    const d = panDragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    if (dx * dx + dy * dy > 36) didPan.current = true;
+    if (dx * dx + dy * dy > 9) {
+      const next = { x: d.px + dx, y: d.py + dy };
+      panRef.current = next;
+      setPan(next);
+    }
+  }
+
+  function releaseMapPointerCapture() {
+    const pid = mapPanPointerId.current;
+    const el = mapViewportRef.current;
+    if (pid != null && el) {
+      try {
+        el.releasePointerCapture(pid);
+      } catch {
+        /* not capturing */
+      }
+    }
+    mapPanPointerId.current = null;
+  }
+
+  function onMapPointerUp() {
+    releaseMapPointerCapture();
+    if (didPan.current) mapNavSuppress.current = true;
+    panDragRef.current = null;
+  }
+
   function replayBriefing() {
     try {
       localStorage.removeItem(FRONTIER_ONBOARD_STORAGE_KEY);
@@ -644,77 +811,141 @@ export default function HomePage() {
                 <div className="realm-atmosphere__aurora" />
                 <div className="realm-atmosphere__stars" />
               </div>
-              <div ref={mapViewportRef} className="realm-map-viewport">
-                <div className="realm-map-frame realm-map-frame--hero">
-                  <motion.div
-                    key={world.tick}
-                    className="realm-tick-ripple"
-                    initial={{ opacity: 0.45 }}
-                    animate={{ opacity: 0 }}
-                    transition={{ duration: 0.55, ease: "easeOut" }}
-                  />
-                  <div className="realm-map-god-wrap">
-                    <div className="realm-map-grid-stack">
-                      <RealmMapFxOverlay
-                        events={mapFx}
-                        cellPx={grid.cellPx}
-                        gap={MAP_CELL_GAP}
-                        gridW={grid.w}
-                        gridH={grid.h}
-                        pad={4}
-                      />
-                      <div
-                        className="realm-map-grid"
-                        style={{
-                          gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)`,
-                          gap: MAP_CELL_GAP,
-                        }}
-                      >
-                        {grid.cells.flatMap((row, y) =>
-                          row.map((p, x) => {
-                            const sel = p && selectedPlotId === p.id;
-                            const mine = p?.owner === "player";
-                            const terrainCls = p ? terrainCellClass(p.terrain) : "realm-map-cell--void";
-                            const nBuild = p ? (buildsByPlot.get(p.id) ?? 0) : 0;
-                            const cls = [
-                              "realm-map-cell",
-                              terrainCls,
-                              sel ? "realm-map-cell--sel" : "",
-                              mine ? "realm-map-cell--mine" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ");
-                            return (
-                              <motion.button
-                                key={p?.id ?? `cell-${x}-${y}`}
-                                type="button"
-                                className={cls}
-                                title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
-                                disabled={busy || !p}
-                                onClick={() => p && onPlotClick(p)}
-                                layout
-                                whileTap={{ scale: 0.94 }}
-                                style={{
+              <div
+                ref={mapViewportRef}
+                className="realm-map-viewport"
+                onPointerDownCapture={onMapPointerDownCapture}
+                onPointerMove={onMapPointerMove}
+                onPointerUp={onMapPointerUp}
+                onPointerCancel={onMapPointerUp}
+              >
+                <motion.div
+                  key={world.tick}
+                  className="realm-tick-ripple"
+                  initial={{ opacity: 0.45 }}
+                  animate={{ opacity: 0 }}
+                  transition={{ duration: 0.55, ease: "easeOut" }}
+                />
+                <div className="realm-map-toolbar" role="toolbar" aria-label="Map controls">
+                  <span className="realm-map-toolbar__label">{mapStyle}</span>
+                  <button
+                    type="button"
+                    className="realm-map-toolbar__btn"
+                    onClick={() => {
+                      setMapZoom((z) => {
+                        const z1 = Math.min(2.8, z * 1.12);
+                        mapZoomRef.current = z1;
+                        return z1;
+                      });
+                    }}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    className="realm-map-toolbar__btn"
+                    onClick={() => {
+                      setMapZoom((z) => {
+                        const z1 = Math.max(0.38, z / 1.12);
+                        mapZoomRef.current = z1;
+                        return z1;
+                      });
+                    }}
+                  >
+                    −
+                  </button>
+                  <button type="button" className="realm-map-toolbar__btn" onClick={resetMapView}>
+                    Reset
+                  </button>
+                  <button type="button" className="realm-map-toolbar__btn" onClick={cycleMapStyle}>
+                    Style
+                  </button>
+                </div>
+                <div
+                  className="realm-map-world-surface"
+                  data-map-style={mapStyle}
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${mapZoom})`,
+                  }}
+                >
+                  <div className="realm-map-grid-stack">
+                    <RealmMapFxOverlay
+                      events={mapFx}
+                      cellPx={grid.cellPx}
+                      gap={MAP_CELL_GAP}
+                      gridW={grid.w}
+                      gridH={grid.h}
+                      pad={MAP_PAD}
+                    />
+                    <RealmMapParticlesCanvas width={gridContentPx.w} height={gridContentPx.h} sparks={sparks} />
+                    <div
+                      className="realm-map-grid"
+                      style={{
+                        gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)`,
+                        gap: MAP_CELL_GAP,
+                      }}
+                    >
+                      {grid.cells.flatMap((row, y) =>
+                        row.map((p, x) => {
+                          const sel = p && selectedPlotId === p.id;
+                          const mine = p?.owner === "player";
+                          const terrainCls = p ? terrainCellClass(p.terrain) : "realm-map-cell--void";
+                          const nBuild = p ? (buildsByPlot.get(p.id) ?? 0) : 0;
+                          const sh = p ? cellTextureShift(p.id, world.seed) : { bx: 0, by: 0 };
+                          const rr = p ? cellRoughRadius(p.id, world.seed) : 0;
+                          const ot = p ? ownerTint(p.owner) : "transparent";
+                          const cls = [
+                            "realm-map-cell",
+                            terrainCls,
+                            sel ? "realm-map-cell--sel" : "",
+                            mine ? "realm-map-cell--mine" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+                          return (
+                            <motion.button
+                              key={p?.id ?? `cell-${x}-${y}`}
+                              type="button"
+                              className={cls}
+                              data-owner={p?.owner ?? ""}
+                              title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
+                              disabled={busy || !p}
+                              onClick={() => {
+                                if (!p) return;
+                                if (mapNavSuppress.current) {
+                                  mapNavSuppress.current = false;
+                                  return;
+                                }
+                                onPlotClick(p);
+                              }}
+                              layout
+                              whileTap={{ scale: 0.94 }}
+                              style={
+                                {
                                   width: grid.cellPx,
                                   height: grid.cellPx,
-                                }}
-                              >
-                                {nBuild > 0 ? (
-                                  <span className="realm-map-cell__build" aria-hidden>
-                                    ▣{nBuild > 1 ? nBuild : ""}
-                                  </span>
-                                ) : null}
-                              </motion.button>
-                            );
-                          }),
-                        )}
-                      </div>
+                                  borderRadius: rr,
+                                  backgroundPosition: `${sh.bx}px ${sh.by}px`,
+                                  ["--owner-tint" as string]: ot,
+                                } as CSSProperties
+                              }
+                            >
+                              {nBuild > 0 ? (
+                                <span className="realm-map-cell__build" aria-hidden>
+                                  ▣{nBuild > 1 ? nBuild : ""}
+                                </span>
+                              ) : null}
+                            </motion.button>
+                          );
+                        }),
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Empty = <strong>claim</strong> · yours again = <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected
+                Drag to pan · wheel zooms toward cursor · Style cycles terrain / satellite / political. Empty = <strong>claim</strong> · yours again ={" "}
+                <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected
               </p>
             </div>
 

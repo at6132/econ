@@ -14,6 +14,34 @@ export type FrontierFeature = {
 
 export const FRONTIER_FEATURES: FrontierFeature[] = [
   {
+    id: "map_god_view",
+    title: "Pan / zoom frontier map",
+    detail: "Edge-to-edge map surface: drag to pan, wheel zoom toward cursor, terrain / satellite / political styles (saved locally).",
+    lane: "live",
+    jumpTab: "world",
+  },
+  {
+    id: "worldbox_sprites",
+    title: "Custom sprites & walk cycles",
+    detail: "No bespoke sprite sheets or unit walk cycles yet — that is art plus atlas work.",
+    lane: "planned",
+    jumpTab: "codex",
+  },
+  {
+    id: "worldbox_sfx_assets",
+    title: "Per-action SFX (asset pack)",
+    detail: "Prototype uses simple synthesized stings; no per-action sampled SFX until Audio plus an asset pack.",
+    lane: "planned",
+    jumpTab: "codex",
+  },
+  {
+    id: "worldbox_particles_engine",
+    title: "Heavy particles / WebGL",
+    detail: "FX are 2D DOM plus motion and light canvas bursts — enough for prototype; smoke, lightning, etc. can move to canvas/WebGL later.",
+    lane: "planned",
+    jumpTab: "codex",
+  },
+  {
     id: "manual_tick",
     title: "Manual turns",
     detail: "Time advances only when you press Advance tick — solo pacing, no idle sim.",
