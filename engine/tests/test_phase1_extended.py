@@ -1,0 +1,78 @@
+"""Movement, markets, persistence, social stubs."""
+
+from __future__ import annotations
+
+import os
+import tempfile
+
+from realm.ids import MaterialId, PartyId, PlotId
+from realm.movement import dispatch_shipment
+from realm.markets import market_buy, p2p_trade, place_sell_order
+from realm.persistence import load_snapshot, save_snapshot
+from realm.state_io import dumps_json, loads_json
+from realm.tick import advance_tick
+from realm.social import honor_contract_stub, propose_contract_stub
+from realm.world import bootstrap_frontier
+
+
+def test_json_roundtrip_preserves_ledger_total() -> None:
+    w = bootstrap_frontier(seed=11, grid_width=3, grid_height=2)
+    t0 = w.ledger.total_cents()
+    blob = dumps_json(w)
+    w2 = loads_json(blob)
+    assert w2.ledger.total_cents() == t0
+    assert w2.tick == w.tick
+
+
+def test_sqlite_roundtrip() -> None:
+    w = bootstrap_frontier(seed=12, grid_width=3, grid_height=2)
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "t.sqlite")
+        save_snapshot(path, w)
+        w2 = load_snapshot(path)
+    assert w2.seed == w.seed
+    assert w2.inventory.qty(PartyId("player"), MaterialId("timber")) == w.inventory.qty(
+        PartyId("player"), MaterialId("timber")
+    )
+
+
+def test_shipment_delivers_and_conserves_matter() -> None:
+    w = bootstrap_frontier(seed=13, grid_width=4, grid_height=2)
+    from realm.actions import claim_plot
+
+    a, b = PlotId("p-0-0"), PlotId("p-1-0")
+    assert claim_plot(w, PartyId("player"), a)["ok"] is True
+    assert claim_plot(w, PartyId("player"), b)["ok"] is True
+    u0 = w.inventory.total_units()
+    assert dispatch_shipment(w, PartyId("player"), MaterialId("timber"), 2, a, b)["ok"] is True
+    assert w.inventory.total_units() == u0 - 2
+    for _ in range(5):
+        advance_tick(w)
+    assert w.inventory.qty(PartyId("player"), MaterialId("timber")) >= 10
+
+
+def test_p2p_trade_moves_matter_and_money() -> None:
+    w = bootstrap_frontier(seed=14, grid_width=2, grid_height=2)
+    seller, buyer = PartyId("player"), PartyId("t1_consumer")
+    t0 = w.ledger.total_cents()
+    m_buyer_before = w.inventory.qty(buyer, MaterialId("grain"))
+    assert p2p_trade(w, seller, buyer, MaterialId("grain"), 1, 50)["ok"] is True
+    assert w.ledger.total_cents() == t0
+    assert w.inventory.qty(buyer, MaterialId("grain")) == m_buyer_before + 1
+
+
+def test_market_buy_from_listed_ask() -> None:
+    w = bootstrap_frontier(seed=15, grid_width=2, grid_height=2)
+    buyer = PartyId("t1_consumer")
+    before = w.inventory.qty(buyer, MaterialId("grain"))
+    r = market_buy(w, buyer, MaterialId("grain"), 2)
+    assert r["ok"] is True
+    assert w.inventory.qty(buyer, MaterialId("grain")) >= before + 1
+
+
+def test_contract_honor_increments_reputation() -> None:
+    w = bootstrap_frontier(seed=16, grid_width=2, grid_height=2)
+    pr = propose_contract_stub(w, PartyId("player"), PartyId("npc_grain_vendor"), "supply")
+    cid = pr["contract_id"]
+    assert honor_contract_stub(w, cid)["ok"] is True
+    assert w.reputation["player"]["honored"] >= 1
