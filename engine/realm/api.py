@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
-from realm.ids import PartyId, PlotId
+from realm.ids import MaterialId, PartyId, PlotId
+from realm.markets import cancel_sell_order, market_buy, p2p_trade, place_sell_order
+from realm.movement import dispatch_shipment
+from realm.persistence import load_snapshot, save_snapshot
+from realm.social import honor_contract_stub, propose_contract_stub
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier, world_public_dict
 
@@ -19,8 +24,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Single in-memory world for dev; persistence comes later
+# Single in-memory world for dev; optional SQLite via /persistence/*
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_SAVE_PATH = _REPO_ROOT / "saves" / "realm_dev.sqlite"
+
 _world = bootstrap_frontier(seed=42)
+
+
+def _save_path(path: str | None) -> Path:
+    if path:
+        p = Path(path)
+        if not p.is_absolute():
+            p = _REPO_ROOT / p
+    else:
+        p = _DEFAULT_SAVE_PATH
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 @app.get("/health")
@@ -74,3 +93,116 @@ def dev_reset(seed: Annotated[int, Query()] = 42) -> dict:
     global _world
     _world = bootstrap_frontier(seed=seed)
     return {"ok": True, "seed": seed}
+
+
+@app.post("/ship")
+def post_ship(
+    party: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+    from_plot: Annotated[str, Query()],
+    to_plot: Annotated[str, Query()],
+) -> dict:
+    r = dispatch_shipment(
+        _world,
+        PartyId(party),
+        MaterialId(material),
+        qty,
+        PlotId(from_plot),
+        PlotId(to_plot),
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/sell")
+def post_market_sell(
+    party: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+    price_per_unit_cents: Annotated[int, Query()],
+) -> dict:
+    r = place_sell_order(_world, PartyId(party), MaterialId(material), qty, price_per_unit_cents)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/cancel")
+def post_market_cancel(
+    party: Annotated[str, Query()],
+    order_id: Annotated[str, Query()],
+) -> dict:
+    r = cancel_sell_order(_world, PartyId(party), order_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/buy")
+def post_market_buy(
+    party: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    max_qty: Annotated[int, Query()],
+) -> dict:
+    r = market_buy(_world, PartyId(party), MaterialId(material), max_qty)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/trade/p2p")
+def post_trade_p2p(
+    seller: Annotated[str, Query()],
+    buyer: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+    total_price_cents: Annotated[int, Query()],
+) -> dict:
+    r = p2p_trade(
+        _world,
+        PartyId(seller),
+        PartyId(buyer),
+        MaterialId(material),
+        qty,
+        total_price_cents,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/propose")
+def post_contract_propose(
+    party_a: Annotated[str, Query()],
+    party_b: Annotated[str, Query()],
+    kind: Annotated[str, Query()] = "supply",
+) -> dict:
+    return propose_contract_stub(_world, PartyId(party_a), PartyId(party_b), kind)
+
+
+@app.post("/contracts/{contract_id}/honor")
+def post_contract_honor(contract_id: str) -> dict:
+    r = honor_contract_stub(_world, contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/persistence/save")
+def post_persistence_save(path: Annotated[str | None, Query()] = None) -> dict:
+    p = _save_path(path)
+    save_snapshot(str(p), _world)
+    return {"ok": True, "path": str(p)}
+
+
+@app.post("/persistence/load")
+def post_persistence_load(path: Annotated[str | None, Query()] = None) -> dict:
+    global _world
+    p = _save_path(path)
+    try:
+        _world = load_snapshot(str(p))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return {"ok": True, "path": str(p), "tick": _world.tick}

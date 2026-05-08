@@ -29,6 +29,23 @@ type ActiveProductionDto = {
   ticks_remaining: number;
 };
 
+type InTransitDto = {
+  id: string;
+  party: string;
+  material: string;
+  qty: number;
+  dest_plot_id: string;
+  arrive_tick: number;
+};
+
+type MarketAskDto = {
+  order_id: string;
+  party: string;
+  material: string;
+  qty: number;
+  price_per_unit_cents: number;
+};
+
 type WorldDto = {
   seed: number;
   tick: number;
@@ -38,6 +55,10 @@ type WorldDto = {
   parties: string[];
   recipes: RecipeDto[];
   active_production: ActiveProductionDto[];
+  in_transit?: InTransitDto[];
+  market_asks?: MarketAskDto[];
+  reputation?: Record<string, { honored: number; breached: number }>;
+  contracts?: Record<string, unknown>[];
 };
 
 const TERRAIN_COLOR: Record<string, string> = {
@@ -60,6 +81,14 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
+  const [shipFrom, setShipFrom] = useState("p-0-0");
+  const [shipTo, setShipTo] = useState("p-1-0");
+  const [shipMaterial, setShipMaterial] = useState("timber");
+  const [shipQty, setShipQty] = useState("1");
+  const [sellMaterial, setSellMaterial] = useState("timber");
+  const [sellQty, setSellQty] = useState("1");
+  const [sellPriceCents, setSellPriceCents] = useState("500");
+  const [lastContractId, setLastContractId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -151,6 +180,138 @@ export default function HomePage() {
         `/api/engine/plots/${encodeURIComponent(plotId)}/produce?${q.toString()}`,
         { method: "POST" },
       );
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function persistenceSave() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/engine/persistence/save", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function persistenceLoad() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/engine/persistence/load", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shipGoods() {
+    const qty = Number(shipQty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setError("Ship quantity must be a positive number.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        party: "player",
+        material: shipMaterial,
+        qty: String(qty),
+        from_plot: shipFrom,
+        to_plot: shipTo,
+      });
+      const r = await fetch(`/api/engine/ship?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function marketBuyGrain() {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ party: "player", material: "grain", max_qty: "1" });
+      const r = await fetch(`/api/engine/market/buy?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function placeSellOrder() {
+    const qty = Number(sellQty);
+    const price = Number(sellPriceCents);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) {
+      setError("Sell qty and price (cents) must be positive numbers.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        party: "player",
+        material: sellMaterial,
+        qty: String(qty),
+        price_per_unit_cents: String(price),
+      });
+      const r = await fetch(`/api/engine/market/sell?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function proposeContract() {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ party_a: "player", party_b: "npc_grain_vendor", kind: "supply" });
+      const r = await fetch(`/api/engine/contracts/propose?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      const body = (await r.json()) as { contract_id?: string };
+      if (body.contract_id) setLastContractId(body.contract_id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function honorContract() {
+    if (!lastContractId) {
+      setError("Propose a contract first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/engine/contracts/${encodeURIComponent(lastContractId)}/honor`, {
+        method: "POST",
+      });
       if (!r.ok) throw new Error(await r.text());
       await load();
     } catch (e) {
@@ -311,6 +472,128 @@ export default function HomePage() {
                   ))}
               </tbody>
             </table>
+
+            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Market (limit asks)</h3>
+            {(world.market_asks ?? []).length === 0 ? (
+              <p style={{ opacity: 0.7 }}>No open asks</p>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 8 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #30363d" }}>Mat</th>
+                    <th style={{ textAlign: "right", borderBottom: "1px solid #30363d" }}>Qty</th>
+                    <th style={{ textAlign: "right", borderBottom: "1px solid #30363d" }}>¢/u</th>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #30363d" }}>Seller</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(world.market_asks ?? []).map((a) => (
+                    <tr key={a.order_id}>
+                      <td style={{ padding: "4px 0" }}>{a.material}</td>
+                      <td style={{ textAlign: "right" }}>{a.qty}</td>
+                      <td style={{ textAlign: "right" }}>{a.price_per_unit_cents}</td>
+                      <td style={{ paddingLeft: 6 }}>{a.party}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <button type="button" disabled={busy} onClick={() => void marketBuyGrain()} style={{ marginRight: 8 }}>
+              Buy 1 grain (player)
+            </button>
+
+            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>List for sale (player)</h3>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                material
+                <input
+                  value={sellMaterial}
+                  onChange={(e) => setSellMaterial(e.target.value)}
+                  style={{ width: 100, padding: 4 }}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                qty
+                <input
+                  value={sellQty}
+                  onChange={(e) => setSellQty(e.target.value)}
+                  style={{ width: 48, padding: 4 }}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                ¢/unit
+                <input
+                  value={sellPriceCents}
+                  onChange={(e) => setSellPriceCents(e.target.value)}
+                  style={{ width: 56, padding: 4 }}
+                />
+              </label>
+              <button type="button" disabled={busy} onClick={() => void placeSellOrder()} style={{ alignSelf: "flex-end" }}>
+                Place ask
+              </button>
+            </div>
+
+            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>In transit</h3>
+            {(world.in_transit ?? []).length === 0 ? (
+              <p style={{ opacity: 0.7 }}>None</p>
+            ) : (
+              <ul style={{ paddingLeft: 18, margin: "0 0 8px", fontSize: 12 }}>
+                {(world.in_transit ?? []).map((s) => (
+                  <li key={s.id}>
+                    {s.material} ×{s.qty} → {s.dest_plot_id} (arr. tick {s.arrive_tick})
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Ship (player, owned plots)</h3>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                from
+                <input value={shipFrom} onChange={(e) => setShipFrom(e.target.value)} style={{ width: 72, padding: 4 }} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                to
+                <input value={shipTo} onChange={(e) => setShipTo(e.target.value)} style={{ width: 72, padding: 4 }} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                material
+                <input
+                  value={shipMaterial}
+                  onChange={(e) => setShipMaterial(e.target.value)}
+                  style={{ width: 88, padding: 4 }}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", fontSize: 11, gap: 2 }}>
+                qty
+                <input value={shipQty} onChange={(e) => setShipQty(e.target.value)} style={{ width: 40, padding: 4 }} />
+              </label>
+              <button type="button" disabled={busy} onClick={() => void shipGoods()} style={{ alignSelf: "flex-end" }}>
+                Dispatch
+              </button>
+            </div>
+
+            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Save / load (SQLite)</h3>
+            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
+              Writes <code>saves/realm_dev.sqlite</code> at repo root (from engine cwd).
+            </p>
+            <button type="button" disabled={busy} onClick={() => void persistenceSave()} style={{ marginRight: 8 }}>
+              Save snapshot
+            </button>
+            <button type="button" disabled={busy} onClick={() => void persistenceLoad()}>
+              Load snapshot
+            </button>
+
+            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Contracts (stub)</h3>
+            <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
+              Last id: {lastContractId ?? "—"} · open contracts: {(world.contracts ?? []).filter((c) => (c as { status?: string }).status === "open").length}
+            </p>
+            <button type="button" disabled={busy} onClick={() => void proposeContract()} style={{ marginRight: 8 }}>
+              Propose with vendor
+            </button>
+            <button type="button" disabled={busy} onClick={() => void honorContract()}>
+              Honor last
+            </button>
           </aside>
         </section>
       ) : (
