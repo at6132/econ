@@ -1,0 +1,108 @@
+---
+description: Realm project context — primitives, pillars, laws, stack, and how the agent must behave
+alwaysApply: true
+---
+
+# Realm — project context for the agent
+
+You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic civilization sim where every business, price, currency, and service is invented and run by players (or AI agents in solo mode). No quests, no levels, no win condition — only an emergent economy.
+
+**Solo-mode-first.** Solo (Python sim + Next.js/TS frontend) is the existence test of the design. Multiplayer comes much later. Mobile is a companion, not a port.
+
+**Current phase:** Phase 0 — Spec & Foundation. (Update this line on phase advance.)
+
+The full doc set lives in `realm_docs/realm_docs/00_README.md` … `15_GLOSSARY.md`. When in doubt, read the relevant doc rather than guess. If a doc and Avi conflict, ask Avi — docs may be stale.
+
+## The 9 economic primitives (`03_PRIMITIVES_SPEC.md`)
+
+1. Land / Plots — bounded regions with terrain, climate, hidden subsurface
+2. Matter / Materials — physical stuff, conserved
+3. Labor / Agents — time-bounded work capacity (player, NPC, AI)
+4. Time, Distance, Movement — distance has cost, things take time
+5. Capital / Money — single in-game currency, conserved, no creation outside designed channels
+6. Production — recipes (inputs + labor + energy → outputs at a location)
+7. Markets and Trade — order books for high volume, P2P for the rest
+8. Contracts — multi-step enforceable agreements (supply, loan, employment, equity, service)
+9. Code / Programmable Services — Lua services other players subscribe to
+
+Adding a new primitive is a major design event — flag it, do not silently add one.
+
+## The 7 design pillars (`02_DESIGN_PILLARS.md`) — never violate
+
+1. Players invent the content (we ship rules, not categories)
+2. Scarcity is real (conservation enforced)
+3. Geography matters (distance + terrain create friction)
+4. Information asymmetry creates markets (not everything is public)
+5. Reputation persists (public, append-only)
+6. Solo and multiplayer share one engine
+7. Mobile is a companion, not a port
+
+## The 10 laws of the universe (`04_LAWS_OF_THE_UNIVERSE.md`) — engine-enforced
+
+1. Conservation (matter + money) 2. Time scale (1 game-day ≈ 1 real-hour public; configurable solo) 3. Distance has cost 4. Energy is required for production 5. Decay without maintenance 6. Information has cost 7. Reputation accumulates 8. Identity has cost 9. Determinism (same inputs → same outputs) 10. Simulation is authoritative (no client-side trust)
+
+## v1 stack (solo) — `09_TECH_ARCHITECTURE.md`
+
+- Frontend: Next.js + React + TypeScript (strict mode)
+- 2D map: simple HTML/CSS in Phase 1, Pixi.js from Phase 2
+- Charts: Recharts
+- Simulation engine: Python (with type hints everywhere)
+- API (when needed): FastAPI (keeps stack uniform with sim)
+- Database (solo): SQLite per save file; Postgres later for multi
+- Lua sandbox: Phase 4+
+- LLM agents: Anthropic API (Tier 3, Phase 3+)
+- Mobile: React Native + Expo (later phase)
+
+Don't introduce new tech without justification. Don't propose Rust/Go for the sim core in v1.
+
+## Coding conventions
+
+- TypeScript strict on frontend; Python type hints everywhere on backend.
+- Functions over classes where reasonable.
+- Names that describe what something *is*, not how it's implemented.
+- All state mutations go through the simulation's transaction layer. Never mutate state directly.
+- All randomness is seeded by `(world.tick, purpose)`. Never `random.random()` or `Date.now()` in game logic.
+- Tests for any function that touches conservation laws (every code path that moves money or matter).
+- All actions return a result object: `{ ok: true, ... } | { ok: false, reason: '...' }`. No throwing for expected rejections.
+
+## How to behave when Avi asks for something
+
+1. **Locate the phase.** If the request is out-of-phase, flag and ask before building. Phase plan: `13_PHASED_TODO.md`.
+2. **Locate the primitive(s) involved.** Ground work in the 9 primitives.
+3. **Check pillars and laws.** If the request would violate any, surface it.
+4. **Propose, then implement.** For non-trivial work, sketch (file structure, function signatures, data flow) and wait for Avi's nod before generating code.
+5. **Write tests for conservation-touching code.**
+6. **Don't over-engineer for future phases.** v1 simplicity > v3 generality.
+7. **Don't create new top-level repo structure without asking.**
+
+## Things never to do
+
+- 3D, fancy graphics, "wouldn't it be cool" features. Aesthetic is locked: 2D dense data UIs.
+- Combat, quests, NPCs with dialog trees, achievements, levels, skill trees, tycoon-clicker tropes.
+- Blockchain, crypto, NFTs, play-to-earn.
+- Code that creates money or matter outside designed channels.
+- Bypass the transaction layer.
+- Non-deterministic game logic.
+- Refactor for v3 needs while in Phase 1.
+
+## Proposal format for non-trivial work
+
+> **Feature:** [name]
+> **Phase fit:** [current phase or backlog]
+> **Primitives touched:** [from the 9]
+> **Pillar/law check:** [confirm no violations or flag]
+> **Approach:** [3–5 sentence sketch]
+> **Files affected:** [list]
+> **Tests needed:** [especially conservation tests]
+>
+> Want me to implement?
+
+Then wait for "yes" before writing code.
+
+## Working preferences
+
+- Compact list format for totals/state summaries.
+- When delivering a complete script, retain previously requested features across iterations.
+- If Avi asks for "the whole script," produce the full file, not a diff.
+- Default to deep + concrete; switch to short answers when Avi asks.
+- Commit incrementally per `git-incremental-commits.mdc` — small reviewable commits, not one giant end-of-session commit.
