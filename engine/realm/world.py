@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
+
 from realm.ids import PartyId, PlotId
-from realm.inventory import Inventory
+from realm.inventory import Inventory, MatterErr
 from realm.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
-from realm.inventory import MatterErr
 from realm.materials import MaterialId
 from realm.recipes import recipe_public_list
 from realm.rng import make_rng
@@ -20,6 +21,16 @@ class ActiveProduction:
     plot_id: PlotId
     recipe_id: str
     ticks_remaining: int
+
+
+@dataclass
+class InTransit:
+    shipment_id: str
+    party: PartyId
+    material: MaterialId
+    qty: int
+    dest_plot_id: PlotId
+    arrive_tick: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +66,13 @@ class World:
     parties: set[PartyId] = field(default_factory=set)
     active_production: list[ActiveProduction] = field(default_factory=list)
     next_production_seq: int = 0
+    in_transit: list[InTransit] = field(default_factory=list)
+    next_shipment_seq: int = 0
+    market_asks_by_material: dict[str, list[Any]] = field(default_factory=dict)
+    next_order_seq: int = 0
+    reputation: dict[str, dict[str, int]] = field(default_factory=dict)
+    contracts: list[dict] = field(default_factory=list)
+    next_contract_seq: int = 0
 
     def rng(self, purpose: str):
         return make_rng(self.tick, purpose)
@@ -144,17 +162,43 @@ def bootstrap_frontier(
         (MaterialId("iron_ore"), 6),
         (MaterialId("copper_ore"), 6),
         (MaterialId("clay"), 10),
-        (MaterialId("grain"), 8),
+        (MaterialId("grain"), 20),
     )
     for mid, qty in _starter:
         ad = inv.add(human, mid, qty)
         if isinstance(ad, MatterErr):
             raise ValueError(ad.reason)
+    world.reputation[str(human)] = {"honored": 0, "breached": 0}
+    vendor = PartyId("npc_grain_vendor")
+    consumer = PartyId("t1_consumer")
+    world.parties.add(vendor)
+    world.parties.add(consumer)
+    world.reputation[str(vendor)] = {"honored": 0, "breached": 0}
+    world.reputation[str(consumer)] = {"honored": 0, "breached": 0}
+    tr_g = inv.transfer(material=MaterialId("grain"), qty=10, from_party=human, to_party=vendor)
+    if isinstance(tr_g, MatterErr):
+        raise ValueError(tr_g.reason)
+    cc = party_cash_account(consumer)
+    world.ledger.ensure_account(cc)
+    tr_c = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=cc,
+        amount_cents=25_000,
+    )
+    if isinstance(tr_c, MoneyErr):
+        raise ValueError(tr_c.reason)
+    from realm.markets import place_sell_order
+
+    pr = place_sell_order(world, vendor, MaterialId("grain"), 10, 120)
+    if not pr.get("ok"):
+        raise ValueError(str(pr.get("reason")))
     return world
 
 
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
+    from realm.markets import market_book_public
+
     plots_out: list[dict] = []
     for p in world.plots.values():
         entry: dict = {
@@ -196,4 +240,18 @@ def world_public_dict(world: World) -> dict:
             }
             for a in world.active_production
         ],
+        "in_transit": [
+            {
+                "id": s.shipment_id,
+                "party": str(s.party),
+                "material": str(s.material),
+                "qty": s.qty,
+                "dest_plot_id": str(s.dest_plot_id),
+                "arrive_tick": s.arrive_tick,
+            }
+            for s in world.in_transit
+        ],
+        "market_asks": market_book_public(world),
+        "reputation": dict(world.reputation),
+        "contracts": list(world.contracts),
     }
