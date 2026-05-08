@@ -7,8 +7,12 @@ import { FRONTIER_FEATURES } from "./frontierFeatures";
 import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
+import type { MapFxEvent } from "./mapFxTypes";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
+import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
+
+const MAP_CELL_GAP = 2;
 
 function panelHeadline(tab: TabId): string {
   for (const g of FRONTIER_MENU) {
@@ -117,19 +121,20 @@ type WorldDto = {
   hire_catalog?: HireCatalogRow[];
 };
 
-const TERRAIN_COLOR: Record<string, string> = {
-  plains: "#78c850",
-  forest: "#286028",
-  mountain: "#9090a8",
-  desert: "#e8c060",
-  tundra: "#a8d8f0",
-  swamp: "#408850",
-  water_shallow: "#4890d8",
-  water_deep: "#183878",
-};
+const KNOWN_TERRAIN = new Set([
+  "plains",
+  "forest",
+  "mountain",
+  "desert",
+  "tundra",
+  "swamp",
+  "water_shallow",
+  "water_deep",
+]);
 
-function terrainColor(t: string): string {
-  return TERRAIN_COLOR[t] ?? "#3d4450";
+function terrainCellClass(terrain: string): string {
+  if (!KNOWN_TERRAIN.has(terrain)) return "realm-map-cell--t-unknown";
+  return `realm-map-cell--t-${terrain}`;
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -154,6 +159,16 @@ export default function HomePage() {
   const [commandOpen, setCommandOpen] = useState(true);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
+  const [mapFx, setMapFx] = useState<MapFxEvent[]>([]);
+  const mapFxSeq = useRef(0);
+
+  const queueFx = useCallback((ev: Omit<MapFxEvent, "id">) => {
+    const id = ++mapFxSeq.current;
+    setMapFx((prev) => [...prev, { id, ...ev }]);
+    window.setTimeout(() => {
+      setMapFx((prev) => prev.filter((e) => e.id !== id));
+    }, 1700);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -203,7 +218,7 @@ export default function HomePage() {
     for (const p of world.plots) {
       cells[p.y][p.x] = p;
     }
-    const gap = 2;
+    const gap = MAP_CELL_GAP;
     const pad = 20;
     const innerW = Math.max(60, viewportPx.w - pad * 2);
     const innerH = Math.max(60, viewportPx.h - pad * 2);
@@ -212,6 +227,14 @@ export default function HomePage() {
     const cellPx = Math.floor(Math.max(14, Math.min(88, Math.min(cw, ch))));
     return { w, h, cells, cellPx };
   }, [world, viewportPx]);
+
+  const buildsByPlot = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const b of world?.plot_buildings ?? []) {
+      m.set(b.plot_id, (m.get(b.plot_id) ?? 0) + 1);
+    }
+    return m;
+  }, [world?.plot_buildings]);
 
   const selectedPlot = useMemo(
     () => world?.plots.find((p) => p.id === selectedPlotId) ?? null,
@@ -241,6 +264,14 @@ export default function HomePage() {
     try {
       const r = await fetch("/api/engine/tick", { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "tick",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+          label: "TURN",
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -249,12 +280,13 @@ export default function HomePage() {
     }
   }
 
-  async function claim(plotId: string) {
+  async function claimPlot(p: PlotDto) {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/claim`, { method: "POST" });
+      const r = await fetch(`/api/engine/plots/${encodeURIComponent(p.id)}/claim`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      queueFx({ kind: "claim", gx: p.x, gy: p.y, label: "CLAIM" });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -263,12 +295,13 @@ export default function HomePage() {
     }
   }
 
-  async function survey(plotId: string) {
+  async function surveyPlot(p: PlotDto) {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/survey`, { method: "POST" });
+      const r = await fetch(`/api/engine/plots/${encodeURIComponent(p.id)}/survey`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      queueFx({ kind: "survey", gx: p.x, gy: p.y, label: "SCAN" });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -278,6 +311,7 @@ export default function HomePage() {
   }
 
   async function produce(plotId: string, recipeId: string) {
+    const plot = world?.plots.find((pp) => pp.id === plotId);
     setBusy(true);
     setError(null);
     try {
@@ -286,6 +320,7 @@ export default function HomePage() {
         method: "POST",
       });
       if (!r.ok) throw new Error(await r.text());
+      if (plot) queueFx({ kind: "produce", gx: plot.x, gy: plot.y, label: "MAKE" });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -340,6 +375,8 @@ export default function HomePage() {
       });
       const r = await fetch(`/api/engine/ship?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      const dest = world?.plots.find((pp) => pp.id === shipTo);
+      if (dest) queueFx({ kind: "ship", gx: dest.x, gy: dest.y, label: "SHIP" });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -355,6 +392,14 @@ export default function HomePage() {
       const q = new URLSearchParams({ party: "player", material: "grain", max_qty: "1" });
       const r = await fetch(`/api/engine/market/buy?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 3)),
+          label: "BUY",
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -381,6 +426,14 @@ export default function HomePage() {
       });
       const r = await fetch(`/api/engine/market/sell?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((2 * (grid.h - 1)) / 3)),
+          label: "SELL",
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -398,6 +451,14 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       const body = (await r.json()) as { contract_id?: string };
       if (body.contract_id) setLastContractId(body.contract_id);
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "contract",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+          label: "PACT",
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -418,6 +479,14 @@ export default function HomePage() {
         method: "POST",
       });
       if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "contract",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+          label: "OK",
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -431,6 +500,7 @@ export default function HomePage() {
       setError("Select a surveyed plot you own.");
       return;
     }
+    const plot = world?.plots.find((pp) => pp.id === selectedPlotId);
     setBusy(true);
     setError(null);
     try {
@@ -440,6 +510,7 @@ export default function HomePage() {
         { method: "POST" },
       );
       if (!r.ok) throw new Error(await r.text());
+      if (plot) queueFx({ kind: "build", gx: plot.x, gy: plot.y, label: "RISE" });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -459,6 +530,14 @@ export default function HomePage() {
       });
       const r = await fetch(`/api/engine/hire?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "hire",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+          label: "HIRE",
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -469,14 +548,14 @@ export default function HomePage() {
 
   function onPlotClick(p: PlotDto) {
     if (!p.owner) {
-      void claim(p.id);
+      void claimPlot(p);
       setSelectedPlotId(p.id);
       setTab("world");
       return;
     }
     if (p.owner === "player") {
       if (!p.surveyed) {
-        void survey(p.id);
+        void surveyPlot(p);
         setTab("world");
         return;
       }
@@ -574,36 +653,63 @@ export default function HomePage() {
                     animate={{ opacity: 0 }}
                     transition={{ duration: 0.55, ease: "easeOut" }}
                   />
-                  <div
-                    className="realm-map-grid"
-                    style={{ gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)` }}
-                  >
-                    {grid.cells.flatMap((row, y) =>
-                      row.map((p, x) => {
-                        const sel = p && selectedPlotId === p.id;
-                        const mine = p?.owner === "player";
-                        const cls = ["realm-map-cell", sel ? "realm-map-cell--sel" : "", mine ? "realm-map-cell--mine" : ""]
-                          .filter(Boolean)
-                          .join(" ");
-                        return (
-                          <motion.button
-                            key={p?.id ?? `cell-${x}-${y}`}
-                            type="button"
-                            className={cls}
-                            title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
-                            disabled={busy || !p}
-                            onClick={() => p && onPlotClick(p)}
-                            layout
-                            whileTap={{ scale: 0.94 }}
-                            style={{
-                              width: grid.cellPx,
-                              height: grid.cellPx,
-                              background: p ? terrainColor(p.terrain) : "#000",
-                            }}
-                          />
-                        );
-                      }),
-                    )}
+                  <div className="realm-map-god-wrap">
+                    <div className="realm-map-grid-stack">
+                      <RealmMapFxOverlay
+                        events={mapFx}
+                        cellPx={grid.cellPx}
+                        gap={MAP_CELL_GAP}
+                        gridW={grid.w}
+                        gridH={grid.h}
+                        pad={4}
+                      />
+                      <div
+                        className="realm-map-grid"
+                        style={{
+                          gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)`,
+                          gap: MAP_CELL_GAP,
+                        }}
+                      >
+                        {grid.cells.flatMap((row, y) =>
+                          row.map((p, x) => {
+                            const sel = p && selectedPlotId === p.id;
+                            const mine = p?.owner === "player";
+                            const terrainCls = p ? terrainCellClass(p.terrain) : "realm-map-cell--void";
+                            const nBuild = p ? (buildsByPlot.get(p.id) ?? 0) : 0;
+                            const cls = [
+                              "realm-map-cell",
+                              terrainCls,
+                              sel ? "realm-map-cell--sel" : "",
+                              mine ? "realm-map-cell--mine" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+                            return (
+                              <motion.button
+                                key={p?.id ?? `cell-${x}-${y}`}
+                                type="button"
+                                className={cls}
+                                title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
+                                disabled={busy || !p}
+                                onClick={() => p && onPlotClick(p)}
+                                layout
+                                whileTap={{ scale: 0.94 }}
+                                style={{
+                                  width: grid.cellPx,
+                                  height: grid.cellPx,
+                                }}
+                              >
+                                {nBuild > 0 ? (
+                                  <span className="realm-map-cell__build" aria-hidden>
+                                    ▣{nBuild > 1 ? nBuild : ""}
+                                  </span>
+                                ) : null}
+                              </motion.button>
+                            );
+                          }),
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

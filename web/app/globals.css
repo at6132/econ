@@ -297,12 +297,189 @@ body::after {
   mix-blend-mode: screen;
 }
 
+/* WorldBox-style god view: slight perspective + floating world */
+.realm-map-god-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  filter: drop-shadow(0 32px 24px rgba(0, 0, 0, 0.6));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .realm-map-god-wrap {
+    perspective: 1400px;
+  }
+
+  .realm-map-grid-stack {
+    transform: rotateX(11deg);
+    transform-style: preserve-3d;
+    transition: transform 0.35s ease;
+  }
+
+  .realm-map-god-wrap:hover .realm-map-grid-stack {
+    transform: rotateX(9deg);
+  }
+}
+
+.realm-map-grid-stack {
+  position: relative;
+  display: inline-block;
+}
+
+.realm-map-fx-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.realm-map-fx-burst {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.realm-map-fx-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+}
+
+.realm-map-fx-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2px 0 0 -2px;
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
+}
+
+.realm-map-fx-label {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  translate: -50% 0;
+  font-family: var(--realm-font-display);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  color: var(--realm-text);
+  text-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+}
+
+.realm-map-fx-scaffold {
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 72%;
+  height: 42%;
+  margin-left: -36%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(201, 162, 39, 0.92) 3px,
+    rgba(201, 162, 39, 0.92) 5px
+  );
+  transform-origin: bottom center;
+  border: 2px solid #000;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .realm-map-god-wrap {
+    perspective: none;
+  }
+
+  .realm-map-grid-stack {
+    transform: none;
+  }
+}
+
+/* Pixel terrain (top-down god sim) */
+.realm-map-cell--void {
+  background: #07070d;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+}
+
+.realm-map-cell--t-plains {
+  background-image:
+    repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0, 0, 0, 0.07) 3px, rgba(0, 0, 0, 0.07) 4px),
+    linear-gradient(165deg, #8fd060 0%, #4a8a38 55%, #356028 100%);
+}
+
+.realm-map-cell--t-forest {
+  background-image:
+    repeating-linear-gradient(-35deg, transparent, transparent 2px, rgba(0, 40, 0, 0.12) 2px, rgba(0, 40, 0, 0.12) 3px),
+    linear-gradient(180deg, #2d8040 0%, #143018 100%);
+}
+
+.realm-map-cell--t-mountain {
+  background-image:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.12) 0%, transparent 40%),
+    linear-gradient(180deg, #a8a8b8 0%, #4a4a58 45%, #2a2a32 100%);
+}
+
+.realm-map-cell--t-desert {
+  background-image:
+    repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(120, 80, 20, 0.1) 4px, rgba(120, 80, 20, 0.1) 5px),
+    linear-gradient(180deg, #f0d878 0%, #c89838 100%);
+}
+
+.realm-map-cell--t-tundra {
+  background-image:
+    linear-gradient(180deg, #d8f0ff 0%, #78a8c8 55%, #406080 100%);
+}
+
+.realm-map-cell--t-swamp {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 40% 60%, rgba(0, 0, 0, 0.2) 0%, transparent 55%),
+    linear-gradient(180deg, #4a9850 0%, #1a4020 100%);
+}
+
+.realm-map-cell--t-water_shallow {
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.06) 2px, rgba(255, 255, 255, 0.06) 3px),
+    linear-gradient(180deg, #58b0e8 0%, #2868a8 100%);
+}
+
+.realm-map-cell--t-water_deep {
+  background-image:
+    linear-gradient(180deg, #3068a8 0%, #0a1838 100%);
+}
+
+.realm-map-cell--t-unknown {
+  background: #3d4450;
+}
+
+.realm-map-cell__build {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: max(8px, 0.35em);
+  line-height: 1;
+  color: var(--realm-accent);
+  text-shadow:
+    0 0 2px #000,
+    1px 1px 0 #000;
+  pointer-events: none;
+  z-index: 2;
+}
+
 .realm-map-footnote {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 5;
+  z-index: 8;
   margin: 0;
   padding: 8px 14px 10px;
   font-size: 17px;
@@ -471,6 +648,7 @@ body::after {
 }
 
 .realm-map-cell {
+  position: relative;
   border: none;
   border-radius: 0;
   cursor: pointer;
