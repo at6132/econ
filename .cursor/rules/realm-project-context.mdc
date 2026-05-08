@@ -106,3 +106,4 @@ For those, use a **compact** proposal (feature name, phase fit, primitives, pill
 - If Avi asks for "the whole script," produce the full file, not a diff.
 - Default to concrete implementation; go deep when Avi asks for depth.
 - Commit incrementally per `git-incremental-commits.mdc` — small reviewable commits, not one giant end-of-session commit.
+- **When you stop** after substantive work (features, refactors, or multi-file changes), end the message with a **Manual tests for Avi** section: a **numbered checklist** of exact steps (URLs, clicks, commands, expected results). Not vague ("test the app"); specific (e.g. "1. `cd engine` … 2. POST … 3. expect JSON …").

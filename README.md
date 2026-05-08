@@ -106,7 +106,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 — terrain grid, claim plot, survey ($500), advance tick. Persistence and full Phase 1 systems (production, markets, agents) are next slices.
+Open http://localhost:3000 — claim a plot, survey it, pick a recipe, advance ticks until the run completes and inventory updates. Next slices: movement, markets, agents, SQLite.
 
 ### Phase 1 checklist (excerpt)
 
@@ -114,7 +114,9 @@ Open http://localhost:3000 — terrain grid, claim plot, survey ($500), advance 
 - [x] Small grid world + terrain + hidden subsurface (API hides until surveyed)
 - [x] Capital ledger + conservation tests; matter inventory + transfer test
 - [x] Basic Next.js map + FastAPI bridge
-- [ ] Production recipes, movement, order books, P2P, contracts, reputation stub
+- [x] Production recipes (5 templates) + tick-based completion + starter inventory
+- [ ] Movement / transit
+- [ ] Order books + P2P, contracts stub, reputation stub
 - [ ] Tier 1 agents (~6), SQLite save/load
 
 ---
