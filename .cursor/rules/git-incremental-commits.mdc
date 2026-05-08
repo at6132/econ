@@ -1,0 +1,15 @@
+---
+description: Commit logical units of work as you go, not only at the end
+alwaysApply: true
+---
+
+# Incremental Git commits
+
+When doing multi-step or non-trivial work in this repository:
+
+1. **Commit in logical slices** — After a coherent change (one feature, one fix, one refactor pass), stage only what belongs together and commit with a short, imperative subject line (and body only when it helps).
+2. **Avoid one giant end-of-session commit** — Prefer several small commits the user can review, bisect, or revert.
+3. **Keep commits buildable when reasonable** — Do not land commits that knowingly break the project unless the user asked for explicit WIP checkpoints; in that case use a clear `WIP:` prefix in the message.
+4. **Run the usual checks before committing** — If the project has tests, lint, or format scripts, run what fits the change before `git commit`.
+
+If there is nothing to commit yet, do not create empty commits.
