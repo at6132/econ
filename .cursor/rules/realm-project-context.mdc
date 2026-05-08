@@ -9,7 +9,7 @@ You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic c
 
 **Solo-mode-first.** Solo (Python sim + Next.js/TS frontend) is the existence test of the design. Multiplayer comes much later. Mobile is a companion, not a port.
 
-**Current phase:** Phase 0 — Spec & Foundation. (Update this line on phase advance.)
+**Current phase:** Phase 1 — Solo Engine Prototype. (Update this line on phase advance.)
 
 The full doc set lives in `realm_docs/00_README.md` … `realm_docs/15_GLOSSARY.md`. When in doubt, read the relevant doc rather than guess. If a doc and Avi conflict, ask Avi — docs may be stale.
 

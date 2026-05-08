@@ -5,12 +5,19 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from realm.actions import claim_plot, survey_plot
 from realm.ids import PartyId, PlotId
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Single in-memory world for dev; persistence comes later
 _world = bootstrap_frontier(seed=42)

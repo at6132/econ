@@ -2,7 +2,7 @@
 
 > A 2D, web-first economic civilization sim where every business, price, currency, and service is invented and run by players — or by AI agents that act like players when you're alone.
 
-**Status:** Phase 0 — Spec & Foundation. No engine code yet.
+**Status:** Phase 1 — Solo engine prototype (in progress). Spec in `realm_docs/`; runnable shell: Python engine + Next.js map.
 **Designer / builder:** Avi (Sheva Studios).
 **Doc set version:** v1.0.
 
@@ -86,17 +86,36 @@ Update the **Current phase** line in `realm-project-context.mdc` whenever you ad
 
 ## Where we are right now
 
-Phase 0 deliverables (per [`realm_docs/13_PHASED_TODO.md`](realm_docs/13_PHASED_TODO.md)):
+Phase 0 (spec + worked businesses) is documented; **active build is Phase 1** per [`realm_docs/13_PHASED_TODO.md`](realm_docs/13_PHASED_TODO.md).
 
-- [x] Spec doc set drafted (16 docs in `realm_docs/`)
-- [x] Project repo initialized with clean structure (in progress)
-- [x] v1 stack committed (Python + Next.js + SQLite, see doc 09)
-- [x] 1-pager pitch (this file)
-- [ ] 5 worked player-business examples expressed only via the 9 primitives — Phase 0 test gate
-- [ ] Glossary review pass (doc 15)
-- [ ] Engine / web / mobile directory skeleton
+### Run the prototype shell
 
-Once the test gate passes, we move to **Phase 1 — Solo Engine Prototype** (build a tick-based deterministic sim with ~30–50 plots, ~6 Tier 1 agents, hand-authored recipes, table-based UI, SQLite saves; playtest with 3–5 strangers; 3 of 5 must say "I'd play another hour").
+Terminal 1 — engine API:
+
+```powershell
+Set-Location c:\Users\avita\econ\engine
+python -m pip install -e .
+uvicorn realm.api:app --reload --port 8000
+```
+
+Terminal 2 — web client (proxies `/api/engine` → engine):
+
+```powershell
+Set-Location c:\Users\avita\econ\web
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 — terrain grid, claim plot, survey ($500), advance tick. Persistence and full Phase 1 systems (production, markets, agents) are next slices.
+
+### Phase 1 checklist (excerpt)
+
+- [x] Tick-based time + deterministic RNG
+- [x] Small grid world + terrain + hidden subsurface (API hides until surveyed)
+- [x] Capital ledger + conservation tests; matter inventory + transfer test
+- [x] Basic Next.js map + FastAPI bridge
+- [ ] Production recipes, movement, order books, P2P, contracts, reputation stub
+- [ ] Tier 1 agents (~6), SQLite save/load
 
 ---
 
