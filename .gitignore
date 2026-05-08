@@ -39,6 +39,7 @@ profile_default/
 ipython_config.py
 
 # --- Node / Next.js (web client) ---
+*.tsbuildinfo
 node_modules/
 .pnp.*
 .yarn/cache
