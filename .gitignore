@@ -1,0 +1,107 @@
+# --- Python (simulation engine + FastAPI) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Type / lint / test caches
+.mypy_cache/
+.pytype/
+.ruff_cache/
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+nosetests.xml
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# --- Node / Next.js (web client) ---
+node_modules/
+.pnp.*
+.yarn/cache
+.yarn/install-state.gz
+.next/
+out/
+.turbo/
+.vercel/
+
+# Build output
+build/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# --- React Native / Expo (later, mobile companion) ---
+.expo/
+.expo-shared/
+ios/build/
+android/build/
+android/app/build/
+android/.gradle/
+
+# --- SQLite save files (per-save artifacts, never committed) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# --- Realm save / runtime data (when these dirs exist) ---
+saves/
+runtime/
+local_data/
+
+# --- Environment / secrets ---
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+*.pem
+*.key
+secrets/
+
+# --- IDE / editors ---
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
