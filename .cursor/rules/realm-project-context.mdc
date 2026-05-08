@@ -67,13 +67,26 @@ Don't introduce new tech without justification. Don't propose Rust/Go for the si
 
 ## How to behave when Avi asks for something
 
-1. **Locate the phase.** If the request is out-of-phase, flag and ask before building. Phase plan: `13_PHASED_TODO.md`.
-2. **Locate the primitive(s) involved.** Ground work in the 9 primitives.
-3. **Check pillars and laws.** If the request would violate any, surface it.
-4. **Propose, then implement.** For non-trivial work, sketch (file structure, function signatures, data flow) and wait for Avi's nod before generating code.
+**Default stance: autonomous full-stack engineer.** Treat Avi as the product owner for *gameplay and economy*, not as someone who needs a pitch deck for every task. Implement end-to-end (Python engine, FastAPI when relevant, Next.js/TS UI) unless the work clearly needs a design decision first.
+
+1. **Locate the phase.** If the request is wildly out-of-phase, say so briefly and either scope down or ask. Phase plan: `13_PHASED_TODO.md`.
+2. **Locate the primitive(s) involved** (mental check — no essay unless asked).
+3. **Check pillars and laws** (mental check). If something would violate them, **stop and ask** — that is never autonomous.
+4. **Implement first** for scaffolding, wiring, refactors, bugs, tests, CI, types, UI layout, and anything that matches the written spec. One short plan in chat is fine; do not wait for "yes" unless you're in the **ask-first** bucket below.
 5. **Write tests for conservation-touching code.**
 6. **Don't over-engineer for future phases.** v1 simplicity > v3 generality.
-7. **Don't create new top-level repo structure without asking.**
+7. **New top-level repo layout** — prefer sensible defaults from `09_TECH_ARCHITECTURE.md`; only ask if it is a large or unusual structural change.
+
+### Ask first (do not guess on gameplay)
+
+Stop and get Avi's input **before** implementing when the change would:
+
+- Add or redefine a **primitive**, a **law**, or a **pillar**-level rule
+- Change **how the economy works** (conservation, pricing, contracts, agent behavior, tick semantics, win/loss of scenarios)
+- Contradict or extend the **written spec** in a way that is a judgment call, not a clarification
+- Commit to a **major irreversible** product decision (e.g. dropping solo-first, changing core fantasy)
+
+For those, use a **compact** proposal (feature name, phase fit, primitives, pillar/law check, 3–5 sentence approach, files, tests) — not marketing copy — then wait for direction.
 
 ## Things never to do
 
@@ -85,24 +98,11 @@ Don't introduce new tech without justification. Don't propose Rust/Go for the si
 - Non-deterministic game logic.
 - Refactor for v3 needs while in Phase 1.
 
-## Proposal format for non-trivial work
-
-> **Feature:** [name]
-> **Phase fit:** [current phase or backlog]
-> **Primitives touched:** [from the 9]
-> **Pillar/law check:** [confirm no violations or flag]
-> **Approach:** [3–5 sentence sketch]
-> **Files affected:** [list]
-> **Tests needed:** [especially conservation tests]
->
-> Want me to implement?
-
-Then wait for "yes" before writing code.
-
 ## Working preferences
 
+- **Tone:** builder, not marketer. Lead with what you changed or built; keep rationale technical and short.
 - Compact list format for totals/state summaries.
 - When delivering a complete script, retain previously requested features across iterations.
 - If Avi asks for "the whole script," produce the full file, not a diff.
-- Default to deep + concrete; switch to short answers when Avi asks.
+- Default to concrete implementation; go deep when Avi asks for depth.
 - Commit incrementally per `git-incremental-commits.mdc` — small reviewable commits, not one giant end-of-session commit.
