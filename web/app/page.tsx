@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
+
 type PlotDto = {
   id: string;
   x: number;
@@ -71,6 +73,13 @@ type StubHireDto = {
   employee: string;
   signing_bonus_cents: number;
   tick: number;
+  contract_id?: string;
+};
+
+type HireCatalogRow = {
+  party: string;
+  role: string;
+  suggested_signing_cents: number;
 };
 
 type WorldDto = {
@@ -90,6 +99,8 @@ type WorldDto = {
   building_catalog?: BuildingCatalogDto[];
   plot_buildings?: PlotBuildingDto[];
   stub_hires?: StubHireDto[];
+  market_history?: MarketHistorySnap[];
+  hire_catalog?: HireCatalogRow[];
 };
 
 const TERRAIN_COLOR: Record<string, string> = {
@@ -137,7 +148,7 @@ export default function HomePage() {
   }, [load]);
 
   const grid = useMemo(() => {
-    if (!world?.plots.length) return { w: 0, h: 0, cells: [] as PlotDto[][] };
+    if (!world?.plots.length) return { w: 0, h: 0, cells: [] as PlotDto[][], cellPx: 36 };
     const w = Math.max(...world.plots.map((p) => p.x)) + 1;
     const h = Math.max(...world.plots.map((p) => p.y)) + 1;
     const cells: PlotDto[][] = Array.from({ length: h }, () =>
@@ -146,7 +157,8 @@ export default function HomePage() {
     for (const p of world.plots) {
       cells[p.y][p.x] = p;
     }
-    return { w, h, cells };
+    const cellPx = Math.min(36, Math.max(18, Math.floor(520 / Math.max(w, 1))));
+    return { w, h, cells, cellPx };
   }, [world]);
 
   const selectedPlot = useMemo(
@@ -449,11 +461,13 @@ export default function HomePage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(${grid.w}, 36px)`,
+                gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)`,
                 gap: 2,
                 border: "1px solid #30363d",
                 padding: 4,
                 background: "#161b22",
+                maxWidth: "100%",
+                overflowX: "auto",
               }}
             >
               {grid.cells.flatMap((row, y) =>
@@ -467,8 +481,8 @@ export default function HomePage() {
                       disabled={busy || !p}
                       onClick={() => p && onPlotClick(p)}
                       style={{
-                        width: 36,
-                        height: 36,
+                        width: grid.cellPx,
+                        height: grid.cellPx,
                         border: sel ? "2px solid #f0883e" : p?.owner ? "2px solid #58a6ff" : "1px solid #21262d",
                         background: p ? terrainColor(p.terrain) : "#000",
                         cursor: busy ? "wait" : "pointer",
@@ -582,23 +596,27 @@ export default function HomePage() {
               </tbody>
             </table>
 
-            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Hire (stub)</h3>
+            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Hire (employment stub)</h3>
             <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.75 }}>
-              Signing bonus only (no labor output yet). Hires: {(world.stub_hires ?? []).length}
+              Signing bonus creates an <code>employment</code> contract row (no output yet). Hires:{" "}
+              {(world.stub_hires ?? []).length}
             </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-              <button type="button" disabled={busy} onClick={() => void hireNpc("npc_grain_vendor", 100)}>
-                Grain vendor ($1)
-              </button>
-              <button type="button" disabled={busy} onClick={() => void hireNpc("t1_timber_merchant", 200)}>
-                Timber merchant ($2)
-              </button>
-              <button type="button" disabled={busy} onClick={() => void hireNpc("t1_lumber_buyer", 200)}>
-                Lumber buyer ($2)
-              </button>
-            </div>
+            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
+              {(world.hire_catalog ?? []).map((row) => (
+                <li key={row.party} style={{ marginBottom: 6 }}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void hireNpc(row.party, row.suggested_signing_cents)}
+                    style={{ width: "100%", textAlign: "left", fontSize: 12 }}
+                  >
+                    {row.role} — ${(row.suggested_signing_cents / 100).toFixed(2)} bonus
+                  </button>
+                </li>
+              ))}
+            </ul>
 
-            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Market (limit asks)</h3>
+            <h3 style={{ fontSize: 14, marginTop: 16, marginBottom: 6 }}>Order book (limit asks)</h3>
             {(world.market_asks ?? []).length === 0 ? (
               <p style={{ opacity: 0.7 }}>No open asks</p>
             ) : (
@@ -626,6 +644,11 @@ export default function HomePage() {
             <button type="button" disabled={busy} onClick={() => void marketBuyGrain()} style={{ marginRight: 8 }}>
               Buy 1 grain (player)
             </button>
+
+            <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>Market depth (best ask ¢/u)</h3>
+            <div style={{ width: "100%", maxWidth: 640, marginBottom: 10 }}>
+              <MarketHistoryChart history={world.market_history ?? []} />
+            </div>
 
             <h3 style={{ fontSize: 14, marginTop: 14, marginBottom: 6 }}>List for sale (player)</h3>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
