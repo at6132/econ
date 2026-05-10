@@ -187,6 +187,14 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         duration_ticks=3,
         labor_cents=4_00,
     ),
+    "twist_rope": Recipe(
+        recipe_id="twist_rope",
+        display_name="Twist cordage (timber + power → rope)",
+        inputs={MaterialId("timber"): 1, MaterialId("electricity"): 1},
+        outputs={MaterialId("rope"): 3},
+        duration_ticks=2,
+        labor_cents=2_00,
+    ),
 }
 
 

@@ -79,3 +79,20 @@ def test_stub_hire_routes_part_of_labor_to_employee() -> None:
     assert w.ledger.total_cents() == total0
     assert w.ledger.balance(pc) == cash_p0 - 500
     assert w.ledger.balance(ec) == cash_e0 + 200
+
+
+def test_twist_rope_completes_and_conserves_ledger() -> None:
+    w = bootstrap_frontier(seed=6, grid_width=2, grid_height=2)
+    pid = PlotId("p-0-0")
+    player = PartyId("player")
+    assert claim_plot(w, player, pid)["ok"] is True
+    total0 = w.ledger.total_cents()
+    t0 = w.inventory.qty(player, MaterialId("timber"))
+    e0 = w.inventory.qty(player, MaterialId("electricity"))
+    assert start_production(w, player, pid, "twist_rope")["ok"] is True
+    assert w.inventory.qty(player, MaterialId("timber")) == t0 - 1
+    assert w.inventory.qty(player, MaterialId("electricity")) == e0 - 1
+    advance_tick(w)
+    advance_tick(w)
+    assert w.ledger.total_cents() == total0
+    assert w.inventory.qty(player, MaterialId("rope")) == 3
