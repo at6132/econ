@@ -35,7 +35,7 @@ export const FRONTIER_MENU: MenuGroup[] = [
     id: "realm",
     label: "Realm",
     items: [
-      { id: "pacts", label: "Pacts & hires", tab: "contracts", hint: "Stubs today" },
+      { id: "pacts", label: "Pacts & hires", tab: "contracts", hint: "Supply + memo + hires" },
       { id: "chronicle", label: "Chronicle", tab: "log", hint: "Log + save/load" },
       { id: "atlas", label: "Atlas", tab: "codex", hint: "What works / next" },
     ],

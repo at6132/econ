@@ -16,11 +16,11 @@ const STEPS = [
   },
   {
     title: "You control time",
-    body: "Nothing simulates in the background. Hit Advance tick when you are ready — transit, production timers, and NPC ticks all resolve on your command.",
+    body: "Nothing simulates in the background. Hit End turn when you are ready — transit, production timers, and NPC ticks all resolve on your command.",
   },
   {
     title: "Menus = depth",
-    body: "Use the left Atlas-style menu: Bazaar for orders, Caravans for shipping, Pacts for hire/contract stubs, Chronicle for the log and save. Atlas lists what is live vs stub vs planned.",
+    body: "Use the left Atlas-style menu: Bazaar for orders, Caravans for shipping, Pacts for supply contracts, optional memo honor flow, and hiring, Chronicle for the log and save. Atlas lists what is live vs stub vs planned.",
   },
 ];
 
