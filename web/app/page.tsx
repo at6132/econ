@@ -588,29 +588,6 @@ export default function HomePage() {
     }
   }
 
-  async function marketBuyGrain() {
-    setBusy(true);
-    setError(null);
-    try {
-      const q = new URLSearchParams({ party: "player", material: "grain", max_qty: "1" });
-      const r = await fetch(`/api/engine/market/buy?${q.toString()}`, { method: "POST" });
-      if (!r.ok) throw new Error(await r.text());
-      if (grid.w > 0 && grid.h > 0) {
-        queueFx({
-          kind: "trade",
-          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
-          gy: Math.max(0, Math.floor((grid.h - 1) / 3)),
-          label: "BUY",
-        });
-      }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function placeSellOrder() {
     const qty = Number(sellQty);
     const price = Number(sellPriceCents);
@@ -1158,9 +1135,6 @@ export default function HomePage() {
                 >
                   Step +1
                 </motion.button>
-                <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" disabled={busy} onClick={() => void marketBuyGrain()}>
-                  Market: grain ×1
-                </button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={() => setCommandOpen((o) => !o)}>
                   {commandOpen ? "Hide command" : "Command"}
                 </button>
