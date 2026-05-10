@@ -195,6 +195,18 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         duration_ticks=2,
         labor_cents=2_00,
     ),
+    "build_ladder": Recipe(
+        recipe_id="build_ladder",
+        display_name="Assemble ladder (lumber + rope + power)",
+        inputs={
+            MaterialId("lumber"): 2,
+            MaterialId("rope"): 2,
+            MaterialId("electricity"): 1,
+        },
+        outputs={MaterialId("ladder"): 1},
+        duration_ticks=3,
+        labor_cents=6_00,
+    ),
 }
 
 

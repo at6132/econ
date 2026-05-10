@@ -96,3 +96,22 @@ def test_twist_rope_completes_and_conserves_ledger() -> None:
     advance_tick(w)
     assert w.ledger.total_cents() == total0
     assert w.inventory.qty(player, MaterialId("rope")) == 3
+
+
+def test_build_ladder_completes_and_conserves_ledger() -> None:
+    w = bootstrap_frontier(seed=7, grid_width=2, grid_height=2)
+    pid = PlotId("p-0-0")
+    player = PartyId("player")
+    assert claim_plot(w, player, pid)["ok"] is True
+    w.inventory.add(player, MaterialId("lumber"), 4)
+    w.inventory.add(player, MaterialId("rope"), 4)
+    w.inventory.add(player, MaterialId("electricity"), 4)
+    total0 = w.ledger.total_cents()
+    assert start_production(w, player, pid, "build_ladder")["ok"] is True
+    advance_tick(w)
+    advance_tick(w)
+    advance_tick(w)
+    assert w.ledger.total_cents() == total0
+    assert w.inventory.qty(player, MaterialId("ladder")) == 1
+    assert w.inventory.qty(player, MaterialId("lumber")) == 2
+    assert w.inventory.qty(player, MaterialId("rope")) == 2

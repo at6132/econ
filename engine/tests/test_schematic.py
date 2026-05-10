@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.ids import MaterialId, PartyId
 from realm.schematic import validate_linear_recipe_chain
 from realm.world import bootstrap_frontier
 
@@ -43,3 +43,19 @@ def test_schematic_shortfall() -> None:
     r = validate_linear_recipe_chain(w, party, ["sawmill"])
     assert r["ok"] is False
     assert r["errors"]
+
+
+def test_schematic_twist_rope_then_build_ladder() -> None:
+    w = bootstrap_frontier(seed=93, grid_width=2, grid_height=2)
+    party = PartyId("player")
+    bucket = w.inventory.stock.get(party, {})
+    for mid in list(bucket.keys()):
+        q = bucket.get(mid, 0)
+        if q > 0:
+            w.inventory.remove(party, mid, q)
+    w.inventory.add(party, MaterialId("timber"), 1)
+    w.inventory.add(party, MaterialId("lumber"), 4)
+    w.inventory.add(party, MaterialId("electricity"), 10)
+    r = validate_linear_recipe_chain(w, party, ["twist_rope", "build_ladder"])
+    assert r["ok"] is True
+    assert r["final_inventory"].get("ladder", 0) >= 1

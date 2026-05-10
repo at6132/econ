@@ -94,6 +94,9 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("rope"): MaterialDef(
         MaterialId("rope"), "Cordage (rope)", 80.0, "construction"
     ),
+    MaterialId("ladder"): MaterialDef(
+        MaterialId("ladder"), "Timber ladder (assembled)", 120.0, "construction"
+    ),
 }
 
 
