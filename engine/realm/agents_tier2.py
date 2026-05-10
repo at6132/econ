@@ -1,21 +1,28 @@
-"""Tier 2 optimizing agents — five algorithmic loops (Phase 2 / doc 06).
+"""Tier 2 optimizing agents (``realm_docs/06_AI_AGENT_DESIGN.md`` — Tier 2).
 
-Unlike Tier 1 fixed cadence shoppers, these roles read the live book and adjust
-limits (escrow discipline, spread capture, inventory bias). All randomness uses
-``world.rng("tier2:…")`` so replays stay deterministic.
+These are **algorithmic** NPCs: each archetype implements a narrow optimization or
+search policy over the **live** order book and inventory (spread capture, depth at
+stale quotes, conservative sweeps). They use the same market primitives as players
+(Tier 1 is reactive cadence + ``market_buy``; Tier 2 **reads quotes** and adjusts
+limits). This module is Phase 2 scope: small handcrafted solvers and bounded heuristics,
+not full RL — doc 06’s “memory / KPI history / CPU budget” hooks are represented only
+implicitly (cadence, caps, and RNG namespaces).
 
-Archetypes:
+**Determinism:** all stochastic tie-breaks use ``world.rng("tier2:…")`` — no
+``random`` module or wall-clock noise.
 
-- **t2_ele_bidstack** — cancels stale electricity bids then posts a small clip at a
-  limit derived from the current best ask (adds depth without lifting the market).
-- **t2_lumber_bid** — when the lumber spread is wide, improves the bid side by one
-  cent with a single resting order.
-- **t2_timber_spread** — with on-hand timber, cancels and replaces asks using nearby
-  bid quotes plus bounded jitter.
-- **t2_clay_sweep** — accumulates clay when visible asks are below a conservative
-  threshold (sweep size capped per tick).
-- **t2_coal_spread** — with on-hand coal, cancels and replaces asks using nearby bid
-  quotes plus bounded jitter (parallel to timber, different cadence / RNG namespace).
+Archetypes (problem sketch → behavior):
+
+- **t2_ele_bidstack** — depth on electricity: cancel own bids, repost a short clip at a
+  limit anchored to the best ask (or a floor when the ask side is empty).
+- **t2_lumber_bid** — wide-spread lumber: improve the best bid by one cent with one
+  resting bid when bid–ask gap is large enough.
+- **t2_timber_spread** — inventory timber: refresh the ask off nearby bids with bounded
+  price jitter under the best ask.
+- **t2_clay_sweep** — accumulate clay when the best ask is at or below a conservative
+  ceiling (one unit per eligible tick).
+- **t2_coal_spread** — inventory coal: same pattern as timber with a separate cadence
+  and RNG namespace.
 """
 
 from __future__ import annotations
