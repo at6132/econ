@@ -26,15 +26,15 @@ The design rests on **9 economic primitives** (land, matter, labor, time/distanc
 
 **Official phase doc:** `13_PHASED_TODO.md`.
 
-**Current phase:** **Phase 2 — Solo Polish & Visual Identity** (see `13_PHASED_TODO.md`).
+**Current phase:** **Phase 2 — Solo Polish & Visual Identity** (see `13_PHASED_TODO.md`). Phase 2 **engineering** is closed per **`18_PHASE_2_COMPLETION_CHECKLIST.md`** (Pixi, schematic, Tier 2, decay, information costs, scenarios, polish). **A1** ($30 stranger playtest gate) is deferred.
 
-Phase 1 **engineering checklist** is closed (`17_PHASE_1_COMPLETION_CHECKLIST.md`). Phase 2 work is tracked in **`18_PHASE_2_COMPLETION_CHECKLIST.md`** (Pixi, schematic, Tier 2, decay, information costs, scenarios, polish).
+Phase 1 **engineering checklist** is closed (`17_PHASE_1_COMPLETION_CHECKLIST.md`).
 
 ### Phase 1 checklist — honest snapshot (rolling)
 
 This is a **status snapshot**, not a promise every box is finished to final quality.
 
-**2026-05-08 — Phase transition:** Phase 1 **B–E** ✅ per `17_PHASE_1_COMPLETION_CHECKLIST.md`. Repo work now follows **`18_PHASE_2_COMPLETION_CHECKLIST.md`** (decay, intel, Tier 2, scenarios, Pixi, schematic, UI polish). Stranger **$30** gate is Phase 2 **A1** in doc 18.
+**2026-05-08 — Phase transition:** Phase 1 **B–E** ✅ per `17_PHASE_1_COMPLETION_CHECKLIST.md`. **2026-05-10:** Phase 2 **engineering** ✅ per `18_PHASE_2_COMPLETION_CHECKLIST.md`. Stranger **$30** gate remains **A1** (deferred).
 
 **Engine core (Phase 1 intent)**
 
@@ -58,7 +58,7 @@ This is a **status snapshot**, not a promise every box is finished to final qual
 | Item | Status |
 |------|--------|
 | Tier 1 behavioral NPC loops | **Yes** — six loops (see `agents_tier1.py` docstring) |
-| Tier 2 / 3 | **Tier 2** in progress (`agents_tier2.py`); Tier 3 not Phase 2 |
+| Tier 2 / 3 | **Tier 2** shipped (`agents_tier2.py`, `test_agents_tier2.py`); Tier 3 not Phase 2 |
 
 **Frontend**
 
@@ -67,7 +67,7 @@ This is a **status snapshot**, not a promise every box is finished to final qual
 | Next.js shell | **Yes** |
 | Map | **Yes** — data still plot lattice; **organic SVG mesh** is presentation |
 | Market / logistics / contracts / log UI | **Yes** — Bloomberg-style panels; tabs cover Phase 1 actions |
-| Schematic plot view | **No** (Phase 2 territory per doc 13) |
+| Schematic plot view | **Yes** — engine validate + `PlotSchematicPanel` (Phase 2) |
 
 **Persistence**
 

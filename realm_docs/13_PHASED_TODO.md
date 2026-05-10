@@ -121,32 +121,32 @@
 ---
 
 ## Phase 2 — Solo Polish & Visual Identity
-**Status:** **Active** — checklist `18_PHASE_2_COMPLETION_CHECKLIST.md`.
+**Status:** **Engineering complete** — checklist `18_PHASE_2_COMPLETION_CHECKLIST.md` (all rows ✅ except **A1** human $30 gate, deferred).
 **Duration estimate:** 8–12 weeks
 **Goal:** Take the proven prototype and make it visually compelling. Add Tier 2 AI agents. Add named scenarios.
 
 ### Build list
 
 **Visuals:**
-- [ ] Pixi.js world map view (colored terrain, plot boundaries, ownership shading)
-- [ ] Schematic plot view (drag-drop production flow)
-- [ ] Real charting (Recharts) for market view
-- [ ] Polished UI components (panels, command palette, keyboard shortcuts)
-- [ ] Notification system (in-app toaster)
-- [ ] Settings menu (game speed, pause, save management)
+- [x] Pixi.js world map view (colored terrain, plot boundaries, ownership shading)
+- [x] Schematic plot view (drag-drop production flow)
+- [x] Real charting (Recharts) for market view
+- [x] Polished UI components (panels, command palette, keyboard shortcuts)
+- [x] Notification system (in-app toaster)
+- [x] Settings menu (game speed, pause, save management)
 
 **Engine extensions:**
-- [ ] Tier 2 (optimizing) AI agents — at least 4 archetypes (market-maker, logistics, production-planner, employer)
-- [ ] More materials (~25 total, covering most starter strategies)
-- [ ] More recipe templates (~15 total)
-- [ ] Better contract templates (loan, equity, service-subscription stub)
-- [ ] Surveying mechanic (reveal subsurface info at cost)
-- [ ] Decay implementation per Law 5
-- [ ] Information cost system per Law 6 (basic — historical price data costs money)
+- [x] Tier 2 (optimizing) AI agents — at least 4 archetypes (market-maker, logistics, production-planner, employer)
+- [x] More materials (~25 total, covering most starter strategies)
+- [x] More recipe templates (~15 total)
+- [x] Better contract templates (loan, equity, service-subscription stub)
+- [x] Surveying mechanic (reveal subsurface info at cost)
+- [x] Decay implementation per Law 5
+- [x] Information cost system per Law 6 (basic — historical price data costs money)
 
 **Content:**
-- [ ] 3 scenarios in addition to "Frontier": "The Cartel," "The Bootstrapper," "The Speculator" (doc 05)
-- [ ] Scenario selection UI
+- [x] 3 scenarios in addition to "Frontier": "The Cartel," "The Bootstrapper," "The Speculator" (doc 05)
+- [x] Scenario selection UI
 
 **Skipped in this phase:**
 - ❌ Mobile app
