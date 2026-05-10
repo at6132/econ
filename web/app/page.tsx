@@ -263,6 +263,8 @@ export default function HomePage() {
   const mapNavSuppress = useRef(false);
   const panDragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   const mapPanPointerId = useRef<number | null>(null);
+  /** True only after we capture the pointer for an active pan — immediate capture breaks plot clicks on the SVG. */
+  const mapPanCaptureActiveRef = useRef(false);
   const panRef = useRef(pan);
   const mapZoomRef = useRef(mapZoom);
   const didPan = useRef(false);
@@ -1111,8 +1113,8 @@ export default function HomePage() {
 
   function onMapPointerDownCapture(e: React.PointerEvent) {
     if (e.button !== 0) return;
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
     mapPanPointerId.current = e.pointerId;
+    mapPanCaptureActiveRef.current = false;
     didPan.current = false;
     panDragRef.current = { sx: e.clientX, sy: e.clientY, px: panRef.current.x, py: panRef.current.y };
   }
@@ -1124,6 +1126,15 @@ export default function HomePage() {
     const dy = e.clientY - d.sy;
     if (dx * dx + dy * dy > 36) didPan.current = true;
     if (dx * dx + dy * dy > 9) {
+      const el = mapViewportRef.current;
+      if (el && !mapPanCaptureActiveRef.current) {
+        try {
+          el.setPointerCapture(e.pointerId);
+          mapPanCaptureActiveRef.current = true;
+        } catch {
+          /* already captured elsewhere */
+        }
+      }
       const next = { x: d.px + dx, y: d.py + dy };
       panRef.current = next;
       setPan(next);
@@ -1133,7 +1144,7 @@ export default function HomePage() {
   function releaseMapPointerCapture() {
     const pid = mapPanPointerId.current;
     const el = mapViewportRef.current;
-    if (pid != null && el) {
+    if (pid != null && el && mapPanCaptureActiveRef.current) {
       try {
         el.releasePointerCapture(pid);
       } catch {
@@ -1141,6 +1152,7 @@ export default function HomePage() {
       }
     }
     mapPanPointerId.current = null;
+    mapPanCaptureActiveRef.current = false;
   }
 
   function onMapPointerUp() {
