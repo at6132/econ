@@ -473,6 +473,27 @@ body::after {
   shape-rendering: geometricPrecision;
 }
 
+.realm-map-mesh-pixi {
+  position: relative;
+  z-index: 3;
+  display: block;
+  line-height: 0;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45));
+}
+
+.realm-map-mesh-pixi__canvas {
+  display: block;
+  max-width: none;
+}
+
+.realm-map-world-surface[data-map-style="satellite"] .realm-map-mesh-pixi {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)) contrast(1.1) saturate(1.32) brightness(0.9);
+}
+
+.realm-map-world-surface[data-map-style="political"] .realm-map-mesh-pixi {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)) saturate(0.85);
+}
+
 .realm-map-region {
   stroke: rgba(0, 0, 0, 0.38);
   stroke-width: 1px;

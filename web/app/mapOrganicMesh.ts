@@ -5,6 +5,8 @@ export type OrganicMesh = {
   readonly pad: number;
   readonly contentWidth: number;
   readonly contentHeight: number;
+  /** Quad corners in winding order for SVG path / canvas / Pixi. */
+  plotPolygon: (gx: number, gy: number) => readonly [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }];
   plotPath: (gx: number, gy: number) => string;
   plotCentroid: (gx: number, gy: number) => { x: number; y: number };
 };
@@ -35,21 +37,22 @@ export function buildOrganicMesh(
   cellPx: number,
 ): OrganicMesh {
   const amp = cellPx * 0.42;
-  const plotPath = (gx: number, gy: number) => {
+  const plotPolygon = (gx: number, gy: number) => {
     const c00 = corner(worldSeed, gx, gy, pad, cellPx, amp);
     const c10 = corner(worldSeed, gx + 1, gy, pad, cellPx, amp);
     const c11 = corner(worldSeed, gx + 1, gy + 1, pad, cellPx, amp);
     const c01 = corner(worldSeed, gx, gy + 1, pad, cellPx, amp);
+    return [c00, c10, c11, c01] as const;
+  };
+  const plotPath = (gx: number, gy: number) => {
+    const [c00, c10, c11, c01] = plotPolygon(gx, gy);
     return `M ${fmt(c00.x)} ${fmt(c00.y)} L ${fmt(c10.x)} ${fmt(c10.y)} L ${fmt(c11.x)} ${fmt(c11.y)} L ${fmt(c01.x)} ${fmt(c01.y)} Z`;
   };
   const plotCentroid = (gx: number, gy: number) => {
-    const c00 = corner(worldSeed, gx, gy, pad, cellPx, amp);
-    const c10 = corner(worldSeed, gx + 1, gy, pad, cellPx, amp);
-    const c11 = corner(worldSeed, gx + 1, gy + 1, pad, cellPx, amp);
-    const c01 = corner(worldSeed, gx, gy + 1, pad, cellPx, amp);
+    const [c00, c10, c11, c01] = plotPolygon(gx, gy);
     return { x: (c00.x + c10.x + c11.x + c01.x) / 4, y: (c00.y + c10.y + c11.y + c01.y) / 4 };
   };
   const contentWidth = pad * 2 + gridW * cellPx;
   const contentHeight = pad * 2 + gridH * cellPx;
-  return { cellPx, pad, contentWidth, contentHeight, plotPath, plotCentroid };
+  return { cellPx, pad, contentWidth, contentHeight, plotPolygon, plotPath, plotCentroid };
 }

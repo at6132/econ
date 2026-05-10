@@ -16,5 +16,8 @@ export const FRONTIER_SCENARIO_STORAGE_KEY = "realm_frontier_scenario_v1";
 /** Must match `engine/realm/actions.py` SURVEY_COST_CENTS */
 export const FRONTIER_SURVEY_COST_CENTS = 50_000;
 
+/** Map mesh renderer: `svg` (default) or WebGL `pixi` — bump to reset */
+export const FRONTIER_MAP_RENDERER_STORAGE_KEY = "realm_map_renderer_v1";
+
 /** localStorage: `${prefix}${plotId}` → JSON string[] of recipe ids */
 export const PLOT_SCHEMATIC_STORAGE_PREFIX = "realm_plot_schematic_v1:";

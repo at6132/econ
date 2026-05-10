@@ -19,6 +19,7 @@ import {
   previewShipFeeCents,
 } from "./formatters";
 import {
+  FRONTIER_MAP_RENDERER_STORAGE_KEY,
   FRONTIER_MAP_STYLE_STORAGE_KEY,
   FRONTIER_ONBOARD_STORAGE_KEY,
   FRONTIER_SIM_PAUSED_STORAGE_KEY,
@@ -40,6 +41,7 @@ import { bookMidpointCentsPerUnit } from "./marketPriceHints";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
+import { RealmMapMeshPixi } from "./RealmMapMeshPixi";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
@@ -323,6 +325,7 @@ export default function HomePage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [mapZoom, setMapZoom] = useState(1);
   const [mapStyle, setMapStyle] = useState<"terrain" | "satellite" | "political">("terrain");
+  const [mapRenderer, setMapRenderer] = useState<"svg" | "pixi">("svg");
   const mapNavSuppress = useRef(false);
   const panDragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   const mapPanPointerId = useRef<number | null>(null);
@@ -340,6 +343,15 @@ export default function HomePage() {
     try {
       const v = localStorage.getItem(FRONTIER_MAP_STYLE_STORAGE_KEY);
       if (v === "satellite" || v === "political" || v === "terrain") setMapStyle(v);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const r = localStorage.getItem(FRONTIER_MAP_RENDERER_STORAGE_KEY);
+      if (r === "pixi" || r === "svg") setMapRenderer(r);
     } catch {
       /* ignore */
     }
@@ -1649,6 +1661,24 @@ export default function HomePage() {
                   <button type="button" className="realm-map-toolbar__btn" onClick={cycleMapStyle}>
                     Style
                   </button>
+                  <button
+                    type="button"
+                    className="realm-map-toolbar__btn"
+                    title="Switch map renderer: SVG (vector) or Pixi (WebGL canvas)"
+                    onClick={() => {
+                      setMapRenderer((m) => {
+                        const next = m === "svg" ? "pixi" : "svg";
+                        try {
+                          localStorage.setItem(FRONTIER_MAP_RENDERER_STORAGE_KEY, next);
+                        } catch {
+                          /* ignore */
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    {mapRenderer === "pixi" ? "GL" : "SVG"}
+                  </button>
                 </div>
                 <div
                   className="realm-map-world-surface"
@@ -1668,26 +1698,42 @@ export default function HomePage() {
                           burstScale={grid.cellPx}
                         />
                         <RealmMapParticlesCanvas width={gridContentPx.w} height={gridContentPx.h} sparks={sparks} />
-                        <RealmMapMeshSvg
-                          mesh={mesh}
-                          plots={world.plots}
-                          selectedPlotId={selectedPlotId}
-                          buildsByPlot={buildsByPlot}
-                          busy={busy}
-                          mapNavSuppress={mapNavSuppress}
-                          onPlotClick={onPlotClick}
-                          starterPulsePlotIds={starterPulsePlotIds}
-                          mapAnchor={mapAnchor}
-                          ariaLabel={mapAriaLabel}
-                        />
+                        {mapRenderer === "svg" ? (
+                          <RealmMapMeshSvg
+                            mesh={mesh}
+                            plots={world.plots}
+                            selectedPlotId={selectedPlotId}
+                            buildsByPlot={buildsByPlot}
+                            busy={busy}
+                            mapNavSuppress={mapNavSuppress}
+                            onPlotClick={onPlotClick}
+                            starterPulsePlotIds={starterPulsePlotIds}
+                            mapAnchor={mapAnchor}
+                            ariaLabel={mapAriaLabel}
+                          />
+                        ) : (
+                          <RealmMapMeshPixi
+                            mesh={mesh}
+                            plots={world.plots}
+                            selectedPlotId={selectedPlotId}
+                            buildsByPlot={buildsByPlot}
+                            busy={busy}
+                            mapNavSuppress={mapNavSuppress}
+                            onPlotClick={onPlotClick}
+                            starterPulsePlotIds={starterPulsePlotIds}
+                            mapAnchor={mapAnchor}
+                            ariaLabel={mapAriaLabel}
+                            mapStyle={mapStyle}
+                          />
+                        )}
                       </>
                     ) : null}
                   </div>
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Drag to pan · scroll wheel zoom · click a plot to select it (gold ring). Claim and survey from the side panel. Pause the clock in the header
-                when you want the world to hold still.
+                Drag to pan · scroll wheel zoom · click a plot to select it (gold ring). Toggle <strong>SVG</strong> / <strong>GL</strong> in the map toolbar for
+                vector vs Pixi canvas. Claim and survey from the side panel. Pause the clock in the header when you want the world to hold still.
               </p>
             </div>
 
