@@ -163,6 +163,49 @@ def _seed_tier2_agents(
         raise ValueError(tr_c.reason)
 
 
+def _seed_cartel_grain_overlay(
+    world: World,
+    inv: Inventory,
+    grain_vendor: PartyId,
+    vendor_grain_order_id: str,
+) -> None:
+    """
+    Cartel scenario: cancel the bulk vendor grain clip, split stock between the incumbent
+    vendor and a synthetic pool that lists at a premium (information / rationing pressure).
+    """
+    from realm.markets import cancel_sell_order, place_sell_order
+
+    if not vendor_grain_order_id:
+        raise ValueError("cartel overlay requires vendor grain order id")
+    cr = cancel_sell_order(world, grain_vendor, vendor_grain_order_id)
+    if not cr.get("ok"):
+        raise ValueError(str(cr.get("reason")))
+    cell = PartyId("cartel_grain_cell")
+    world.parties.add(cell)
+    world.reputation[str(cell)] = {"honored": 0, "breached": 0}
+    tr = inv.transfer(
+        material=MaterialId("grain"),
+        qty=6,
+        from_party=grain_vendor,
+        to_party=cell,
+    )
+    if isinstance(tr, MatterErr):
+        raise ValueError(tr.reason)
+    pr_hi = place_sell_order(world, cell, MaterialId("grain"), 6, 168)
+    if not pr_hi.get("ok"):
+        raise ValueError(str(pr_hi.get("reason")))
+    pr_lo = place_sell_order(world, grain_vendor, MaterialId("grain"), 4, 118)
+    if not pr_lo.get("ok"):
+        raise ValueError(str(pr_lo.get("reason")))
+    from realm.event_log import log_event
+
+    log_event(
+        world,
+        "world",
+        "Cartel overlay: split grain listings (pool @ premium vs vendor remainder).",
+    )
+
+
 def bootstrap_frontier(
     *,
     seed: int,
@@ -242,6 +285,7 @@ def bootstrap_frontier(
     pr = place_sell_order(world, vendor, MaterialId("grain"), 10, 120)
     if not pr.get("ok"):
         raise ValueError(str(pr.get("reason")))
+    grain_vendor_ask_id = str(pr.get("order_id", ""))
     timber_merch = PartyId("t1_timber_merchant")
     lumber_buyer = PartyId("t1_lumber_buyer")
     world.parties.add(timber_merch)
@@ -292,6 +336,8 @@ def bootstrap_frontier(
     pr_clay = place_sell_order(world, clay_v, MaterialId("clay"), 2, 54)
     if not pr_clay.get("ok"):
         raise ValueError(str(pr_clay.get("reason")))
+    if scenario_id == "cartel":
+        _seed_cartel_grain_overlay(world, inv, vendor, grain_vendor_ask_id)
     _seed_tier2_agents(world, inv, timber_merch, clay_v)
     from realm.market_history import record_market_snapshot
 
