@@ -344,6 +344,8 @@ export default function HomePage() {
   paletteOpenRef.current = paletteOpen;
   const onboardingOpenRef = useRef(onboardingOpen);
   onboardingOpenRef.current = onboardingOpen;
+  const commandOpenRef = useRef(commandOpen);
+  commandOpenRef.current = commandOpen;
 
   useEffect(() => {
     try {
@@ -470,6 +472,22 @@ export default function HomePage() {
       const ni = (i + di + order.length) % order.length;
       setTab(order[ni]);
       setCommandOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (paletteOpenRef.current || onboardingOpenRef.current) return;
+      const el = e.target as HTMLElement;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (el.isContentEditable) return;
+      if (!commandOpenRef.current) return;
+      e.preventDefault();
+      setCommandOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -878,6 +896,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Sell order posted.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -901,6 +920,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Sell order cancelled.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -944,6 +964,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Bid posted.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -967,6 +988,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Bid cancelled.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -999,6 +1021,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Market sell-fill executed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1056,6 +1079,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "P2P trade completed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1628,7 +1652,12 @@ export default function HomePage() {
                 >
                   {SIM_SPEED_LABELS[simSpeedIdx]}
                 </button>
-                <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={() => setCommandOpen((o) => !o)}>
+                <button
+                  type="button"
+                  className="realm-btn realm-btn--ghost realm-btn--sm"
+                  title="Collapse side panel (Esc when not typing)"
+                  onClick={() => setCommandOpen((o) => !o)}
+                >
                   {commandOpen ? "Hide panel" : "Show panel"}
                 </button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={replayBriefing}>
