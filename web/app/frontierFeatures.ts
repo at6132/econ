@@ -81,7 +81,7 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
   {
     id: "persistence",
     title: "SQLite save / load",
-    detail: "Snapshot world to saves/realm_dev.sqlite (engine path).",
+    detail: "Write a SQLite snapshot from the Chronicle tab and reload it later in the same browser session.",
     lane: "live",
     jumpTab: "log",
   },
@@ -106,7 +106,7 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
     detail:
       "Signing bonus opens employment; optional recurring wage every N ticks. Each production run routes 40% of recipe labor cash to hires (split evenly).",
     lane: "live",
-    jumpTab: "contracts",
+    jumpTab: "hire",
   },
   {
     id: "supply_stub",
@@ -114,7 +114,7 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
     detail:
       "Propose → accept → fulfill by deadline tick; breach marks supplier reputation. Deposits / liquidated damages when terms say so.",
     lane: "live",
-    jumpTab: "contracts",
+    jumpTab: "pacts",
   },
   {
     id: "building_fx",
@@ -127,7 +127,7 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
     title: "Hired labor in production",
     detail: "40% of each recipe's labor cash goes to employed parties on that payroll (split evenly); remainder to system reserve.",
     lane: "live",
-    jumpTab: "contracts",
+    jumpTab: "hire",
   },
   {
     id: "order_book_full",

@@ -1,6 +1,6 @@
 "use client";
 
-import { FRONTIER_MENU, type TabId } from "./frontierMenu";
+import { getFrontierMenu, type TabId } from "./frontierMenu";
 
 type Props = {
   active: TabId;
@@ -8,9 +8,10 @@ type Props = {
 };
 
 export function FrontierTopNav({ active, onSelect }: Props) {
+  const menu = getFrontierMenu();
   return (
     <nav className="realm-top-nav" aria-label="Command screens">
-      {FRONTIER_MENU.map((g) => (
+      {menu.map((g) => (
         <div key={g.id} className="realm-top-nav__group">
           <span className="realm-top-nav__group-label">{g.label}</span>
           <div className="realm-top-nav__chips">

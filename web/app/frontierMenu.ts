@@ -1,7 +1,9 @@
 /**
- * Command deck navigation — add groups/items here; wire new tabs in `page.tsx`.
+ * Command deck navigation — wire tabs in `page.tsx`.
  */
-export type TabId = "world" | "market" | "logistics" | "contracts" | "log" | "codex";
+import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
+
+export type TabId = "world" | "market" | "logistics" | "hire" | "pacts" | "log" | "codex";
 
 export type MenuItem = {
   id: string;
@@ -17,27 +19,37 @@ export type MenuGroup = {
   items: MenuItem[];
 };
 
-export const FRONTIER_MENU: MenuGroup[] = [
-  {
-    id: "field",
-    label: "Field ops",
-    items: [{ id: "territory", label: "Territory & works", tab: "world", hint: "Map, recipes, builds" }],
-  },
-  {
-    id: "commerce",
-    label: "Commerce",
-    items: [
-      { id: "bazaar", label: "Bazaar", tab: "market", hint: "Orders, prices, depth chart" },
-      { id: "caravans", label: "Caravans", tab: "logistics", hint: "Ship goods" },
-    ],
-  },
-  {
-    id: "realm",
-    label: "Realm",
-    items: [
-      { id: "pacts", label: "Pacts & hires", tab: "contracts", hint: "Supply + memo + hires" },
-      { id: "chronicle", label: "Chronicle", tab: "log", hint: "Log + save/load" },
-      { id: "atlas", label: "Atlas", tab: "codex", hint: "What works / next" },
-    ],
-  },
-];
+function realmItems(): MenuItem[] {
+  const items: MenuItem[] = [
+    { id: "hires", label: "Hiring", tab: "hire", hint: "Employment and wages" },
+    { id: "pacts", label: "Contracts", tab: "pacts", hint: "Supply deals" },
+    { id: "chronicle", label: "Chronicle", tab: "log", hint: "Log and saves" },
+  ];
+  if (SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS) {
+    items.push({ id: "atlas", label: "Atlas", tab: "codex", hint: "Internal roadmap (dev)" });
+  }
+  return items;
+}
+
+export function getFrontierMenu(): MenuGroup[] {
+  return [
+    {
+      id: "field",
+      label: "Field ops",
+      items: [{ id: "territory", label: "Territory & works", tab: "world", hint: "Map, recipes, builds" }],
+    },
+    {
+      id: "commerce",
+      label: "Commerce",
+      items: [
+        { id: "bazaar", label: "Bazaar", tab: "market", hint: "Orders and prices" },
+        { id: "caravans", label: "Caravans", tab: "logistics", hint: "Ship goods" },
+      ],
+    },
+    {
+      id: "realm",
+      label: "Realm",
+      items: realmItems(),
+    },
+  ];
+}
