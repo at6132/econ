@@ -10,6 +10,7 @@ from realm.inventory import Inventory, MatterErr
 from realm.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
 from realm.materials import MaterialId
 from realm.recipes import recipe_public_list
+from realm.biome_noise import terrain_for_cell
 from realm.rng import make_rng
 from realm.terrain import Terrain
 
@@ -83,27 +84,13 @@ class World:
 
 
 def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
-    """Grid of width x height plots; terrain + subsurface from deterministic RNG."""
+    """Grid of width x height plots; terrain from coherent biome fields, subsurface iid per plot."""
     plots: dict[PlotId, Plot] = {}
     for y in range(height):
         for x in range(width):
             pid = PlotId(f"p-{x}-{y}")
             rng = make_rng(seed, f"gen:{pid}")
-            terrain_roll = rng.random()
-            if terrain_roll < 0.08:
-                terrain = Terrain.WATER_DEEP if rng.random() < 0.5 else Terrain.WATER_SHALLOW
-            elif terrain_roll < 0.22:
-                terrain = Terrain.FOREST
-            elif terrain_roll < 0.35:
-                terrain = Terrain.MOUNTAIN
-            elif terrain_roll < 0.5:
-                terrain = Terrain.PLAINS
-            elif terrain_roll < 0.65:
-                terrain = Terrain.DESERT
-            elif terrain_roll < 0.8:
-                terrain = Terrain.SWAMP
-            else:
-                terrain = Terrain.TUNDRA
+            terrain = terrain_for_cell(seed, x, y)
             subsurface = SubsurfaceRoll(
                 iron_ore_grade=rng.random(),
                 copper_ore_grade=rng.random(),
@@ -124,8 +111,8 @@ def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
 def bootstrap_frontier(
     *,
     seed: int,
-    grid_width: int = 8,
-    grid_height: int = 6,
+    grid_width: int = 48,
+    grid_height: int = 36,
     starting_cash_cents: int = 1_000_000,  # $10,000.00
     system_reserve_cents: int = 100_000_000_000,  # $1B — unallocated pool
 ) -> World:
@@ -136,6 +123,7 @@ def bootstrap_frontier(
     """
     human = PartyId("player")
     plots = generate_plots(seed=seed, width=grid_width, height=grid_height)
+    n_plots = len(plots)
     ledger = Ledger()
     inv = Inventory()
     world = World(
@@ -252,7 +240,7 @@ def bootstrap_frontier(
     log_event(
         world,
         "world",
-        "Frontier ready: 48 plots, seeded commodity books, six tier-1 agent loops.",
+        f"Frontier ready: {n_plots} plots, seeded commodity books, six tier-1 agent loops.",
     )
     record_market_snapshot(world)
     return world

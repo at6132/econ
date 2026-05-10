@@ -90,9 +90,9 @@ def test_build_and_hire_emit_events_and_move_cash() -> None:
     assert any(e.get("kind") == "hire" for e in w.event_log)
 
 
-def test_bootstrap_default_is_48_plots() -> None:
+def test_bootstrap_default_plot_count() -> None:
     w = bootstrap_frontier(seed=0)
-    assert len(w.plots) == 48
+    assert len(w.plots) == 48 * 36
 
 
 def test_market_history_after_ticks() -> None:
