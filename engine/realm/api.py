@@ -10,7 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, start_production_on_plot, survey_plot
 from realm.buildings import build_on_plot
 from realm.ids import MaterialId, PartyId, PlotId
-from realm.markets import cancel_sell_order, market_buy, p2p_trade, place_sell_order
+from realm.markets import (
+    cancel_buy_order,
+    cancel_sell_order,
+    market_buy,
+    p2p_trade,
+    place_buy_order,
+    place_sell_order,
+    sell_into_bids,
+)
 from realm.movement import dispatch_shipment
 from realm.persistence import load_snapshot, save_snapshot
 from realm.social import honor_contract_stub, propose_contract_stub
@@ -165,6 +173,48 @@ def post_market_cancel(
     order_id: Annotated[str, Query()],
 ) -> dict:
     r = cancel_sell_order(_world, PartyId(party), order_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/bid")
+def post_market_bid(
+    party: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+    max_price_per_unit_cents: Annotated[int, Query()],
+) -> dict:
+    r = place_buy_order(
+        _world,
+        PartyId(party),
+        MaterialId(material),
+        qty,
+        max_price_per_unit_cents,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/cancel_bid")
+def post_market_cancel_bid(
+    party: Annotated[str, Query()],
+    order_id: Annotated[str, Query()],
+) -> dict:
+    r = cancel_buy_order(_world, PartyId(party), order_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/sell_fill")
+def post_market_sell_fill(
+    party: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    max_qty: Annotated[int, Query()],
+) -> dict:
+    r = sell_into_bids(_world, PartyId(party), MaterialId(material), max_qty)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
