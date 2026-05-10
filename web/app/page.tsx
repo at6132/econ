@@ -1657,7 +1657,13 @@ export default function HomePage() {
                   type="button"
                   className="realm-btn realm-btn--ghost realm-btn--sm"
                   title="Real-time gap between engine ticks while running"
-                  onClick={() => setSimSpeedIdx((i) => ((i + 1) % 3) as 0 | 1 | 2)}
+                  onClick={() => {
+                    setSimSpeedIdx((i) => {
+                      const next = ((i + 1) % 3) as 0 | 1 | 2;
+                      pushToast({ message: `Sim speed: ${SIM_SPEED_LABELS[next]}`, kind: "info" });
+                      return next;
+                    });
+                  }}
                 >
                   {SIM_SPEED_LABELS[simSpeedIdx]}
                 </button>
