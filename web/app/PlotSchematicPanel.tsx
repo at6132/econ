@@ -27,7 +27,10 @@ export function PlotSchematicPanel({
 
   const [chain, setChain] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [validation, setValidation] = useState<{ ok: true } | { ok: false; errors: string[] } | null>(null);
+  const [validation, setValidation] = useState<{ ok: true; source?: "engine" | "client" } | { ok: false; errors: string[] } | null>(
+    null,
+  );
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     setValidation(null);
@@ -61,10 +64,50 @@ export function PlotSchematicPanel({
 
   const recipeById = useMemo(() => new Map(recipes.map((r) => [r.id, r])), [recipes]);
 
-  const runValidate = useCallback(() => {
-    const res = validateLinearRecipeChain(recipes, playerInventory, chain);
-    setValidation(res);
-  }, [recipes, playerInventory, chain]);
+  const runValidate = useCallback(async () => {
+    if (!selectedPlotId) return;
+    setValidating(true);
+    try {
+      const r = await fetch(
+        `/api/engine/plots/${encodeURIComponent(selectedPlotId)}/schematic/validate?party=player`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipe_ids: chain }),
+        },
+      );
+      if (r.ok) {
+        const body = (await r.json()) as { ok?: boolean; errors?: string[] };
+        if (body.ok === true) {
+          setValidation({ ok: true, source: "engine" });
+          return;
+        }
+        setValidation({ ok: false, errors: Array.isArray(body.errors) ? body.errors : ["Engine rejected the chain."] });
+        return;
+      }
+      const txt = await r.text();
+      let detail = txt;
+      try {
+        const j = JSON.parse(txt) as { detail?: unknown };
+        if (typeof j.detail === "string") detail = j.detail;
+        else if (Array.isArray(j.detail) && j.detail[0] && typeof (j.detail[0] as { msg?: string }).msg === "string") {
+          detail = (j.detail[0] as { msg: string }).msg;
+        }
+      } catch {
+        /* use raw txt */
+      }
+      setValidation({ ok: false, errors: [detail || `Request failed (${r.status})`] });
+    } catch {
+      const res = validateLinearRecipeChain(recipes, playerInventory, chain);
+      if (res.ok) {
+        setValidation({ ok: true, source: "client" });
+      } else {
+        setValidation(res);
+      }
+    } finally {
+      setValidating(false);
+    }
+  }, [selectedPlotId, chain, recipes, playerInventory]);
 
   const addRecipe = useCallback((recipeId: string) => {
     setChain((c) => [...c, recipeId]);
@@ -164,8 +207,13 @@ export function PlotSchematicPanel({
             ))}
           </select>
         </label>
-        <button type="button" className="realm-btn realm-btn--ghost" disabled={disabled} onClick={runValidate}>
-          Validate chain
+        <button
+          type="button"
+          className="realm-btn realm-btn--ghost"
+          disabled={disabled || validating}
+          onClick={() => void runValidate()}
+        >
+          {validating ? "Validating…" : "Validate chain"}
         </button>
         <button type="button" className="realm-btn realm-btn--ghost" disabled={disabled || chain.length === 0} onClick={clearChain}>
           Clear chain
@@ -175,7 +223,15 @@ export function PlotSchematicPanel({
       {validation ? (
         validation.ok ? (
           <p style={{ color: "var(--realm-ok, #6bbf6b)", marginBottom: 14, fontSize: 14 }}>
-            Chain is feasible with your current inventory (simulated outputs compound through the steps).
+            {validation.source === "client" ? (
+              <>
+                Chain looks feasible offline (engine unreachable — using the same rules in your browser). Outputs compound through the steps.
+              </>
+            ) : (
+              <>
+                <strong>Engine confirms</strong> this chain is feasible with your current inventory (simulated outputs compound through the steps).
+              </>
+            )}
           </p>
         ) : (
           <div
