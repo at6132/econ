@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CartesianGrid,
   Legend,
   Line,
   LineChart,
@@ -40,19 +41,39 @@ export function MarketHistoryChart({ history, symbol }: Props) {
     };
   });
 
+  const label = displayMaterial(sym || "—");
+
   if (data.length < 1) {
     return (
-      <p className="realm-help" style={{ margin: 0 }}>
-        No market snapshots yet. The chart fills as the simulation runs (each tick records best bid/ask).
-      </p>
+      <div className="realm-chart-empty" role="status">
+        <p className="realm-help" style={{ margin: 0 }}>
+          No market snapshots yet. The chart fills as the simulation runs — each tick records best bid and ask for watched
+          materials.
+        </p>
+      </div>
     );
   }
 
-  const label = displayMaterial(sym || "—");
+  const hasSeries = data.some((d) => Number.isFinite(d.ask) || Number.isFinite(d.bid));
+  if (!hasSeries) {
+    return (
+      <div className="realm-chart-empty" role="status">
+        <p className="realm-help" style={{ margin: 0 }}>
+          No bid or ask prints for <strong>{label}</strong> in recorded history yet. Run the clock or place orders so the book
+          has resting liquidity for this symbol.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 4 }}>
+        <CartesianGrid
+          stroke="rgba(107, 90, 138, 0.22)"
+          strokeDasharray="4 6"
+          vertical={false}
+        />
         <XAxis
           dataKey="tick"
           tick={{ fontSize: 11, fill: "#a894c4" }}
@@ -75,10 +96,12 @@ export function MarketHistoryChart({ history, symbol }: Props) {
             fontFamily: "VT323, ui-monospace, monospace",
           }}
           labelStyle={{ color: "#8a7a98" }}
-          formatter={(value: unknown) => {
+          labelFormatter={(tick) => `Tick ${tick}`}
+          formatter={(value: unknown, name: unknown) => {
             const n = typeof value === "number" ? value : Number(value);
-            if (value == null || !Number.isFinite(n)) return ["—", ""];
-            return [`$${(n / 100).toFixed(2)}/u`, ""];
+            const labelStr = typeof name === "string" ? name : String(name);
+            if (value == null || !Number.isFinite(n)) return ["—", labelStr];
+            return [`$${(n / 100).toFixed(2)}/u`, labelStr];
           }}
         />
         <Legend wrapperStyle={{ fontSize: 13, color: "#a894c4", fontFamily: "VT323, ui-monospace, monospace" }} />

@@ -19,6 +19,15 @@ export type MenuGroup = {
   items: MenuItem[];
 };
 
+/** Flattened entries for the command palette (Ctrl/Cmd+K). */
+export type PaletteItem = {
+  id: string;
+  label: string;
+  group: string;
+  tab: TabId;
+  hint?: string;
+};
+
 function realmItems(): MenuItem[] {
   const items: MenuItem[] = [
     { id: "hires", label: "Hiring", tab: "hire", hint: "Employment and wages" },
@@ -55,4 +64,16 @@ export function getFrontierMenu(): MenuGroup[] {
       items: realmItems(),
     },
   ];
+}
+
+export function getFrontierPaletteItems(): PaletteItem[] {
+  return getFrontierMenu().flatMap((g) =>
+    g.items.map((it) => ({
+      id: it.id,
+      label: it.label,
+      group: g.label,
+      tab: it.tab,
+      hint: it.hint,
+    })),
+  );
 }

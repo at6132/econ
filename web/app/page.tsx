@@ -27,6 +27,7 @@ import {
   FRONTIER_SURVEY_COST_CENTS,
 } from "./frontierConstants";
 import { getFrontierMenu, type TabId } from "./frontierMenu";
+import { FrontierCommandPalette } from "./FrontierCommandPalette";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
@@ -42,6 +43,7 @@ import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
+import { useRealmToast } from "./realmToast";
 
 const MAP_PAD = 4;
 
@@ -258,6 +260,7 @@ function readDevResetScenarioFromStorage(): DevResetScenarioId {
 }
 
 export default function HomePage() {
+  const { pushToast } = useRealmToast();
   const [world, setWorld] = useState<WorldDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -310,6 +313,7 @@ export default function HomePage() {
   const [advAskIceberg, setAdvAskIceberg] = useState("");
   const [advAskHonored, setAdvAskHonored] = useState("0");
   const [commandOpen, setCommandOpen] = useState(true);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
   const [mapFx, setMapFx] = useState<MapFxEvent[]>([]);
@@ -409,6 +413,24 @@ export default function HomePage() {
     } catch {
       setOnboardingOpen(true);
     }
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.key.toLowerCase() !== "k") return;
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-realm-no-palette]")) return;
+      const tag = t.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+        if (!t.closest(".realm-palette")) return;
+      }
+      if (t.isContentEditable) return;
+      e.preventDefault();
+      setPaletteOpen((o) => !o);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
@@ -649,6 +671,7 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       queueFx({ kind: "claim", gx: p.x, gy: p.y, label: "CLAIM" });
       await load();
+      pushToast({ message: "Plot claimed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -664,6 +687,7 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       queueFx({ kind: "survey", gx: p.x, gy: p.y, label: "SCAN" });
       await load();
+      pushToast({ message: "Survey complete.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -683,6 +707,7 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       if (plot) queueFx({ kind: "produce", gx: plot.x, gy: plot.y, label: "MAKE" });
       await load();
+      pushToast({ message: "Production step queued.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -697,6 +722,7 @@ export default function HomePage() {
       const r = await fetch("/api/engine/persistence/save", { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Game saved.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -712,6 +738,7 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       didInitPan.current = false;
       await load();
+      pushToast({ message: "Game loaded.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -736,6 +763,7 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       didInitPan.current = false;
       await load();
+      pushToast({ message: `World reset (${devResetScenario}).`, kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -764,6 +792,7 @@ export default function HomePage() {
       const dest = world?.plots.find((pp) => pp.id === shipTo);
       if (dest) queueFx({ kind: "ship", gx: dest.x, gy: dest.y, label: "SHIP" });
       await load();
+      pushToast({ message: "Shipment queued.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1292,6 +1321,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Contract honored.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1309,6 +1339,7 @@ export default function HomePage() {
       });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Maintenance applied.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1323,6 +1354,7 @@ export default function HomePage() {
       const r = await fetch(`/api/engine/market/intel?party=player`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Market intel purchased.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1347,6 +1379,7 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       if (plot) queueFx({ kind: "build", gx: plot.x, gy: plot.y, label: "RISE" });
       await load();
+      pushToast({ message: "Build started.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1374,6 +1407,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Hire recorded.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1546,6 +1580,14 @@ export default function HomePage() {
                 </button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={replayBriefing}>
                   Briefing
+                </button>
+                <button
+                  type="button"
+                  className="realm-btn realm-btn--ghost realm-btn--sm"
+                  title="Open command palette (Ctrl or Cmd + K)"
+                  onClick={() => setPaletteOpen(true)}
+                >
+                  Go to…
                 </button>
               </div>
             </div>
@@ -2988,6 +3030,15 @@ export default function HomePage() {
           Loading world…
         </motion.p>
       )}
+      <FrontierCommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        activeTab={tab}
+        onPick={(t) => {
+          setTab(t);
+          setCommandOpen(true);
+        }}
+      />
     </main>
   );
 }
