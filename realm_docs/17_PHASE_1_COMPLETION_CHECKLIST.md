@@ -158,7 +158,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 ## H. “Full not shallow” — recommended completion order
 
 1. **Market depth:** ✅ limit bids, matching, persistence, API, UI, chart bid series; optional: richer depth / level-2 later.
-2. **P2P:** ✅ UI + HTTP smoke test.
+2. **P2P:** ✅ UI + HTTP tests + **idempotency** + structured API errors.
 3. **Contracts:** ✅ supply propose → accept → fulfill; deadline breach → supplier `breached`.
 4. **Employment:** ✅ **40%** of recipe `labor_cents` paid to distinct `stub_hires` employees per batch (even split); remainder to reserve.
 5. **Playtest gate A1** — schedule strangers; capture notes.
