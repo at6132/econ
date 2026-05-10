@@ -8,7 +8,7 @@ from typing import Any
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import Inventory
 from realm.ledger import Ledger
-from realm.markets import AskOrder
+from realm.markets import AskOrder, BidOrder
 from realm.world import (
     ActiveProduction,
     InTransit,
@@ -47,6 +47,19 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for o in lst
         ]
+    bids: dict[str, list[dict[str, Any]]] = {}
+    for k, lst in world.market_bids_by_material.items():
+        bids[k] = [
+            {
+                "order_id": b.order_id,
+                "party": str(b.party),
+                "material": str(b.material),
+                "qty": b.qty,
+                "max_price_per_unit_cents": b.max_price_per_unit_cents,
+                "escrow_cents": b.escrow_cents,
+            }
+            for b in lst
+        ]
     inv: dict[str, dict[str, int]] = {}
     for party, mats in world.inventory.snapshot().items():
         inv[str(party)] = {str(m): q for m, q in mats.items()}
@@ -84,6 +97,7 @@ def dump_world(world: World) -> dict[str, Any]:
             for s in world.in_transit
         ],
         "market_asks": asks,
+        "market_bids": bids,
         "reputation": dict(world.reputation),
         "contracts": list(world.contracts),
         "event_log": list(world.event_log),
@@ -159,6 +173,19 @@ def load_world(d: dict[str, Any]) -> World:
             )
             for r in rows
         ]
+    bids_map: dict[str, list[Any]] = {}
+    for mat_key, rows in d.get("market_bids", {}).items():
+        bids_map[mat_key] = [
+            BidOrder(
+                order_id=r["order_id"],
+                party=PartyId(r["party"]),
+                material=MaterialId(r["material"]),
+                qty=int(r["qty"]),
+                max_price_per_unit_cents=int(r["max_price_per_unit_cents"]),
+                escrow_cents=int(r.get("escrow_cents", int(r["qty"]) * int(r["max_price_per_unit_cents"]))),
+            )
+            for r in rows
+        ]
     world = World(
         seed=seed,
         tick=int(d["tick"]),
@@ -171,6 +198,7 @@ def load_world(d: dict[str, Any]) -> World:
         in_transit=transit,
         next_shipment_seq=int(d.get("next_shipment_seq", 0)),
         market_asks_by_material=asks_map,
+        market_bids_by_material=bids_map,
         next_order_seq=int(d.get("next_order_seq", 0)),
         reputation=dict(d.get("reputation", {})),
         contracts=list(d.get("contracts", [])),

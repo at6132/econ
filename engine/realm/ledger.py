@@ -81,3 +81,8 @@ def party_cash_account(party: PartyId) -> AccountId:
 
 def system_reserve_account() -> AccountId:
     return AccountId("system:reserve")
+
+
+def market_escrow_account() -> AccountId:
+    """Holds cash locked for open limit bids (released on fill or cancel)."""
+    return AccountId("system:market_escrow")

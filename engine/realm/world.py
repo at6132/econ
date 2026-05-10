@@ -70,6 +70,7 @@ class World:
     in_transit: list[InTransit] = field(default_factory=list)
     next_shipment_seq: int = 0
     market_asks_by_material: dict[str, list[Any]] = field(default_factory=dict)
+    market_bids_by_material: dict[str, list[Any]] = field(default_factory=dict)
     next_order_seq: int = 0
     reputation: dict[str, dict[str, int]] = field(default_factory=dict)
     contracts: list[dict] = field(default_factory=list)
@@ -249,7 +250,7 @@ def bootstrap_frontier(
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
     from realm.buildings import building_catalog_public
-    from realm.markets import market_book_public
+    from realm.markets import market_book_public, market_bids_public
 
     plots_out: list[dict] = []
     for p in world.plots.values():
@@ -306,6 +307,7 @@ def world_public_dict(world: World) -> dict:
             for s in world.in_transit
         ],
         "market_asks": market_book_public(world),
+        "market_bids": market_bids_public(world),
         "reputation": dict(world.reputation),
         "contracts": list(world.contracts),
         "event_log": list(world.event_log[-120:]),
