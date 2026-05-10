@@ -20,13 +20,22 @@ export type MenuGroup = {
 };
 
 /** Flattened entries for the command palette (Ctrl/Cmd+K). */
-export type PaletteItem = {
-  id: string;
-  label: string;
-  group: string;
-  tab: TabId;
-  hint?: string;
-};
+export type PaletteItem =
+  | {
+      type: "tab";
+      id: string;
+      label: string;
+      group: string;
+      tab: TabId;
+      hint?: string;
+    }
+  | {
+      type: "settings";
+      id: "settings";
+      label: string;
+      group: string;
+      hint?: string;
+    };
 
 function realmItems(): MenuItem[] {
   const items: MenuItem[] = [
@@ -67,8 +76,9 @@ export function getFrontierMenu(): MenuGroup[] {
 }
 
 export function getFrontierPaletteItems(): PaletteItem[] {
-  return getFrontierMenu().flatMap((g) =>
+  const tabs = getFrontierMenu().flatMap((g) =>
     g.items.map((it) => ({
+      type: "tab" as const,
       id: it.id,
       label: it.label,
       group: g.label,
@@ -76,6 +86,16 @@ export function getFrontierPaletteItems(): PaletteItem[] {
       hint: it.hint,
     })),
   );
+  return [
+    ...tabs,
+    {
+      type: "settings" as const,
+      id: "settings",
+      label: "Settings",
+      group: "Realm",
+      hint: "Sim speed, pause, dev world reset",
+    },
+  ];
 }
 
 /** Unique tabs in top-nav order — for keyboard cycling `[` / `]`. */
@@ -83,6 +103,7 @@ export function getFrontierTabCycleOrder(): TabId[] {
   const seen = new Set<TabId>();
   const out: TabId[] = [];
   for (const it of getFrontierPaletteItems()) {
+    if (it.type !== "tab") continue;
     if (!seen.has(it.tab)) {
       seen.add(it.tab);
       out.push(it.tab);

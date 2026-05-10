@@ -1358,6 +1358,66 @@ body::after {
   color: var(--realm-dim);
 }
 
+/* Settings modal */
+.realm-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10vh 16px 24px;
+  background: rgba(6, 3, 10, 0.75);
+}
+
+.realm-settings-dialog {
+  width: min(480px, 100%);
+  max-height: min(78vh, 620px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(165deg, #2a1f42 0%, #12081f 100%);
+  border: 3px solid #000;
+  box-shadow: var(--realm-shadow-out), 0 0 0 2px var(--realm-border-lit);
+}
+
+.realm-settings-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 10px;
+  border-bottom: 2px dashed var(--realm-border);
+}
+
+.realm-settings-dialog__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: normal;
+  color: var(--realm-accent);
+  font-family: var(--realm-font);
+}
+
+.realm-settings-dialog__body {
+  padding: 12px 14px 16px;
+  overflow-y: auto;
+}
+
+.realm-settings-section {
+  margin-bottom: 18px;
+}
+
+.realm-settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.realm-settings-section__title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: normal;
+  color: var(--realm-text);
+  font-family: var(--realm-font);
+}
+
 .realm-chart-empty {
   min-height: 120px;
   display: flex;

@@ -9,9 +9,10 @@ type Props = {
   onClose: () => void;
   activeTab: TabId;
   onPick: (tab: TabId) => void;
+  onOpenSettings?: () => void;
 };
 
-export function FrontierCommandPalette({ open, onClose, activeTab, onPick }: Props) {
+export function FrontierCommandPalette({ open, onClose, activeTab, onPick, onOpenSettings }: Props) {
   const items = useMemo(() => getFrontierPaletteItems(), []);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
@@ -42,10 +43,15 @@ export function FrontierCommandPalette({ open, onClose, activeTab, onPick }: Pro
 
   const commit = useCallback(
     (it: PaletteItem) => {
+      if (it.type === "settings") {
+        onOpenSettings?.();
+        onClose();
+        return;
+      }
       onPick(it.tab);
       onClose();
     },
-    [onClose, onPick],
+    [onClose, onPick, onOpenSettings],
   );
 
   useEffect(() => {
@@ -103,7 +109,7 @@ export function FrontierCommandPalette({ open, onClose, activeTab, onPick }: Pro
             <li className="realm-palette__empty">No matches.</li>
           ) : (
             filtered.map((it, idx) => {
-              const on = activeTab === it.tab;
+              const on = it.type === "tab" && activeTab === it.tab;
               const hi = idx === sel;
               return (
                 <li key={it.id} role="presentation">

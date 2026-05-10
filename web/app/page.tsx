@@ -29,6 +29,7 @@ import {
 } from "./frontierConstants";
 import { getFrontierMenu, getFrontierTabCycleOrder, type TabId } from "./frontierMenu";
 import { FrontierCommandPalette } from "./FrontierCommandPalette";
+import { FrontierSettingsModal } from "./FrontierSettingsModal";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
@@ -292,6 +293,7 @@ export default function HomePage() {
   const [shipMaterial, setShipMaterial] = useState("timber");
   const [shipQty, setShipQty] = useState("1");
   const [bazaarSymbol, setBazaarSymbol] = useState("timber");
+  const [bazaarActiveId, setBazaarActiveId] = useState("timber");
   const [sellQty, setSellQty] = useState("1");
   const [sellPriceDollars, setSellPriceDollars] = useState("5.00");
   const [bidQty, setBidQty] = useState("1");
@@ -330,6 +332,7 @@ export default function HomePage() {
   const [advAskHonored, setAdvAskHonored] = useState("0");
   const [commandOpen, setCommandOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
   const [mapFx, setMapFx] = useState<MapFxEvent[]>([]);
@@ -356,6 +359,8 @@ export default function HomePage() {
   tabRef.current = tab;
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
+  const settingsOpenRef = useRef(false);
+  settingsOpenRef.current = settingsOpen;
   const onboardingOpenRef = useRef(onboardingOpen);
   onboardingOpenRef.current = onboardingOpen;
   const commandOpenRef = useRef(commandOpen);
@@ -532,6 +537,11 @@ export default function HomePage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (settingsOpenRef.current) {
+        e.preventDefault();
+        setSettingsOpen(false);
+        return;
+      }
       if (paletteOpenRef.current || onboardingOpenRef.current) return;
       const el = e.target as HTMLElement;
       const tag = el.tagName;
@@ -741,11 +751,11 @@ export default function HomePage() {
     return base;
   }, [world, bazaarSymbol]);
 
-  const bazaarActiveId = useMemo(() => {
-    const s = normalizeBazaarSymbolId(bazaarSymbol);
-    if (s) return s;
-    return bazaarSymbolList[0] ?? "timber";
-  }, [bazaarSymbol, bazaarSymbolList]);
+  const syncBazaarFieldFromDomValue = useCallback((raw: string) => {
+    setBazaarSymbol(raw.toLowerCase());
+    const n = normalizeBazaarSymbolId(raw);
+    if (n) setBazaarActiveId(n);
+  }, []);
 
   const playerCash =
     world?.balances_cents["cash:player"] != null
@@ -755,6 +765,33 @@ export default function HomePage() {
   const playerCashCents = world?.balances_cents["cash:player"];
   const canAffordSurvey =
     typeof playerCashCents === "number" && playerCashCents >= FRONTIER_SURVEY_COST_CENTS;
+
+  const toggleSimPause = useCallback(() => {
+    setSimPaused((p) => {
+      const next = !p;
+      pushToast({
+        message: next ? "Simulation paused." : "Simulation running.",
+        kind: "ok",
+      });
+      return next;
+    });
+  }, [pushToast]);
+
+  const setSimSpeedPreset = useCallback(
+    (next: 0 | 1 | 2) => {
+      setSimSpeedIdx(next);
+      pushToast({ message: `Sim speed: ${SIM_SPEED_LABELS[next]}`, kind: "info" });
+    },
+    [pushToast],
+  );
+
+  const cycleSimSpeed = useCallback(() => {
+    setSimSpeedIdx((i) => {
+      const next = ((i + 1) % 3) as 0 | 1 | 2;
+      pushToast({ message: `Sim speed: ${SIM_SPEED_LABELS[next]}`, kind: "info" });
+      return next;
+    });
+  }, [pushToast]);
 
   const advanceSimTick = useCallback(async () => {
     if (tickInFlightRef.current) return;
@@ -1715,16 +1752,7 @@ export default function HomePage() {
                   aria-pressed={!simPaused}
                   aria-label={simPaused ? "Run simulation" : "Pause simulation"}
                   disabled={busy}
-                  onClick={() => {
-                    setSimPaused((p) => {
-                      const next = !p;
-                      pushToast({
-                        message: next ? "Simulation paused." : "Simulation running.",
-                        kind: "ok",
-                      });
-                      return next;
-                    });
-                  }}
+                  onClick={toggleSimPause}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                 >
@@ -1734,15 +1762,17 @@ export default function HomePage() {
                   type="button"
                   className="realm-btn realm-btn--ghost realm-btn--sm"
                   title="Real-time gap between engine ticks while running"
-                  onClick={() => {
-                    setSimSpeedIdx((i) => {
-                      const next = ((i + 1) % 3) as 0 | 1 | 2;
-                      pushToast({ message: `Sim speed: ${SIM_SPEED_LABELS[next]}`, kind: "info" });
-                      return next;
-                    });
-                  }}
+                  onClick={cycleSimSpeed}
                 >
                   {SIM_SPEED_LABELS[simSpeedIdx]}
+                </button>
+                <button
+                  type="button"
+                  className="realm-btn realm-btn--ghost realm-btn--sm"
+                  title="Open settings (sim speed, pause, dev reset)"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  Settings
                 </button>
                 <button
                   type="button"
@@ -2226,7 +2256,9 @@ export default function HomePage() {
                               const cur = bazaarActiveId;
                               const i = list.indexOf(cur);
                               const from = i >= 0 ? i : 0;
-                              setBazaarSymbol(list[(from - 1 + list.length) % list.length]);
+                              const id = list[(from - 1 + list.length) % list.length];
+                              setBazaarSymbol(id);
+                              setBazaarActiveId(id);
                             }}
                           >
                             ◀
@@ -2236,10 +2268,14 @@ export default function HomePage() {
                             <input
                               className="realm-input"
                               value={bazaarSymbol}
-                              onChange={(e) => setBazaarSymbol(e.target.value.toLowerCase())}
-                              onBlur={() =>
-                                setBazaarSymbol((s) => normalizeBazaarSymbolId(s) || bazaarSymbolList[0] || "timber")
-                              }
+                              onChange={(e) => syncBazaarFieldFromDomValue(e.target.value)}
+                              onInput={(e) => syncBazaarFieldFromDomValue((e.target as HTMLInputElement).value)}
+                              onBlur={(e) => {
+                                const raw = (e.target as HTMLInputElement).value;
+                                const n = normalizeBazaarSymbolId(raw) || bazaarSymbolList[0] || "timber";
+                                setBazaarSymbol(n);
+                                setBazaarActiveId(n);
+                              }}
                               list="realm-bazaar-datalist"
                               spellCheck={false}
                               autoCapitalize="off"
@@ -2263,7 +2299,9 @@ export default function HomePage() {
                               const cur = bazaarActiveId;
                               const i = list.indexOf(cur);
                               const from = i >= 0 ? i : 0;
-                              setBazaarSymbol(list[(from + 1) % list.length]);
+                              const id = list[(from + 1) % list.length];
+                              setBazaarSymbol(id);
+                              setBazaarActiveId(id);
                             }}
                           >
                             ▶
@@ -2283,7 +2321,10 @@ export default function HomePage() {
                                 role="option"
                                 aria-selected={on}
                                 className={`realm-bazaar-chip${on ? " realm-bazaar-chip--on" : ""}`}
-                                onClick={() => setBazaarSymbol(s)}
+                                onClick={() => {
+                                  setBazaarSymbol(s);
+                                  setBazaarActiveId(s);
+                                }}
                               >
                                 <span className="realm-bazaar-chip__name">{displayMaterial(s)}</span>
                                 <span className="realm-bazaar-chip__quote">
@@ -3232,28 +3273,6 @@ export default function HomePage() {
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void persistenceLoad()}>
                           Load snapshot
                         </button>
-                        {SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS ? (
-                          <>
-                            <label className="realm-label" style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
-                              Reset scenario
-                              <select
-                                className="realm-input"
-                                style={{ minWidth: 140 }}
-                                value={devResetScenario}
-                                onChange={(e) => setDevResetScenario(e.target.value as DevResetScenarioId)}
-                              >
-                                {DEV_RESET_SCENARIOS.map((s) => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void devResetWorld()}>
-                              Dev: reset world
-                            </button>
-                          </>
-                        ) : null}
                       </div>
                     </>
                   ) : null}
@@ -3280,6 +3299,21 @@ export default function HomePage() {
           Loading world…
         </motion.p>
       )}
+      <FrontierSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        busy={busy}
+        simPaused={simPaused}
+        onTogglePause={toggleSimPause}
+        simSpeedIdx={simSpeedIdx}
+        simSpeedLabels={SIM_SPEED_LABELS}
+        simSpeedsMs={SIM_SPEEDS_MS}
+        onSetSimSpeedIdx={setSimSpeedPreset}
+        showDevReset={SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS}
+        devResetScenario={devResetScenario}
+        onDevResetScenario={(s) => setDevResetScenario(s)}
+        onDevResetWorld={devResetWorld}
+      />
       <FrontierCommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
@@ -3288,6 +3322,7 @@ export default function HomePage() {
           setTab(t);
           setCommandOpen(true);
         }}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
     </main>
   );
