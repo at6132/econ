@@ -42,12 +42,11 @@ const KIND_COLOR: Record<MapFxKind, string> = {
 
 type Props = {
   events: MapFxEvent[];
-  cellPx: number;
-  gap: number;
-  gridW: number;
-  gridH: number;
-  /** Match `.realm-map-grid` padding */
-  pad?: number;
+  width: number;
+  height: number;
+  getBurstCenter: (gx: number, gy: number) => { x: number; y: number };
+  /** Scales ring + particle spread (≈ cell size). */
+  burstScale: number;
 };
 
 function Particle({
@@ -77,23 +76,20 @@ function Particle({
 
 function Burst({
   ev,
-  cellPx,
-  gap,
-  pad,
+  getBurstCenter,
+  burstScale,
 }: {
   ev: MapFxEvent;
-  cellPx: number;
-  gap: number;
-  pad: number;
+  getBurstCenter: (gx: number, gy: number) => { x: number; y: number };
+  burstScale: number;
 }) {
-  const cx = pad + ev.gx * (cellPx + gap) + cellPx / 2;
-  const cy = pad + ev.gy * (cellPx + gap) + cellPx / 2;
+  const { x: cx, y: cy } = getBurstCenter(ev.gx, ev.gy);
   const label = ev.label ?? DEFAULT_LABEL[ev.kind] ?? ev.kind.toUpperCase();
   const n = 10;
   const color = KIND_COLOR[ev.kind];
   const particles = Array.from({ length: n }, (_, i) => ({
     angle: (360 / n) * i + (ev.id % 7) * 3,
-    dist: cellPx * 0.85 + (i % 3) * 6,
+    dist: burstScale * 0.85 + (i % 3) * 6,
     delay: i * 0.02,
   }));
 
@@ -126,8 +122,8 @@ function Burst({
       <motion.span
         className="realm-map-fx-label"
         initial={{ y: 8, opacity: 0, scale: 0.7 }}
-        animate={{ y: -cellPx * 0.55, opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, y: -cellPx }}
+        animate={{ y: -burstScale * 0.55, opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, y: -burstScale }}
         transition={{ type: "spring", stiffness: 420, damping: 22 }}
       >
         {label}
@@ -136,14 +132,12 @@ function Burst({
   );
 }
 
-export function RealmMapFxOverlay({ events, cellPx, gap, gridW, gridH, pad = 4 }: Props) {
-  const w = pad * 2 + Math.max(1, gridW) * cellPx + Math.max(0, gridW - 1) * gap;
-  const h = pad * 2 + Math.max(1, gridH) * cellPx + Math.max(0, gridH - 1) * gap;
+export function RealmMapFxOverlay({ events, width, height, getBurstCenter, burstScale }: Props) {
   return (
-    <div className="realm-map-fx-layer" style={{ width: w, height: h }} aria-hidden>
+    <div className="realm-map-fx-layer" style={{ width, height }} aria-hidden>
       <AnimatePresence>
         {events.map((ev) => (
-          <Burst key={ev.id} ev={ev} cellPx={cellPx} gap={gap} pad={pad} />
+          <Burst key={ev.id} ev={ev} getBurstCenter={getBurstCenter} burstScale={burstScale} />
         ))}
       </AnimatePresence>
     </div>

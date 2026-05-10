@@ -16,7 +16,8 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
   {
     id: "map_god_view",
     title: "Pan / zoom frontier map",
-    detail: "Edge-to-edge map surface: drag to pan, wheel zoom toward cursor, terrain / satellite / political styles (saved locally).",
+    detail:
+      "Large frontier (48×36 plots): coherent biomes from engine noise; UI draws irregular regions (shared vertex jitter) with pan/zoom and terrain / satellite / political styles.",
     lane: "live",
     jumpTab: "world",
   },

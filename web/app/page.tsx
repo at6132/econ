@@ -2,21 +2,20 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
 import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
-import { cellRoughRadius, cellTextureShift, ownerTint } from "./mapHash";
+import { buildOrganicMesh } from "./mapOrganicMesh";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
+import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 
-const MAP_CELL_GAP = 1;
 const MAP_PAD = 4;
 
 const FX_HUE: Record<MapFxKind, number> = {
@@ -138,22 +137,6 @@ type WorldDto = {
   hire_catalog?: HireCatalogRow[];
 };
 
-const KNOWN_TERRAIN = new Set([
-  "plains",
-  "forest",
-  "mountain",
-  "desert",
-  "tundra",
-  "swamp",
-  "water_shallow",
-  "water_deep",
-]);
-
-function terrainCellClass(terrain: string): string {
-  if (!KNOWN_TERRAIN.has(terrain)) return "realm-map-cell--t-unknown";
-  return `realm-map-cell--t-${terrain}`;
-}
-
 function SectionTitle({ children }: { children: string }) {
   return <h3 className="realm-section-title">{children}</h3>;
 }
@@ -270,31 +253,27 @@ export default function HomePage() {
   }, [world]);
 
   const grid = useMemo(() => {
-    if (!world?.plots.length) return { w: 0, h: 0, cells: [] as PlotDto[][], cellPx: 36 };
+    if (!world?.plots.length) return { w: 0, h: 0, cellPx: 36 };
     const w = Math.max(...world.plots.map((p) => p.x)) + 1;
     const h = Math.max(...world.plots.map((p) => p.y)) + 1;
-    const cells: PlotDto[][] = Array.from({ length: h }, () =>
-      Array.from({ length: w }, () => null as unknown as PlotDto),
-    );
-    for (const p of world.plots) {
-      cells[p.y][p.x] = p;
-    }
-    const gap = MAP_CELL_GAP;
     const pad = 4;
     const innerW = Math.max(60, viewportPx.w - pad * 2);
     const innerH = Math.max(60, viewportPx.h - pad * 2);
-    const cw = (innerW - gap * Math.max(0, w - 1)) / Math.max(1, w);
-    const ch = (innerH - gap * Math.max(0, h - 1)) / Math.max(1, h);
-    const cellPx = Math.floor(Math.max(14, Math.min(88, Math.min(cw, ch))));
-    return { w, h, cells, cellPx };
+    const cw = innerW / Math.max(1, w);
+    const ch = innerH / Math.max(1, h);
+    const cellPx = Math.floor(Math.max(8, Math.min(56, Math.min(cw, ch))));
+    return { w, h, cellPx };
   }, [world, viewportPx]);
 
-  const gridContentPx = useMemo(() => {
-    if (!world || grid.w === 0) return { w: 0, h: 0 };
-    const w = MAP_PAD * 2 + grid.w * grid.cellPx + Math.max(0, grid.w - 1) * MAP_CELL_GAP;
-    const h = MAP_PAD * 2 + grid.h * grid.cellPx + Math.max(0, grid.h - 1) * MAP_CELL_GAP;
-    return { w, h };
+  const mesh = useMemo(() => {
+    if (!world || grid.w === 0) return null;
+    return buildOrganicMesh(world.seed, grid.w, grid.h, MAP_PAD, grid.cellPx);
   }, [world, grid.w, grid.h, grid.cellPx]);
+
+  const gridContentPx = useMemo(() => {
+    if (!mesh) return { w: 0, h: 0 };
+    return { w: mesh.contentWidth, h: mesh.contentHeight };
+  }, [mesh]);
 
   useLayoutEffect(() => {
     const el = mapViewportRef.current;
@@ -319,15 +298,14 @@ export default function HomePage() {
       window.setTimeout(() => {
         setMapFx((prev) => prev.filter((e) => e.id !== id));
       }, 1700);
-      if (grid.w > 0) {
+      if (mesh && grid.w > 0) {
         const sid = ++sparkSeqRef.current;
-        const cx = MAP_PAD + ev.gx * (grid.cellPx + MAP_CELL_GAP) + grid.cellPx / 2;
-        const cy = MAP_PAD + ev.gy * (grid.cellPx + MAP_CELL_GAP) + grid.cellPx / 2;
-        setSparks((prev) => [...prev, { id: sid, cx, cy, hue: FX_HUE[ev.kind] ?? 200 }]);
+        const c = mesh.plotCentroid(ev.gx, ev.gy);
+        setSparks((prev) => [...prev, { id: sid, cx: c.x, cy: c.y, hue: FX_HUE[ev.kind] ?? 200 }]);
         window.setTimeout(() => setSparks((prev) => prev.filter((s) => s.id !== sid)), 480);
       }
     },
-    [grid.w, grid.cellPx],
+    [grid.w, mesh],
   );
 
   const buildsByPlot = useMemo(() => {
@@ -869,83 +847,33 @@ export default function HomePage() {
                   }}
                 >
                   <div className="realm-map-grid-stack">
-                    <RealmMapFxOverlay
-                      events={mapFx}
-                      cellPx={grid.cellPx}
-                      gap={MAP_CELL_GAP}
-                      gridW={grid.w}
-                      gridH={grid.h}
-                      pad={MAP_PAD}
-                    />
-                    <RealmMapParticlesCanvas width={gridContentPx.w} height={gridContentPx.h} sparks={sparks} />
-                    <div
-                      className="realm-map-grid"
-                      style={{
-                        gridTemplateColumns: `repeat(${grid.w}, ${grid.cellPx}px)`,
-                        gap: MAP_CELL_GAP,
-                      }}
-                    >
-                      {grid.cells.flatMap((row, y) =>
-                        row.map((p, x) => {
-                          const sel = p && selectedPlotId === p.id;
-                          const mine = p?.owner === "player";
-                          const terrainCls = p ? terrainCellClass(p.terrain) : "realm-map-cell--void";
-                          const nBuild = p ? (buildsByPlot.get(p.id) ?? 0) : 0;
-                          const sh = p ? cellTextureShift(p.id, world.seed) : { bx: 0, by: 0 };
-                          const rr = p ? cellRoughRadius(p.id, world.seed) : 0;
-                          const ot = p ? ownerTint(p.owner) : "transparent";
-                          const cls = [
-                            "realm-map-cell",
-                            terrainCls,
-                            sel ? "realm-map-cell--sel" : "",
-                            mine ? "realm-map-cell--mine" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ");
-                          return (
-                            <motion.button
-                              key={p?.id ?? `cell-${x}-${y}`}
-                              type="button"
-                              className={cls}
-                              data-owner={p?.owner ?? ""}
-                              title={`${p?.id ?? ""} · ${p?.terrain ?? ""} · owner ${p?.owner ?? "none"} · surveyed ${p?.surveyed ? "yes" : "no"}`}
-                              disabled={busy || !p}
-                              onClick={() => {
-                                if (!p) return;
-                                if (mapNavSuppress.current) {
-                                  mapNavSuppress.current = false;
-                                  return;
-                                }
-                                onPlotClick(p);
-                              }}
-                              layout
-                              whileTap={{ scale: 0.94 }}
-                              style={
-                                {
-                                  width: grid.cellPx,
-                                  height: grid.cellPx,
-                                  borderRadius: rr,
-                                  backgroundPosition: `${sh.bx}px ${sh.by}px`,
-                                  ["--owner-tint" as string]: ot,
-                                } as CSSProperties
-                              }
-                            >
-                              {nBuild > 0 ? (
-                                <span className="realm-map-cell__build" aria-hidden>
-                                  ▣{nBuild > 1 ? nBuild : ""}
-                                </span>
-                              ) : null}
-                            </motion.button>
-                          );
-                        }),
-                      )}
-                    </div>
+                    {mesh ? (
+                      <>
+                        <RealmMapFxOverlay
+                          events={mapFx}
+                          width={gridContentPx.w}
+                          height={gridContentPx.h}
+                          getBurstCenter={(gx, gy) => mesh.plotCentroid(gx, gy)}
+                          burstScale={grid.cellPx}
+                        />
+                        <RealmMapParticlesCanvas width={gridContentPx.w} height={gridContentPx.h} sparks={sparks} />
+                        <RealmMapMeshSvg
+                          mesh={mesh}
+                          plots={world.plots}
+                          selectedPlotId={selectedPlotId}
+                          buildsByPlot={buildsByPlot}
+                          busy={busy}
+                          mapNavSuppress={mapNavSuppress}
+                          onPlotClick={onPlotClick}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Drag to pan · wheel zooms toward cursor · Style cycles terrain / satellite / political. Empty = <strong>claim</strong> · yours again ={" "}
-                <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected
+                Drag to pan · wheel zoom · Style: terrain / satellite / political. Regions are jittered from a large world map (engine still uses plot
+                tiles). Empty = <strong>claim</strong> · yours again = <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected
               </p>
             </div>
 
