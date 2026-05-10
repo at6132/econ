@@ -35,6 +35,28 @@ def test_market_cancel_400_wrong_party() -> None:
     assert r2.status_code == 400
 
 
+def test_supply_contract_http_flow() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 71})
+    r = c.post(
+        "/contracts/supply/propose",
+        params={
+            "supplier": "player",
+            "buyer": "t1_consumer",
+            "material": "grain",
+            "qty": 1,
+            "total_price_cents": 50,
+            "due_in_ticks": 5,
+        },
+    )
+    assert r.status_code == 200
+    cid = r.json()["contract_id"]
+    r2 = c.post("/contracts/supply/accept", params={"buyer": "t1_consumer", "contract_id": cid})
+    assert r2.status_code == 200
+    r3 = c.post("/contracts/supply/fulfill", params={"supplier": "player", "contract_id": cid})
+    assert r3.status_code == 200
+
+
 def test_market_bid_cancel_via_http() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"seed": 58})

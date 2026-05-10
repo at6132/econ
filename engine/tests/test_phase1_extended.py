@@ -127,9 +127,17 @@ def test_market_history_records_best_bid() -> None:
     assert snap.get("best_bids_cents", {}).get("electricity") == 144
 
 
+def test_tier1_agent_ticks_conserve_total_cents() -> None:
+    w = bootstrap_frontier(seed=78, grid_width=3, grid_height=3)
+    t0 = w.ledger.total_cents()
+    for _ in range(60):
+        advance_tick(w)
+    assert w.ledger.total_cents() == t0
+
+
 def test_contract_honor_increments_reputation() -> None:
     w = bootstrap_frontier(seed=16, grid_width=2, grid_height=2)
-    pr = propose_contract_stub(w, PartyId("player"), PartyId("npc_grain_vendor"), "supply")
+    pr = propose_contract_stub(w, PartyId("player"), PartyId("npc_grain_vendor"), "memo")
     cid = pr["contract_id"]
     assert honor_contract_stub(w, cid)["ok"] is True
     assert w.reputation["player"]["honored"] >= 1

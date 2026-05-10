@@ -45,3 +45,23 @@ def test_rejects_second_production_same_plot() -> None:
     assert start_production(w, PartyId("player"), pid, "coal_generator")["ok"] is True
     r = start_production(w, PartyId("player"), pid, "coal_generator")
     assert r["ok"] is False
+
+
+def test_stub_hire_routes_part_of_labor_to_employee() -> None:
+    from realm.actions import hire_worker_stub
+
+    w = bootstrap_frontier(seed=4, grid_width=2, grid_height=2)
+    pid = PlotId("p-0-0")
+    player = PartyId("player")
+    emp = PartyId("t1_timber_merchant")
+    assert claim_plot(w, player, pid)["ok"] is True
+    assert hire_worker_stub(w, player, emp, 500)["ok"] is True
+    pc = party_cash_account(player)
+    ec = party_cash_account(emp)
+    cash_p0 = w.ledger.balance(pc)
+    cash_e0 = w.ledger.balance(ec)
+    total0 = w.ledger.total_cents()
+    assert start_production(w, player, pid, "sawmill")["ok"] is True
+    assert w.ledger.total_cents() == total0
+    assert w.ledger.balance(pc) == cash_p0 - 500
+    assert w.ledger.balance(ec) == cash_e0 + 200
