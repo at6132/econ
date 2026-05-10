@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
+from realm.buildings import build_on_plot
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.materials import MATERIALS, all_material_ids
 from realm.production import start_production
 from realm.recipes import RECIPES
+from realm.terrain import Terrain
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier
 
@@ -48,10 +50,11 @@ def _party_unit_total(w, party: PartyId) -> int:
 
 
 def test_mill_flour_run_conserves_player_inventory_units() -> None:
-    w = bootstrap_frontier(seed=31, grid_width=3, grid_height=2)
+    w = bootstrap_frontier(seed=1, grid_width=3, grid_height=2)
     player = PartyId("player")
     pid = PlotId("p-0-0")
     assert claim_plot(w, player, pid)["ok"] is True
+    assert build_on_plot(w, player, pid, "gristmill", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     u0 = _party_unit_total(w, player)
     assert start_production(w, player, pid, "mill_flour")["ok"] is True
@@ -64,7 +67,9 @@ def test_steel_alloy_outputs_match_inputs_units() -> None:
     w = bootstrap_frontier(seed=9, grid_width=3, grid_height=2)
     player = PartyId("player")
     pid = PlotId("p-0-0")
+    assert w.plots[pid].terrain == Terrain.MOUNTAIN
     assert claim_plot(w, player, pid)["ok"] is True
+    assert build_on_plot(w, player, pid, "foundry", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     # Bootstrap already has smelt inputs; add one more iron ingot for a steel batch.
     w.inventory.add(player, MaterialId("iron_ingot"), 1)

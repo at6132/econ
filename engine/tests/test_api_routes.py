@@ -141,10 +141,16 @@ def test_survey_http_returns_terrain_and_recipe_ids() -> None:
     c.post("/dev/reset", params={"seed": 1})
     r = c.post("/plots/p-0-0/claim", params={"party": "player"})
     assert r.status_code == 200
+    rb = c.post(
+        "/plots/p-0-0/build",
+        params={"building_id": "wood_shop", "party": "player", "build_mode": "turnkey"},
+    )
+    assert rb.status_code == 200
     r2 = c.post("/plots/p-0-0/survey", params={"party": "player"})
     assert r2.status_code == 200
     body = r2.json()
     assert body.get("ok") is True
     assert body.get("terrain") == "plains"
     assert isinstance(body.get("recipe_ids"), list)
+    assert "sawmill" in body["recipe_ids"]
     assert len(body["recipe_ids"]) >= 3
