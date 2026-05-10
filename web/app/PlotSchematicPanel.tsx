@@ -101,7 +101,12 @@ export function PlotSchematicPanel({
       }
       setValidation({ ok: false, errors: [detail || `Request failed (${r.status})`] });
     } catch {
-      const res = validateLinearRecipeChain(recipes, playerInventory, chain);
+      const res = validateLinearRecipeChain(
+        recipes,
+        playerInventory,
+        chain,
+        recipes.length ? new Set(recipes.map((x) => x.id)) : null,
+      );
       if (res.ok) {
         setValidation({ ok: true, source: "client" });
         pushToast({ message: "Schematic OK (offline check).", kind: "ok" });

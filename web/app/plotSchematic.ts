@@ -14,6 +14,7 @@ export function validateLinearRecipeChain(
   catalog: SchematicRecipe[],
   starterInv: Record<string, number>,
   chainIds: string[],
+  allowedRecipeIds?: ReadonlySet<string> | null,
 ): { ok: true; finalInventory: Record<string, number> } | { ok: false; errors: string[] } {
   const byId = new Map(catalog.map((r) => [r.id, r]));
   const inv: Record<string, number> = { ...starterInv };
@@ -24,6 +25,10 @@ export function validateLinearRecipeChain(
     const r = byId.get(rid);
     if (!r) {
       errors.push(`Step ${i + 1}: unknown recipe “${rid}”.`);
+      break;
+    }
+    if (allowedRecipeIds && allowedRecipeIds.size > 0 && !allowedRecipeIds.has(rid)) {
+      errors.push(`Step ${i + 1} — ${r.display_name}: not allowed on this plot’s terrain.`);
       break;
     }
     for (const [mat, need] of Object.entries(r.inputs)) {

@@ -84,6 +84,8 @@ type PlotDto = {
   owner: string | null;
   surveyed: boolean;
   subsurface?: Record<string, number>;
+  /** Surveyed plots: recipe ids the engine allows on this terrain (omitted until surveyed). */
+  recipe_ids?: string[];
 };
 
 type RecipeDto = {
@@ -634,6 +636,14 @@ export default function HomePage() {
     () => world?.plots.find((p) => p.id === selectedPlotId) ?? null,
     [world, selectedPlotId],
   );
+
+  const workshopRecipesForSelectedPlot = useMemo(() => {
+    const all = (world?.recipes ?? []) as RecipeDto[];
+    const ids = selectedPlot?.surveyed ? selectedPlot.recipe_ids : undefined;
+    if (!ids?.length) return [];
+    const allow = new Set(ids);
+    return all.filter((r) => allow.has(r.id));
+  }, [world?.recipes, selectedPlot]);
 
   const playerInv = world?.inventory["player"] ?? {};
 
@@ -1949,21 +1959,32 @@ export default function HomePage() {
 
                           {selectedPlot.owner === "player" && selectedPlot.surveyed ? (
                             <>
-                              <SectionTitle>Recipes</SectionTitle>
-                              <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
-                                {(world.recipes ?? []).map((r) => (
-                                  <li key={r.id} style={{ marginBottom: 6 }}>
-                                    <button
-                                      type="button"
-                                      className="realm-list-btn"
-                                      disabled={busy}
-                                      onClick={() => void produce(selectedPlot.id, r.id)}
-                                    >
-                                      {r.display_name} · {r.duration_ticks} ticks · labor ${(r.labor_cents / 100).toFixed(2)}
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
+                              <SectionTitle>Recipes on this plot</SectionTitle>
+                              <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+                                Only recipes that match this tile&apos;s <strong>terrain</strong> can run here after survey — mountains host smelting, forests
+                                favor timber work, and <strong>water</strong> cannot host workshops in this build.
+                              </p>
+                              {workshopRecipesForSelectedPlot.length === 0 ? (
+                                <p className="realm-help" style={{ marginBottom: 8 }}>
+                                  No workshop recipes on this terrain. Claim and survey <strong>dry land</strong> with the industry you need (check terrain on
+                                  the map).
+                                </p>
+                              ) : (
+                                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
+                                  {workshopRecipesForSelectedPlot.map((r) => (
+                                    <li key={r.id} style={{ marginBottom: 6 }}>
+                                      <button
+                                        type="button"
+                                        className="realm-list-btn"
+                                        disabled={busy}
+                                        onClick={() => void produce(selectedPlot.id, r.id)}
+                                      >
+                                        {r.display_name} · {r.duration_ticks} ticks · labor ${(r.labor_cents / 100).toFixed(2)}
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                               <SectionTitle>Build on this plot</SectionTitle>
                               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                                 {(world.building_catalog ?? []).map((b) => (
@@ -2584,7 +2605,7 @@ export default function HomePage() {
                     <>
                       <SectionTitle>Plot schematic</SectionTitle>
                       <PlotSchematicPanel
-                        recipes={(world.recipes ?? []) as SchematicRecipe[]}
+                        recipes={workshopRecipesForSelectedPlot as SchematicRecipe[]}
                         playerInventory={playerInv}
                         eligiblePlots={schematicEligiblePlots}
                         selectedPlotId={selectedPlotId}
