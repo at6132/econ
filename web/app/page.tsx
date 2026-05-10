@@ -1852,7 +1852,6 @@ export default function HomePage() {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.2 }}
                   className="realm-panel-scroll"
-                  style={{ flex: 1, minHeight: 0 }}
                 >
                   {tab === "world" ? (
                     <>
