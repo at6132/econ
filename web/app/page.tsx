@@ -155,6 +155,11 @@ export default function HomePage() {
   const [sellMaterial, setSellMaterial] = useState("timber");
   const [sellQty, setSellQty] = useState("1");
   const [sellPriceCents, setSellPriceCents] = useState("500");
+  const [p2pRole, setP2pRole] = useState<"sell" | "buy">("sell");
+  const [p2pParty, setP2pParty] = useState("t1_consumer");
+  const [p2pMaterial, setP2pMaterial] = useState("grain");
+  const [p2pQty, setP2pQty] = useState("1");
+  const [p2pTotalCents, setP2pTotalCents] = useState("50");
   const [lastContractId, setLastContractId] = useState<string | null>(null);
   const [commandOpen, setCommandOpen] = useState(true);
   const mapViewportRef = useRef<HTMLDivElement>(null);
@@ -429,6 +434,30 @@ export default function HomePage() {
     try {
       const r = await fetch("/api/engine/persistence/load", { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      didInitPan.current = false;
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function devResetWorld() {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Reset the in-memory Frontier world to a fresh bootstrap (seed 42)? Unsaved progress is lost unless you saved to SQLite first.",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/engine/dev/reset?seed=42", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      didInitPan.current = false;
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -512,6 +541,66 @@ export default function HomePage() {
           gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
           gy: Math.max(0, Math.floor((2 * (grid.h - 1)) / 3)),
           label: "SELL",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelAsk(orderId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ party: "player", order_id: orderId });
+      const r = await fetch(`/api/engine/market/cancel?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 4)),
+          label: "CANCEL",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runP2pTrade() {
+    const qty = Number(p2pQty);
+    const total = Number(p2pTotalCents);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(total) || total < 0) {
+      setError("P2P qty must be positive; total price (cents) must be zero or more.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const seller = p2pRole === "sell" ? "player" : p2pParty.trim();
+      const buyer = p2pRole === "sell" ? p2pParty.trim() : "player";
+      const q = new URLSearchParams({
+        seller,
+        buyer,
+        material: p2pMaterial.trim(),
+        qty: String(qty),
+        total_price_cents: String(total),
+      });
+      const r = await fetch(`/api/engine/trade/p2p?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 3)),
+          label: "P2P",
         });
       }
       await load();
@@ -1024,6 +1113,7 @@ export default function HomePage() {
                               <th style={{ textAlign: "right" }}>Qty</th>
                               <th style={{ textAlign: "right" }}>¢/u</th>
                               <th>Seller</th>
+                              <th style={{ textAlign: "right" }}> </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1033,6 +1123,20 @@ export default function HomePage() {
                                 <td style={{ textAlign: "right" }}>{a.qty}</td>
                                 <td style={{ textAlign: "right" }}>{a.price_per_unit_cents}</td>
                                 <td>{a.party}</td>
+                                <td style={{ textAlign: "right" }}>
+                                  {a.party === "player" ? (
+                                    <button
+                                      type="button"
+                                      className="realm-btn realm-btn--ghost realm-btn--sm"
+                                      disabled={busy}
+                                      onClick={() => void cancelAsk(a.order_id)}
+                                    >
+                                      Cancel
+                                    </button>
+                                  ) : (
+                                    <span className="realm-help"> </span>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1073,6 +1177,64 @@ export default function HomePage() {
                         </label>
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void placeSellOrder()}>
                           Place ask
+                        </button>
+                      </div>
+                      <SectionTitle>P2P trade (atomic)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Direct deal: counterparty pays (or receives) <code>total_price_cents</code> for the whole lot — no order book. Example: sell grain to{" "}
+                        <code>t1_consumer</code> from bootstrap.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                        <label className="realm-label">
+                          you are
+                          <select
+                            className="realm-input"
+                            value={p2pRole}
+                            onChange={(e) => setP2pRole(e.target.value as "sell" | "buy")}
+                            style={{ width: 120 }}
+                          >
+                            <option value="sell">Seller</option>
+                            <option value="buy">Buyer</option>
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          counterparty id
+                          <input
+                            className="realm-input"
+                            value={p2pParty}
+                            onChange={(e) => setP2pParty(e.target.value)}
+                            style={{ width: 180 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          material
+                          <input
+                            className="realm-input"
+                            value={p2pMaterial}
+                            onChange={(e) => setP2pMaterial(e.target.value)}
+                            style={{ width: 120 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          qty
+                          <input
+                            className="realm-input"
+                            value={p2pQty}
+                            onChange={(e) => setP2pQty(e.target.value)}
+                            style={{ width: 48 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          total (¢)
+                          <input
+                            className="realm-input"
+                            value={p2pTotalCents}
+                            onChange={(e) => setP2pTotalCents(e.target.value)}
+                            style={{ width: 72 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void runP2pTrade()}>
+                          Execute P2P
                         </button>
                       </div>
                     </>
@@ -1230,6 +1392,9 @@ export default function HomePage() {
                         </button>
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void persistenceLoad()}>
                           Load snapshot
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void devResetWorld()}>
+                          Dev: reset world
                         </button>
                       </div>
                     </>

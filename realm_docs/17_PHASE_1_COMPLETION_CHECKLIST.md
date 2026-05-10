@@ -47,8 +47,8 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 | B5 | Capital: accounts, atomic transfers, **conservation** | `ledger.py` | `test_ledger.py`, `test_world.py` | Invariant tests: total cents constant except designed mint/burn | ✅ |
 | B6 | Production: ~5 recipes | `recipes.py` (5), `production.py` | `test_production.py` | **Labor as real input** to runs; building modifiers | 🟡 |
 | B7 | Movement: transport, time, cost | `movement.py` | `test_phase1_extended` shipment | Fee formula vs distance documented + tested | 🟡 |
-| B8 | Order book (7b) | `markets.py` — **asks only**, `market_buy` walks book | `test_phase1_extended` | **Bids**, partial fills policy, cancel edge cases, **matching** rules documented | 🟡 |
-| B9 | P2P trade (7a) | `markets.py` `p2p_trade` | `test_phase1_extended` | UI + idempotency + failure reasons in API | 🟡 |
+| B9 | P2P trade (7a) | `markets.py` `p2p_trade` | `test_phase1_extended`, `test_api_routes` | Idempotency; richer API errors | 🟡 |
+| B8 | Order book (7b) | `markets.py` — **asks only**, `market_buy` walks book | `test_phase1_extended`, `test_markets`, `test_api_routes` | **Bids**, partial fills policy, **matching** rules documented | 🟡 |
 | B10 | Basic contracts: **supply + employment** | `social.py` **stub** dicts; `actions.py` hire stub | `test_phase1_extended` | Typed contract state machine; **breach** path; performance clauses | 🟡 |
 | B11 | Reputation (doc calls it “placeholder”) | `world.reputation` + honor stub | `test_phase1_extended` | Separate **breach** flow; reputation affects something (even stub discount) | 🟡 |
 
@@ -72,13 +72,13 @@ Wire each action the UI needs; return `{ ok, ... } | { ok: false, reason }`.
 | C10 | `POST /ship` | ✅ | ✅ | |
 | C11 | `POST /market/sell` | ✅ | ✅ | |
 | C12 | `POST /market/buy` | ✅ | ✅ | |
-| C13 | `POST /market/cancel` | ✅ | ❌ | **Add UI** to cancel player asks |
-| C14 | `POST /trade/p2p` | ✅ | ❌ | **Add UI** for player↔NPC or player↔player P2P |
+| C13 | `POST /market/cancel` | ✅ | ✅ | Cancel button on **player** rows in Bazaar order book |
+| C14 | `POST /trade/p2p` | ✅ | ✅ | **P2P trade** block on Bazaar tab |
 | C15 | `POST /contracts/propose` | ✅ | ✅ | Stub only |
 | C16 | `POST /contracts/{id}/honor` | ✅ | ✅ | Stub only |
 | C17 | `POST /persistence/save` | ✅ | ✅ | |
-| C18 | `POST /persistence/load` | ✅ | ✅ | |
-| C19 | `POST /dev/reset` | ✅ | ❌ | Optional dev-only UI or document for QA |
+| C18 | `POST /persistence/load` | ✅ | ✅ | Refetch + map pan re-init |
+| C19 | `POST /dev/reset` | ✅ | ✅ | Chronicle → **Dev: reset world** (confirm) |
 
 **Next.js:** `web` calls `/api/engine/*` → rewrite to engine (`next.config.mjs`, `REALM_ENGINE_ORIGIN`).
 
@@ -93,15 +93,15 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | D1 | Next.js app shell | ✅ | |
 | D2 | World map (no Pixi required) | ✅ | SVG organic mesh; OK for Phase 1 |
 | D3 | Plot detail — tables + buttons | ✅ | Under **Territory & works**; ensure empty-state copy |
-| D4 | Market — **table** order book + chart | 🟡 | Book + Recharts history; **no bid book**; **no cancel** in UI |
-| D5 | Inventory — **table** | 🟡 | Section exists; ensure **all parties** or clear “player only” + doc |
+| D4 | Market — **table** order book + chart | ✅ | Cancel ask + P2P UI; **no bid book** |
+| D5 | Inventory — **table** | 🟡 | Player-only table; label as such |
 | D6 | Build menu (costs) | ✅ | From `building_catalog` |
 | D7 | Hire menu (wages / signing) | 🟡 | Stub hire; not full employment economy |
 | D8 | Action log | ✅ | `event_log` |
 | D9 | Logistics (in transit + ship) | ✅ | **Caravans** tab |
 | D10 | Contracts UI | 🟡 | Stubs only |
-| D11 | P2P trade UI | ❌ | Wire `POST /trade/p2p` |
-| D12 | Market cancel UI | ❌ | Wire `POST /market/cancel` |
+| D11 | P2P trade UI | ✅ | Bazaar tab |
+| D12 | Market cancel UI | ✅ | Player rows only |
 
 ---
 
@@ -136,18 +136,18 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | `test_inventory.py` | matter add/remove | Cross-party transfers, edge qty |
 | `test_actions.py` | claim, survey | Survey cost if added |
 | `test_production.py` | recipes, reject duplicate run | Labor + building modifiers |
-| `test_production.py` | — | **market cancel** unit tests |
-| `test_phase1_extended.py` | JSON/SQLite roundtrip, ship, p2p, market buy, build/hire, contracts stub, market history | **Bids**, **full contract** flows, **API-level** tests (optional `TestClient`) |
+| `test_markets.py` | Cancel ask restores inventory; wrong party / missing order | **Bids** |
+| `test_api_routes.py` | HTTP smoke: cancel, P2P, wrong-party cancel | Expand to all routes |
 | `test_rng.py` | RNG | — |
 
-**Stretch:** `tests/test_api_http.py` using FastAPI `TestClient` for every route in section C.
+**Stretch:** extend `test_api_routes.py` with `TestClient` coverage for every route in section C.
 
 ---
 
 ## H. “Full not shallow” — recommended completion order
 
-1. **Market depth:** `market/cancel` UI + tests; then **limit bids** + symmetric matching (biggest Phase 1 gap vs wording “order books”).
-2. **P2P UI** + one pytest for API JSON shape.
+1. **Market depth:** ✅ cancel UI + tests landed; next: **limit bids** + symmetric matching.
+2. **P2P:** ✅ UI + HTTP smoke test.
 3. **Contracts:** replace stub with minimal **supply** contract (deliver qty by tick N, breach marks reputation).
 4. **Employment:** hiring affects **production capacity** or wage line item on runs (even one recipe).
 5. **Playtest gate A1** — schedule strangers; capture notes.
