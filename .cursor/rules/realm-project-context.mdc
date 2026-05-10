@@ -5,13 +5,13 @@ alwaysApply: true
 
 # Realm — project context for the agent
 
-You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic civilization sim where every business, price, currency, and service is invented and run by players (or AI agents in solo mode). No quests, no levels, no win condition — only an emergent economy.
+You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic civilization sim where the **whole economy** — businesses, prices, currency, **contracts**, and **services** — is **player-run** (AI agents play those roles in solo). Advanced play includes **Lua-style programmable services** others subscribe to (in-game SaaS). No quests, no levels, no win condition — only an emergent economy. **Three modes share one engine:** solo (pausable existence test), public persistent multiplayer (slow real-time; mobile companion), competitive seasons.
 
-**Solo-mode-first.** Solo (Python sim + Next.js/TS frontend) is the existence test of the design. Multiplayer comes much later. Mobile is a companion, not a port.
+**Solo-mode-first.** Solo (Python sim + Next.js/TS frontend) is the existence test of the design. Multiplayer and mobile companion are **later products on the same engine**, not v1 solo requirements.
 
-**Current phase:** Phase 1 — Solo Engine Prototype. (Update this line on phase advance.)
+**Current phase:** **Phase 1 — Solo Engine Prototype** (mid-build). Vision + phase alignment: `realm_docs/16_VISION_ANCHOR_AND_PHASE_STATUS.md`. Update the phase line here when doc 13’s gate is honestly passed and you advance.
 
-The full doc set lives in `realm_docs/00_README.md` … `realm_docs/15_GLOSSARY.md`. When in doubt, read the relevant doc rather than guess. If a doc and Avi conflict, ask Avi — docs may be stale.
+The full doc set lives in `realm_docs/00_README.md` … `realm_docs/16_VISION_ANCHOR_AND_PHASE_STATUS.md`. When in doubt, read the relevant doc rather than guess. If a doc and Avi conflict, ask Avi — docs may be stale.
 
 ## The 9 economic primitives (`03_PRIMITIVES_SPEC.md`)
 

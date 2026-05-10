@@ -31,6 +31,7 @@ This is the complete planning bundle for the game we've been designing. Read in 
 | 13 | `13_PHASED_TODO.md` | **The build plan with phases, checklists, and per-phase test gates** | Your operational doc. This is what you work from day-to-day. |
 | 14 | `14_CURSOR_PROMPT.md` | **Drop-in prompt for Cursor that loads it with full project context** | Paste at the start of any Cursor session. |
 | 15 | `15_GLOSSARY.md` | Terminology so you don't drift on definitions | Use this to keep the spec coherent over months. |
+| 16 | `16_VISION_ANCHOR_AND_PHASE_STATUS.md` | **North-star summary + where the repo is vs Phase 1** | Re-read when implementation starts to “lose the plot.” |
 
 ---
 
@@ -49,7 +50,7 @@ This is the complete planning bundle for the game we've been designing. Read in 
 - **Designer/Builder:** Avi (Sheva Studios)
 - **Doc set version:** v1.0 (initial drop)
 - **Last updated:** May 2026
-- **Status:** Pre-prototype. No code written yet. Spec phase.
+- **Status:** **Phase 1 — Solo Engine Prototype in development** (see `16_VISION_ANCHOR_AND_PHASE_STATUS.md` for vision anchor vs phased roadmap). Spec + code both exist; Phase 1 **playtest gate** in doc 13 is not treated as passed until run deliberately.
 
 ---
 
