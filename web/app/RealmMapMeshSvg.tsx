@@ -47,6 +47,9 @@ export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, bus
     return a.y - b.y || a.x - b.x;
   });
 
+  const selected = selectedPlotId ? plots.find((p) => p.id === selectedPlotId) : undefined;
+  const outlineD = selected ? mesh.plotPath(selected.x, selected.y) : null;
+
   return (
     <svg
       className="realm-map-mesh-svg"
@@ -100,13 +103,11 @@ export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, bus
         {ordered.map((p) => {
           const d = mesh.plotPath(p.x, p.y);
           const c = mesh.plotCentroid(p.x, p.y);
-          const sel = p.id === selectedPlotId;
           const mine = p.owner === "player";
           const nBuild = buildsByPlot.get(p.id) ?? 0;
           const tint = ownerTint(p.owner);
           const cls = [
             "realm-map-region",
-            sel ? "realm-map-region--sel" : "",
             mine ? "realm-map-region--mine" : "",
             p.surveyed ? "realm-map-region--surveyed" : "",
           ]
@@ -151,6 +152,15 @@ export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, bus
           );
         })}
       </g>
+      {outlineD ? (
+        <path
+          className="realm-map-plot-outline"
+          d={outlineD}
+          fill="none"
+          pointerEvents="none"
+          aria-hidden
+        />
+      ) : null}
     </svg>
   );
 }

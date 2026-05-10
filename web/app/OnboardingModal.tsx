@@ -14,7 +14,7 @@ The map and the command panel are the whole game right now. Chronicle is the pap
   },
   {
     title: "Map: claim land",
-    body: `Click a region. Empty plots can be claimed; yours can be surveyed once you pay the fee.
+    body: `Click a region to select it — the gold outline follows that plot's shape. Unclaimed land: open Territory & works and press Claim (free in this build). Your unsurveyed plots: Survey from the panel for the listed cash fee, then build and produce.
 
 Pan by dragging, zoom with the scroll wheel. The style toggle is cosmetic (terrain / satellite / political).
 
@@ -22,7 +22,7 @@ You start with cash and starter stock. Scripted traders already post on the book
   },
   {
     title: "Territory: survey, build, produce",
-    body: `In Territory & works, select a plot you own. Survey reveals subsurface grades (ore, clay, coal hints) for that tile.
+    body: `In Territory & works, your selected plot shows terrain, owner, survey status, and any structures. After you survey, subsurface grades appear there.
 
 Building spends cash and attaches a structure. Field stockade raises party-wide storage headroom. Tool cache and watch hut reduce recipe labor cash on that plot only.
 

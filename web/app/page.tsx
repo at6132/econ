@@ -9,6 +9,7 @@ import {
   FRONTIER_ONBOARD_STORAGE_KEY,
   FRONTIER_SIM_PAUSED_STORAGE_KEY,
   FRONTIER_SIM_SPEED_STORAGE_KEY,
+  FRONTIER_SURVEY_COST_CENTS,
 } from "./frontierConstants";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
@@ -424,6 +425,10 @@ export default function HomePage() {
     world?.balances_cents["cash:player"] != null
       ? (world.balances_cents["cash:player"] / 100).toFixed(2)
       : "—";
+
+  const playerCashCents = world?.balances_cents["cash:player"];
+  const canAffordSurvey =
+    typeof playerCashCents === "number" && playerCashCents >= FRONTIER_SURVEY_COST_CENTS;
 
   const advanceSimTick = useCallback(
     async (opts: { lockCommandUi?: boolean } = {}) => {
@@ -971,21 +976,8 @@ export default function HomePage() {
   }
 
   function onPlotClick(p: PlotDto) {
-    if (!p.owner) {
-      void claimPlot(p);
-      setSelectedPlotId(p.id);
-      setTab("world");
-      return;
-    }
-    if (p.owner === "player") {
-      if (!p.surveyed) {
-        void surveyPlot(p);
-        setTab("world");
-        return;
-      }
-      setSelectedPlotId(p.id);
-      setTab("world");
-    }
+    setSelectedPlotId(p.id);
+    setTab("world");
   }
 
   function resetMapView() {
@@ -1060,6 +1052,8 @@ export default function HomePage() {
       localStorage.removeItem("realm_frontier_map_style");
       localStorage.removeItem("realm_frontier_onboard_v3");
       localStorage.removeItem("realm_frontier_onboard_v4");
+      localStorage.removeItem("realm_frontier_onboard_v5");
+      localStorage.removeItem("realm_frontier_onboard_v6");
       localStorage.removeItem(FRONTIER_SIM_PAUSED_STORAGE_KEY);
       localStorage.removeItem(FRONTIER_SIM_SPEED_STORAGE_KEY);
     } catch {
@@ -1235,9 +1229,8 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Drag to pan · wheel zoom · Style is cosmetic. Regions are jittered from a large map (engine still uses square plots). Empty ={" "}
-                <strong>claim</strong> · yours = <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected. The sim clock runs in
-                the header unless paused.
+                Drag to pan · wheel zoom · Style is cosmetic. Regions follow the organic mesh (engine still indexes square tiles). Click selects a plot —
+                gold outline traces that region; claim / survey / industry in the command panel. The sim clock runs in the header unless paused.
               </p>
             </div>
 
@@ -1277,68 +1270,148 @@ export default function HomePage() {
                     <>
                       <SectionTitle>Selected plot</SectionTitle>
                       {selectedPlot ? (
-                        <div className="realm-help" style={{ marginBottom: 12 }}>
-                          <strong style={{ color: "var(--realm-text)" }}>{selectedPlot.id}</strong> · {selectedPlot.terrain}{" "}
-                          · {selectedPlot.surveyed ? "surveyed" : "not surveyed"}
-                          {selectedPlot.owner === "player" && selectedPlot.surveyed && selectedPlot.subsurface ? (
-                            <span style={{ display: "block", marginTop: 6, fontSize: 11 }}>
-                              Subsurface grades (ore/clay/coal):{" "}
-                              {Object.entries(selectedPlot.subsurface)
-                                .map(([k, v]) => `${k.replace(/_grade/, "")} ${(v as number).toFixed(2)}`)
-                                .join(" · ")}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p className="realm-help">Select a plot you own (surveyed) to manage production.</p>
-                      )}
-
-                      {selectedPlot?.owner === "player" && selectedPlot.surveyed ? (
                         <>
-                          <SectionTitle>Recipes</SectionTitle>
-                          <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
-                            {(world.recipes ?? []).map((r) => (
-                              <li key={r.id} style={{ marginBottom: 6 }}>
-                                <button
-                                  type="button"
-                                  className="realm-list-btn"
-                                  disabled={busy}
-                                  onClick={() => void produce(selectedPlot.id, r.id)}
-                                >
-                                  {r.display_name} · {r.duration_ticks} ticks · labor ${(r.labor_cents / 100).toFixed(2)}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                          <SectionTitle>Build on this plot</SectionTitle>
-                          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                            {(world.building_catalog ?? []).map((b) => (
-                              <li key={b.id} style={{ marginBottom: 6 }}>
-                                <button
-                                  type="button"
-                                  className="realm-list-btn"
-                                  disabled={busy}
-                                  onClick={() => void buildOnSelectedPlot(b.id)}
-                                >
-                                  {b.label} · ${(b.cost_cents / 100).toFixed(2)}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                          {buildingsHere.length > 0 ? (
+                          <div className="realm-help" style={{ marginBottom: 12 }}>
+                            <strong style={{ color: "var(--realm-text)" }}>{selectedPlot.id}</strong>
+                            <span style={{ display: "block", marginTop: 6 }}>
+                              Terrain <strong>{selectedPlot.terrain}</strong> · grid ({selectedPlot.x}, {selectedPlot.y})
+                            </span>
+                            <span style={{ display: "block", marginTop: 4 }}>
+                              Owner:{" "}
+                              {selectedPlot.owner == null ? (
+                                <strong>unclaimed</strong>
+                              ) : selectedPlot.owner === "player" ? (
+                                <strong>you</strong>
+                              ) : (
+                                <strong>{selectedPlot.owner}</strong>
+                              )}
+                            </span>
+                            <span style={{ display: "block", marginTop: 4 }}>
+                              Survey status:{" "}
+                              <strong>{selectedPlot.surveyed ? "complete — industry unlocked" : "not surveyed"}</strong>
+                            </span>
+                            {!selectedPlot.surveyed && selectedPlot.owner === "player" ? (
+                              <span style={{ display: "block", marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
+                                Surveying costs <strong>${(FRONTIER_SURVEY_COST_CENTS / 100).toFixed(2)}</strong> cash and reveals
+                                subsurface grades (ore / clay / coal hints).
+                              </span>
+                            ) : null}
+                            {selectedPlot.owner === "player" && selectedPlot.surveyed && selectedPlot.subsurface ? (
+                              <span style={{ display: "block", marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
+                                Subsurface grades:{" "}
+                                {Object.entries(selectedPlot.subsurface)
+                                  .map(([k, v]) => `${k.replace(/_grade/, "")} ${(v as number).toFixed(2)}`)
+                                  .join(" · ")}
+                              </span>
+                            ) : null}
+                            {selectedPlot.owner === "player" && selectedPlot.surveyed && !selectedPlot.subsurface ? (
+                              <span style={{ display: "block", marginTop: 6, fontSize: 11 }}>
+                                No subsurface readout (survey data missing in snapshot).
+                              </span>
+                            ) : null}
+                            {buildingsHere.length > 0 ? (
+                              <span style={{ display: "block", marginTop: 6, fontSize: 11 }}>
+                                Structures on this plot: {buildingsHere.length}
+                                <span style={{ display: "block", opacity: 0.9, marginTop: 2 }}>
+                                  {buildingsHere.map((x) => x.label).join(" · ")}
+                                </span>
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {!selectedPlot.owner ? (
+                            <div style={{ marginBottom: 14 }}>
+                              <p className="realm-help" style={{ marginTop: 0 }}>
+                                Claiming assigns the plot to you (no cash cost in this build). Survey afterward to produce here.
+                              </p>
+                              <button
+                                type="button"
+                                className="realm-btn realm-btn--primary"
+                                disabled={busy}
+                                onClick={() => void claimPlot(selectedPlot)}
+                              >
+                                Claim this plot
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {selectedPlot.owner === "player" && !selectedPlot.surveyed ? (
+                            <div style={{ marginBottom: 14 }}>
+                              <button
+                                type="button"
+                                className="realm-btn realm-btn--primary"
+                                disabled={busy || !canAffordSurvey}
+                                onClick={() => void surveyPlot(selectedPlot)}
+                              >
+                                Survey for ${(FRONTIER_SURVEY_COST_CENTS / 100).toFixed(2)}
+                              </button>
+                              {!canAffordSurvey && typeof playerCashCents === "number" ? (
+                                <p className="realm-help" style={{ marginTop: 8, marginBottom: 0 }}>
+                                  Short by ${Math.max(0, (FRONTIER_SURVEY_COST_CENTS - playerCashCents) / 100).toFixed(2)} (
+                                  cash ${playerCash}).
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          {selectedPlot.owner != null && selectedPlot.owner !== "player" ? (
+                            <p className="realm-help" style={{ marginBottom: 14 }}>
+                              Not your holding — browse terrain and structures only.
+                            </p>
+                          ) : null}
+
+                          {selectedPlot.owner === "player" && selectedPlot.surveyed ? (
                             <>
-                              <SectionTitle>Built here</SectionTitle>
-                              <ul className="realm-help" style={{ marginTop: 4 }}>
-                                {buildingsHere.map((x, i) => (
-                                  <li key={`${x.building_id}-${i}`}>
-                                    {x.label} ({x.building_id})
+                              <SectionTitle>Recipes</SectionTitle>
+                              <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
+                                {(world.recipes ?? []).map((r) => (
+                                  <li key={r.id} style={{ marginBottom: 6 }}>
+                                    <button
+                                      type="button"
+                                      className="realm-list-btn"
+                                      disabled={busy}
+                                      onClick={() => void produce(selectedPlot.id, r.id)}
+                                    >
+                                      {r.display_name} · {r.duration_ticks} ticks · labor ${(r.labor_cents / 100).toFixed(2)}
+                                    </button>
                                   </li>
                                 ))}
                               </ul>
+                              <SectionTitle>Build on this plot</SectionTitle>
+                              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                                {(world.building_catalog ?? []).map((b) => (
+                                  <li key={b.id} style={{ marginBottom: 6 }}>
+                                    <button
+                                      type="button"
+                                      className="realm-list-btn"
+                                      disabled={busy}
+                                      onClick={() => void buildOnSelectedPlot(b.id)}
+                                    >
+                                      {b.label} · ${(b.cost_cents / 100).toFixed(2)}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                              {buildingsHere.length > 0 ? (
+                                <>
+                                  <SectionTitle>Built here</SectionTitle>
+                                  <ul className="realm-help" style={{ marginTop: 4 }}>
+                                    {buildingsHere.map((x, i) => (
+                                      <li key={`${x.building_id}-${i}`}>
+                                        {x.label} ({x.building_id})
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
+                              ) : null}
                             </>
                           ) : null}
                         </>
-                      ) : null}
+                      ) : (
+                        <p className="realm-help">
+                          Click a plot on the map. The outline follows that region; use this panel to claim, survey, or work land you own.
+                        </p>
+                      )}
 
                       <SectionTitle>Active production</SectionTitle>
                       {(world.active_production ?? []).length === 0 ? (
