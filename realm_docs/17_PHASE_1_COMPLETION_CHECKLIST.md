@@ -48,7 +48,7 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 | B6 | Production: ~5 recipes | `recipes.py` (5), `production.py` | `test_production.py` | **Labor as real input** to runs; building modifiers | 🟡 |
 | B7 | Movement: transport, time, cost | `movement.py` | `test_phase1_extended` shipment | Fee formula vs distance documented + tested | 🟡 |
 | B9 | P2P trade (7a) | `markets.py` `p2p_trade` | `test_phase1_extended`, `test_api_routes` | Idempotency; richer API errors | 🟡 |
-| B8 | Order book (7b) | `markets.py` — **asks only**, `market_buy` walks book | `test_phase1_extended`, `test_markets`, `test_api_routes` | **Bids**, partial fills policy, **matching** rules documented | 🟡 |
+| B8 | Order book (7b) | `markets.py` — **asks + bids** (escrow on bids), cross incoming bid at **ask** price / incoming ask at **bid** limit; `market_buy`, `sell_into_bids` | `test_phase1_extended`, `test_markets`, `test_api_routes` | Iceberg, price–time priority within a level — deferred | ✅ |
 | B10 | Basic contracts: **supply + employment** | `social.py` **stub** dicts; `actions.py` hire stub | `test_phase1_extended` | Typed contract state machine; **breach** path; performance clauses | 🟡 |
 | B11 | Reputation (doc calls it “placeholder”) | `world.reputation` + honor stub | `test_phase1_extended` | Separate **breach** flow; reputation affects something (even stub discount) | 🟡 |
 
@@ -72,13 +72,16 @@ Wire each action the UI needs; return `{ ok, ... } | { ok: false, reason }`.
 | C10 | `POST /ship` | ✅ | ✅ | |
 | C11 | `POST /market/sell` | ✅ | ✅ | |
 | C12 | `POST /market/buy` | ✅ | ✅ | |
-| C13 | `POST /market/cancel` | ✅ | ✅ | Cancel button on **player** rows in Bazaar order book |
+| C13 | `POST /market/cancel` | ✅ | ✅ | Cancel **ask** — player rows in Bazaar |
 | C14 | `POST /trade/p2p` | ✅ | ✅ | **P2P trade** block on Bazaar tab |
 | C15 | `POST /contracts/propose` | ✅ | ✅ | Stub only |
 | C16 | `POST /contracts/{id}/honor` | ✅ | ✅ | Stub only |
 | C17 | `POST /persistence/save` | ✅ | ✅ | |
 | C18 | `POST /persistence/load` | ✅ | ✅ | Refetch + map pan re-init |
 | C19 | `POST /dev/reset` | ✅ | ✅ | Chronicle → **Dev: reset world** (confirm) |
+| C20 | `POST /market/bid` | ✅ | ✅ | Limit bid: `party`, `material`, `qty`, `max_price_per_unit_cents` |
+| C21 | `POST /market/cancel_bid` | ✅ | ✅ | Refunds escrow |
+| C22 | `POST /market/sell_fill` | ✅ | ✅ | Aggressive sell into bid book: `max_qty` |
 
 **Next.js:** `web` calls `/api/engine/*` → rewrite to engine (`next.config.mjs`, `REALM_ENGINE_ORIGIN`).
 
@@ -93,7 +96,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | D1 | Next.js app shell | ✅ | |
 | D2 | World map (no Pixi required) | ✅ | SVG organic mesh; OK for Phase 1 |
 | D3 | Plot detail — tables + buttons | ✅ | Under **Territory & works**; ensure empty-state copy |
-| D4 | Market — **table** order book + chart | ✅ | Cancel ask + P2P UI; **no bid book** |
+| D4 | Market — **table** order book + chart | ✅ | Asks + bids tables, place/cancel bid, sell into bids; depth chart **ask + bid** series (dashed bids) |
 | D5 | Inventory — **table** | 🟡 | Player-only table; label as such |
 | D6 | Build menu (costs) | ✅ | From `building_catalog` |
 | D7 | Hire menu (wages / signing) | 🟡 | Stub hire; not full employment economy |
@@ -101,7 +104,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | D9 | Logistics (in transit + ship) | ✅ | **Caravans** tab |
 | D10 | Contracts UI | 🟡 | Stubs only |
 | D11 | P2P trade UI | ✅ | Bazaar tab |
-| D12 | Market cancel UI | ✅ | Player rows only |
+| D12 | Market cancel UI | ✅ | Player rows only — cancel **ask** or **bid** |
 
 ---
 
@@ -123,6 +126,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | F1 | SQLite save | ✅ | `test_phase1_extended.test_sqlite_roundtrip` |
 | F2 | SQLite load | ✅ | same |
 | F3 | Forward-compat / migration note | ❌ | Optional Phase 1 doc string in save format |
+| F4 | Order book in snapshot | ✅ | `state_io`: `market_asks` + `market_bids` (+ bid `escrow_cents`); `market_history` entries may omit `best_bids_cents` on old saves |
 
 ---
 
@@ -136,8 +140,8 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | `test_inventory.py` | matter add/remove | Cross-party transfers, edge qty |
 | `test_actions.py` | claim, survey | Survey cost if added |
 | `test_production.py` | recipes, reject duplicate run | Labor + building modifiers |
-| `test_markets.py` | Cancel ask restores inventory; wrong party / missing order | **Bids** |
-| `test_api_routes.py` | HTTP smoke: cancel, P2P, wrong-party cancel | Expand to all routes |
+| `test_markets.py` | Ask/bid cancel, crossing, `sell_into_bids`, escrow | HTTP coverage for bid routes (see `test_api_routes`) |
+| `test_api_routes.py` | HTTP smoke: cancel ask, cancel bid, P2P, wrong-party cancel | Expand to full C matrix if desired |
 | `test_rng.py` | RNG | — |
 
 **Stretch:** extend `test_api_routes.py` with `TestClient` coverage for every route in section C.
@@ -146,7 +150,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 
 ## H. “Full not shallow” — recommended completion order
 
-1. **Market depth:** ✅ cancel UI + tests landed; next: **limit bids** + symmetric matching.
+1. **Market depth:** ✅ limit bids, matching, persistence, API, UI, chart bid series; optional: richer depth / level-2 later.
 2. **P2P:** ✅ UI + HTTP smoke test.
 3. **Contracts:** replace stub with minimal **supply** contract (deliver qty by tick N, breach marks reputation).
 4. **Employment:** hiring affects **production capacity** or wage line item on runs (even one recipe).
@@ -157,7 +161,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 ## I. Definition of done (Phase 1 code — suggested strict version)
 
 - [ ] Every **C** row that is ✅ on the engine has either **UI** or an explicit **“engine-only / dev”** note.
-- [ ] No 🟡 in **B8, B10, B11** without a tracked follow-up (or doc 13 amended).
+- [ ] No 🟡 in **B10, B11** without a tracked follow-up (or doc 13 amended). (**B8** order book: ✅ for Phase 1 depth.)
 - [ ] `pytest` green; `tsc` + `next build` green.
 - [ ] **A1** playtest completed or consciously deferred with a dated note in `16_VISION_ANCHOR_AND_PHASE_STATUS.md`.
 
@@ -169,4 +173,4 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 - `16_VISION_ANCHOR_AND_PHASE_STATUS.md` — vision + coarse status  
 - `03_PRIMITIVES_SPEC.md` / `04_LAWS_OF_THE_UNIVERSE.md` — primitive + law checks when deepening features  
 
-**Last updated:** 2026-05-10
+**Last updated:** 2026-05-08
