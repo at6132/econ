@@ -358,8 +358,6 @@ def bootstrap_frontier(
         f"Frontier ready: {n_plots} plots, seeded commodity books, six tier-1 agent loops.",
     )
     record_market_snapshot(world)
-    for p in world.parties:
-        inv.ensure_party_bucket(p)
     return world
 
 
