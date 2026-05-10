@@ -382,15 +382,6 @@ body::after {
     inset 0 0 48px rgba(0, 0, 0, 0.45);
 }
 
-.realm-tick-ripple {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: radial-gradient(circle at 50% 45%, rgba(255, 216, 74, 0.35) 0%, transparent 55%);
-  mix-blend-mode: screen;
-}
-
 /* Flat god view (pan/zoom). Tilt removed — feels closer to map apps. */
 .realm-map-grid-stack {
   position: relative;

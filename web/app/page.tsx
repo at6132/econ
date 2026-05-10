@@ -436,14 +436,6 @@ export default function HomePage() {
       try {
         const r = await fetch("/api/engine/tick", { method: "POST" });
         if (!r.ok) throw new Error(await r.text());
-        if (grid.w > 0 && grid.h > 0) {
-          queueFx({
-            kind: "tick",
-            gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
-            gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
-            label: "TIME",
-          });
-        }
         await load();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -454,7 +446,7 @@ export default function HomePage() {
         if (lockUi) setBusy(false);
       }
     },
-    [grid.w, grid.h, load, queueFx],
+    [load],
   );
 
   const simIntervalMs = SIM_SPEEDS_MS[simSpeedIdx];
@@ -1201,13 +1193,6 @@ export default function HomePage() {
                 onPointerUp={onMapPointerUp}
                 onPointerCancel={onMapPointerUp}
               >
-                <motion.div
-                  key={world.tick}
-                  className="realm-tick-ripple"
-                  initial={{ opacity: 0.45 }}
-                  animate={{ opacity: 0 }}
-                  transition={{ duration: 0.55, ease: "easeOut" }}
-                />
                 <div className="realm-map-toolbar" role="toolbar" aria-label="Map controls">
                   <span className="realm-map-toolbar__label">{mapStyle}</span>
                   <button
