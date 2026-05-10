@@ -1,7 +1,18 @@
 import type { MarketHistorySnap } from "./MarketHistoryChart";
 
 /** Default commodities shown in the Bazaar even before the book has data. */
-export const BAZAAR_DEFAULT_MATERIALS = ["grain", "timber", "coal", "clay", "electricity"] as const;
+export const BAZAAR_DEFAULT_MATERIALS = [
+  "grain",
+  "timber",
+  "coal",
+  "clay",
+  "electricity",
+  "lumber",
+  "flour",
+  "iron_ingot",
+  "steel_ingot",
+  "sand",
+] as const;
 
 type WorldMarketSlice = {
   market_history?: MarketHistorySnap[];
