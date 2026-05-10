@@ -124,8 +124,17 @@ def post_hire(
     employer: Annotated[str, Query()],
     employee: Annotated[str, Query()],
     signing_bonus_cents: Annotated[int, Query()],
+    wage_per_tick_cents: Annotated[int, Query()] = 0,
+    wage_interval_ticks: Annotated[int, Query()] = 1,
 ) -> dict:
-    r = hire_worker_stub(_world, PartyId(employer), PartyId(employee), signing_bonus_cents)
+    r = hire_worker_stub(
+        _world,
+        PartyId(employer),
+        PartyId(employee),
+        signing_bonus_cents,
+        wage_per_tick_cents=wage_per_tick_cents,
+        wage_interval_ticks=wage_interval_ticks,
+    )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
@@ -166,8 +175,18 @@ def post_market_sell(
     material: Annotated[str, Query()],
     qty: Annotated[int, Query()],
     price_per_unit_cents: Annotated[int, Query()],
+    iceberg_display_qty: Annotated[int | None, Query()] = None,
+    min_counterparty_honored: Annotated[int, Query()] = 0,
 ) -> dict:
-    r = place_sell_order(_world, PartyId(party), MaterialId(material), qty, price_per_unit_cents)
+    r = place_sell_order(
+        _world,
+        PartyId(party),
+        MaterialId(material),
+        qty,
+        price_per_unit_cents,
+        iceberg_display_qty=iceberg_display_qty,
+        min_counterparty_honored=min_counterparty_honored,
+    )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
@@ -190,6 +209,8 @@ def post_market_bid(
     material: Annotated[str, Query()],
     qty: Annotated[int, Query()],
     max_price_per_unit_cents: Annotated[int, Query()],
+    iceberg_display_qty: Annotated[int | None, Query()] = None,
+    min_counterparty_honored: Annotated[int, Query()] = 0,
 ) -> dict:
     r = place_buy_order(
         _world,
@@ -197,6 +218,8 @@ def post_market_bid(
         MaterialId(material),
         qty,
         max_price_per_unit_cents,
+        iceberg_display_qty=iceberg_display_qty,
+        min_counterparty_honored=min_counterparty_honored,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
@@ -219,8 +242,11 @@ def post_market_sell_fill(
     party: Annotated[str, Query()],
     material: Annotated[str, Query()],
     max_qty: Annotated[int, Query()],
+    min_buyer_honored: Annotated[int, Query()] = 0,
 ) -> dict:
-    r = sell_into_bids(_world, PartyId(party), MaterialId(material), max_qty)
+    r = sell_into_bids(
+        _world, PartyId(party), MaterialId(material), max_qty, min_buyer_honored=min_buyer_honored
+    )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
@@ -231,8 +257,15 @@ def post_market_buy(
     party: Annotated[str, Query()],
     material: Annotated[str, Query()],
     max_qty: Annotated[int, Query()],
+    min_seller_honored: Annotated[int, Query()] = 0,
 ) -> dict:
-    r = market_buy(_world, PartyId(party), MaterialId(material), max_qty)
+    r = market_buy(
+        _world,
+        PartyId(party),
+        MaterialId(material),
+        max_qty,
+        min_seller_honored=min_seller_honored,
+    )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
@@ -270,6 +303,8 @@ def post_contract_supply_propose(
     qty: Annotated[int, Query()],
     total_price_cents: Annotated[int, Query()],
     due_in_ticks: Annotated[int, Query()],
+    buyer_deposit_cents: Annotated[int, Query()] = 0,
+    liquidated_damages_cents: Annotated[int, Query()] = 0,
 ) -> dict:
     r = propose_supply_contract(
         _world,
@@ -279,6 +314,8 @@ def post_contract_supply_propose(
         qty,
         total_price_cents,
         due_in_ticks,
+        buyer_deposit_cents=buyer_deposit_cents,
+        liquidated_damages_cents=liquidated_damages_cents,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])

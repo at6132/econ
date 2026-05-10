@@ -59,3 +59,34 @@ def test_supply_fulfill_rejects_wrong_supplier() -> None:
     assert accept_supply_contract(w, buyer, cid)["ok"] is True
     r = fulfill_supply_contract(w, buyer, cid)
     assert r["ok"] is False
+
+
+def test_supply_deposit_refund_on_breach_conserves_money() -> None:
+    from realm.ledger import contract_escrow_account, party_cash_account
+
+    w = bootstrap_frontier(seed=63, grid_width=2, grid_height=2)
+    vendor = PartyId("npc_grain_vendor")
+    buyer = PartyId("t1_consumer")
+    t0 = w.ledger.total_cents()
+    pr = propose_supply_contract(
+        w,
+        vendor,
+        buyer,
+        MaterialId("grain"),
+        1,
+        10,
+        due_in_ticks=1,
+        buyer_deposit_cents=30,
+        liquidated_damages_cents=40,
+    )
+    cid = pr["contract_id"]
+    bc = party_cash_account(buyer)
+    bb0 = w.ledger.balance(bc)
+    assert accept_supply_contract(w, buyer, cid)["ok"] is True
+    assert w.ledger.balance(bc) == bb0 - 30
+    esc = contract_escrow_account(cid)
+    assert w.ledger.balance(esc) == 30
+    advance_tick(w)
+    advance_tick(w)
+    assert w.ledger.total_cents() == t0
+    assert w.ledger.balance(esc) == 0

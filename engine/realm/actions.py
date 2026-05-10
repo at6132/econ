@@ -89,15 +89,23 @@ def survey_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
 
 
 def hire_worker_stub(
-    world: World, employer: PartyId, employee: PartyId, signing_bonus_cents: int
+    world: World,
+    employer: PartyId,
+    employee: PartyId,
+    signing_bonus_cents: int,
+    *,
+    wage_per_tick_cents: int = 0,
+    wage_interval_ticks: int = 1,
 ) -> ActionResult:
     """
-    One-shot signing bonus to an NPC party (Phase 1 stub — no labor output yet).
-
-    Employment / contracts v2 will replace this shape.
+    Signing bonus to an NPC party; optional recurring wage every ``wage_interval_ticks``.
     """
     if signing_bonus_cents <= 0:
         return ActionErr(ok=False, reason="signing bonus must be positive")
+    if wage_per_tick_cents < 0:
+        return ActionErr(ok=False, reason="wage_per_tick_cents must be non-negative")
+    if wage_interval_ticks < 1:
+        return ActionErr(ok=False, reason="wage_interval_ticks must be at least 1")
     if employee not in HIRABLE_NPCS:
         return ActionErr(ok=False, reason="that party is not on the hire list (stub)")
     if employer not in world.parties or employee not in world.parties:
@@ -115,6 +123,7 @@ def hire_worker_stub(
         return ActionErr(ok=False, reason=pay.reason)
     world.next_contract_seq += 1
     cid = f"c-{world.next_contract_seq}"
+    interval = max(1, wage_interval_ticks)
     world.contracts.append(
         {
             "id": cid,
@@ -123,6 +132,8 @@ def hire_worker_stub(
             "kind": "employment",
             "status": "active",
             "signing_bonus_cents": signing_bonus_cents,
+            "wage_per_tick_cents": wage_per_tick_cents,
+            "wage_interval_ticks": interval,
         }
     )
     world.stub_hires.append(
@@ -132,18 +143,52 @@ def hire_worker_stub(
             "signing_bonus_cents": signing_bonus_cents,
             "contract_id": cid,
             "tick": world.tick,
+            "wage_per_tick_cents": wage_per_tick_cents,
+            "wage_interval_ticks": interval,
+            "next_wage_tick": world.tick + interval if wage_per_tick_cents > 0 else -1,
         }
     )
     log_event(
         world,
         "hire",
-        f"{employer} hired {employee} (employment {cid}, bonus ${signing_bonus_cents / 100:.2f})",
+        f"{employer} hired {employee} (employment {cid}, bonus ${signing_bonus_cents / 100:.2f}"
+        + (f", wage {wage_per_tick_cents}¢ / {interval} ticks" if wage_per_tick_cents > 0 else "")
+        + ")",
         employer=str(employer),
         employee=str(employee),
         signing_bonus_cents=signing_bonus_cents,
         contract_id=cid,
     )
     return ActionOk(ok=True)
+
+
+def tick_stub_employment(world: World) -> None:
+    """Pay recurring stub wages when due (employer must have cash)."""
+    for h in world.stub_hires:
+        wage = int(h.get("wage_per_tick_cents", 0))
+        if wage <= 0:
+            continue
+        nxt = int(h.get("next_wage_tick", -1))
+        if nxt < 0 or world.tick < nxt:
+            continue
+        emp = PartyId(str(h["employer"]))
+        wkr = PartyId(str(h["employee"]))
+        if emp not in world.parties or wkr not in world.parties:
+            continue
+        interval = max(1, int(h.get("wage_interval_ticks", 1)))
+        ec, wc = party_cash_account(emp), party_cash_account(wkr)
+        if world.ledger.balance(ec) >= wage:
+            tr = world.ledger.transfer(debit=ec, credit=wc, amount_cents=wage)
+            if not isinstance(tr, MoneyErr):
+                log_event(
+                    world,
+                    "employment_wage",
+                    f"{emp} paid {wkr} ${wage / 100:.2f} wage",
+                    employer=str(emp),
+                    employee=str(wkr),
+                    wage_cents=wage,
+                )
+        h["next_wage_tick"] = nxt + interval
 
 
 def plot_by_id(world: World, plot_id: PlotId) -> Plot | None:

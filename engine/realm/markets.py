@@ -5,6 +5,10 @@ Crossing: incoming bid lifts resting asks at ask price; incoming ask lifts resti
 
 **Matching:** at each price level, resting orders are **FIFO** by ``order_id`` (lexicographic order
 matches creation order for ``ord-{seq}`` ids).
+
+**Iceberg:** optional ``iceberg_display_qty`` (peak); hidden size refills the visible clip when depleted.
+**Reputation gate:** optional ``min_counterparty_honored`` on bids/asks — no cross unless both parties
+meet the other's minimum (0 = off).
 """
 
 from __future__ import annotations
@@ -26,6 +30,9 @@ class AskOrder:
     material: MaterialId
     qty: int
     price_per_unit_cents: int
+    iceberg_peak: int = 0  # 0 = not iceberg; else max visible clip size
+    iceberg_hidden_qty: int = 0  # units not yet shown at this price
+    min_counterparty_honored: int = 0
 
 
 @dataclass
@@ -36,6 +43,9 @@ class BidOrder:
     qty: int
     max_price_per_unit_cents: int
     escrow_cents: int
+    iceberg_peak: int = 0
+    iceberg_hidden_qty: int = 0
+    min_counterparty_honored: int = 0
 
 
 def _asks(world: World, material: MaterialId) -> list[AskOrder]:
@@ -68,6 +78,114 @@ def _clean_empty_book(world: World, material: MaterialId) -> None:
         del world.market_bids_by_material[k]
 
 
+def _honored_count(world: World, party: PartyId) -> int:
+    return int(world.reputation.get(str(party), {}).get("honored", 0))
+
+
+def _rep_allows_match(bid: BidOrder, ask: AskOrder, world: World) -> bool:
+    if _honored_count(world, ask.party) < bid.min_counterparty_honored:
+        return False
+    if _honored_count(world, bid.party) < ask.min_counterparty_honored:
+        return False
+    return True
+
+
+def _ask_total_remaining(ask: AskOrder) -> int:
+    return ask.qty + ask.iceberg_hidden_qty
+
+
+def _bid_total_remaining(bid: BidOrder) -> int:
+    return bid.qty + bid.iceberg_hidden_qty
+
+
+def _replenish_iceberg_ask(ask: AskOrder) -> None:
+    if ask.iceberg_peak <= 0:
+        return
+    if ask.qty > 0:
+        return
+    if ask.iceberg_hidden_qty <= 0:
+        return
+    rev = min(ask.iceberg_peak, ask.iceberg_hidden_qty)
+    ask.qty = rev
+    ask.iceberg_hidden_qty -= rev
+
+
+def _replenish_iceberg_bid(bid: BidOrder) -> None:
+    if bid.iceberg_peak <= 0:
+        return
+    if bid.qty > 0:
+        return
+    if bid.iceberg_hidden_qty <= 0:
+        return
+    rev = min(bid.iceberg_peak, bid.iceberg_hidden_qty)
+    bid.qty = rev
+    bid.iceberg_hidden_qty -= rev
+
+
+def _apply_fill_to_ask(ask: AskOrder, fill: int) -> None:
+    if ask.iceberg_peak <= 0:
+        ask.qty -= fill
+        return
+    left = fill
+    while left > 0:
+        if ask.qty == 0:
+            _replenish_iceberg_ask(ask)
+        if ask.qty == 0:
+            break
+        step = min(left, ask.qty)
+        ask.qty -= step
+        left -= step
+        _replenish_iceberg_ask(ask)
+
+
+def _apply_fill_to_bid(bid: BidOrder, fill: int) -> None:
+    if bid.iceberg_peak <= 0:
+        bid.qty -= fill
+        return
+    left = fill
+    while left > 0:
+        if bid.qty == 0:
+            _replenish_iceberg_bid(bid)
+        if bid.qty == 0:
+            break
+        step = min(left, bid.qty)
+        bid.qty -= step
+        left -= step
+        _replenish_iceberg_bid(bid)
+
+
+def _ask_fully_done(ask: AskOrder) -> bool:
+    return _ask_total_remaining(ask) <= 0
+
+
+def _bid_fully_done(bid: BidOrder) -> bool:
+    return _bid_total_remaining(bid) <= 0
+
+
+def _first_ask_index_for_bid(world: World, bid: BidOrder, asks: list[AskOrder]) -> int | None:
+    if not asks or asks[0].price_per_unit_cents > bid.max_price_per_unit_cents:
+        return None
+    best_px = asks[0].price_per_unit_cents
+    for i, ask in enumerate(asks):
+        if ask.price_per_unit_cents != best_px:
+            break
+        if _rep_allows_match(bid, ask, world):
+            return i
+    return None
+
+
+def _first_bid_index_for_ask(world: World, ask: AskOrder, bids: list[BidOrder]) -> int | None:
+    if not bids or bids[0].max_price_per_unit_cents < ask.price_per_unit_cents:
+        return None
+    best_px = bids[0].max_price_per_unit_cents
+    for i, bid in enumerate(bids):
+        if bid.max_price_per_unit_cents != best_px:
+            break
+        if _rep_allows_match(bid, ask, world):
+            return i
+    return None
+
+
 def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: int, unit_px: int) -> bool:
     """Incoming bid hits resting ask: trade at ask price."""
     payment = fill * unit_px
@@ -78,6 +196,8 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     reserve = fill * bid.max_price_per_unit_cents
     if bid.escrow_cents < reserve:
         return False
+    bid_snap = (bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents)
+    ask_snap = (ask.qty, ask.iceberg_hidden_qty)
     trp = world.ledger.transfer(debit=escrow, credit=seller_c, amount_cents=payment)
     if isinstance(trp, MoneyErr):
         return False
@@ -87,13 +207,12 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
             world.ledger.transfer(debit=seller_c, credit=escrow, amount_cents=payment)
             return False
     bid.escrow_cents -= reserve
-    bid.qty -= fill
-    ask.qty -= fill
+    _apply_fill_to_bid(bid, fill)
+    _apply_fill_to_ask(ask, fill)
     ad = try_add_inventory(world, bid.party, ask.material, fill)
     if isinstance(ad, MatterErr):
-        bid.escrow_cents += reserve
-        bid.qty += fill
-        ask.qty += fill
+        bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
+        ask.qty, ask.iceberg_hidden_qty = ask_snap
         if refund > 0:
             world.ledger.transfer(debit=buyer_c, credit=escrow, amount_cents=refund)
         world.ledger.transfer(debit=seller_c, credit=escrow, amount_cents=payment)
@@ -120,17 +239,18 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     reserve = fill * bid.max_price_per_unit_cents
     if bid.escrow_cents < reserve:
         return False
+    bid_snap = (bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents)
+    ask_snap = (ask.qty, ask.iceberg_hidden_qty)
     trp = world.ledger.transfer(debit=escrow, credit=seller_c, amount_cents=payment)
     if isinstance(trp, MoneyErr):
         return False
     bid.escrow_cents -= reserve
-    bid.qty -= fill
-    ask.qty -= fill
+    _apply_fill_to_bid(bid, fill)
+    _apply_fill_to_ask(ask, fill)
     ad = try_add_inventory(world, bid.party, ask.material, fill)
     if isinstance(ad, MatterErr):
-        bid.escrow_cents += reserve
-        bid.qty += fill
-        ask.qty += fill
+        bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
+        ask.qty, ask.iceberg_hidden_qty = ask_snap
         world.ledger.transfer(debit=seller_c, credit=escrow, amount_cents=payment)
         return False
     log_event(
@@ -148,19 +268,24 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
 
 def _cross_incoming_bid(world: World, bid: BidOrder) -> None:
     material = bid.material
-    while bid.qty > 0:
+    while _bid_total_remaining(bid) > 0:
         asks = _asks(world, material)
-        if not asks or asks[0].price_per_unit_cents > bid.max_price_per_unit_cents:
+        idx = _first_ask_index_for_bid(world, bid, asks)
+        if idx is None:
             break
-        ask = asks[0]
+        ask = asks[idx]
         fill = min(bid.qty, ask.qty)
         unit_px = ask.price_per_unit_cents
         if not _apply_cross_at_ask_price(world, bid, ask, fill, unit_px):
             break
-        if ask.qty <= 0:
-            asks.pop(0)
         _sort_asks(asks)
-        if bid.qty <= 0:
+        if _ask_fully_done(ask):
+            for j, o in enumerate(asks):
+                if o.order_id == ask.order_id:
+                    asks.pop(j)
+                    break
+        _sort_asks(asks)
+        if _bid_fully_done(bid):
             bids = _bids(world, material)
             for i, b in enumerate(bids):
                 if b.order_id == bid.order_id:
@@ -173,19 +298,24 @@ def _cross_incoming_bid(world: World, bid: BidOrder) -> None:
 
 def _cross_incoming_ask(world: World, ask: AskOrder) -> None:
     material = ask.material
-    while ask.qty > 0:
+    while _ask_total_remaining(ask) > 0:
         bids = _bids(world, material)
-        if not bids or bids[0].max_price_per_unit_cents < ask.price_per_unit_cents:
+        idx = _first_bid_index_for_ask(world, ask, bids)
+        if idx is None:
             break
-        bid = bids[0]
+        bid = bids[idx]
         fill = min(ask.qty, bid.qty)
         unit_px = bid.max_price_per_unit_cents
         if not _apply_cross_at_bid_price(world, bid, ask, fill, unit_px):
             break
-        if bid.qty <= 0:
-            bids.pop(0)
         _sort_bids(bids)
-        if ask.qty <= 0:
+        if _bid_fully_done(bid):
+            for j, b in enumerate(bids):
+                if b.order_id == bid.order_id:
+                    bids.pop(j)
+                    break
+        _sort_bids(bids)
+        if _ask_fully_done(ask):
             asks = _asks(world, material)
             for i, a in enumerate(asks):
                 if a.order_id == ask.order_id:
@@ -202,23 +332,41 @@ def place_sell_order(
     material: MaterialId,
     qty: int,
     price_per_unit_cents: int,
+    *,
+    iceberg_display_qty: int | None = None,
+    min_counterparty_honored: int = 0,
 ) -> dict:
     """List material for sale at a limit price (inventory removed until filled or cancelled)."""
     if qty <= 0 or price_per_unit_cents <= 0:
         return {"ok": False, "reason": "invalid qty or price"}
+    if min_counterparty_honored < 0:
+        return {"ok": False, "reason": "min_counterparty_honored must be non-negative"}
     if world.inventory.qty(party, material) < qty:
         return {"ok": False, "reason": "insufficient material"}
     rm = world.inventory.remove(party, material, qty)
     if isinstance(rm, MatterErr):
         return {"ok": False, "reason": rm.reason}
+    ice_peak = 0
+    ice_hid = 0
+    vis = qty
+    if iceberg_display_qty is not None:
+        if iceberg_display_qty < 1 or iceberg_display_qty >= qty:
+            world.inventory.add(party, material, qty)
+            return {"ok": False, "reason": "iceberg_display_qty must be >= 1 and < qty"}
+        ice_peak = iceberg_display_qty
+        vis = ice_peak
+        ice_hid = qty - vis
     world.next_order_seq += 1
     oid = f"ord-{world.next_order_seq}"
     new_ask = AskOrder(
         order_id=oid,
         party=party,
         material=material,
-        qty=qty,
+        qty=vis,
         price_per_unit_cents=price_per_unit_cents,
+        iceberg_peak=ice_peak,
+        iceberg_hidden_qty=ice_hid,
+        min_counterparty_honored=min_counterparty_honored,
     )
     lst = _asks(world, material)
     lst.append(new_ask)
@@ -226,7 +374,8 @@ def place_sell_order(
     log_event(
         world,
         "market_list",
-        f"{party} listed {qty}×{material} @ {price_per_unit_cents}¢/u ({oid})",
+        f"{party} listed {qty}×{material} @ {price_per_unit_cents}¢/u ({oid})"
+        + (f" [iceberg peak {ice_peak}]" if ice_peak > 0 else ""),
         party=str(party),
         material=str(material),
         qty=qty,
@@ -244,7 +393,8 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
                 if o.party != party:
                     return {"ok": False, "reason": "not your order"}
                 lst.pop(i)
-                ad = try_add_inventory(world, party, o.material, o.qty)
+                total_back = o.qty + o.iceberg_hidden_qty
+                ad = try_add_inventory(world, party, o.material, total_back)
                 if isinstance(ad, MatterErr):
                     lst.insert(i, o)
                     return {"ok": False, "reason": ad.reason}
@@ -253,11 +403,11 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
                 log_event(
                     world,
                     "market_cancel",
-                    f"{party} cancelled ask {order_id} ({o.qty}×{o.material})",
+                    f"{party} cancelled ask {order_id} ({total_back}×{o.material})",
                     party=str(party),
                     order_id=order_id,
                     material=str(o.material),
-                    qty=o.qty,
+                    qty=total_back,
                 )
                 return {"ok": True}
     return {"ok": False, "reason": "order not found"}
@@ -269,14 +419,28 @@ def place_buy_order(
     material: MaterialId,
     qty: int,
     max_price_per_unit_cents: int,
+    *,
+    iceberg_display_qty: int | None = None,
+    min_counterparty_honored: int = 0,
 ) -> dict:
     """Limit bid: lock qty × max price in market escrow; may immediately lift asks."""
     if qty <= 0 or max_price_per_unit_cents <= 0:
         return {"ok": False, "reason": "invalid qty or limit price"}
+    if min_counterparty_honored < 0:
+        return {"ok": False, "reason": "min_counterparty_honored must be non-negative"}
     escrow_need = qty * max_price_per_unit_cents
     buyer_c = party_cash_account(party)
     if world.ledger.balance(buyer_c) < escrow_need:
         return {"ok": False, "reason": "insufficient cash for bid"}
+    ice_peak = 0
+    ice_hid = 0
+    vis = qty
+    if iceberg_display_qty is not None:
+        if iceberg_display_qty < 1 or iceberg_display_qty >= qty:
+            return {"ok": False, "reason": "iceberg_display_qty must be >= 1 and < qty"}
+        ice_peak = iceberg_display_qty
+        vis = ice_peak
+        ice_hid = qty - vis
     tr = world.ledger.transfer(
         debit=buyer_c,
         credit=market_escrow_account(),
@@ -290,9 +454,12 @@ def place_buy_order(
         order_id=oid,
         party=party,
         material=material,
-        qty=qty,
+        qty=vis,
         max_price_per_unit_cents=max_price_per_unit_cents,
         escrow_cents=escrow_need,
+        iceberg_peak=ice_peak,
+        iceberg_hidden_qty=ice_hid,
+        min_counterparty_honored=min_counterparty_honored,
     )
     bl = _bids(world, material)
     bl.append(bid)
@@ -300,7 +467,8 @@ def place_buy_order(
     log_event(
         world,
         "market_bid",
-        f"{party} bid {qty}×{material} up to {max_price_per_unit_cents}¢/u ({oid})",
+        f"{party} bid {qty}×{material} up to {max_price_per_unit_cents}¢/u ({oid})"
+        + (f" [iceberg peak {ice_peak}]" if ice_peak > 0 else ""),
         party=str(party),
         material=str(material),
         qty=qty,
@@ -342,23 +510,47 @@ def cancel_buy_order(world: World, party: PartyId, order_id: str) -> dict:
     return {"ok": False, "reason": "order not found"}
 
 
-def market_buy(world: World, buyer: PartyId, material: MaterialId, max_qty: int) -> dict:
+def market_buy(
+    world: World,
+    buyer: PartyId,
+    material: MaterialId,
+    max_qty: int,
+    *,
+    min_seller_honored: int = 0,
+) -> dict:
     """
     Aggressive buy: walk lowest-priced asks; pay sellers from buyer cash; deliver goods.
     """
     if max_qty <= 0:
         return {"ok": False, "reason": "max_qty must be positive"}
+    if min_seller_honored < 0:
+        return {"ok": False, "reason": "min_seller_honored must be non-negative"}
     remaining = max_qty
     spent = 0
-    asks = _asks(world, material)
     buyer_cash = party_cash_account(buyer)
-    i = 0
-    while i < len(asks) and remaining > 0:
-        o = asks[i]
+    while remaining > 0:
+        asks = _asks(world, material)
+        if not asks:
+            break
+        best_px = asks[0].price_per_unit_cents
+        idx = None
+        for j, o in enumerate(asks):
+            if o.price_per_unit_cents != best_px:
+                break
+            if (
+                _honored_count(world, o.party) >= min_seller_honored
+                and _honored_count(world, buyer) >= o.min_counterparty_honored
+            ):
+                idx = j
+                break
+        if idx is None:
+            break
+        o = asks[idx]
         fill = min(remaining, o.qty)
         cost = fill * o.price_per_unit_cents
         if world.ledger.balance(buyer_cash) < cost:
             break
+        ask_snap = (o.qty, o.iceberg_hidden_qty)
         tr = world.ledger.transfer(
             debit=buyer_cash,
             credit=party_cash_account(o.party),
@@ -366,8 +558,10 @@ def market_buy(world: World, buyer: PartyId, material: MaterialId, max_qty: int)
         )
         if isinstance(tr, MoneyErr):
             break
+        _apply_fill_to_ask(o, fill)
         ad = try_add_inventory(world, buyer, material, fill)
         if isinstance(ad, MatterErr):
+            o.qty, o.iceberg_hidden_qty = ask_snap
             world.ledger.transfer(
                 debit=party_cash_account(o.party),
                 credit=buyer_cash,
@@ -376,11 +570,9 @@ def market_buy(world: World, buyer: PartyId, material: MaterialId, max_qty: int)
             break
         spent += cost
         remaining -= fill
-        o.qty -= fill
-        if o.qty <= 0:
-            asks.pop(i)
-            continue
-        i += 1
+        if _ask_fully_done(o):
+            asks.pop(idx)
+        _sort_asks(asks)
     key = str(material)
     if key in world.market_asks_by_material and not world.market_asks_by_material[key]:
         del world.market_asks_by_material[key]
@@ -399,12 +591,21 @@ def market_buy(world: World, buyer: PartyId, material: MaterialId, max_qty: int)
     return {"ok": True, "filled": filled, "spent_cents": spent}
 
 
-def sell_into_bids(world: World, seller: PartyId, material: MaterialId, max_qty: int) -> dict:
+def sell_into_bids(
+    world: World,
+    seller: PartyId,
+    material: MaterialId,
+    max_qty: int,
+    *,
+    min_buyer_honored: int = 0,
+) -> dict:
     """
     Aggressive sell: walk highest bids; receive payment from bid escrow; deliver from seller inventory.
     """
     if max_qty <= 0:
         return {"ok": False, "reason": "max_qty must be positive"}
+    if min_buyer_honored < 0:
+        return {"ok": False, "reason": "min_buyer_honored must be non-negative"}
     remaining = max_qty
     received = 0
     seller_cash = party_cash_account(seller)
@@ -413,7 +614,20 @@ def sell_into_bids(world: World, seller: PartyId, material: MaterialId, max_qty:
         bids = _bids(world, material)
         if not bids:
             break
-        bid = bids[0]
+        best_px = bids[0].max_price_per_unit_cents
+        idx = None
+        for j, b in enumerate(bids):
+            if b.max_price_per_unit_cents != best_px:
+                break
+            if (
+                _honored_count(world, b.party) >= min_buyer_honored
+                and _honored_count(world, seller) >= b.min_counterparty_honored
+            ):
+                idx = j
+                break
+        if idx is None:
+            break
+        bid = bids[idx]
         fill = min(remaining, bid.qty)
         unit_px = bid.max_price_per_unit_cents
         payment = fill * unit_px
@@ -422,23 +636,22 @@ def sell_into_bids(world: World, seller: PartyId, material: MaterialId, max_qty:
             break
         if world.inventory.qty(seller, material) < fill:
             break
+        bid_snap = (bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents)
         tr = world.ledger.transfer(debit=escrow, credit=seller_cash, amount_cents=payment)
         if isinstance(tr, MoneyErr):
             break
         bid.escrow_cents -= reserve
-        bid.qty -= fill
+        _apply_fill_to_bid(bid, fill)
         rm = world.inventory.remove(seller, material, fill)
         if isinstance(rm, MatterErr):
+            bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
             world.ledger.transfer(debit=seller_cash, credit=escrow, amount_cents=payment)
-            bid.escrow_cents += reserve
-            bid.qty += fill
             break
         ad = try_add_inventory(world, bid.party, material, fill)
         if isinstance(ad, MatterErr):
             world.inventory.add(seller, material, fill)
+            bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
             world.ledger.transfer(debit=seller_cash, credit=escrow, amount_cents=payment)
-            bid.escrow_cents += reserve
-            bid.qty += fill
             break
         received += payment
         remaining -= fill
@@ -452,8 +665,8 @@ def sell_into_bids(world: World, seller: PartyId, material: MaterialId, max_qty:
             qty=fill,
             received_cents=payment,
         )
-        if bid.qty <= 0:
-            bids.pop(0)
+        if _bid_fully_done(bid):
+            bids.pop(idx)
         _sort_bids(bids)
     _clean_empty_book(world, material)
     if received == 0 and max_qty > 0:
@@ -566,14 +779,19 @@ def market_book_public(world: World) -> list[dict]:
     rows: list[dict] = []
     for mat_key, lst in sorted(world.market_asks_by_material.items()):
         for o in lst:
+            total = _ask_total_remaining(o)
             rows.append(
                 {
                     "order_id": o.order_id,
                     "party": str(o.party),
                     "material": mat_key,
                     "qty": o.qty,
+                    "qty_total_remaining": total,
                     "price_per_unit_cents": o.price_per_unit_cents,
                     "side": "ask",
+                    "iceberg_peak": o.iceberg_peak,
+                    "iceberg_hidden_qty": o.iceberg_hidden_qty,
+                    "min_counterparty_honored": o.min_counterparty_honored,
                 }
             )
     return rows
@@ -584,14 +802,19 @@ def market_bids_public(world: World) -> list[dict]:
     rows: list[dict] = []
     for mat_key, lst in sorted(world.market_bids_by_material.items()):
         for b in lst:
+            total = _bid_total_remaining(b)
             rows.append(
                 {
                     "order_id": b.order_id,
                     "party": str(b.party),
                     "material": mat_key,
                     "qty": b.qty,
+                    "qty_total_remaining": total,
                     "max_price_per_unit_cents": b.max_price_per_unit_cents,
                     "side": "bid",
+                    "iceberg_peak": b.iceberg_peak,
+                    "iceberg_hidden_qty": b.iceberg_hidden_qty,
+                    "min_counterparty_honored": b.min_counterparty_honored,
                 }
             )
     return rows

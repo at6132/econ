@@ -86,3 +86,8 @@ def system_reserve_account() -> AccountId:
 def market_escrow_account() -> AccountId:
     """Holds cash locked for open limit bids (released on fill or cancel)."""
     return AccountId("system:market_escrow")
+
+
+def contract_escrow_account(contract_id: str) -> AccountId:
+    """Holds buyer deposits for active supply contracts until fulfill or breach."""
+    return AccountId(f"system:contract_escrow:{contract_id}")

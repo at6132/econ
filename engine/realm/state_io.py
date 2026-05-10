@@ -49,6 +49,9 @@ def dump_world(world: World) -> dict[str, Any]:
                 "material": str(o.material),
                 "qty": o.qty,
                 "price_per_unit_cents": o.price_per_unit_cents,
+                "iceberg_peak": o.iceberg_peak,
+                "iceberg_hidden_qty": o.iceberg_hidden_qty,
+                "min_counterparty_honored": o.min_counterparty_honored,
             }
             for o in lst
         ]
@@ -62,6 +65,9 @@ def dump_world(world: World) -> dict[str, Any]:
                 "qty": b.qty,
                 "max_price_per_unit_cents": b.max_price_per_unit_cents,
                 "escrow_cents": b.escrow_cents,
+                "iceberg_peak": b.iceberg_peak,
+                "iceberg_hidden_qty": b.iceberg_hidden_qty,
+                "min_counterparty_honored": b.min_counterparty_honored,
             }
             for b in lst
         ]
@@ -176,6 +182,9 @@ def load_world(d: dict[str, Any]) -> World:
                 material=MaterialId(r["material"]),
                 qty=int(r["qty"]),
                 price_per_unit_cents=int(r["price_per_unit_cents"]),
+                iceberg_peak=int(r.get("iceberg_peak", 0)),
+                iceberg_hidden_qty=int(r.get("iceberg_hidden_qty", 0)),
+                min_counterparty_honored=int(r.get("min_counterparty_honored", 0)),
             )
             for r in rows
         ]
@@ -189,6 +198,9 @@ def load_world(d: dict[str, Any]) -> World:
                 qty=int(r["qty"]),
                 max_price_per_unit_cents=int(r["max_price_per_unit_cents"]),
                 escrow_cents=int(r.get("escrow_cents", int(r["qty"]) * int(r["max_price_per_unit_cents"]))),
+                iceberg_peak=int(r.get("iceberg_peak", 0)),
+                iceberg_hidden_qty=int(r.get("iceberg_hidden_qty", 0)),
+                min_counterparty_honored=int(r.get("min_counterparty_honored", 0)),
             )
             for r in rows
         ]

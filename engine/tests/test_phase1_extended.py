@@ -152,6 +152,22 @@ def test_tier1_agent_ticks_conserve_total_cents() -> None:
     assert w.ledger.total_cents() == t0
 
 
+def test_stub_hire_recurring_wage_moves_cash() -> None:
+    from realm.actions import hire_worker_stub
+    from realm.ledger import party_cash_account
+
+    w = bootstrap_frontier(seed=104, grid_width=2, grid_height=2)
+    emp = PartyId("player")
+    wkr = PartyId("t1_timber_merchant")
+    wc = party_cash_account(wkr)
+    w0 = w.ledger.balance(wc)
+    assert hire_worker_stub(w, emp, wkr, 100, wage_per_tick_cents=7, wage_interval_ticks=1)["ok"] is True
+    assert w.ledger.balance(wc) == w0 + 100
+    advance_tick(w)
+    advance_tick(w)
+    assert w.ledger.balance(wc) >= w0 + 100 + 7
+
+
 def test_contract_honor_increments_reputation() -> None:
     w = bootstrap_frontier(seed=16, grid_width=2, grid_height=2)
     pr = propose_contract_stub(w, PartyId("player"), PartyId("npc_grain_vendor"), "memo")
