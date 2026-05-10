@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, start_production_on_plot, survey_plot
 from realm.buildings import build_on_plot
@@ -39,7 +39,7 @@ from realm.contract_stubs import (
     propose_service_sub,
     repay_loan_contract,
 )
-from realm.tick import advance_tick
+from realm.schematic import validate_linear_recipe_chain
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
@@ -116,6 +116,28 @@ def post_survey(plot_id: str, party: Annotated[str, Query()] = "player") -> dict
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
+
+
+@app.post("/plots/{plot_id}/schematic/validate")
+def post_schematic_validate(
+    plot_id: str,
+    party: Annotated[str, Query()] = "player",
+    body: dict = Body(...),
+) -> dict:
+    """Authoritative linear-chain validation (engine recipes + party inventory)."""
+    pid = PlotId(plot_id)
+    plot = _world.plots.get(pid)
+    if plot is None:
+        raise HTTPException(status_code=404, detail="unknown plot")
+    party_id = PartyId(party)
+    if plot.owner != party_id:
+        raise HTTPException(status_code=400, detail="party does not own this plot")
+    if not plot.surveyed:
+        raise HTTPException(status_code=400, detail="plot is not surveyed")
+    raw = body.get("recipe_ids")
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise HTTPException(status_code=400, detail="body.recipe_ids must be a list of strings")
+    return validate_linear_recipe_chain(_world, party_id, raw)
 
 
 @app.post("/plots/{plot_id}/build")
