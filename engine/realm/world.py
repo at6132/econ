@@ -87,6 +87,8 @@ class World:
     """While ``world.tick < market_intel_expires_tick``, API exposes full ``market_history``; else a short free window."""
     next_building_instance_seq: int = 0
     """Monotonic id generator for ``plot_buildings[].instance_id``."""
+    llm_agents: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Tier-3 LLM-controlled parties: party id str → ``display_name``, ``system_prompt``, ``memory_summary``, ``last_plan_tick``."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -115,6 +117,38 @@ def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
                 subsurface=subsurface,
             )
     return plots
+
+
+def _seed_tier3_llm_margaux(world: World, inv: Inventory) -> None:
+    """One named Haiku-driven rival (doc 06) — acts only when ``ANTHROPIC_API_KEY`` + ``anthropic`` are available."""
+    margaux = PartyId("llm_margaux")
+    world.parties.add(margaux)
+    world.reputation[str(margaux)] = {"honored": 0, "breached": 0}
+    cash_acct = party_cash_account(margaux)
+    world.ledger.ensure_account(cash_acct)
+    tr = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=cash_acct,
+        amount_cents=85_000,
+    )
+    if isinstance(tr, MoneyErr):
+        raise ValueError(tr.reason)
+    for mid, qty in ((MaterialId("timber"), 4), (MaterialId("grain"), 3), (MaterialId("clay"), 2)):
+        ad = inv.add(margaux, mid, qty)
+        if isinstance(ad, MatterErr):
+            raise ValueError(ad.reason)
+    world.llm_agents[str(margaux)] = {
+        "display_name": "Margaux",
+        "system_prompt": (
+            "You are Margaux, a methodical industrialist in an economic simulation. "
+            "You compete on markets and plots using ONLY the provided tools — never invent "
+            "plot ids or materials. Prefer vertical integration: secure inputs, add value, "
+            "sell outputs. You speak briefly in analysis, but your tools are what change the world. "
+            "Respect conservation: you cannot spend cash or materials you do not have."
+        ),
+        "memory_summary": "Arrived in the Frontier with seed capital and small stock.",
+        "last_plan_tick": -10**9,
+    }
 
 
 def _seed_tier2_agents(
@@ -350,6 +384,7 @@ def bootstrap_frontier(
     if scenario_id == "cartel":
         _seed_cartel_grain_overlay(world, inv, vendor, grain_vendor_ask_id)
     _seed_tier2_agents(world, inv, timber_merch, clay_v, human)
+    _seed_tier3_llm_margaux(world, inv)
     from realm.market_history import record_market_snapshot
 
     log_event(
@@ -468,4 +503,12 @@ def world_public_dict(world: World) -> dict:
         "building_catalog": building_catalog_public(),
         "market_history": market_hist_out[-160:],
         "hire_catalog": hire_catalog_public(),
+        "llm_agents": [
+            {
+                "party": pid,
+                "display_name": blob.get("display_name", pid),
+                "memory_summary": str(blob.get("memory_summary", ""))[:800],
+            }
+            for pid, blob in sorted(world.llm_agents.items(), key=lambda x: x[0])
+        ],
     }

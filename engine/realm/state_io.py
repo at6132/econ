@@ -1,6 +1,6 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``2`` (``1`` still loads). Nested dict/list values are deep-copied on dump
+Snapshot ``version`` is ``3`` (``1`` / ``2`` still load). Nested dict/list values are deep-copied on dump
 so JSON round-trips do not share mutable subgraphs with the live ``World``.
 
 ``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 2
+SNAPSHOT_VERSION = 3
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -139,12 +139,13 @@ def dump_world(world: World) -> dict[str, Any]:
         "scenario_id": world.scenario_id,
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "next_building_instance_seq": world.next_building_instance_seq,
+        "llm_agents": copy.deepcopy(dict(world.llm_agents)),
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2):
+    if ver not in (1, 2, 3):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -270,6 +271,7 @@ def load_world(d: dict[str, Any]) -> World:
         scenario_id=str(d.get("scenario_id", "frontier")),
         market_intel_expires_tick=int(d.get("market_intel_expires_tick", 0)),
         next_building_instance_seq=next_bseq,
+        llm_agents=copy.deepcopy(dict(d.get("llm_agents", {}))),
     )
     return world
 

@@ -91,6 +91,37 @@ def post_tick() -> dict:
     return {"ok": True, "tick": _world.tick}
 
 
+@app.get("/llm/status")
+def get_llm_status() -> dict:
+    from realm.llm_haiku import default_model, make_client
+
+    return {
+        "client_ready": make_client() is not None,
+        "model": default_model(),
+        "agents": [
+            {
+                "party": k,
+                "display_name": v.get("display_name", k),
+                "last_plan_tick": v.get("last_plan_tick"),
+                "memory_preview": str(v.get("memory_summary", ""))[:240],
+            }
+            for k, v in sorted(_world.llm_agents.items())
+        ],
+    }
+
+
+@app.post("/llm/step")
+def post_llm_step(party: Annotated[str, Query()]) -> dict:
+    from realm.agents_tier3 import plan_llm_party_once
+
+    r = plan_llm_party_once(_world, PartyId(party))
+    if not r.get("ok"):
+        if r.get("reason") == "no_anthropic_client":
+            raise HTTPException(status_code=503, detail=r["reason"])
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "llm step failed")))
+    return dict(r)
+
+
 @app.post("/plots/{plot_id}/claim")
 def post_claim(plot_id: str, party: Annotated[str, Query()] = "player") -> dict:
     party_id = PartyId(party)

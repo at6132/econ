@@ -36,6 +36,8 @@ def test_dump_load_roundtrip_after_ticks_and_building(scenario: str) -> None:
     assert w2.next_building_instance_seq == w.next_building_instance_seq
     assert w2.ledger.total_cents() == ledger_total
     assert w2.inventory.snapshot() == inv_snapshot
+    assert w2.llm_agents == w.llm_agents
+    assert PartyId("llm_margaux") in w2.parties
     assert w2.plots[pid].owner == PartyId("player")
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings

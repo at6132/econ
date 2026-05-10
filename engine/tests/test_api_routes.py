@@ -200,3 +200,15 @@ def test_maintain_http_conserves_ledger_total() -> None:
     assert r.status_code == 200
     assert api._world.ledger.total_cents() == total_before
     assert row["condition_bps"] == BUILDING_CONDITION_FULL_BPS
+
+
+def test_llm_status_lists_margaux() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 77})
+    r = c.get("/llm/status")
+    assert r.status_code == 200
+    body = r.json()
+    parties = {a["party"] for a in body["agents"]}
+    assert "llm_margaux" in parties
+    assert "client_ready" in body
+    assert "model" in body

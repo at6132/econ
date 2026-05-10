@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from realm.agents_tier1 import tick_tier1_agents
 from realm.agents_tier2 import tick_tier2_agents
+from realm.agents_tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
 from realm.decay import tick_building_decay
 from realm.market_history import record_market_snapshot
@@ -24,6 +25,7 @@ def advance_tick(world: World) -> None:
     tick_stub_employment(world)
     tick_tier1_agents(world)
     tick_tier2_agents(world)
+    tick_tier3_llm_agents(world)
     world.tick += 1
     tick_supply_contract_breaches(world)
     tick_phase2_financial_contracts(world)
