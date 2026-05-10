@@ -1,4 +1,4 @@
-"""Tier 2 optimizing agents — four algorithmic loops (Phase 2 / doc 06).
+"""Tier 2 optimizing agents — five algorithmic loops (Phase 2 / doc 06).
 
 Unlike Tier 1 fixed cadence shoppers, these roles read the live book and adjust
 limits (escrow discipline, spread capture, inventory bias). All randomness uses
@@ -14,6 +14,8 @@ Archetypes:
   bid quotes plus bounded jitter.
 - **t2_clay_sweep** — accumulates clay when visible asks are below a conservative
   threshold (sweep size capped per tick).
+- **t2_coal_spread** — with on-hand coal, cancels and replaces asks using nearby bid
+  quotes plus bounded jitter (parallel to timber, different cadence / RNG namespace).
 """
 
 from __future__ import annotations
@@ -116,9 +118,33 @@ def _clay_sweep(world: World) -> None:
     market_buy(world, party, mat, 1)
 
 
+def _coal_spread_trader(world: World) -> None:
+    if world.tick % 23 != 0:
+        return
+    party = PartyId("t2_coal_spread")
+    if party not in world.parties:
+        return
+    mat = MaterialId("coal")
+    if world.inventory.qty(party, mat) < 1:
+        return
+    cancel_party_asks_for_material(world, party, mat)
+    best_bid = _best_resting_bid(world, mat)
+    best_ask = _best_resting_ask(world, mat)
+    if best_bid is None:
+        px = 34 + world.rng("tier2:coal_spread:px").randint(0, 6)
+    else:
+        px = best_bid + world.rng("tier2:coal_spread:px").randint(1, 3)
+    if best_ask is not None:
+        px = min(px, best_ask - 1)
+    if px < 8:
+        return
+    place_sell_order(world, party, mat, 1, px)
+
+
 def tick_tier2_agents(world: World) -> None:
     """Run Tier 2 decision loops once per simulation tick."""
     _ele_bidstack(world)
     _lumber_bid_improver(world)
     _timber_spread_trader(world)
     _clay_sweep(world)
+    _coal_spread_trader(world)

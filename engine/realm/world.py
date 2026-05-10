@@ -122,13 +122,15 @@ def _seed_tier2_agents(
     inv: Inventory,
     timber_merchant: PartyId,
     clay_vendor: PartyId,
+    player: PartyId,
 ) -> None:
-    """Phase 2 optimizing NPCs — cash from system reserve; small inventory seed from Tier-1 buffers."""
+    """Phase 2 optimizing NPCs — cash from system reserve; inventory seed from Tier-1 buffers or player (1 coal for t2_coal_spread)."""
     specs = (
         ("t2_ele_bidstack", 42_000),
         ("t2_lumber_bid", 55_000),
         ("t2_timber_spread", 35_000),
         ("t2_clay_sweep", 38_000),
+        ("t2_coal_spread", 32_000),
     )
     for name, cents in specs:
         pid = PartyId(name)
@@ -161,6 +163,15 @@ def _seed_tier2_agents(
     )
     if isinstance(tr_c, MatterErr):
         raise ValueError(tr_c.reason)
+    tcoal = PartyId("t2_coal_spread")
+    tr_coal = inv.transfer(
+        material=MaterialId("coal"),
+        qty=1,
+        from_party=player,
+        to_party=tcoal,
+    )
+    if isinstance(tr_coal, MatterErr):
+        raise ValueError(tr_coal.reason)
 
 
 def _seed_cartel_grain_overlay(
@@ -338,7 +349,7 @@ def bootstrap_frontier(
         raise ValueError(str(pr_clay.get("reason")))
     if scenario_id == "cartel":
         _seed_cartel_grain_overlay(world, inv, vendor, grain_vendor_ask_id)
-    _seed_tier2_agents(world, inv, timber_merch, clay_v)
+    _seed_tier2_agents(world, inv, timber_merch, clay_v, human)
     from realm.market_history import record_market_snapshot
 
     log_event(
