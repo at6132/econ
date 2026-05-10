@@ -15,6 +15,18 @@ from realm.social import honor_contract_stub, propose_contract_stub
 from realm.world import bootstrap_frontier
 
 
+def test_json_roundtrip_preserves_new_world_fields() -> None:
+    w = bootstrap_frontier(seed=21, grid_width=2, grid_height=2)
+    w.market_intel_expires_tick = 777
+    w.next_building_instance_seq = 42
+    w.scenario_id = "speculator"
+    blob = dumps_json(w)
+    w2 = loads_json(blob)
+    assert w2.market_intel_expires_tick == 777
+    assert w2.next_building_instance_seq == 42
+    assert w2.scenario_id == "speculator"
+
+
 def test_json_roundtrip_preserves_ledger_total() -> None:
     w = bootstrap_frontier(seed=11, grid_width=3, grid_height=2)
     t0 = w.ledger.total_cents()

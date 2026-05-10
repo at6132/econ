@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.decay import building_effective_for_bonuses
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
@@ -32,6 +33,8 @@ def _labor_bps_for_plot(world: World, party: PartyId, plot_id: PlotId) -> int:
     bps = 10_000
     for b in world.plot_buildings:
         if b.get("party") != str(party) or b.get("plot_id") != str(plot_id):
+            continue
+        if not building_effective_for_bonuses(b):
             continue
         bid = b.get("building_id")
         if bid == "tool_cache":

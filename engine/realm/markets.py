@@ -413,6 +413,19 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
     return {"ok": False, "reason": "order not found"}
 
 
+def cancel_party_asks_for_material(world: World, party: PartyId, material: MaterialId) -> int:
+    """Cancel every resting sell order ``party`` has for ``material``. Returns count removed."""
+    key = str(material)
+    lst = world.market_asks_by_material.get(key, [])
+    ids = [o.order_id for o in lst if o.party == party]
+    n = 0
+    for oid in ids:
+        r = cancel_sell_order(world, party, oid)
+        if r.get("ok"):
+            n += 1
+    return n
+
+
 def place_buy_order(
     world: World,
     party: PartyId,
@@ -508,6 +521,19 @@ def cancel_buy_order(world: World, party: PartyId, order_id: str) -> dict:
                 )
                 return {"ok": True}
     return {"ok": False, "reason": "order not found"}
+
+
+def cancel_party_bids_for_material(world: World, party: PartyId, material: MaterialId) -> int:
+    """Cancel every resting buy order ``party`` has for ``material``. Returns count removed."""
+    key = str(material)
+    lst = world.market_bids_by_material.get(key, [])
+    ids = [b.order_id for b in lst if b.party == party]
+    n = 0
+    for oid in ids:
+        r = cancel_buy_order(world, party, oid)
+        if r.get("ok"):
+            n += 1
+    return n
 
 
 def market_buy(

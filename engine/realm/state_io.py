@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from realm.decay import BUILDING_CONDITION_FULL_BPS
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import Inventory
 from realm.ledger import Ledger
@@ -116,6 +117,9 @@ def dump_world(world: World) -> dict[str, Any]:
         "stub_hires": list(world.stub_hires),
         "market_history": list(world.market_history),
         "p2p_idempotency": {str(k): dict(v) for k, v in world.p2p_idempotency.items()},
+        "scenario_id": world.scenario_id,
+        "market_intel_expires_tick": world.market_intel_expires_tick,
+        "next_building_instance_seq": world.next_building_instance_seq,
     }
 
 
@@ -204,6 +208,16 @@ def load_world(d: dict[str, Any]) -> World:
             )
             for r in rows
         ]
+    next_bseq = int(d.get("next_building_instance_seq", 0))
+    plot_buildings_m: list[dict] = []
+    for raw in d.get("plot_buildings", []):
+        row = dict(raw)
+        if not row.get("instance_id"):
+            next_bseq += 1
+            row["instance_id"] = f"b{next_bseq:06d}"
+        if row.get("condition_bps") is None:
+            row["condition_bps"] = BUILDING_CONDITION_FULL_BPS
+        plot_buildings_m.append(row)
     world = World(
         seed=seed,
         tick=int(d["tick"]),
@@ -222,10 +236,13 @@ def load_world(d: dict[str, Any]) -> World:
         contracts=list(d.get("contracts", [])),
         next_contract_seq=int(d.get("next_contract_seq", 0)),
         event_log=list(d.get("event_log", [])),
-        plot_buildings=list(d.get("plot_buildings", [])),
+        plot_buildings=plot_buildings_m,
         stub_hires=list(d.get("stub_hires", [])),
         market_history=list(d.get("market_history", [])),
         p2p_idempotency={str(k): dict(v) for k, v in d.get("p2p_idempotency", {}).items()},
+        scenario_id=str(d.get("scenario_id", "frontier")),
+        market_intel_expires_tick=int(d.get("market_intel_expires_tick", 0)),
+        next_building_instance_seq=next_bseq,
     )
     return world
 

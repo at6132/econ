@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.decay import building_effective_for_bonuses
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr, MatterOk, MatterResult
 from realm.world import World
@@ -16,7 +17,7 @@ def party_storage_cap_units(world: World, party: PartyId) -> int:
     for b in world.plot_buildings:
         if b.get("party") != str(party):
             continue
-        if b.get("building_id") == "field_stockade":
+        if b.get("building_id") == "field_stockade" and building_effective_for_bonuses(b):
             cap += FIELD_STOCKADE_BONUS_UNITS
     return cap
 

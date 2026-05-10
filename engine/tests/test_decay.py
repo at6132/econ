@@ -1,0 +1,91 @@
+"""Law 5 — building decay and maintenance."""
+
+from __future__ import annotations
+
+from realm.actions import claim_plot, survey_plot
+from realm.buildings import build_on_plot
+from realm.decay import (
+    BUILDING_CONDITION_FULL_BPS,
+    maintain_building,
+    tick_building_decay,
+)
+from realm.ids import PartyId, PlotId
+from realm.ledger import party_cash_account
+from realm.tick import advance_tick
+from realm.world import bootstrap_frontier
+
+
+def test_tick_building_decay_reduces_condition() -> None:
+    w = bootstrap_frontier(seed=3, grid_width=2, grid_height=2)
+    w.plot_buildings.append(
+        {
+            "instance_id": "btest01",
+            "condition_bps": BUILDING_CONDITION_FULL_BPS,
+            "plot_id": "p-0-0",
+            "party": "player",
+            "building_id": "watch_hut",
+            "label": "Watch",
+            "cost_cents": 15_000,
+        }
+    )
+    tick_building_decay(w)
+    assert w.plot_buildings[-1]["condition_bps"] < BUILDING_CONDITION_FULL_BPS
+
+
+def test_maintain_building_restores_condition_and_conserves_ledger_total() -> None:
+    w = bootstrap_frontier(seed=4, grid_width=3, grid_height=2)
+    pid = PlotId("p-0-0")
+    assert claim_plot(w, PartyId("player"), pid)["ok"] is True
+    assert survey_plot(w, PartyId("player"), pid)["ok"] is True
+    assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
+    row = next(b for b in w.plot_buildings if b.get("building_id") == "watch_hut")
+    iid = str(row["instance_id"])
+    row["condition_bps"] = 1_000
+    total = w.ledger.total_cents()
+    cash_before = w.ledger.balance(party_cash_account(PartyId("player")))
+    r = maintain_building(w, PartyId("player"), iid)
+    assert r["ok"] is True
+    assert isinstance(r.get("fee_cents"), int)
+    assert w.ledger.total_cents() == total
+    assert w.ledger.balance(party_cash_account(PartyId("player"))) == cash_before - int(r["fee_cents"])
+    assert row["condition_bps"] == BUILDING_CONDITION_FULL_BPS
+
+
+def test_production_labor_bonus_requires_effective_building_condition() -> None:
+    from realm.production import _labor_bps_for_plot
+
+    w = bootstrap_frontier(seed=6, grid_width=2, grid_height=2)
+    plot_id = PlotId("p-0-0")
+    party = PartyId("player")
+    w.plot_buildings.append(
+        {
+            "instance_id": "blow01",
+            "condition_bps": 500,
+            "plot_id": str(plot_id),
+            "party": str(party),
+            "building_id": "tool_cache",
+            "label": "Tools",
+            "cost_cents": 25_000,
+        }
+    )
+    assert _labor_bps_for_plot(w, party, plot_id) == 10_000
+    w.plot_buildings[-1]["condition_bps"] = 10_000
+    assert _labor_bps_for_plot(w, party, plot_id) < 10_000
+
+
+def test_decay_runs_in_advance_tick() -> None:
+    w = bootstrap_frontier(seed=7, grid_width=2, grid_height=2)
+    w.plot_buildings.append(
+        {
+            "instance_id": "btick01",
+            "condition_bps": BUILDING_CONDITION_FULL_BPS,
+            "plot_id": "p-0-0",
+            "party": "player",
+            "building_id": "field_stockade",
+            "label": "Stockade",
+            "cost_cents": 30_000,
+        }
+    )
+    before = w.plot_buildings[-1]["condition_bps"]
+    advance_tick(w)
+    assert w.plot_buildings[-1]["condition_bps"] < before

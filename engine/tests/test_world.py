@@ -14,7 +14,8 @@ def test_frontier_bootstrap_money_total() -> None:
     assert w.ledger.balance(consumer) == 25_000
     assert w.ledger.balance(lumber_buyer) == 50_000
     assert w.ledger.balance(party_cash_account(PartyId("t1_electricity_buyer"))) == 30_000
-    assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - 1_000_000 - 25_000 - 50_000 - 30_000
+    tier2_cash = 42_000 + 55_000 + 35_000 + 38_000
+    assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - 1_000_000 - 25_000 - 50_000 - 30_000 - tier2_cash
 
 
 def test_world_gen_deterministic() -> None:

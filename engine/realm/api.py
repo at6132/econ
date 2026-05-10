@@ -9,7 +9,9 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, start_production_on_plot, survey_plot
 from realm.buildings import build_on_plot
+from realm.decay import maintain_building
 from realm.ids import MaterialId, PartyId, PlotId
+from realm.intel import purchase_market_intel
 from realm.markets import (
     cancel_buy_order,
     cancel_sell_order,
@@ -29,7 +31,7 @@ from realm.social import (
     propose_supply_contract,
 )
 from realm.tick import advance_tick
-from realm.world import bootstrap_frontier, world_public_dict
+from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
 app.add_middleware(
@@ -140,12 +142,41 @@ def post_hire(
     return dict(r)
 
 
+@app.post("/plots/{plot_id}/maintain")
+def post_maintain_building(
+    plot_id: str,
+    instance_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    row = next((b for b in _world.plot_buildings if str(b.get("instance_id")) == instance_id), None)
+    if row is not None and str(row.get("plot_id")) != plot_id:
+        raise HTTPException(status_code=400, detail="building instance is not on that plot")
+    r = maintain_building(_world, PartyId(party), instance_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/market/intel")
+def post_market_intel(party: Annotated[str, Query()] = "player") -> dict:
+    r = purchase_market_intel(_world, PartyId(party))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
 @app.post("/dev/reset")
-def dev_reset(seed: Annotated[int, Query()] = 42) -> dict:
-    """Recreate Frontier world (dev only)."""
+def dev_reset(
+    seed: Annotated[int, Query()] = 42,
+    scenario: Annotated[str, Query()] = "frontier",
+) -> dict:
+    """Recreate world (dev). ``scenario`` ∈ frontier, bootstrapper, speculator, cartel."""
     global _world
-    _world = bootstrap_frontier(seed=seed)
-    return {"ok": True, "seed": seed}
+    try:
+        _world = bootstrap_by_scenario(seed=seed, scenario=scenario)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True, "seed": seed, "scenario_id": _world.scenario_id}
 
 
 @app.post("/ship")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.decay import BUILDING_CONDITION_FULL_BPS
 from realm.event_log import log_event
 from realm.ids import PartyId, PlotId
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
@@ -53,8 +54,12 @@ def build_on_plot(world: World, party: PartyId, plot_id: PlotId, building_id: st
     if isinstance(pay, MoneyErr):
         return {"ok": False, "reason": pay.reason}
     label = str(spec["label"])
+    world.next_building_instance_seq += 1
+    instance_id = f"b{world.next_building_instance_seq:06d}"
     world.plot_buildings.append(
         {
+            "instance_id": instance_id,
+            "condition_bps": BUILDING_CONDITION_FULL_BPS,
             "plot_id": str(plot_id),
             "party": str(party),
             "building_id": building_id,

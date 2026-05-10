@@ -81,6 +81,12 @@ class World:
     stub_hires: list[dict] = field(default_factory=list)
     market_history: list[dict] = field(default_factory=list)
     p2p_idempotency: dict[str, dict] = field(default_factory=dict)
+    scenario_id: str = "frontier"
+    """Active scenario name (Frontier, bootstrapper, speculator, cartel)."""
+    market_intel_expires_tick: int = 0
+    """While ``world.tick < market_intel_expires_tick``, API exposes full ``market_history``; else a short free window."""
+    next_building_instance_seq: int = 0
+    """Monotonic id generator for ``plot_buildings[].instance_id``."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -111,6 +117,52 @@ def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
     return plots
 
 
+def _seed_tier2_agents(
+    world: World,
+    inv: Inventory,
+    timber_merchant: PartyId,
+    clay_vendor: PartyId,
+) -> None:
+    """Phase 2 optimizing NPCs — cash from system reserve; small inventory seed from Tier-1 buffers."""
+    specs = (
+        ("t2_ele_bidstack", 42_000),
+        ("t2_lumber_bid", 55_000),
+        ("t2_timber_spread", 35_000),
+        ("t2_clay_sweep", 38_000),
+    )
+    for name, cents in specs:
+        pid = PartyId(name)
+        world.parties.add(pid)
+        world.reputation[str(pid)] = {"honored": 0, "breached": 0}
+        acct = party_cash_account(pid)
+        world.ledger.ensure_account(acct)
+        tr = world.ledger.transfer(
+            debit=system_reserve_account(),
+            credit=acct,
+            amount_cents=cents,
+        )
+        if isinstance(tr, MoneyErr):
+            raise ValueError(tr.reason)
+    ts = PartyId("t2_timber_spread")
+    tr_t = inv.transfer(
+        material=MaterialId("timber"),
+        qty=1,
+        from_party=timber_merchant,
+        to_party=ts,
+    )
+    if isinstance(tr_t, MatterErr):
+        raise ValueError(tr_t.reason)
+    cs = PartyId("t2_clay_sweep")
+    tr_c = inv.transfer(
+        material=MaterialId("clay"),
+        qty=1,
+        from_party=clay_vendor,
+        to_party=cs,
+    )
+    if isinstance(tr_c, MatterErr):
+        raise ValueError(tr_c.reason)
+
+
 def bootstrap_frontier(
     *,
     seed: int,
@@ -118,6 +170,7 @@ def bootstrap_frontier(
     grid_height: int = 36,
     starting_cash_cents: int = 1_000_000,  # $10,000.00
     system_reserve_cents: int = 100_000_000_000,  # $1B — unallocated pool
+    scenario_id: str = "frontier",
 ) -> World:
     """
     Frontier scenario: one human player party + plots + funded economy.
@@ -136,6 +189,7 @@ def bootstrap_frontier(
         ledger=ledger,
         inventory=inv,
         parties={human},
+        scenario_id=scenario_id,
     )
     res = world.ledger.seed_system_reserve(system_reserve_cents)
     if isinstance(res, MoneyErr):
@@ -238,6 +292,7 @@ def bootstrap_frontier(
     pr_clay = place_sell_order(world, clay_v, MaterialId("clay"), 2, 54)
     if not pr_clay.get("ok"):
         raise ValueError(str(pr_clay.get("reason")))
+    _seed_tier2_agents(world, inv, timber_merch, clay_v)
     from realm.market_history import record_market_snapshot
 
     log_event(
@@ -247,6 +302,24 @@ def bootstrap_frontier(
     )
     record_market_snapshot(world)
     return world
+
+
+def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
+    """Named Phase 2 scenarios — same engine, different starting parameters."""
+    sid = scenario.strip().lower()
+    if sid in ("frontier", "cartel"):
+        return bootstrap_frontier(seed=seed, scenario_id=sid)
+    if sid == "bootstrapper":
+        return bootstrap_frontier(
+            seed=seed,
+            grid_width=32,
+            grid_height=24,
+            starting_cash_cents=500_000,
+            scenario_id="bootstrapper",
+        )
+    if sid == "speculator":
+        return bootstrap_frontier(seed=seed, starting_cash_cents=2_000_000, scenario_id="speculator")
+    raise ValueError(f"unknown scenario: {scenario!r}")
 
 
 def world_public_dict(world: World) -> dict:
@@ -278,10 +351,22 @@ def world_public_dict(world: World) -> dict:
         for party, mats in world.inventory.snapshot().items()
     }
     from realm.actions import hire_catalog_public
+    from realm.intel import FREE_MARKET_HISTORY_TICKS
+
+    intel_active = world.tick < world.market_intel_expires_tick
+    hist = world.market_history
+    if intel_active:
+        market_hist_out = list(hist)
+    else:
+        market_hist_out = list(hist[-FREE_MARKET_HISTORY_TICKS:])
 
     return {
         "seed": world.seed,
         "tick": world.tick,
+        "scenario_id": world.scenario_id,
+        "market_intel_expires_tick": world.market_intel_expires_tick,
+        "market_intel_active": intel_active,
+        "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
         "plots": plots_out,
         "balances_cents": balances,
         "inventory": inv,
@@ -316,6 +401,6 @@ def world_public_dict(world: World) -> dict:
         "plot_buildings": list(world.plot_buildings),
         "stub_hires": list(world.stub_hires),
         "building_catalog": building_catalog_public(),
-        "market_history": list(world.market_history[-160:]),
+        "market_history": market_hist_out[-160:],
         "hire_catalog": hire_catalog_public(),
     }
