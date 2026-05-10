@@ -27,7 +27,7 @@ export const FRONTIER_MENU: MenuGroup[] = [
     id: "commerce",
     label: "Commerce",
     items: [
-      { id: "bazaar", label: "Bazaar & tape", tab: "market", hint: "Orders, depth chart" },
+      { id: "bazaar", label: "Bazaar", tab: "market", hint: "Orders, prices, depth chart" },
       { id: "caravans", label: "Caravans", tab: "logistics", hint: "Ship goods" },
     ],
   },

@@ -280,7 +280,8 @@ body::after {
 
 .realm-map-toolbar {
   position: absolute;
-  top: 10px;
+  top: auto;
+  bottom: 52px;
   right: 10px;
   z-index: 20;
   display: flex;
@@ -489,6 +490,54 @@ body::after {
 .realm-map-region__tint {
   mix-blend-mode: soft-light;
   pointer-events: none;
+}
+
+.realm-map-starter-pulse {
+  fill: var(--realm-accent);
+  fill-opacity: 0.11;
+  stroke: var(--realm-accent);
+  stroke-opacity: 0.42;
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+  animation: realm-map-starter-breathe 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes realm-map-starter-breathe {
+  0%,
+  100% {
+    fill-opacity: 0.07;
+    stroke-opacity: 0.32;
+  }
+  50% {
+    fill-opacity: 0.2;
+    stroke-opacity: 0.68;
+  }
+}
+
+.realm-map-anchor__dot {
+  fill: var(--realm-accent);
+  stroke: #000;
+  stroke-width: 2px;
+}
+
+.realm-map-anchor__caption {
+  font-family: var(--realm-font-display);
+  font-size: 5.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  fill: var(--realm-text);
+  stroke: #000;
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .realm-map-starter-pulse {
+    animation: none;
+    fill-opacity: 0.12;
+    stroke-opacity: 0.45;
+  }
 }
 
 .realm-map-plot-outline {

@@ -37,9 +37,26 @@ type Props = {
   busy: boolean;
   mapNavSuppress: React.MutableRefObject<boolean>;
   onPlotClick: (p: PlotDto) => void;
+  /** Soft pulse on these plot ids (e.g. suggested first claims). */
+  starterPulsePlotIds: ReadonlySet<string>;
+  /** Map pin for “you are here” / “start here” (centroid in SVG space). */
+  mapAnchor: { cx: number; cy: number; caption: string } | null;
+  /** Accessible name for the SVG map. */
+  ariaLabel: string;
 };
 
-export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, busy, mapNavSuppress, onPlotClick }: Props) {
+export function RealmMapMeshSvg({
+  mesh,
+  plots,
+  selectedPlotId,
+  buildsByPlot,
+  busy,
+  mapNavSuppress,
+  onPlotClick,
+  starterPulsePlotIds,
+  mapAnchor,
+  ariaLabel,
+}: Props) {
   const ordered = [...plots].sort((a, b) => {
     const as = a.id === selectedPlotId ? 1 : 0;
     const bs = b.id === selectedPlotId ? 1 : 0;
@@ -56,7 +73,7 @@ export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, bus
       width={mesh.contentWidth}
       height={mesh.contentHeight}
       role="img"
-      aria-label="Frontier land — click a region to claim or work it"
+      aria-label={ariaLabel}
     >
       <defs>
         <linearGradient id="realm-g-plains" x1="0%" y1="0%" x2="100%" y2="100%" gradientUnits="objectBoundingBox">
@@ -152,6 +169,18 @@ export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, bus
           );
         })}
       </g>
+      {starterPulsePlotIds.size > 0
+        ? plots
+            .filter((p) => starterPulsePlotIds.has(p.id))
+            .map((p) => (
+              <path
+                key={`starter-${p.id}`}
+                className="realm-map-starter-pulse"
+                d={mesh.plotPath(p.x, p.y)}
+                aria-hidden
+              />
+            ))
+        : null}
       {outlineD ? (
         <path
           className="realm-map-plot-outline"
@@ -160,6 +189,19 @@ export function RealmMapMeshSvg({ mesh, plots, selectedPlotId, buildsByPlot, bus
           pointerEvents="none"
           aria-hidden
         />
+      ) : null}
+      {mapAnchor ? (
+        <g className="realm-map-anchor" pointerEvents="none" aria-hidden>
+          <circle className="realm-map-anchor__dot" cx={mapAnchor.cx} cy={mapAnchor.cy} r={5} />
+          <text
+            className="realm-map-anchor__caption"
+            x={mapAnchor.cx}
+            y={mapAnchor.cy - 16}
+            textAnchor="middle"
+          >
+            {mapAnchor.caption}
+          </text>
+        </g>
       ) : null}
     </svg>
   );

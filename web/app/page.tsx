@@ -15,7 +15,9 @@ import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { buildOrganicMesh } from "./mapOrganicMesh";
+import { computeStarterHintPlotIds } from "./mapStarterHints";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
+import { bookMidpointCentsPerUnit } from "./marketPriceHints";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
@@ -395,6 +397,37 @@ export default function HomePage() {
     }
     return m;
   }, [world?.plot_buildings]);
+
+  const playerOwnsLand = useMemo(
+    () => (world?.plots ?? []).some((p) => p.owner === "player"),
+    [world?.plots],
+  );
+
+  const starterPulsePlotIds = useMemo(() => {
+    if (!world?.plots.length || playerOwnsLand) return new Set<string>();
+    return computeStarterHintPlotIds(world.plots, 5);
+  }, [world?.plots, playerOwnsLand]);
+
+  const mapAnchor = useMemo((): { cx: number; cy: number; caption: string } | null => {
+    if (!mesh || !world?.plots.length) return null;
+    if (playerOwnsLand) {
+      const mine = world.plots.filter((p) => p.owner === "player");
+      mine.sort((a, b) => a.x + a.y - (b.x + b.y) || a.id.localeCompare(b.id));
+      const p = mine[0];
+      if (!p) return null;
+      const c = mesh.plotCentroid(p.x, p.y);
+      return { cx: c.x, cy: c.y, caption: "You are here" };
+    }
+    const origin = world.plots.find((q) => q.id === "p-0-0");
+    if (!origin) return null;
+    const c = mesh.plotCentroid(origin.x, origin.y);
+    return { cx: c.x, cy: c.y, caption: "Start here" };
+  }, [mesh, world?.plots, playerOwnsLand]);
+
+  const mapAriaLabel = useMemo(() => {
+    if (playerOwnsLand) return "Frontier map — click a plot to select it";
+    return "Frontier map — Start here marks the landing corner; soft gold highlights suggest good first claims";
+  }, [playerOwnsLand]);
 
   const selectedPlot = useMemo(
     () => world?.plots.find((p) => p.id === selectedPlotId) ?? null,
@@ -1046,6 +1079,7 @@ export default function HomePage() {
       localStorage.removeItem("realm_frontier_onboard_v5");
       localStorage.removeItem("realm_frontier_onboard_v6");
       localStorage.removeItem("realm_frontier_onboard_v7");
+      localStorage.removeItem("realm_frontier_onboard_v8");
       localStorage.removeItem(FRONTIER_SIM_PAUSED_STORAGE_KEY);
       localStorage.removeItem(FRONTIER_SIM_SPEED_STORAGE_KEY);
     } catch {
@@ -1111,7 +1145,7 @@ export default function HomePage() {
                   {SIM_SPEED_LABELS[simSpeedIdx]}
                 </button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={() => setCommandOpen((o) => !o)}>
-                  {commandOpen ? "Hide command" : "Command"}
+                  {commandOpen ? "Hide panel" : "Show panel"}
                 </button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={replayBriefing}>
                   Briefing
@@ -1142,7 +1176,7 @@ export default function HomePage() {
                 onPointerUp={onMapPointerUp}
                 onPointerCancel={onMapPointerUp}
               >
-                <div className="realm-map-toolbar" role="toolbar" aria-label="Map controls">
+                <div className="realm-map-toolbar" role="toolbar" aria-label="Zoom and map appearance">
                   <span className="realm-map-toolbar__label">{mapStyle}</span>
                   <button
                     type="button"
@@ -1203,6 +1237,9 @@ export default function HomePage() {
                           busy={busy}
                           mapNavSuppress={mapNavSuppress}
                           onPlotClick={onPlotClick}
+                          starterPulsePlotIds={starterPulsePlotIds}
+                          mapAnchor={mapAnchor}
+                          ariaLabel={mapAriaLabel}
                         />
                       </>
                     ) : null}
@@ -1210,8 +1247,8 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Drag to pan · wheel zoom · Style is cosmetic. Regions follow the organic mesh (engine still indexes square tiles). Click selects a plot —
-                gold outline traces that region; claim / survey / industry in the command panel. The sim clock runs in the header unless paused.
+                Drag to pan · scroll wheel zoom · click a plot to select it (gold ring). Claim and survey from the side panel. Pause the clock in the header
+                when you want the world to hold still.
               </p>
             </div>
 
@@ -1221,7 +1258,7 @@ export default function HomePage() {
                   key="cmd"
                   className="realm-panel-pop"
                   role="complementary"
-                  aria-label="Command panel"
+                  aria-label="Side panel"
                   initial={{ opacity: 0, x: 48 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 40 }}
@@ -1231,7 +1268,7 @@ export default function HomePage() {
                     <span className="realm-panel-pop__title" aria-live="polite">
                       {panelHeadline(tab)}
                     </span>
-                    <button type="button" className="realm-panel-pop__close" onClick={() => setCommandOpen(false)} aria-label="Hide command panel">
+                    <button type="button" className="realm-panel-pop__close" onClick={() => setCommandOpen(false)} aria-label="Close side panel">
                       ×
                     </button>
                   </div>
@@ -1390,7 +1427,8 @@ export default function HomePage() {
                         </>
                       ) : (
                         <p className="realm-help">
-                          Click a plot on the map. The outline follows that region; use this panel to claim, survey, or work land you own.
+                          Click a plot on the map (gold ring). Until you own land, a <strong>Start here</strong> pin and soft gold glow mark easy first claims
+                          near the corner — then use this panel to claim and survey.
                         </p>
                       )}
 
@@ -1408,22 +1446,40 @@ export default function HomePage() {
                       )}
 
                       <SectionTitle>Inventory (player)</SectionTitle>
+                      <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+                        ≈ prices use the latest market book snapshot (mid of bid and ask when both exist).
+                      </p>
                       <table className="realm-table">
                         <thead>
                           <tr>
                             <th>Material</th>
                             <th style={{ textAlign: "right" }}>Qty</th>
+                            <th style={{ textAlign: "right" }}>≈ $/u</th>
+                            <th style={{ textAlign: "right" }}>≈ stack</th>
                           </tr>
                         </thead>
                         <tbody>
                           {Object.entries(playerInv)
                             .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([k, v]) => (
-                              <tr key={k}>
-                                <td>{k}</td>
-                                <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)" }}>{v}</td>
-                              </tr>
-                            ))}
+                            .map(([k, v]) => {
+                              const unitCents = bookMidpointCentsPerUnit(world.market_history, k);
+                              const unitUsd =
+                                unitCents != null ? `~$${(unitCents / 100).toFixed(2)}` : "—";
+                              const stackUsd =
+                                unitCents != null ? `~$${((unitCents * v) / 100).toFixed(2)}` : "—";
+                              return (
+                                <tr key={k}>
+                                  <td>{k}</td>
+                                  <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)" }}>{v}</td>
+                                  <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)", fontSize: 13 }}>
+                                    {unitUsd}
+                                  </td>
+                                  <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)", fontSize: 13 }}>
+                                    {stackUsd}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                         </tbody>
                       </table>
                     </>
@@ -1954,8 +2010,8 @@ export default function HomePage() {
             </AnimatePresence>
 
             {!commandOpen ? (
-              <button type="button" className="realm-panel-fab" onClick={() => setCommandOpen(true)}>
-                Command
+              <button type="button" className="realm-panel-fab" onClick={() => setCommandOpen(true)} aria-label="Open side panel">
+                Show panel
               </button>
             ) : null}
           </div>

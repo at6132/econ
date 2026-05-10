@@ -14,7 +14,7 @@ The map and the command panel are the whole game right now. Chronicle is the pap
   },
   {
     title: "Map: claim land",
-    body: `Click a region to select it — the gold outline follows that plot's shape. Unclaimed land: open Territory & works and press Claim (free in this build). Your unsurveyed plots: Survey from the panel for the listed cash fee, then build and produce.
+    body: `Click a region to select it — the gold outline follows that plot. Until you own land, look for the Start here pin and the soft gold glow on a few nearby tiles; those are friendly first claims. Unclaimed land: open Territory & works and press Claim (free in this build). Your unsurveyed plots: Survey from the panel for the listed cash fee, then build and produce.
 
 Pan by dragging, zoom with the scroll wheel. The style toggle is cosmetic (terrain / satellite / political).
 
