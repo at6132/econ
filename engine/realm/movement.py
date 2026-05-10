@@ -1,4 +1,8 @@
-"""Goods in transit — Law 3 (time + distance)."""
+"""Goods in transit — Law 3 (time + distance).
+
+Shipping fee (integer cents): ``BASE_SHIP_FEE_CENTS + manhattan(from, to) * PER_TILE_SHIP_CENTS``.
+Paid to ``system:reserve`` on dispatch. Arrival tick uses distance × ``TRANSIT_BUFFER_TICKS`` plus buffer.
+"""
 
 from __future__ import annotations
 

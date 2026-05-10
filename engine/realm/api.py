@@ -21,7 +21,13 @@ from realm.markets import (
 )
 from realm.movement import dispatch_shipment
 from realm.persistence import load_snapshot, save_snapshot
-from realm.social import honor_contract_stub, propose_contract_stub
+from realm.social import (
+    accept_supply_contract,
+    fulfill_supply_contract,
+    honor_contract_stub,
+    propose_contract_stub,
+    propose_supply_contract,
+)
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier, world_public_dict
 
@@ -248,6 +254,51 @@ def post_trade_p2p(
         qty,
         total_price_cents,
     )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/supply/propose")
+def post_contract_supply_propose(
+    supplier: Annotated[str, Query()],
+    buyer: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+    total_price_cents: Annotated[int, Query()],
+    due_in_ticks: Annotated[int, Query()],
+) -> dict:
+    r = propose_supply_contract(
+        _world,
+        PartyId(supplier),
+        PartyId(buyer),
+        MaterialId(material),
+        qty,
+        total_price_cents,
+        due_in_ticks,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/supply/accept")
+def post_contract_supply_accept(
+    buyer: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_supply_contract(_world, PartyId(buyer), contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/supply/fulfill")
+def post_contract_supply_fulfill(
+    supplier: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = fulfill_supply_contract(_world, PartyId(supplier), contract_id)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)

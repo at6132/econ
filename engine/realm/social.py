@@ -1,13 +1,21 @@
-"""Contract + reputation stubs (Primitive 8 / Law 7)."""
+"""Contracts + reputation (Primitive 8 / Law 7)."""
 
 from __future__ import annotations
 
 from realm.event_log import log_event
-from realm.ids import PartyId
+from realm.ids import MaterialId, PartyId
+from realm.inventory import MatterErr
+from realm.ledger import MoneyErr, party_cash_account
 from realm.world import World
 
 
 def propose_contract_stub(world: World, party_a: PartyId, party_b: PartyId, kind: str) -> dict:
+    """Legacy generic handshake (honor-only). Supply deals use ``propose_supply_contract``."""
+    if kind == "supply":
+        return {
+            "ok": False,
+            "reason": "use POST /contracts/supply/propose with material, qty, price, and due_in_ticks",
+        }
     world.next_contract_seq += 1
     cid = f"c-{world.next_contract_seq}"
     world.contracts.append(
@@ -35,6 +43,8 @@ def honor_contract_stub(world: World, contract_id: str) -> dict:
     for c in world.contracts:
         if c.get("id") != contract_id:
             continue
+        if c.get("kind") == "supply" and "deliver_by_tick" in c:
+            return {"ok": False, "reason": "supply contracts use accept then fulfill endpoints"}
         if c.get("status") not in ("open", "active"):
             return {"ok": False, "reason": "contract not open"}
         c["status"] = "honored"
@@ -45,3 +55,160 @@ def honor_contract_stub(world: World, contract_id: str) -> dict:
         log_event(world, "contract_honor", f"Contract {contract_id} honored", contract_id=contract_id)
         return {"ok": True}
     return {"ok": False, "reason": "contract not found"}
+
+
+def propose_supply_contract(
+    world: World,
+    supplier: PartyId,
+    buyer: PartyId,
+    material: MaterialId,
+    qty: int,
+    total_price_cents: int,
+    due_in_ticks: int,
+) -> dict:
+    """
+    Supplier offers to deliver ``qty`` of ``material`` by ``deliver_by_tick`` (inclusive).
+    Buyer must call ``accept_supply_contract`` before fulfillment is allowed.
+    """
+    if qty <= 0:
+        return {"ok": False, "reason": "qty must be positive"}
+    if total_price_cents < 0:
+        return {"ok": False, "reason": "price must be non-negative"}
+    if due_in_ticks < 1:
+        return {"ok": False, "reason": "due_in_ticks must be at least 1"}
+    if supplier not in world.parties or buyer not in world.parties:
+        return {"ok": False, "reason": "unknown party"}
+    if supplier == buyer:
+        return {"ok": False, "reason": "supplier and buyer must differ"}
+    world.next_contract_seq += 1
+    cid = f"c-{world.next_contract_seq}"
+    deliver_by = world.tick + due_in_ticks
+    world.contracts.append(
+        {
+            "id": cid,
+            "kind": "supply",
+            "supplier": str(supplier),
+            "buyer": str(buyer),
+            "material": str(material),
+            "qty": qty,
+            "total_price_cents": total_price_cents,
+            "deliver_by_tick": deliver_by,
+            "status": "proposed",
+        }
+    )
+    log_event(
+        world,
+        "contract_supply_propose",
+        f"{supplier} proposes supply {cid}: {qty}×{material} to {buyer} for {total_price_cents}¢ by tick {deliver_by}",
+        contract_id=cid,
+        supplier=str(supplier),
+        buyer=str(buyer),
+        material=str(material),
+        qty=qty,
+        total_price_cents=total_price_cents,
+        deliver_by_tick=deliver_by,
+    )
+    return {"ok": True, "contract_id": cid, "deliver_by_tick": deliver_by}
+
+
+def accept_supply_contract(world: World, buyer: PartyId, contract_id: str) -> dict:
+    for c in world.contracts:
+        if c.get("id") != contract_id:
+            continue
+        if c.get("kind") != "supply":
+            return {"ok": False, "reason": "not a supply contract"}
+        if c.get("status") != "proposed":
+            return {"ok": False, "reason": "contract not awaiting acceptance"}
+        if PartyId(c["buyer"]) != buyer:
+            return {"ok": False, "reason": "not the buyer on this contract"}
+        c["status"] = "active"
+        log_event(
+            world,
+            "contract_supply_accept",
+            f"{buyer} accepted supply {contract_id}",
+            contract_id=contract_id,
+            buyer=str(buyer),
+        )
+        return {"ok": True}
+    return {"ok": False, "reason": "contract not found"}
+
+
+def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -> dict:
+    """Deliver goods and (if priced) payment; both parties gain ``honored`` reputation."""
+    for c in world.contracts:
+        if c.get("id") != contract_id:
+            continue
+        if c.get("kind") != "supply":
+            return {"ok": False, "reason": "not a supply contract"}
+        if c.get("status") != "active":
+            return {"ok": False, "reason": "contract not active"}
+        if PartyId(c["supplier"]) != supplier:
+            return {"ok": False, "reason": "not the supplier"}
+        if world.tick > int(c["deliver_by_tick"]):
+            return {"ok": False, "reason": "deadline passed"}
+        buyer = PartyId(c["buyer"])
+        mat = MaterialId(c["material"])
+        qty = int(c["qty"])
+        price = int(c["total_price_cents"])
+        if world.inventory.qty(supplier, mat) < qty:
+            return {"ok": False, "reason": "insufficient material to fulfill"}
+        bc = party_cash_account(buyer)
+        sc = party_cash_account(supplier)
+        if world.ledger.balance(bc) < price:
+            return {"ok": False, "reason": "buyer insufficient cash"}
+        if price > 0:
+            pay = world.ledger.transfer(debit=bc, credit=sc, amount_cents=price)
+            if isinstance(pay, MoneyErr):
+                return {"ok": False, "reason": pay.reason}
+        rm = world.inventory.remove(supplier, mat, qty)
+        if isinstance(rm, MatterErr):
+            if price > 0:
+                world.ledger.transfer(debit=sc, credit=bc, amount_cents=price)
+            return {"ok": False, "reason": rm.reason}
+        ad = world.inventory.add(buyer, mat, qty)
+        if isinstance(ad, MatterErr):
+            world.inventory.add(supplier, mat, qty)
+            if price > 0:
+                world.ledger.transfer(debit=sc, credit=bc, amount_cents=price)
+            return {"ok": False, "reason": ad.reason}
+        c["status"] = "fulfilled"
+        for pid in (supplier, buyer):
+            r = world.reputation.setdefault(str(pid), {"honored": 0, "breached": 0})
+            r["honored"] += 1
+        log_event(
+            world,
+            "contract_supply_fulfill",
+            f"{supplier} fulfilled {contract_id}: {qty}×{mat} → {buyer}",
+            contract_id=contract_id,
+            supplier=str(supplier),
+            buyer=str(buyer),
+            material=str(mat),
+            qty=qty,
+            total_price_cents=price,
+        )
+        return {"ok": True}
+    return {"ok": False, "reason": "contract not found"}
+
+
+def tick_supply_contract_breaches(world: World) -> None:
+    """After ``world.tick`` advances: active supply past ``deliver_by_tick`` becomes breached (supplier only)."""
+    t = world.tick
+    for c in world.contracts:
+        if c.get("kind") != "supply":
+            continue
+        if c.get("status") != "active":
+            continue
+        if t <= int(c["deliver_by_tick"]):
+            continue
+        c["status"] = "breached"
+        sup = PartyId(c["supplier"])
+        r = world.reputation.setdefault(str(sup), {"honored": 0, "breached": 0})
+        r["breached"] += 1
+        log_event(
+            world,
+            "contract_supply_breach",
+            f"Supply {c['id']}: {sup} missed deadline (due by tick {c['deliver_by_tick']}, now {t})",
+            contract_id=c["id"],
+            supplier=str(sup),
+            buyer=str(c.get("buyer", "")),
+        )
