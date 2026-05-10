@@ -80,6 +80,16 @@ type MarketAskDto = {
   material: string;
   qty: number;
   price_per_unit_cents: number;
+  side?: string;
+};
+
+type MarketBidDto = {
+  order_id: string;
+  party: string;
+  material: string;
+  qty: number;
+  max_price_per_unit_cents: number;
+  side?: string;
 };
 
 type EventLogEntryDto = {
@@ -127,6 +137,7 @@ type WorldDto = {
   active_production: ActiveProductionDto[];
   in_transit?: InTransitDto[];
   market_asks?: MarketAskDto[];
+  market_bids?: MarketBidDto[];
   reputation?: Record<string, { honored: number; breached: number }>;
   contracts?: Record<string, unknown>[];
   event_log?: EventLogEntryDto[];
@@ -155,6 +166,11 @@ export default function HomePage() {
   const [sellMaterial, setSellMaterial] = useState("timber");
   const [sellQty, setSellQty] = useState("1");
   const [sellPriceCents, setSellPriceCents] = useState("500");
+  const [bidMaterial, setBidMaterial] = useState("timber");
+  const [bidQty, setBidQty] = useState("1");
+  const [bidMaxCents, setBidMaxCents] = useState("500");
+  const [sellFillMaterial, setSellFillMaterial] = useState("timber");
+  const [sellFillQty, setSellFillQty] = useState("1");
   const [p2pRole, setP2pRole] = useState<"sell" | "buy">("sell");
   const [p2pParty, setP2pParty] = useState("t1_consumer");
   const [p2pMaterial, setP2pMaterial] = useState("grain");
@@ -564,6 +580,95 @@ export default function HomePage() {
           gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
           gy: Math.max(0, Math.floor((grid.h - 1) / 4)),
           label: "CANCEL",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function placeBuyOrder() {
+    const qty = Number(bidQty);
+    const maxPx = Number(bidMaxCents);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(maxPx) || maxPx <= 0) {
+      setError("Bid qty and max price (cents) must be positive numbers.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        party: "player",
+        material: bidMaterial.trim(),
+        qty: String(qty),
+        max_price_per_unit_cents: String(maxPx),
+      });
+      const r = await fetch(`/api/engine/market/bid?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 3)),
+          label: "BID",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelBid(orderId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ party: "player", order_id: orderId });
+      const r = await fetch(`/api/engine/market/cancel_bid?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 5)),
+          label: "CANCEL",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sellIntoBids() {
+    const maxQty = Number(sellFillQty);
+    if (!Number.isFinite(maxQty) || maxQty <= 0) {
+      setError("Sell-into-bids quantity must be a positive number.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        party: "player",
+        material: sellFillMaterial.trim(),
+        max_qty: String(maxQty),
+      });
+      const r = await fetch(`/api/engine/market/sell_fill?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "trade",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((2 * (grid.h - 1)) / 3)),
+          label: "FILL",
         });
       }
       await load();
@@ -1102,7 +1207,7 @@ export default function HomePage() {
 
                   {tab === "market" ? (
                     <>
-                      <SectionTitle>Order book</SectionTitle>
+                      <SectionTitle>Asks (sell side)</SectionTitle>
                       {(world.market_asks ?? []).length === 0 ? (
                         <p className="realm-help">No open asks.</p>
                       ) : (
@@ -1142,9 +1247,85 @@ export default function HomePage() {
                           </tbody>
                         </table>
                       )}
+                      <SectionTitle>Bids (buy side)</SectionTitle>
+                      {(world.market_bids ?? []).length === 0 ? (
+                        <p className="realm-help">No open bids.</p>
+                      ) : (
+                        <table className="realm-table">
+                          <thead>
+                            <tr>
+                              <th>Mat</th>
+                              <th style={{ textAlign: "right" }}>Qty</th>
+                              <th style={{ textAlign: "right" }}>Max ¢/u</th>
+                              <th>Buyer</th>
+                              <th style={{ textAlign: "right" }}> </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(world.market_bids ?? []).map((b) => (
+                              <tr key={b.order_id}>
+                                <td>{b.material}</td>
+                                <td style={{ textAlign: "right" }}>{b.qty}</td>
+                                <td style={{ textAlign: "right" }}>{b.max_price_per_unit_cents}</td>
+                                <td>{b.party}</td>
+                                <td style={{ textAlign: "right" }}>
+                                  {b.party === "player" ? (
+                                    <button
+                                      type="button"
+                                      className="realm-btn realm-btn--ghost realm-btn--sm"
+                                      disabled={busy}
+                                      onClick={() => void cancelBid(b.order_id)}
+                                    >
+                                      Cancel
+                                    </button>
+                                  ) : (
+                                    <span className="realm-help"> </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                       <SectionTitle>Market depth</SectionTitle>
                       <div className="realm-chart-card">
                         <MarketHistoryChart history={world.market_history ?? []} />
+                      </div>
+                      <SectionTitle>Place limit bid (player)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Locks up to <code>qty × max ¢/u</code> in market escrow; lifts cheaper asks immediately at their price.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                        <label className="realm-label">
+                          material
+                          <input
+                            className="realm-input"
+                            value={bidMaterial}
+                            onChange={(e) => setBidMaterial(e.target.value)}
+                            style={{ width: 120 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          qty
+                          <input
+                            className="realm-input"
+                            value={bidQty}
+                            onChange={(e) => setBidQty(e.target.value)}
+                            style={{ width: 56 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          max ¢/unit
+                          <input
+                            className="realm-input"
+                            value={bidMaxCents}
+                            onChange={(e) => setBidMaxCents(e.target.value)}
+                            style={{ width: 64 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void placeBuyOrder()}>
+                          Place bid
+                        </button>
                       </div>
                       <SectionTitle>List for sale (player)</SectionTitle>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
@@ -1177,6 +1358,33 @@ export default function HomePage() {
                         </label>
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void placeSellOrder()}>
                           Place ask
+                        </button>
+                      </div>
+                      <SectionTitle>Sell into bids (player)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Walks highest bids; you must hold inventory. Payment comes from bid escrow at each bid&apos;s limit.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                        <label className="realm-label">
+                          material
+                          <input
+                            className="realm-input"
+                            value={sellFillMaterial}
+                            onChange={(e) => setSellFillMaterial(e.target.value)}
+                            style={{ width: 120 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          max qty
+                          <input
+                            className="realm-input"
+                            value={sellFillQty}
+                            onChange={(e) => setSellFillQty(e.target.value)}
+                            style={{ width: 56 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void sellIntoBids()}>
+                          Sell into book
                         </button>
                       </div>
                       <SectionTitle>P2P trade (atomic)</SectionTitle>
