@@ -30,8 +30,8 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 
 | # | Gate | Status | Notes |
 |---|------|--------|-------|
-| A1 | **Stranger playtest:** 3–5 people, ~1 h each; **3/5** would play another hour | ➖ | Optional gate per `13_PHASED_TODO.md`; skipped when validating with other audience signals |
-| A2 | All **B–E** rows below at ✅ for “Phase 1 minimum,” or 🟡 only where explicitly deferred | ✅ | **A1** (stranger playtest) remains the only human gate; B2 default grid > doc 13 minimum (intentional Frontier stress) |
+| A1 | **Stranger playtest:** 3–5 people, ~1 h each; **3/5** would play another hour | ➖ | Process gate — run during Phase 2 polish if not done in Phase 1 |
+| A2 | All **B–E** rows below at ✅ for “Phase 1 minimum,” or 🟡 only where explicitly deferred | ✅ | **Phase 1 code track closed** 2026-05-08 → **Phase 2** active (see `18_PHASE_2_COMPLETION_CHECKLIST.md`) |
 | A3 | **Conservation:** money + matter paths touched by new code have **pytest** coverage | ✅ | Supply, production+labor split, movement fee, markets, 60-tick agent ledger smoke |
 
 ---
@@ -172,7 +172,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 - [x] No 🟡 in **B10, B11** without a tracked follow-up (or doc 13 amended). (**B8** order book: ✅. **B10/B11**: ✅.)
 - [x] Remaining **🟡** acceptable: **B2** grid size vs doc 13 example (intentional Frontier stress).
 - [x] `pytest` green; `tsc` + `next build` green.
-- [ ] **A1** playtest completed **or** consciously skipped (see section A row A1).
+- [x] **A1** playtest deferred to Phase 2 process / marketing cadence (see `18_PHASE_2_COMPLETION_CHECKLIST.md` gate A1).
 
 ---
 
@@ -182,4 +182,4 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 - `16_VISION_ANCHOR_AND_PHASE_STATUS.md` — vision + coarse status  
 - `03_PRIMITIVES_SPEC.md` / `04_LAWS_OF_THE_UNIVERSE.md` — primitive + law checks when deepening features  
 
-**Last updated:** 2026-05-08 (Phase 1 code gate green for A2; A1 recruiting next)
+**Last updated:** 2026-05-08 — **Phase 1 closed** (engineering). Playtest gate A1 tracked under Phase 2 if needed.

@@ -26,15 +26,15 @@ The design rests on **9 economic primitives** (land, matter, labor, time/distanc
 
 **Official phase doc:** `13_PHASED_TODO.md`.
 
-**Current phase:** **Phase 1 — Solo Engine Prototype (ugly-but-functional).**
+**Current phase:** **Phase 2 — Solo Polish & Visual Identity** (see `13_PHASED_TODO.md`).
 
-We are **not** in Phase 0 as a coding freeze (spec exists and code is underway). We are **not** in Phase 2+ (no Pixi map requirement met; no commercial solo launch).
+Phase 1 **engineering checklist** is closed (`17_PHASE_1_COMPLETION_CHECKLIST.md`). Phase 2 work is tracked in **`18_PHASE_2_COMPLETION_CHECKLIST.md`** (Pixi, schematic, Tier 2, decay, information costs, scenarios, polish).
 
 ### Phase 1 checklist — honest snapshot (rolling)
 
 This is a **status snapshot**, not a promise every box is finished to final quality.
 
-**2026-05-08 — Code side:** Phase 1 **B–E** items in `17_PHASE_1_COMPLETION_CHECKLIST.md` are marked ✅ for the minimum bar (A2). **Next focus:** **A1** stranger playtests (process / evidence, not a repo checkbox).
+**2026-05-08 — Phase transition:** Phase 1 **B–E** ✅ per `17_PHASE_1_COMPLETION_CHECKLIST.md`. Repo work now follows **`18_PHASE_2_COMPLETION_CHECKLIST.md`** (decay, intel, Tier 2, scenarios, Pixi, schematic, UI polish). Stranger **$30** gate is Phase 2 **A1** in doc 18.
 
 **Engine core (Phase 1 intent)**
 
@@ -58,7 +58,7 @@ This is a **status snapshot**, not a promise every box is finished to final qual
 | Item | Status |
 |------|--------|
 | Tier 1 behavioral NPC loops | **Yes** — six loops (see `agents_tier1.py` docstring) |
-| Tier 2 / 3 | **Not Phase 1** |
+| Tier 2 / 3 | **Tier 2** in progress (`agents_tier2.py`); Tier 3 not Phase 2 |
 
 **Frontend**
 

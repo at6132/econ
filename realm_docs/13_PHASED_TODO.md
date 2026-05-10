@@ -47,6 +47,7 @@
 ---
 
 ## Phase 1 — Solo Engine Prototype (Ugly But Functional)
+**Status (engineering):** **Complete** — see `17_PHASE_1_COMPLETION_CHECKLIST.md` (closed). Playtests may continue under Phase 2.
 **Duration estimate:** 8–12 weeks
 **Goal:** A playable solo prototype that proves the core economic loop is fun. Ugly UI is fine. No graphics required.
 
@@ -120,6 +121,7 @@
 ---
 
 ## Phase 2 — Solo Polish & Visual Identity
+**Status:** **Active** — checklist `18_PHASE_2_COMPLETION_CHECKLIST.md`.
 **Duration estimate:** 8–12 weeks
 **Goal:** Take the proven prototype and make it visually compelling. Add Tier 2 AI agents. Add named scenarios.
 

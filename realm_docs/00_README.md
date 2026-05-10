@@ -32,7 +32,8 @@ This is the complete planning bundle for the game we've been designing. Read in 
 | 14 | `14_CURSOR_PROMPT.md` | **Drop-in prompt for Cursor that loads it with full project context** | Paste at the start of any Cursor session. |
 | 15 | `15_GLOSSARY.md` | Terminology so you don't drift on definitions | Use this to keep the spec coherent over months. |
 | 16 | `16_VISION_ANCHOR_AND_PHASE_STATUS.md` | **North-star summary + where the repo is vs Phase 1** | Re-read when implementation starts to “lose the plot.” |
-| 17 | `17_PHASE_1_COMPLETION_CHECKLIST.md` | **Granular Phase 1 checklist:** engine, API, UI, tests, full-depth gaps | Use to drive Phase 1 to “done” without forgetting wiring/tests. |
+| 17 | `17_PHASE_1_COMPLETION_CHECKLIST.md` | **Phase 1 checklist (closed):** engine, API, UI, tests | Historical record; Phase 1 engineering complete. |
+| 18 | `18_PHASE_2_COMPLETION_CHECKLIST.md` | **Phase 2 checklist:** Pixi, schematic, Tier 2, decay, intel, scenarios, polish | Active build tracker for Solo Polish & Visual Identity. |
 
 ---
 
