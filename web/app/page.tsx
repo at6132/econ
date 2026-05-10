@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
-import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
+import { FRONTIER_MAP_STYLE_STORAGE_KEY, FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
@@ -217,7 +217,7 @@ export default function HomePage() {
 
   useEffect(() => {
     try {
-      const v = localStorage.getItem("realm_frontier_map_style");
+      const v = localStorage.getItem(FRONTIER_MAP_STYLE_STORAGE_KEY);
       if (v === "satellite" || v === "political" || v === "terrain") setMapStyle(v);
     } catch {
       /* ignore */
@@ -974,7 +974,7 @@ export default function HomePage() {
     setMapStyle((s) => {
       const next = s === "terrain" ? "satellite" : s === "satellite" ? "political" : "terrain";
       try {
-        localStorage.setItem("realm_frontier_map_style", next);
+        localStorage.setItem(FRONTIER_MAP_STYLE_STORAGE_KEY, next);
       } catch {
         /* ignore */
       }
@@ -1025,6 +1025,9 @@ export default function HomePage() {
   function replayBriefing() {
     try {
       localStorage.removeItem(FRONTIER_ONBOARD_STORAGE_KEY);
+      localStorage.removeItem(FRONTIER_MAP_STYLE_STORAGE_KEY);
+      localStorage.removeItem("realm_frontier_map_style");
+      localStorage.removeItem("realm_frontier_onboard_v3");
     } catch {
       /* ignore */
     }
