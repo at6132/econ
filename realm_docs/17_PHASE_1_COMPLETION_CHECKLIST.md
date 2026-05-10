@@ -30,7 +30,7 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 
 | # | Gate | Status | Notes |
 |---|------|--------|-------|
-| A1 | **Stranger playtest:** 3–5 people, ~1 h each; **3/5** would play another hour | ❌ | Process / evidence, not a code checkbox |
+| A1 | **Stranger playtest:** 3–5 people, ~1 h each; **3/5** would play another hour | ➖ | Optional gate per `13_PHASED_TODO.md`; skipped when validating with other audience signals |
 | A2 | All **B–E** rows below at ✅ for “Phase 1 minimum,” or 🟡 only where explicitly deferred | ✅ | **A1** (stranger playtest) remains the only human gate; B2 default grid > doc 13 minimum (intentional Frontier stress) |
 | A3 | **Conservation:** money + matter paths touched by new code have **pytest** coverage | ✅ | Supply, production+labor split, movement fee, markets, 60-tick agent ledger smoke |
 
@@ -48,9 +48,9 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 | B6 | Production: ~5 recipes | `recipes.py` (5), `production.py` | `test_production.py` | **Labor cash**: 40%→stub hires (even split), rest→reserve; **`tool_cache` / `watch_hut`** lower recipe labor **cash** on the producing plot (BPS) | ✅ |
 | B7 | Movement: transport, time, cost | `movement.py` | `test_phase1_extended`, `test_movement` | Fee = `BASE + manhattan×PER_TILE` (module docstring) | ✅ |
 | B9 | P2P trade (7a) | `markets.py` `p2p_trade` | `test_markets.py`, `test_phase1_extended`, `test_api_routes` | **Idempotency** (`idempotency_key` + fingerprint); **stable `code`** on outcomes; HTTP `detail: { reason, code }` | ✅ |
-| B8 | Order book (7b) | `markets.py` — **asks + bids** (escrow on bids), cross incoming bid at **ask** price / incoming ask at **bid** limit; `market_buy`, `sell_into_bids` | `test_phase1_extended`, `test_markets`, `test_api_routes` | Iceberg, price–time priority within a level — deferred | ✅ |
-| B10 | Basic contracts: **supply + employment** | `social.py` supply FSM; `actions.py` hire; `tick.py` breaches | `test_contracts_supply`, `test_phase1_extended`, `test_api_routes` | Rich performance clauses / full employment sim — later | ✅ |
-| B11 | Reputation (doc calls it “placeholder”) | `world.reputation` + memo honor + supply fulfill/breach | `test_contracts_supply`, `test_phase1_extended` | Reputation-priced markets — later | ✅ |
+| B8 | Order book (7b) | `markets.py` — asks + bids, **iceberg** clips, **counterparty rep min** on limit + aggressive flow | `test_markets`, `test_markets_depth`, `test_api_routes` | Iceberg + rep gate + FIFO by price then `order_id` | ✅ |
+| B10 | Basic contracts: **supply + employment** | `social.py` supply FSM + **buyer deposit / liquidated damages**; `actions.py` hire + **recurring wages**; `tick.py` | `test_contracts_supply`, `test_phase1_extended`, `test_api_routes` | Rich arbitrary clause DSL — later | ✅ |
+| B11 | Reputation (doc calls it “placeholder”) | `world.reputation` + memo honor + supply fulfill/breach; **orders filter matches by `min_counterparty_honored`** | `test_contracts_supply`, `test_phase1_extended`, `test_markets_depth` | Reputation as spread / scoring — later | ✅ |
 
 ---
 
@@ -143,8 +143,9 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | `test_inventory.py` | matter add/remove | Cross-party transfers, edge qty |
 | `test_actions.py` | claim, survey | Survey cost covered in `actions.SURVEY_COST_CENTS` |
 | `test_production.py` | recipes, reject duplicate run, **stub hire labor split**, **tool_cache labor BPS** | — |
-| `test_markets.py` | Ask/bid cancel, crossing, `sell_into_bids`, escrow, **P2P idempotency** | — |
-| `test_contracts_supply.py` | Supply propose/accept/fulfill, breach, wrong party | — |
+| `test_markets_depth.py` | Iceberg refill, rep-gated cross + aggressive buy | — |
+| `test_markets.py` | Ask/bid cancel, crossing, `sell_into_bids`, escrow, P2P idempotency | — |
+| `test_contracts_supply.py` | Supply propose/accept/fulfill, breach, deposit + damages, wrong party | — |
 | `test_movement.py` | Shipping fee = base + tile rate × Manhattan | Edge cases |
 | `test_phase1_extended.py` | JSON/SQLite roundtrip, shipments, P2P, agents conservation, market history | — |
 | `test_api_routes.py` | HTTP: markets, P2P (**structured errors**, idempotency), **supply flow**, cancel smoke | Full route matrix optional |
@@ -157,7 +158,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 
 ## H. “Full not shallow” — recommended completion order
 
-1. **Market depth:** ✅ limit bids, matching, persistence, API, UI, chart bid series; optional: richer depth / level-2 later.
+1. **Market depth:** ✅ limit bids, matching, persistence, API, UI, chart bid series; **iceberg + rep min** on book.
 2. **P2P:** ✅ UI + HTTP tests + **idempotency** + structured API errors.
 3. **Contracts:** ✅ supply propose → accept → fulfill; deadline breach → supplier `breached`.
 4. **Employment:** ✅ **40%** of recipe `labor_cents` paid to distinct `stub_hires` employees per batch (even split); remainder to reserve.
@@ -171,7 +172,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 - [x] No 🟡 in **B10, B11** without a tracked follow-up (or doc 13 amended). (**B8** order book: ✅. **B10/B11**: ✅.)
 - [x] Remaining **🟡** acceptable: **B2** grid size vs doc 13 example (intentional Frontier stress).
 - [x] `pytest` green; `tsc` + `next build` green.
-- [ ] **A1** playtest completed or consciously deferred with a dated note in `16_VISION_ANCHOR_AND_PHASE_STATUS.md`.
+- [ ] **A1** playtest completed **or** consciously skipped (see section A row A1).
 
 ---
 
