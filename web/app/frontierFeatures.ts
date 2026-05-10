@@ -43,9 +43,10 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
     jumpTab: "codex",
   },
   {
-    id: "manual_tick",
-    title: "Manual turns",
-    detail: "Time advances only when you press Advance tick — solo pacing, no idle sim.",
+    id: "sim_clock",
+    title: "Running sim clock",
+    detail:
+      "Engine ticks advance on a client timer (pause, speed presets, optional single-step). Solo pacing only — multiplayer wall-clock comes later.",
     lane: "live",
     jumpTab: "world",
   },
@@ -94,34 +95,37 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
   {
     id: "buildings",
     title: "Plot buildings",
-    detail: "Spend cash, record structure on plot — no throughput bonus yet.",
-    lane: "stub",
+    detail:
+      "Spend cash to place field stockade (+party storage units), tool cache (−10% recipe labor cash on plot), or watch hut (−3% labor on plot).",
+    lane: "live",
     jumpTab: "world",
   },
   {
     id: "hire_stub",
-    title: "NPC hire (signing bonus)",
-    detail: "Stub employment record; each production run pays 40% of recipe labor to hired parties (split evenly).",
+    title: "Hire & payroll",
+    detail:
+      "Signing bonus opens employment; optional recurring wage every N ticks. Each production run routes 40% of recipe labor cash to hires (split evenly).",
     lane: "live",
     jumpTab: "contracts",
   },
   {
     id: "supply_stub",
-    title: "Supply contracts (deadline + fulfill)",
-    detail: "Propose → accept → fulfill; miss deliver_by_tick and supplier is breached (buyer reputation unchanged).",
+    title: "Supply contracts",
+    detail:
+      "Propose → accept → fulfill by deadline tick; breach marks supplier reputation. Deposits / liquidated damages when terms say so.",
     lane: "live",
     jumpTab: "contracts",
   },
   {
     id: "building_fx",
-    title: "Building modifiers",
-    detail: "Structures affecting recipes, storage caps, or energy — engine TBD.",
+    title: "More building effects",
+    detail: "Additional structure types (energy, throughput multipliers) beyond the three catalog buildings — not shipped yet.",
     lane: "planned",
   },
   {
     id: "labor_output",
     title: "Hired labor in production",
-    detail: "40% of recipe labor_cents routed to employees on stub_hires (see contracts tab).",
+    detail: "40% of each recipe's labor cash goes to employed parties on that payroll (split evenly); remainder to system reserve.",
     lane: "live",
     jumpTab: "contracts",
   },

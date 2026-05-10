@@ -35,7 +35,7 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
   if (data.length < 1) {
     return (
       <p className="realm-help" style={{ margin: 0 }}>
-        No market snapshots yet. Advance ticks to record best ask and bid prices.
+        No market snapshots yet. The chart fills as the simulation runs (each tick records best bid/ask).
       </p>
     );
   }

@@ -4,7 +4,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
-import { FRONTIER_MAP_STYLE_STORAGE_KEY, FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
+import {
+  FRONTIER_MAP_STYLE_STORAGE_KEY,
+  FRONTIER_ONBOARD_STORAGE_KEY,
+  FRONTIER_SIM_PAUSED_STORAGE_KEY,
+  FRONTIER_SIM_SPEED_STORAGE_KEY,
+} from "./frontierConstants";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { FRONTIER_MENU, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
@@ -17,6 +22,10 @@ import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 
 const MAP_PAD = 4;
+
+/** Real-time gap between engine ticks when the sim is running (solo pacing; not wall-clock canon). */
+const SIM_SPEEDS_MS: readonly [number, number, number] = [2800, 1400, 700];
+const SIM_SPEED_LABELS = ["Slow", "Normal", "Fast"] as const;
 
 const FX_HUE: Record<MapFxKind, number> = {
   claim: 52,
@@ -164,10 +173,34 @@ function SectionTitle({ children }: { children: string }) {
   return <h3 className="realm-section-title">{children}</h3>;
 }
 
+function readSimPausedFromStorage(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(FRONTIER_SIM_PAUSED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function readSimSpeedIdxFromStorage(): 0 | 1 | 2 {
+  if (typeof window === "undefined") return 1;
+  try {
+    const sp = localStorage.getItem(FRONTIER_SIM_SPEED_STORAGE_KEY);
+    if (sp === "0" || sp === "1" || sp === "2") return Number(sp) as 0 | 1 | 2;
+  } catch {
+    /* ignore */
+  }
+  return 1;
+}
+
 export default function HomePage() {
   const [world, setWorld] = useState<WorldDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const tickInFlightRef = useRef(false);
+  const [simPaused, setSimPaused] = useState(readSimPausedFromStorage);
+  const [simSpeedIdx, setSimSpeedIdx] = useState<0 | 1 | 2>(readSimSpeedIdxFromStorage);
+  const [simAdvancing, setSimAdvancing] = useState(false);
   const [tab, setTab] = useState<TabId>("world");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
@@ -223,6 +256,15 @@ export default function HomePage() {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FRONTIER_SIM_PAUSED_STORAGE_KEY, simPaused ? "1" : "0");
+      localStorage.setItem(FRONTIER_SIM_SPEED_STORAGE_KEY, String(simSpeedIdx));
+    } catch {
+      /* ignore */
+    }
+  }, [simPaused, simSpeedIdx]);
 
   useEffect(() => {
     didInitPan.current = false;
@@ -383,27 +425,47 @@ export default function HomePage() {
       ? (world.balances_cents["cash:player"] / 100).toFixed(2)
       : "—";
 
-  async function tick() {
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/engine/tick", { method: "POST" });
-      if (!r.ok) throw new Error(await r.text());
-      if (grid.w > 0 && grid.h > 0) {
-        queueFx({
-          kind: "tick",
-          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
-          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
-          label: "TURN",
-        });
+  const advanceSimTick = useCallback(
+    async (opts: { lockCommandUi?: boolean } = {}) => {
+      if (tickInFlightRef.current) return;
+      tickInFlightRef.current = true;
+      const lockUi = opts.lockCommandUi ?? false;
+      if (lockUi) setBusy(true);
+      setSimAdvancing(true);
+      setError(null);
+      try {
+        const r = await fetch("/api/engine/tick", { method: "POST" });
+        if (!r.ok) throw new Error(await r.text());
+        if (grid.w > 0 && grid.h > 0) {
+          queueFx({
+            kind: "tick",
+            gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+            gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+            label: "TIME",
+          });
+        }
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        setSimPaused(true);
+      } finally {
+        tickInFlightRef.current = false;
+        setSimAdvancing(false);
+        if (lockUi) setBusy(false);
       }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+    },
+    [grid.w, grid.h, load, queueFx],
+  );
+
+  const simIntervalMs = SIM_SPEEDS_MS[simSpeedIdx];
+
+  useEffect(() => {
+    if (!world || simPaused || onboardingOpen) return;
+    const id = window.setInterval(() => {
+      void advanceSimTick({});
+    }, simIntervalMs);
+    return () => window.clearInterval(id);
+  }, [world?.seed, simPaused, simIntervalMs, advanceSimTick, onboardingOpen]);
 
   async function claimPlot(p: PlotDto) {
     setBusy(true);
@@ -1028,9 +1090,14 @@ export default function HomePage() {
       localStorage.removeItem(FRONTIER_MAP_STYLE_STORAGE_KEY);
       localStorage.removeItem("realm_frontier_map_style");
       localStorage.removeItem("realm_frontier_onboard_v3");
+      localStorage.removeItem("realm_frontier_onboard_v4");
+      localStorage.removeItem(FRONTIER_SIM_PAUSED_STORAGE_KEY);
+      localStorage.removeItem(FRONTIER_SIM_SPEED_STORAGE_KEY);
     } catch {
       /* ignore */
     }
+    setSimPaused(false);
+    setSimSpeedIdx(1);
     setOnboardingOpen(true);
   }
 
@@ -1050,7 +1117,7 @@ export default function HomePage() {
             <div className="realm-top-strip__hud">
               <div className="realm-brand">
                 <div className="realm-brand__title">Realm</div>
-                <div className="realm-brand__sub">Frontier · solo build</div>
+                <div className="realm-brand__sub">Frontier · player-run economy (solo slice)</div>
               </div>
               <div className="realm-stat-row">
                 <motion.span
@@ -1060,7 +1127,7 @@ export default function HomePage() {
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 500, damping: 28 }}
                 >
-                  Tick <strong>{world.tick}</strong>
+                  World tick <strong>{world.tick}</strong>
                 </motion.span>
                 <span className="realm-pill">
                   Seed <strong>{world.seed}</strong>
@@ -1070,16 +1137,37 @@ export default function HomePage() {
                 </span>
                 <motion.button
                   type="button"
-                  className="realm-btn realm-btn--primary realm-btn--sm"
+                  className={`realm-btn realm-btn--sm ${simPaused ? "realm-btn--ghost" : "realm-btn--primary"}`}
+                  aria-pressed={!simPaused}
+                  aria-label={simPaused ? "Run simulation" : "Pause simulation"}
                   disabled={busy}
-                  onClick={() => void tick()}
+                  onClick={() => setSimPaused((p) => !p)}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                 >
-                  End turn
+                  {simPaused ? "Run" : "Pause"}
+                </motion.button>
+                <button
+                  type="button"
+                  className="realm-btn realm-btn--ghost realm-btn--sm"
+                  title="Real-time gap between engine ticks while running"
+                  onClick={() => setSimSpeedIdx((i) => ((i + 1) % 3) as 0 | 1 | 2)}
+                >
+                  {SIM_SPEED_LABELS[simSpeedIdx]}
+                </button>
+                <motion.button
+                  type="button"
+                  className="realm-btn realm-btn--ghost realm-btn--sm"
+                  disabled={busy || simAdvancing}
+                  title="Advance exactly one engine tick (useful while paused)"
+                  onClick={() => void advanceSimTick({ lockCommandUi: true })}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  Step +1
                 </motion.button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" disabled={busy} onClick={() => void marketBuyGrain()}>
-                  Buy 1 grain
+                  Market: grain ×1
                 </button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={() => setCommandOpen((o) => !o)}>
                   {commandOpen ? "Hide command" : "Command"}
@@ -1188,8 +1276,9 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Drag to pan · wheel zoom · Style: terrain / satellite / political. Regions are jittered from a large world map (engine still uses plot
-                tiles). Empty = <strong>claim</strong> · yours again = <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected
+                Drag to pan · wheel zoom · Style is cosmetic. Regions are jittered from a large map (engine still uses square plots). Empty ={" "}
+                <strong>claim</strong> · yours = <strong>survey</strong> · surveyed = <strong>industry</strong> · gold = selected. The sim clock runs in
+                the header unless paused.
               </p>
             </div>
 
@@ -1772,15 +1861,15 @@ export default function HomePage() {
                   {tab === "codex" ? (
                     <div className="realm-codex-grid">
                       <p className="realm-help" style={{ marginTop: 0 }}>
-                        Atlas tracks what the engine already does vs placeholder systems vs backlog. Add rows in{" "}
-                        <code>frontierFeatures.ts</code>; wire new screens via <code>frontierMenu.ts</code> + panel
-                        blocks in <code>page.tsx</code>.
+                        Atlas lists what the engine already does versus placeholders and backlog. Live = full panel in this build. Stub = thin slice or
+                        UI-only. Planned = on the road to full Realm (Lua services, multiplayer clock, schematic plots). Extend cards in{" "}
+                        <code>frontierFeatures.ts</code>; new tabs wire through <code>frontierMenu.ts</code> and this page.
                       </p>
                       {(
                         [
-                          ["live", "In this build"],
-                          ["stub", "Stubs (thin vertical slice)"],
-                          ["planned", "Coming later"],
+                          ["live", "Live in this build"],
+                          ["stub", "Stub / partial"],
+                          ["planned", "Planned"],
                         ] as const
                       ).map(([lane, label]) => (
                         <div key={lane} className={`realm-codex-lane realm-codex-lane--${lane}`}>

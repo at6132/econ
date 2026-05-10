@@ -7,80 +7,70 @@ import { FRONTIER_ONBOARD_STORAGE_KEY } from "./frontierConstants";
 
 const STEPS = [
   {
-    title: "Frontier, in one screen",
-    body: `This is Realm: Frontier — a solo build of the economic sim. No quests, no campaign map to “finish.” You run a ledger, plots, and markets against scripted traders and the clock.
+    title: "What you are looking at",
+    body: `Realm is an economic civilization sim: land, materials, work, money, and contracts — no quest chain, no boss fight, no win screen. Frontier is the solo Phase 1 client wired to the real Python engine.
 
-Everything important lives in the command panel (left) and the map. If you get lost, open Chronicle for the event log or replay this manual from the header.`,
+The map and the command panel are the whole game right now. Chronicle is the paper trail when a balance or inventory move surprises you.`,
   },
   {
     title: "Map: claim land",
-    body: `Click a region on the map. If it has no owner, you can claim it — that tile is now yours to survey and build on.
+    body: `Click a region. Empty plots can be claimed; yours can be surveyed once you pay the fee.
 
-Pan by dragging, zoom with the scroll wheel. The style toggle cycles terrain / satellite / political; it’s cosmetic only.
+Pan by dragging, zoom with the scroll wheel. The style toggle is cosmetic (terrain / satellite / political).
 
-You start with cash and starter stock. Rivals already list goods on the market so you aren’t staring at an empty economy.`,
+You start with cash and starter stock. Scripted traders already post on the book so the economy is not empty on load.`,
   },
   {
     title: "Territory: survey, build, produce",
-    body: `Open Territory & works, select your plot, then Survey once you can pay the fee. Survey reveals subsurface hints (ore, clay, coal grades) for that tile.
+    body: `In Territory & works, select a plot you own. Survey reveals subsurface grades (ore, clay, coal hints) for that tile.
 
-Build spends cash and attaches a structure to the plot. Field stockade raises how much stuff you can hold party-wide. Tool cache and watch hut shave recipe labor cost on that plot only.
+Building spends cash and attaches a structure. Field stockade raises party-wide storage headroom. Tool cache and watch hut reduce recipe labor cash on that plot only.
 
-Produce picks a recipe: inputs and labor cash leave your balance up front; outputs arrive after a fixed number of turns. If you’re stuffed to the storage cap, production waits instead of dumping goods into the void.`,
+Produce queues a recipe: inputs and labor cash leave up front; outputs land when the run finishes. If you are at the storage cap, the run waits — nothing is silently deleted.`,
   },
   {
-    title: "You drive the clock",
-    body: `The sim does not run in the background. Press End turn when you’re ready.
+    title: "Time: the clock runs",
+    body: `The engine advances in discrete ticks, but the client runs them for you on a timer. Use Pause when you want to read or stack orders without the world moving. Step +1 moves exactly one tick (handy while paused). The speed control changes how fast real time maps to ticks — it is solo pacing only, not a lore clock.
 
-Each turn runs transit, production, spoilage (grain can turn into spoiled grain over time), wages for any hires you set up, NPC trading scripts, then contract deadlines. After that the tick number increments.
-
-If something didn’t happen, you probably haven’t advanced the turn yet.`,
+Each tick walks transit, production, spoilage where applicable, wages, scripted NPC trading, and contract deadlines.`,
   },
   {
-    title: "Bazaar: book + P2P",
-    body: `Limit sell: you quote a price and park inventory until fill or cancel. Limit bid: you lock cash in market escrow up to your limit price.
+    title: "Bazaar: book and P2P",
+    body: `Limit ask: quote a price and park inventory until fill or cancel. Limit bid: lock cash in market escrow up to your max price.
 
-Incoming orders can cross automatically. You can also hit the book with aggressive buy or sell-into-bids. P2P is one direct trade with a named counterparty (cash and goods swap in one shot).
+Resting orders can cross when prices meet. You can also lift the book with aggressive flow or sell into bids. P2P is one atomic swap with a named counterparty.
 
-Advanced (optional): iceberg clips hide part of your size on the book; minimum “honored” counts let you refuse matches with counterparties you don’t trust yet. Storage limits apply on delivery — full silos block incoming goods.`,
+Optional controls: iceberg clips hide part of displayed size; minimum “honored” counts let you refuse matches with counterparties you do not trust yet. Full storage blocks incoming deliveries.`,
   },
   {
-    title: "Caravans: move stuff",
-    body: `Caravans ships material between two plots you control (or that the rules allow). You pay a distance-based fee up front. The shipment sits in transit and lands after a number of turns.
+    title: "Caravans",
+    body: `Ship between plots you control (where the rules allow). You pay a distance-based fee up front; cargo is in transit until the arrival tick.
 
-Check the in-transit table so you don’t double-spend the same inventory. If a delivery can’t land because storage is full, the engine blocks it.`,
+Watch the in-transit list so you do not double-spend inventory. If the destination cannot take goods, the engine blocks the move.`,
   },
   {
-    title: "Pacts: supply deals",
-    body: `Under Pacts you can run a bilateral supply contract: propose, buyer accepts, supplier fulfills by the due tick with goods and agreed payment.
+    title: "Pacts",
+    body: `Supply contracts: propose, buyer accepts, supplier fulfills by the due tick with goods and payment. Miss the deadline and the supplier takes a breach mark on reputation; terms can hold a buyer deposit or liquidated damages.
 
-Miss the deadline and the supplier eats a breach mark on reputation; optional terms can hold a buyer deposit in escrow until fulfill, or charge liquidated damages on breach.
-
-Memo contracts are a lighter handshake for experiments — supply deals use the dedicated flow.`,
+Memo contracts are lightweight — reputation counters only, no physical delivery.`,
   },
   {
-    title: "Hiring and wages",
-    body: `Hire pays a signing bonus from you to a listed NPC party and opens a stub employment record. You can add a recurring wage paid every N turns if you want the ledger to keep moving.
+    title: "Hiring",
+    body: `Hire pays a signing bonus and records employment. You can add a recurring wage every N ticks.
 
-When you run production, part of the recipe’s labor cash is routed to hired workers you’ve signed — check the contract / hire panel for who counts.
-
-No magical workers: if you’re broke, wages simply don’t move money.`,
+When you run production, part of the recipe labor cash routes to signed hires (split evenly among them). If you are broke, wages simply do not move.`,
   },
   {
-    title: "Chronicle, save, reset",
-    body: `Chronicle streams engine events: claims, trades, production, breaches, hires. Read it when a balance or inventory change surprises you.
+    title: "Chronicle and saves",
+    body: `Chronicle streams engine events: trades, production, breaches, hires. Save writes a SQLite snapshot the engine can reload. Dev reset rebuilds the bootstrap world from seed and drops unsaved play.
 
-Save writes a SQLite snapshot the engine can reload (path shown in the UI). Load brings that world back.
-
-Dev: reset world rebuilds the in-memory Frontier from seed 42 and clears unsaved play. Your browser may still hold this manual’s “seen” flag — use Replay briefing in the header to reopen these pages.`,
+Replay manual in the header reopens this text; it also clears saved pause/speed so you land back on the default running clock.`,
   },
   {
-    title: "How to actually start playing",
-    body: `1) Claim a plot. 2) Survey it when you can afford it. 3) End turn a few times and watch the market and NPCs move. 4) Run one production batch (timber → lumber is a classic first chain) or place one limit order. 5) Ship something or sign a small supply pact when you understand the timers.
+    title: "First session",
+    body: `1) Claim a plot. 2) Survey when you can. 3) Let a few ticks pass and watch the book and NPCs. 4) Run one production chain or place one limit order. 5) Ship something or sign a small supply deal once you see how timers work.
 
-Pick a lane you enjoy: market maker, hauler, contract lawyer on the side, or hermit industrialist. The fun is making the loop yours — not clearing a scripted checklist.
-
-When you’re ready, hit Play and go break something on purpose. That’s the test.`,
+Pick a role you like: market maker, hauler, contract-heavy, or industrial hermit. The point is the loop you build — not clearing a fixed storyline.`,
   },
 ];
 
@@ -140,7 +130,7 @@ export function OnboardingModal({ open, onComplete }: Props) {
                 Skip
               </button>
               <button type="button" className="realm-btn realm-btn--primary" onClick={next}>
-                {step >= STEPS.length - 1 ? "Play" : "Next"}
+                {step >= STEPS.length - 1 ? "Done" : "Next"}
               </button>
             </div>
           </motion.div>
