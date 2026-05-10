@@ -154,6 +154,10 @@ type EventLogEntryDto = {
   tick: number;
   kind: string;
   message: string;
+  party?: string;
+  recipe_id?: string;
+  material?: string;
+  qty?: number;
 };
 
 type BuildingCatalogDto = {
@@ -348,6 +352,8 @@ export default function HomePage() {
   onboardingOpenRef.current = onboardingOpen;
   const commandOpenRef = useRef(commandOpen);
   commandOpenRef.current = commandOpen;
+  const eventLogSeenKeysRef = useRef<Set<string>>(new Set());
+  const eventLogPrimedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -386,6 +392,8 @@ export default function HomePage() {
 
   useEffect(() => {
     didInitPan.current = false;
+    eventLogSeenKeysRef.current.clear();
+    eventLogPrimedRef.current = false;
   }, [world?.seed]);
 
   useEffect(() => {
@@ -426,6 +434,40 @@ export default function HomePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!world?.event_log) return;
+    if (!eventLogPrimedRef.current) {
+      for (const ev of world.event_log) {
+        eventLogSeenKeysRef.current.add(`${ev.tick}|${ev.kind}|${ev.message}`);
+      }
+      eventLogPrimedRef.current = true;
+      return;
+    }
+    for (const ev of world.event_log) {
+      const key = `${ev.tick}|${ev.kind}|${ev.message}`;
+      if (eventLogSeenKeysRef.current.has(key)) continue;
+      eventLogSeenKeysRef.current.add(key);
+      if (eventLogSeenKeysRef.current.size > 500) {
+        eventLogSeenKeysRef.current = new Set(Array.from(eventLogSeenKeysRef.current).slice(-250));
+      }
+      if (ev.party !== "player") continue;
+      if (ev.kind === "production_done") {
+        const rid = ev.recipe_id ?? "";
+        const label = world.recipes?.find((r) => r.id === rid)?.display_name ?? rid;
+        pushToast({ message: `Outputs ready: ${label}`, kind: "ok" });
+      } else if (ev.kind === "production_stalled_storage") {
+        pushToast({
+          message: "Production stalled — pack full. Ship, sell, or use space before outputs land.",
+          kind: "warn",
+        });
+      } else if (ev.kind === "ship_deliver") {
+        const mat = ev.material ?? "";
+        const q = ev.qty ?? 0;
+        pushToast({ message: `Shipment arrived: ${q}×${displayMaterial(mat)}`, kind: "ok" });
+      }
+    }
+  }, [world?.event_log, world?.recipes, pushToast]);
 
   useEffect(() => {
     try {
@@ -755,9 +797,22 @@ export default function HomePage() {
     try {
       const r = await fetch(`/api/engine/plots/${encodeURIComponent(p.id)}/survey`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
+      const body = (await r.json()) as { ok?: boolean; terrain?: string; recipe_ids?: string[] };
       queueFx({ kind: "survey", gx: p.x, gy: p.y, label: "SCAN" });
       await load();
-      pushToast({ message: "Survey complete.", kind: "ok" });
+      const n = Array.isArray(body.recipe_ids) ? body.recipe_ids.length : null;
+      const terr = typeof body.terrain === "string" ? body.terrain : null;
+      if (n != null && terr) {
+        pushToast({
+          message:
+            n === 0
+              ? `Survey complete — no workshops on ${terr} (claim dry land for industry).`
+              : `Survey complete — ${n} recipes unlocked on ${terr}.`,
+          kind: n === 0 ? "info" : "ok",
+        });
+      } else {
+        pushToast({ message: "Survey complete.", kind: "ok" });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -767,6 +822,7 @@ export default function HomePage() {
 
   async function produce(plotId: string, recipeId: string) {
     const plot = world?.plots.find((pp) => pp.id === plotId);
+    const recipeLabel = world?.recipes?.find((x) => x.id === recipeId)?.display_name ?? recipeId;
     setBusy(true);
     setError(null);
     try {
@@ -777,9 +833,11 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       if (plot) queueFx({ kind: "produce", gx: plot.x, gy: plot.y, label: "MAKE" });
       await load();
-      pushToast({ message: "Production step queued.", kind: "ok" });
+      pushToast({ message: `Production started: ${recipeLabel}`, kind: "ok" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      pushToast({ message: msg.length > 140 ? `${msg.slice(0, 137)}…` : msg, kind: "warn" });
     } finally {
       setBusy(false);
     }
