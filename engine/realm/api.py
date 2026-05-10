@@ -11,6 +11,7 @@ from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, sta
 from realm.buildings import build_on_plot
 from realm.decay import maintain_building
 from realm.ids import MaterialId, PartyId, PlotId
+from realm.recipe_sites import recipe_ids_for_surveyed_terrain
 from realm.intel import purchase_market_intel
 from realm.markets import (
     cancel_buy_order,
@@ -112,10 +113,16 @@ def post_produce(
 
 @app.post("/plots/{plot_id}/survey")
 def post_survey(plot_id: str, party: Annotated[str, Query()] = "player") -> dict:
-    r = survey_plot(_world, PartyId(party), PlotId(plot_id))
+    pid = PlotId(plot_id)
+    r = survey_plot(_world, PartyId(party), pid)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
-    return dict(r)
+    out: dict = dict(r)
+    plot = _world.plots.get(pid)
+    if plot is not None:
+        out["terrain"] = plot.terrain.value
+        out["recipe_ids"] = recipe_ids_for_surveyed_terrain(plot.terrain, surveyed=plot.surveyed)
+    return out
 
 
 @app.post("/plots/{plot_id}/schematic/validate")
