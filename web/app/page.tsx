@@ -5,15 +5,29 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
 import {
+  displayMaterial,
+  displayParty,
+  formatDeliverBy,
+  formatQtyTimesMaterial,
+  formatRelativeTicksFromNow,
+  formatUsdFromCents,
+  formatUsdPerUnitFromCentsPerUnit,
+  manhattanPlotIds,
+  parseDollarsToCents,
+  prettifyChronicleMessage,
+  previewShipArriveTick,
+  previewShipFeeCents,
+} from "./formatters";
+import {
   FRONTIER_MAP_STYLE_STORAGE_KEY,
   FRONTIER_ONBOARD_STORAGE_KEY,
   FRONTIER_SIM_PAUSED_STORAGE_KEY,
   FRONTIER_SIM_SPEED_STORAGE_KEY,
   FRONTIER_SURVEY_COST_CENTS,
 } from "./frontierConstants";
-import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
-import { FRONTIER_MENU, type TabId } from "./frontierMenu";
+import { getFrontierMenu, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
+import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { buildOrganicMesh } from "./mapOrganicMesh";
 import { computeStarterHintPlotIds } from "./mapStarterHints";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
@@ -23,6 +37,7 @@ import { OnboardingModal } from "./OnboardingModal";
 import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
+import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 
 const MAP_PAD = 4;
 
@@ -43,7 +58,7 @@ const FX_HUE: Record<MapFxKind, number> = {
 };
 
 function panelHeadline(tab: TabId): string {
-  for (const g of FRONTIER_MENU) {
+  for (const g of getFrontierMenu()) {
     const it = g.items.find((i) => i.tab === tab);
     if (it) return it.label;
   }
@@ -212,23 +227,29 @@ export default function HomePage() {
   const [shipQty, setShipQty] = useState("1");
   const [sellMaterial, setSellMaterial] = useState("timber");
   const [sellQty, setSellQty] = useState("1");
-  const [sellPriceCents, setSellPriceCents] = useState("500");
+  const [sellPriceDollars, setSellPriceDollars] = useState("5.00");
   const [bidMaterial, setBidMaterial] = useState("timber");
   const [bidQty, setBidQty] = useState("1");
-  const [bidMaxCents, setBidMaxCents] = useState("500");
+  const [bidMaxDollars, setBidMaxDollars] = useState("5.00");
   const [sellFillMaterial, setSellFillMaterial] = useState("timber");
   const [sellFillQty, setSellFillQty] = useState("1");
   const [p2pRole, setP2pRole] = useState<"sell" | "buy">("sell");
   const [p2pParty, setP2pParty] = useState("t1_consumer");
   const [p2pMaterial, setP2pMaterial] = useState("grain");
   const [p2pQty, setP2pQty] = useState("1");
-  const [p2pTotalCents, setP2pTotalCents] = useState("50");
+  const [p2pTotalDollars, setP2pTotalDollars] = useState("0.50");
   const [lastContractId, setLastContractId] = useState<string | null>(null);
-  const [supplyBuyer, setSupplyBuyer] = useState("t1_consumer");
+  const [supplyCounterparty, setSupplyCounterparty] = useState("t1_consumer");
+  const [supplyYouAre, setSupplyYouAre] = useState<"supplier" | "buyer">("supplier");
   const [supplyMaterial, setSupplyMaterial] = useState("grain");
   const [supplyQty, setSupplyQty] = useState("2");
-  const [supplyTotalCents, setSupplyTotalCents] = useState("80");
+  const [supplyTotalDollars, setSupplyTotalDollars] = useState("0.80");
   const [supplyDueTicks, setSupplyDueTicks] = useState("10");
+  const [bazaarAdvancedOpen, setBazaarAdvancedOpen] = useState(false);
+  const [advBidIceberg, setAdvBidIceberg] = useState("");
+  const [advBidHonored, setAdvBidHonored] = useState("0");
+  const [advAskIceberg, setAdvAskIceberg] = useState("");
+  const [advAskHonored, setAdvAskHonored] = useState("0");
   const [commandOpen, setCommandOpen] = useState(true);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
@@ -429,6 +450,27 @@ export default function HomePage() {
     return "Frontier map — Start here marks the landing corner; soft gold highlights suggest good first claims";
   }, [playerOwnsLand]);
 
+  useEffect(() => {
+    if (!SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS && tab === "codex") setTab("world");
+  }, [tab]);
+
+  const playerPlotChoices = useMemo(
+    () =>
+      (world?.plots ?? [])
+        .filter((p) => p.owner === "player")
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    [world?.plots],
+  );
+
+  const shipPreview = useMemo(() => {
+    if (!world) return null;
+    return {
+      fee: previewShipFeeCents(shipFrom, shipTo),
+      arrive: previewShipArriveTick(world.tick, shipFrom, shipTo),
+      dist: manhattanPlotIds(shipFrom, shipTo),
+    };
+  }, [world, shipFrom, shipTo]);
+
   const selectedPlot = useMemo(
     () => world?.plots.find((p) => p.id === selectedPlotId) ?? null,
     [world, selectedPlotId],
@@ -452,6 +494,18 @@ export default function HomePage() {
       (c): c is SupplyContractDto => (c as SupplyContractDto).kind === "supply",
     );
   }, [world?.contracts]);
+
+  const pactCounterpartyChoices = useMemo(() => {
+    const ps = world?.parties ?? [];
+    return ps.filter((p) => p !== "player").sort((a, b) => a.localeCompare(b));
+  }, [world?.parties]);
+
+  useEffect(() => {
+    if (pactCounterpartyChoices.length === 0) return;
+    if (!pactCounterpartyChoices.includes(supplyCounterparty)) {
+      setSupplyCounterparty(pactCounterpartyChoices[0]);
+    }
+  }, [pactCounterpartyChoices, supplyCounterparty]);
 
   const playerCash =
     world?.balances_cents["cash:player"] != null
@@ -479,6 +533,7 @@ export default function HomePage() {
   }, [load]);
 
   const simIntervalMs = SIM_SPEEDS_MS[simSpeedIdx];
+  const msPerSimTick = simIntervalMs;
 
   useEffect(() => {
     if (!world || simPaused || onboardingOpen) return;
@@ -619,9 +674,9 @@ export default function HomePage() {
 
   async function placeSellOrder() {
     const qty = Number(sellQty);
-    const price = Number(sellPriceCents);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) {
-      setError("Sell qty and price (cents) must be positive numbers.");
+    const priceCents = parseDollarsToCents(sellPriceDollars);
+    if (!Number.isFinite(qty) || qty <= 0 || priceCents == null || priceCents <= 0) {
+      setError("Sell quantity must be positive; price must be a positive dollar amount per unit (e.g. 5.00).");
       return;
     }
     setBusy(true);
@@ -631,8 +686,17 @@ export default function HomePage() {
         party: "player",
         material: sellMaterial,
         qty: String(qty),
-        price_per_unit_cents: String(price),
+        price_per_unit_cents: String(priceCents),
       });
+      if (bazaarAdvancedOpen) {
+        const ice = advAskIceberg.trim();
+        if (ice !== "") {
+          const n = Number(ice);
+          if (Number.isFinite(n) && n >= 1 && n < qty) q.set("iceberg_display_qty", String(Math.floor(n)));
+        }
+        const hon = Number(advAskHonored);
+        if (Number.isFinite(hon) && hon > 0) q.set("min_counterparty_honored", String(Math.floor(hon)));
+      }
       const r = await fetch(`/api/engine/market/sell?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       if (grid.w > 0 && grid.h > 0) {
@@ -676,9 +740,9 @@ export default function HomePage() {
 
   async function placeBuyOrder() {
     const qty = Number(bidQty);
-    const maxPx = Number(bidMaxCents);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(maxPx) || maxPx <= 0) {
-      setError("Bid qty and max price (cents) must be positive numbers.");
+    const maxCents = parseDollarsToCents(bidMaxDollars);
+    if (!Number.isFinite(qty) || qty <= 0 || maxCents == null || maxCents <= 0) {
+      setError("Bid quantity must be positive; max price must be a positive dollar amount per unit.");
       return;
     }
     setBusy(true);
@@ -688,8 +752,17 @@ export default function HomePage() {
         party: "player",
         material: bidMaterial.trim(),
         qty: String(qty),
-        max_price_per_unit_cents: String(maxPx),
+        max_price_per_unit_cents: String(maxCents),
       });
+      if (bazaarAdvancedOpen) {
+        const ice = advBidIceberg.trim();
+        if (ice !== "") {
+          const n = Number(ice);
+          if (Number.isFinite(n) && n >= 1 && n < qty) q.set("iceberg_display_qty", String(Math.floor(n)));
+        }
+        const hon = Number(advBidHonored);
+        if (Number.isFinite(hon) && hon > 0) q.set("min_counterparty_honored", String(Math.floor(hon)));
+      }
       const r = await fetch(`/api/engine/market/bid?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       if (grid.w > 0 && grid.h > 0) {
@@ -765,9 +838,9 @@ export default function HomePage() {
 
   async function runP2pTrade() {
     const qty = Number(p2pQty);
-    const total = Number(p2pTotalCents);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(total) || total < 0) {
-      setError("P2P qty must be positive; total price (cents) must be zero or more.");
+    const total = parseDollarsToCents(p2pTotalDollars);
+    if (!Number.isFinite(qty) || qty <= 0 || total == null || total < 0) {
+      setError("P2P quantity must be positive; total price must be zero or more in dollars.");
       return;
     }
     setBusy(true);
@@ -847,18 +920,25 @@ export default function HomePage() {
 
   async function proposeSupplyContract() {
     const qty = Number(supplyQty);
-    const total = Number(supplyTotalCents);
+    const total = parseDollarsToCents(supplyTotalDollars);
     const due = Number(supplyDueTicks);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(total) || total < 0 || !Number.isFinite(due) || due < 1) {
-      setError("Supply: qty and due ticks must be positive; total price (cents) must be zero or more.");
+    if (!Number.isFinite(qty) || qty <= 0 || total == null || total < 0 || !Number.isFinite(due) || due < 1) {
+      setError("Supply: quantity and deadline (ticks from now) must be positive; total price must be zero or more in dollars.");
+      return;
+    }
+    const counter = supplyCounterparty.trim();
+    if (!counter) {
+      setError("Supply: pick a counterparty.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
+      const supplier = supplyYouAre === "supplier" ? "player" : counter;
+      const buyer = supplyYouAre === "supplier" ? counter : "player";
       const q = new URLSearchParams({
-        supplier: "player",
-        buyer: supplyBuyer.trim(),
+        supplier,
+        buyer,
         material: supplyMaterial.trim(),
         qty: String(qty),
         total_price_cents: String(total),
@@ -882,11 +962,11 @@ export default function HomePage() {
     }
   }
 
-  async function acceptSupplyContractRow(contractId: string, buyerParty: string) {
+  async function acceptSupplyContractRow(contractId: string) {
     setBusy(true);
     setError(null);
     try {
-      const q = new URLSearchParams({ buyer: buyerParty, contract_id: contractId });
+      const q = new URLSearchParams({ buyer: "player", contract_id: contractId });
       const r = await fetch(`/api/engine/contracts/supply/accept?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
@@ -1269,7 +1349,7 @@ export default function HomePage() {
                       {panelHeadline(tab)}
                     </span>
                     <button type="button" className="realm-panel-pop__close" onClick={() => setCommandOpen(false)} aria-label="Close side panel">
-                      ×
+                      ✕
                     </button>
                   </div>
 
@@ -1301,7 +1381,7 @@ export default function HomePage() {
                               ) : selectedPlot.owner === "player" ? (
                                 <strong>you</strong>
                               ) : (
-                                <strong>{selectedPlot.owner}</strong>
+                                <strong>{displayParty(selectedPlot.owner)}</strong>
                               )}
                             </span>
                             <span style={{ display: "block", marginTop: 4 }}>
@@ -1318,7 +1398,7 @@ export default function HomePage() {
                               <span style={{ display: "block", marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
                                 Subsurface grades:{" "}
                                 {Object.entries(selectedPlot.subsurface)
-                                  .map(([k, v]) => `${k.replace(/_grade/, "")} ${(v as number).toFixed(2)}`)
+                                  .map(([k, v]) => `${displayMaterial(k.replace(/_grade$/, ""))} ${(v as number).toFixed(2)}`)
                                   .join(" · ")}
                               </span>
                             ) : null}
@@ -1415,9 +1495,7 @@ export default function HomePage() {
                                   <SectionTitle>Built here</SectionTitle>
                                   <ul className="realm-help" style={{ marginTop: 4 }}>
                                     {buildingsHere.map((x, i) => (
-                                      <li key={`${x.building_id}-${i}`}>
-                                        {x.label} ({x.building_id})
-                                      </li>
+                                      <li key={`${x.building_id}-${i}`}>{x.label}</li>
                                     ))}
                                   </ul>
                                 </>
@@ -1434,14 +1512,19 @@ export default function HomePage() {
 
                       <SectionTitle>Active production</SectionTitle>
                       {(world.active_production ?? []).length === 0 ? (
-                        <p className="realm-help">None running.</p>
+                        <p className="realm-help">
+                          Nothing is running. <strong>Select a surveyed plot you own</strong>, then pick a recipe above to start a batch.
+                        </p>
                       ) : (
                         <ul className="realm-help" style={{ paddingLeft: 18, margin: 0 }}>
-                          {(world.active_production ?? []).map((a) => (
-                            <li key={a.run_id}>
-                              {a.plot_id} · {a.recipe_id} · {a.ticks_remaining} ticks left
-                            </li>
-                          ))}
+                          {(world.active_production ?? []).map((a) => {
+                            const rn = world.recipes?.find((r) => r.id === a.recipe_id)?.display_name ?? a.recipe_id;
+                            return (
+                              <li key={a.run_id}>
+                                {a.plot_id} · {rn} · {formatRelativeTicksFromNow(a.ticks_remaining, msPerSimTick)} left
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
 
@@ -1459,6 +1542,14 @@ export default function HomePage() {
                           </tr>
                         </thead>
                         <tbody>
+                          {Object.keys(playerInv).length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="realm-help" style={{ padding: "10px 8px" }}>
+                                Your pack is empty. <strong>Produce on a surveyed plot</strong>, buy from the Bazaar, or accept a supply contract to stock
+                                materials.
+                              </td>
+                            </tr>
+                          ) : null}
                           {Object.entries(playerInv)
                             .sort(([a], [b]) => a.localeCompare(b))
                             .map(([k, v]) => {
@@ -1469,7 +1560,7 @@ export default function HomePage() {
                                 unitCents != null ? `~$${((unitCents * v) / 100).toFixed(2)}` : "—";
                               return (
                                 <tr key={k}>
-                                  <td>{k}</td>
+                                  <td>{displayMaterial(k)}</td>
                                   <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)" }}>{v}</td>
                                   <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)", fontSize: 13 }}>
                                     {unitUsd}
@@ -1487,16 +1578,18 @@ export default function HomePage() {
 
                   {tab === "market" ? (
                     <>
-                      <SectionTitle>Asks (sell side)</SectionTitle>
+                      <SectionTitle>Asks (sellers)</SectionTitle>
                       {(world.market_asks ?? []).length === 0 ? (
-                        <p className="realm-help">No open asks.</p>
+                        <p className="realm-help">
+                          No one is offering these goods yet. <strong>List for sale</strong> below to post a price, or check back after a few ticks.
+                        </p>
                       ) : (
                         <table className="realm-table">
                           <thead>
                             <tr>
-                              <th>Mat</th>
+                              <th>Material</th>
                               <th style={{ textAlign: "right" }}>Qty</th>
-                              <th style={{ textAlign: "right" }}>¢/u</th>
+                              <th style={{ textAlign: "right" }}>~$/unit</th>
                               <th>Seller</th>
                               <th style={{ textAlign: "right" }}> </th>
                             </tr>
@@ -1504,10 +1597,10 @@ export default function HomePage() {
                           <tbody>
                             {(world.market_asks ?? []).map((a) => (
                               <tr key={a.order_id}>
-                                <td>{a.material}</td>
+                                <td>{displayMaterial(a.material)}</td>
                                 <td style={{ textAlign: "right" }}>{a.qty}</td>
-                                <td style={{ textAlign: "right" }}>{a.price_per_unit_cents}</td>
-                                <td>{a.party}</td>
+                                <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(a.price_per_unit_cents)}</td>
+                                <td>{displayParty(a.party)}</td>
                                 <td style={{ textAlign: "right" }}>
                                   {a.party === "player" ? (
                                     <button
@@ -1527,16 +1620,18 @@ export default function HomePage() {
                           </tbody>
                         </table>
                       )}
-                      <SectionTitle>Bids (buy side)</SectionTitle>
+                      <SectionTitle>Bids (buyers)</SectionTitle>
                       {(world.market_bids ?? []).length === 0 ? (
-                        <p className="realm-help">No open bids.</p>
+                        <p className="realm-help">
+                          Be the first bidder — sellers will see your offer on the book. Use <strong>Place limit bid</strong> below.
+                        </p>
                       ) : (
                         <table className="realm-table">
                           <thead>
                             <tr>
-                              <th>Mat</th>
+                              <th>Material</th>
                               <th style={{ textAlign: "right" }}>Qty</th>
-                              <th style={{ textAlign: "right" }}>Max ¢/u</th>
+                              <th style={{ textAlign: "right" }}>Max ~$/unit</th>
                               <th>Buyer</th>
                               <th style={{ textAlign: "right" }}> </th>
                             </tr>
@@ -1544,10 +1639,10 @@ export default function HomePage() {
                           <tbody>
                             {(world.market_bids ?? []).map((b) => (
                               <tr key={b.order_id}>
-                                <td>{b.material}</td>
+                                <td>{displayMaterial(b.material)}</td>
                                 <td style={{ textAlign: "right" }}>{b.qty}</td>
-                                <td style={{ textAlign: "right" }}>{b.max_price_per_unit_cents}</td>
-                                <td>{b.party}</td>
+                                <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(b.max_price_per_unit_cents)}</td>
+                                <td>{displayParty(b.party)}</td>
                                 <td style={{ textAlign: "right" }}>
                                   {b.party === "player" ? (
                                     <button
@@ -1571,13 +1666,13 @@ export default function HomePage() {
                       <div className="realm-chart-card">
                         <MarketHistoryChart history={world.market_history ?? []} />
                       </div>
-                      <SectionTitle>Place limit bid (player)</SectionTitle>
+                      <SectionTitle>Place limit bid</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Locks up to <code>qty × max ¢/u</code> in market escrow; lifts cheaper asks immediately at their price.
+                        Locks cash for up to quantity × your max price; matches cheaper listed offers automatically.
                       </p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
                         <label className="realm-label">
-                          material
+                          Material
                           <input
                             className="realm-input"
                             value={bidMaterial}
@@ -1586,7 +1681,7 @@ export default function HomePage() {
                           />
                         </label>
                         <label className="realm-label">
-                          qty
+                          Qty
                           <input
                             className="realm-input"
                             value={bidQty}
@@ -1595,22 +1690,22 @@ export default function HomePage() {
                           />
                         </label>
                         <label className="realm-label">
-                          max ¢/unit
+                          Max $/unit
                           <input
                             className="realm-input"
-                            value={bidMaxCents}
-                            onChange={(e) => setBidMaxCents(e.target.value)}
-                            style={{ width: 64 }}
+                            value={bidMaxDollars}
+                            onChange={(e) => setBidMaxDollars(e.target.value)}
+                            style={{ width: 72 }}
                           />
                         </label>
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void placeBuyOrder()}>
                           Place bid
                         </button>
                       </div>
-                      <SectionTitle>List for sale (player)</SectionTitle>
+                      <SectionTitle>List for sale</SectionTitle>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
                         <label className="realm-label">
-                          material
+                          Material
                           <input
                             className="realm-input"
                             value={sellMaterial}
@@ -1619,7 +1714,7 @@ export default function HomePage() {
                           />
                         </label>
                         <label className="realm-label">
-                          qty
+                          Qty
                           <input
                             className="realm-input"
                             value={sellQty}
@@ -1628,103 +1723,158 @@ export default function HomePage() {
                           />
                         </label>
                         <label className="realm-label">
-                          ¢/unit
+                          $/unit
                           <input
                             className="realm-input"
-                            value={sellPriceCents}
-                            onChange={(e) => setSellPriceCents(e.target.value)}
-                            style={{ width: 64 }}
+                            value={sellPriceDollars}
+                            onChange={(e) => setSellPriceDollars(e.target.value)}
+                            style={{ width: 72 }}
                           />
                         </label>
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void placeSellOrder()}>
                           Place ask
                         </button>
                       </div>
-                      <SectionTitle>Sell into bids (player)</SectionTitle>
-                      <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Walks highest bids; you must hold inventory. Payment comes from bid escrow at each bid&apos;s limit.
-                      </p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-                        <label className="realm-label">
-                          material
-                          <input
-                            className="realm-input"
-                            value={sellFillMaterial}
-                            onChange={(e) => setSellFillMaterial(e.target.value)}
-                            style={{ width: 120 }}
-                          />
-                        </label>
-                        <label className="realm-label">
-                          max qty
-                          <input
-                            className="realm-input"
-                            value={sellFillQty}
-                            onChange={(e) => setSellFillQty(e.target.value)}
-                            style={{ width: 56 }}
-                          />
-                        </label>
-                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void sellIntoBids()}>
-                          Sell into book
-                        </button>
-                      </div>
-                      <SectionTitle>P2P trade (atomic)</SectionTitle>
-                      <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Direct deal: counterparty pays (or receives) <code>total_price_cents</code> for the whole lot — no order book. Example: sell grain to{" "}
-                        <code>t1_consumer</code> from bootstrap.
-                      </p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-                        <label className="realm-label">
-                          you are
-                          <select
-                            className="realm-input"
-                            value={p2pRole}
-                            onChange={(e) => setP2pRole(e.target.value as "sell" | "buy")}
-                            style={{ width: 120 }}
-                          >
-                            <option value="sell">Seller</option>
-                            <option value="buy">Buyer</option>
-                          </select>
-                        </label>
-                        <label className="realm-label">
-                          counterparty id
-                          <input
-                            className="realm-input"
-                            value={p2pParty}
-                            onChange={(e) => setP2pParty(e.target.value)}
-                            style={{ width: 180 }}
-                          />
-                        </label>
-                        <label className="realm-label">
-                          material
-                          <input
-                            className="realm-input"
-                            value={p2pMaterial}
-                            onChange={(e) => setP2pMaterial(e.target.value)}
-                            style={{ width: 120 }}
-                          />
-                        </label>
-                        <label className="realm-label">
-                          qty
-                          <input
-                            className="realm-input"
-                            value={p2pQty}
-                            onChange={(e) => setP2pQty(e.target.value)}
-                            style={{ width: 48 }}
-                          />
-                        </label>
-                        <label className="realm-label">
-                          total (¢)
-                          <input
-                            className="realm-input"
-                            value={p2pTotalCents}
-                            onChange={(e) => setP2pTotalCents(e.target.value)}
-                            style={{ width: 72 }}
-                          />
-                        </label>
-                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void runP2pTrade()}>
-                          Execute P2P
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="realm-btn realm-btn--ghost realm-btn--sm"
+                        style={{ marginTop: 14 }}
+                        onClick={() => setBazaarAdvancedOpen((o) => !o)}
+                      >
+                        {bazaarAdvancedOpen ? "Hide advanced orders" : "Advanced: iceberg, reputation gates, sell-into-book, direct trade"}
+                      </button>
+                      {bazaarAdvancedOpen ? (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                          <p className="realm-help" style={{ marginTop: 0 }}>
+                            Optional: show only part of your size on the book (iceberg), or require a minimum &quot;honored&quot; reputation on the other
+                            party before you match.
+                          </p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
+                            <label className="realm-label">
+                              Bid iceberg clip (units)
+                              <input
+                                className="realm-input"
+                                value={advBidIceberg}
+                                onChange={(e) => setAdvBidIceberg(e.target.value)}
+                                style={{ width: 80 }}
+                                placeholder="off"
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Min counterparty honored
+                              <input
+                                className="realm-input"
+                                value={advBidHonored}
+                                onChange={(e) => setAdvBidHonored(e.target.value)}
+                                style={{ width: 56 }}
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Ask iceberg clip (units)
+                              <input
+                                className="realm-input"
+                                value={advAskIceberg}
+                                onChange={(e) => setAdvAskIceberg(e.target.value)}
+                                style={{ width: 80 }}
+                                placeholder="off"
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Min counterparty honored
+                              <input
+                                className="realm-input"
+                                value={advAskHonored}
+                                onChange={(e) => setAdvAskHonored(e.target.value)}
+                                style={{ width: 56 }}
+                              />
+                            </label>
+                          </div>
+                          <SectionTitle>Sell into bids</SectionTitle>
+                          <p className="realm-help" style={{ marginBottom: 10 }}>
+                            Walks the bid side; you must hold the goods. You are paid from buyers&apos; escrow up to their limits.
+                          </p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                            <label className="realm-label">
+                              Material
+                              <input
+                                className="realm-input"
+                                value={sellFillMaterial}
+                                onChange={(e) => setSellFillMaterial(e.target.value)}
+                                style={{ width: 120 }}
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Max qty
+                              <input
+                                className="realm-input"
+                                value={sellFillQty}
+                                onChange={(e) => setSellFillQty(e.target.value)}
+                                style={{ width: 56 }}
+                              />
+                            </label>
+                            <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void sellIntoBids()}>
+                              Sell into book
+                            </button>
+                          </div>
+                          <SectionTitle>Direct trade (P2P)</SectionTitle>
+                          <p className="realm-help" style={{ marginBottom: 10 }}>
+                            One-shot exchange with a named party — no central book. Example: sell grain to Townfolk.
+                          </p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                            <label className="realm-label">
+                              You are
+                              <select
+                                className="realm-input"
+                                value={p2pRole}
+                                onChange={(e) => setP2pRole(e.target.value as "sell" | "buy")}
+                                style={{ width: 120 }}
+                              >
+                                <option value="sell">Seller</option>
+                                <option value="buy">Buyer</option>
+                              </select>
+                            </label>
+                            <label className="realm-label">
+                              Counterparty
+                              <input
+                                className="realm-input"
+                                value={p2pParty}
+                                onChange={(e) => setP2pParty(e.target.value)}
+                                style={{ width: 180 }}
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Material
+                              <input
+                                className="realm-input"
+                                value={p2pMaterial}
+                                onChange={(e) => setP2pMaterial(e.target.value)}
+                                style={{ width: 120 }}
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Qty
+                              <input
+                                className="realm-input"
+                                value={p2pQty}
+                                onChange={(e) => setP2pQty(e.target.value)}
+                                style={{ width: 48 }}
+                              />
+                            </label>
+                            <label className="realm-label">
+                              Total price ($)
+                              <input
+                                className="realm-input"
+                                value={p2pTotalDollars}
+                                onChange={(e) => setP2pTotalDollars(e.target.value)}
+                                style={{ width: 72 }}
+                              />
+                            </label>
+                            <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void runP2pTrade()}>
+                              Execute trade
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
 
@@ -1732,92 +1882,188 @@ export default function HomePage() {
                     <>
                       <SectionTitle>In transit</SectionTitle>
                       {(world.in_transit ?? []).length === 0 ? (
-                        <p className="realm-help">Nothing in flight.</p>
+                        <p className="realm-help">
+                          Nothing in flight. <strong>Ship goods</strong> between two plots you own to move inventory without trading.
+                        </p>
                       ) : (
                         <ul className="realm-help" style={{ paddingLeft: 18, margin: 0 }}>
                           {(world.in_transit ?? []).map((s) => (
                             <li key={s.id}>
-                              {s.material} ×{s.qty} → {s.dest_plot_id} · arrive tick {s.arrive_tick}
+                              {formatQtyTimesMaterial(s.qty, s.material)} → {s.dest_plot_id} · arrive{" "}
+                              {formatDeliverBy(world.tick, s.arrive_tick, msPerSimTick)}
                             </li>
                           ))}
                         </ul>
                       )}
                       <SectionTitle>Ship goods</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Own both plots. Fee debits cash; goods arrive after distance-based ticks.
+                        Choose origin and destination from land you own. Fee is paid when you dispatch; travel time grows with distance.
                       </p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
                         <label className="realm-label">
-                          from
-                          <input className="realm-input" value={shipFrom} onChange={(e) => setShipFrom(e.target.value)} />
-                        </label>
-                        <label className="realm-label">
-                          to
-                          <input className="realm-input" value={shipTo} onChange={(e) => setShipTo(e.target.value)} />
-                        </label>
-                        <label className="realm-label">
-                          material
-                          <input
+                          From plot
+                          <select
                             className="realm-input"
-                            value={shipMaterial}
-                            onChange={(e) => setShipMaterial(e.target.value)}
-                            style={{ width: 100 }}
-                          />
+                            value={shipFrom}
+                            onChange={(e) => setShipFrom(e.target.value)}
+                            style={{ minWidth: 120 }}
+                          >
+                            {playerPlotChoices.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.id}
+                              </option>
+                            ))}
+                          </select>
                         </label>
                         <label className="realm-label">
-                          qty
+                          To plot
+                          <select
+                            className="realm-input"
+                            value={shipTo}
+                            onChange={(e) => setShipTo(e.target.value)}
+                            style={{ minWidth: 120 }}
+                          >
+                            {playerPlotChoices.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          Material
+                          {Object.keys(playerInv).length > 0 ? (
+                            <select
+                              className="realm-input"
+                              value={shipMaterial}
+                              onChange={(e) => setShipMaterial(e.target.value)}
+                              style={{ minWidth: 140 }}
+                            >
+                              {Object.keys(playerInv)
+                                .sort((a, b) => a.localeCompare(b))
+                                .map((k) => (
+                                  <option key={k} value={k}>
+                                    {displayMaterial(k)} ({playerInv[k]})
+                                  </option>
+                                ))}
+                            </select>
+                          ) : (
+                            <input
+                              className="realm-input"
+                              value={shipMaterial}
+                              onChange={(e) => setShipMaterial(e.target.value)}
+                              style={{ width: 120 }}
+                              placeholder="grain"
+                            />
+                          )}
+                        </label>
+                        <label className="realm-label">
+                          Qty
                           <input className="realm-input" value={shipQty} onChange={(e) => setShipQty(e.target.value)} style={{ width: 48 }} />
                         </label>
                         <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void shipGoods()}>
                           Dispatch
                         </button>
                       </div>
+                      {shipPreview?.fee != null && shipPreview.dist != null && shipPreview.dist > 0 && shipPreview.arrive != null ? (
+                        <p className="realm-help" style={{ marginTop: 10 }}>
+                          Preview: <strong>{formatUsdFromCents(shipPreview.fee)}</strong> shipping fee · arrives{" "}
+                          {formatDeliverBy(world.tick, shipPreview.arrive, msPerSimTick)} · {shipPreview.dist} tiles apart
+                        </p>
+                      ) : (
+                        <p className="realm-help" style={{ marginTop: 10 }}>
+                          Pick two different owned plots to see fee and arrival time.
+                        </p>
+                      )}
                     </>
                   ) : null}
 
-                  {tab === "contracts" ? (
+                  {tab === "hire" ? (
                     <>
                       <SectionTitle>Hire (employment)</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Signing bonus + employment record. Production runs route{" "}
-                        <strong>40%</strong> of recipe labor cash to hired parties (split evenly); the rest goes to system
-                        reserve as before.
+                        Signing bonus opens an employment record. Each production run routes <strong>40%</strong> of recipe labor cash to hired parties (split
+                        evenly); the rest goes to system reserve as before.
                       </p>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Hires so far: {(world.stub_hires ?? []).length}
+                        Active hires: {(world.stub_hires ?? []).length}
                       </p>
-                      <ul style={{ listStyle: "none", padding: 0, margin: "0 0 16px" }}>
-                        {(world.hire_catalog ?? []).map((row) => (
-                          <li key={row.party} style={{ marginBottom: 6 }}>
-                            <button
-                              type="button"
-                              className="realm-list-btn"
-                              disabled={busy}
-                              onClick={() => void hireNpc(row.party, row.suggested_signing_cents)}
-                            >
-                              {row.role} — ${(row.suggested_signing_cents / 100).toFixed(2)} bonus
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                      {(world.hire_catalog ?? []).length === 0 ? (
+                        <p className="realm-help">
+                          No NPCs are on the hiring board in this snapshot. <strong>Advance a few ticks</strong> or reload — catalog comes from the
+                          bootstrap world.
+                        </p>
+                      ) : (
+                        <ul style={{ listStyle: "none", padding: 0, margin: "0 0 16px" }}>
+                          {(world.hire_catalog ?? []).map((row) => (
+                            <li key={row.party} style={{ marginBottom: 6 }}>
+                              <button
+                                type="button"
+                                className="realm-list-btn"
+                                disabled={busy}
+                                onClick={() => void hireNpc(row.party, row.suggested_signing_cents)}
+                              >
+                                {row.role} — {displayParty(row.party)} — {formatUsdFromCents(row.suggested_signing_cents)} bonus
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  ) : null}
 
-                      <SectionTitle>Supply contract (deliver by tick)</SectionTitle>
+                  {tab === "pacts" ? (
+                    <>
+                      <SectionTitle>Supply contracts</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        You are the <strong>supplier</strong>. Buyer must <strong>accept</strong>, then you <strong>fulfill</strong> (goods +
-                        payment) before the deadline tick or the supplier is marked <strong>breached</strong>.
+                        Propose terms: the <strong>buyer accepts</strong>, then the <strong>supplier fulfills</strong> (goods + payment) before the deadline
+                        tick or the supplier is marked <strong>breached</strong>. Use the toggle to play either side.
                       </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 12 }}>
+                        <span className="realm-help" style={{ margin: 0 }}>
+                          You are:
+                        </span>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <input
+                            type="radio"
+                            name="supply-you-are"
+                            checked={supplyYouAre === "supplier"}
+                            onChange={() => setSupplyYouAre("supplier")}
+                          />
+                          Supplier (you deliver)
+                        </label>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <input
+                            type="radio"
+                            name="supply-you-are"
+                            checked={supplyYouAre === "buyer"}
+                            onChange={() => setSupplyYouAre("buyer")}
+                          />
+                          Buyer (you pay on fulfill)
+                        </label>
+                      </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
                         <label className="realm-label">
-                          buyer party
-                          <input
+                          {supplyYouAre === "supplier" ? "Buyer" : "Supplier"}
+                          <select
                             className="realm-input"
-                            value={supplyBuyer}
-                            onChange={(e) => setSupplyBuyer(e.target.value)}
-                            style={{ width: 160 }}
-                          />
+                            value={pactCounterpartyChoices.includes(supplyCounterparty) ? supplyCounterparty : pactCounterpartyChoices[0] ?? ""}
+                            onChange={(e) => setSupplyCounterparty(e.target.value)}
+                            style={{ minWidth: 160 }}
+                          >
+                            {pactCounterpartyChoices.length === 0 ? (
+                              <option value="">—</option>
+                            ) : (
+                              pactCounterpartyChoices.map((p) => (
+                                <option key={p} value={p}>
+                                  {displayParty(p)}
+                                </option>
+                              ))
+                            )}
+                          </select>
                         </label>
                         <label className="realm-label">
-                          material
+                          Material
                           <input
                             className="realm-input"
                             value={supplyMaterial}
@@ -1826,7 +2072,7 @@ export default function HomePage() {
                           />
                         </label>
                         <label className="realm-label">
-                          qty
+                          Qty
                           <input
                             className="realm-input"
                             value={supplyQty}
@@ -1835,16 +2081,17 @@ export default function HomePage() {
                           />
                         </label>
                         <label className="realm-label">
-                          total ¢
+                          Total price
                           <input
                             className="realm-input"
-                            value={supplyTotalCents}
-                            onChange={(e) => setSupplyTotalCents(e.target.value)}
-                            style={{ width: 64 }}
+                            value={supplyTotalDollars}
+                            onChange={(e) => setSupplyTotalDollars(e.target.value)}
+                            style={{ width: 72 }}
+                            placeholder="0.80"
                           />
                         </label>
                         <label className="realm-label">
-                          due in ticks
+                          Deadline (ticks from now)
                           <input
                             className="realm-input"
                             value={supplyDueTicks}
@@ -1853,23 +2100,26 @@ export default function HomePage() {
                           />
                         </label>
                         <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void proposeSupplyContract()}>
-                          Propose supply
+                          Propose contract
                         </button>
                       </div>
 
                       {supplyContractRows.length === 0 ? (
-                        <p className="realm-help">No supply contracts yet.</p>
+                        <p className="realm-help">
+                          No supply contracts yet. <strong>Propose one above</strong> to lock in a future delivery at a fixed total price.
+                        </p>
                       ) : (
                         <table className="realm-table" style={{ marginBottom: 16 }}>
                           <thead>
                             <tr>
                               <th>Id</th>
                               <th>Status</th>
+                              <th>Supplier</th>
                               <th>Buyer</th>
-                              <th>Mat</th>
+                              <th>Goods</th>
                               <th style={{ textAlign: "right" }}>Qty</th>
-                              <th style={{ textAlign: "right" }}>¢</th>
-                              <th style={{ textAlign: "right" }}>Due≤t</th>
+                              <th style={{ textAlign: "right" }}>Total</th>
+                              <th>Deliver by</th>
                               <th style={{ textAlign: "right" }}> </th>
                             </tr>
                           </thead>
@@ -1878,20 +2128,21 @@ export default function HomePage() {
                               <tr key={c.id}>
                                 <td style={{ fontFamily: "var(--realm-mono)", fontSize: 12 }}>{c.id}</td>
                                 <td>{c.status}</td>
-                                <td>{c.buyer}</td>
-                                <td>{c.material}</td>
-                                <td style={{ textAlign: "right" }}>{c.qty}</td>
-                                <td style={{ textAlign: "right" }}>{c.total_price_cents}</td>
-                                <td style={{ textAlign: "right" }}>{c.deliver_by_tick ?? "—"}</td>
+                                <td>{displayParty(c.supplier)}</td>
+                                <td>{displayParty(c.buyer)}</td>
+                                <td>{c.material != null ? displayMaterial(c.material) : "—"}</td>
+                                <td style={{ textAlign: "right" }}>{c.qty ?? "—"}</td>
+                                <td style={{ textAlign: "right" }}>{formatUsdFromCents(c.total_price_cents)}</td>
+                                <td style={{ fontSize: 12 }}>{formatDeliverBy(world.tick, c.deliver_by_tick, msPerSimTick)}</td>
                                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                  {c.status === "proposed" && c.buyer ? (
+                                  {c.status === "proposed" && c.buyer === "player" ? (
                                     <button
                                       type="button"
                                       className="realm-btn realm-btn--ghost realm-btn--sm"
                                       disabled={busy}
-                                      onClick={() => void acceptSupplyContractRow(c.id, String(c.buyer))}
+                                      onClick={() => void acceptSupplyContractRow(c.id)}
                                     >
-                                      Accept (buyer)
+                                      Accept as buyer
                                     </button>
                                   ) : null}
                                   {c.status === "active" && c.supplier === "player" ? (
@@ -1912,28 +2163,32 @@ export default function HomePage() {
                         </table>
                       )}
 
-                      <SectionTitle>Generic memo contract (dev)</SectionTitle>
-                      <p className="realm-help" style={{ marginBottom: 8 }}>
-                        Last memo id: {lastContractId ?? "—"} — honor increments both parties&apos; <code>honored</code> (no goods).
-                      </p>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void proposeMemoContract()}>
-                          Propose memo
-                        </button>
-                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void honorContract()}>
-                          Honor last memo
-                        </button>
-                      </div>
+                      {SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS ? (
+                        <>
+                          <SectionTitle>Generic memo (dev)</SectionTitle>
+                          <p className="realm-help" style={{ marginBottom: 8 }}>
+                            Last memo id: {lastContractId ?? "—"} — honoring increments both parties&apos; <code>honored</code> (no goods).
+                          </p>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void proposeMemoContract()}>
+                              Propose memo
+                            </button>
+                            <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void honorContract()}>
+                              Honor last memo
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
                     </>
                   ) : null}
 
                   {tab === "codex" ? (
-                    <div className="realm-codex-grid">
-                      <p className="realm-help" style={{ marginTop: 0 }}>
-                        Atlas lists what the engine already does versus placeholders and backlog. Live = full panel in this build. Stub = thin slice or
-                        UI-only. Planned = on the road to full Realm (Lua services, multiplayer clock, schematic plots). Extend cards in{" "}
-                        <code>frontierFeatures.ts</code>; new tabs wire through <code>frontierMenu.ts</code> and this page.
-                      </p>
+                    SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS ? (
+                      <div className="realm-codex-grid">
+                        <p className="realm-help" style={{ marginTop: 0 }}>
+                          Atlas is an internal roadmap: what is live in this build versus stub and longer-term plans. Cards with a jump link open the related
+                          panel.
+                        </p>
                       {(
                         [
                           ["live", "Live in this build"],
@@ -1969,26 +2224,33 @@ export default function HomePage() {
                         </div>
                       ))}
                     </div>
-                  ) : null}
+                  ) : (
+                    <p className="realm-help" style={{ marginTop: 0 }}>
+                      Atlas (internal roadmap) is not shown in this build.
+                    </p>
+                  )
+                ) : null}
 
                   {tab === "log" ? (
                     <>
                       <SectionTitle>Action log</SectionTitle>
                       <div className="realm-log">
                         {eventLogReversed.length === 0 ? (
-                          <span className="realm-help">No events yet.</span>
+                          <span className="realm-help">
+                            No events yet. <strong>Run the clock</strong>, trade, produce, or ship — the chronicle records engine outcomes here.
+                          </span>
                         ) : (
                           eventLogReversed.map((e, i) => (
                             <div key={i} className="realm-log-line">
                               <span style={{ opacity: 0.5 }}>t{e.tick}</span>{" "}
-                              <span style={{ opacity: 0.65 }}>[{e.kind}]</span> {e.message}
+                              <span style={{ opacity: 0.65 }}>[{e.kind}]</span> {prettifyChronicleMessage(e.message)}
                             </div>
                           ))
                         )}
                       </div>
                       <SectionTitle>Persistence</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Writes <code>saves/realm_dev.sqlite</code> at repo root (path resolved from the engine package).
+                        Save writes a SQLite snapshot you can reload in this client. Your last save is remembered for the session.
                       </p>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void persistenceSave()}>
@@ -1997,9 +2259,11 @@ export default function HomePage() {
                         <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void persistenceLoad()}>
                           Load snapshot
                         </button>
-                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void devResetWorld()}>
-                          Dev: reset world
-                        </button>
+                        {SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS ? (
+                          <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void devResetWorld()}>
+                            Dev: reset world
+                          </button>
+                        ) : null}
                       </div>
                     </>
                   ) : null}

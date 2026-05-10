@@ -600,8 +600,9 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 6px 8px;
+  min-height: 0;
   border-bottom: 3px solid #000;
   background: #1a1228;
   flex-shrink: 0;
@@ -609,7 +610,8 @@ body::after {
 
 .realm-panel-pop__title {
   font-family: var(--realm-font-display);
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.25;
   letter-spacing: 0.1em;
   color: var(--realm-accent);
   text-shadow: 1px 1px 0 #000;
@@ -617,16 +619,18 @@ body::after {
 
 .realm-panel-pop__close {
   font-family: var(--realm-font);
-  font-size: 28px;
+  font-size: 15px;
   line-height: 1;
-  width: 40px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 2px solid #000;
+  border-radius: 2px;
   background: #2a1f3d;
   color: var(--realm-dim);
   cursor: pointer;
   box-shadow: 2px 2px 0 #000;
+  flex-shrink: 0;
 }
 
 .realm-panel-pop__close:hover {
