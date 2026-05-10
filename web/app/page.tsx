@@ -27,7 +27,7 @@ import {
   FRONTIER_SCENARIO_STORAGE_KEY,
   FRONTIER_SURVEY_COST_CENTS,
 } from "./frontierConstants";
-import { getFrontierMenu, type TabId } from "./frontierMenu";
+import { getFrontierMenu, getFrontierTabCycleOrder, type TabId } from "./frontierMenu";
 import { FrontierCommandPalette } from "./FrontierCommandPalette";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
@@ -338,6 +338,12 @@ export default function HomePage() {
 
   panRef.current = pan;
   mapZoomRef.current = mapZoom;
+  const tabRef = useRef<TabId>(tab);
+  tabRef.current = tab;
+  const paletteOpenRef = useRef(paletteOpen);
+  paletteOpenRef.current = paletteOpen;
+  const onboardingOpenRef = useRef(onboardingOpen);
+  onboardingOpenRef.current = onboardingOpen;
 
   useEffect(() => {
     try {
@@ -440,6 +446,30 @@ export default function HomePage() {
       if (t.isContentEditable) return;
       e.preventDefault();
       setPaletteOpen((o) => !o);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (paletteOpenRef.current || onboardingOpenRef.current) return;
+      if (e.key !== "[" && e.key !== "]") return;
+      const el = e.target as HTMLElement;
+      if (el.closest("[data-realm-no-palette]")) return;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (el.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      const order = getFrontierTabCycleOrder();
+      const cur = tabRef.current;
+      const i = order.indexOf(cur);
+      if (i < 0) return;
+      const di = e.key === "[" ? -1 : 1;
+      const ni = (i + di + order.length) % order.length;
+      setTab(order[ni]);
+      setCommandOpen(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1051,6 +1081,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Memo contract proposed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1095,6 +1126,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Supply contract proposed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1110,6 +1142,7 @@ export default function HomePage() {
       const r = await fetch(`/api/engine/contracts/supply/accept?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Supply contract accepted.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1133,6 +1166,7 @@ export default function HomePage() {
         });
       }
       await load();
+      pushToast({ message: "Supply contract fulfilled.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1167,6 +1201,7 @@ export default function HomePage() {
       const body = (await r.json()) as { contract_id?: string };
       if (body.contract_id) setStubPhase2ContractId(body.contract_id);
       await load();
+      pushToast({ message: "Loan proposed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1187,6 +1222,7 @@ export default function HomePage() {
       const r = await fetch(`/api/engine/contracts/loan/accept?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Loan accepted (principal moved).", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1207,6 +1243,7 @@ export default function HomePage() {
       const r = await fetch(`/api/engine/contracts/loan/repay?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Loan repaid.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1237,6 +1274,7 @@ export default function HomePage() {
       const body = (await r.json()) as { contract_id?: string };
       if (body.contract_id) setStubPhase2ContractId(body.contract_id);
       await load();
+      pushToast({ message: "Equity stub proposed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1257,6 +1295,7 @@ export default function HomePage() {
       const r = await fetch(`/api/engine/contracts/equity/accept?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Equity funding recorded.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1285,6 +1324,7 @@ export default function HomePage() {
       const body = (await r.json()) as { contract_id?: string };
       if (body.contract_id) setStubPhase2ContractId(body.contract_id);
       await load();
+      pushToast({ message: "Service contract proposed.", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1305,6 +1345,7 @@ export default function HomePage() {
       const r = await fetch(`/api/engine/contracts/service/accept?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       await load();
+      pushToast({ message: "Service subscription started (prepaid).", kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1596,7 +1637,7 @@ export default function HomePage() {
                 <button
                   type="button"
                   className="realm-btn realm-btn--ghost realm-btn--sm"
-                  title="Open command palette (Ctrl or Cmd + K)"
+                  title="Open command palette (Ctrl or Cmd + K). Use [ and ] to cycle command tabs when not typing in a field."
                   onClick={() => setPaletteOpen(true)}
                 >
                   Go to…

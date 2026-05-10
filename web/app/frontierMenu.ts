@@ -77,3 +77,16 @@ export function getFrontierPaletteItems(): PaletteItem[] {
     })),
   );
 }
+
+/** Unique tabs in top-nav order — for keyboard cycling `[` / `]`. */
+export function getFrontierTabCycleOrder(): TabId[] {
+  const seen = new Set<TabId>();
+  const out: TabId[] = [];
+  for (const it of getFrontierPaletteItems()) {
+    if (!seen.has(it.tab)) {
+      seen.add(it.tab);
+      out.push(it.tab);
+    }
+  }
+  return out;
+}
