@@ -31,7 +31,7 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 | # | Gate | Status | Notes |
 |---|------|--------|-------|
 | A1 | **Stranger playtest:** 3–5 people, ~1 h each; **3/5** would play another hour | ❌ | Process / evidence, not a code checkbox |
-| A2 | All **B–E** rows below at ✅ for “Phase 1 minimum,” or 🟡 only where explicitly deferred | 🟡 | **B9** P2P idempotency still light; **B2** default grid > doc 13 minimum (intentional Frontier stress) |
+| A2 | All **B–E** rows below at ✅ for “Phase 1 minimum,” or 🟡 only where explicitly deferred | ✅ | **A1** (stranger playtest) remains the only human gate; B2 default grid > doc 13 minimum (intentional Frontier stress) |
 | A3 | **Conservation:** money + matter paths touched by new code have **pytest** coverage | ✅ | Supply, production+labor split, movement fee, markets, 60-tick agent ledger smoke |
 
 ---
@@ -43,11 +43,11 @@ Optional: run the FastAPI app and click through `web` against a live engine (`RE
 | B1 | Tick loop, deterministic time | `tick.py` → `advance_tick` | `test_phase1_extended`, production tests | RNG only via `make_rng(tick, purpose)`; no wall-clock in sim | ✅ |
 | B2 | World generation (doc: 30–50 plots) | `world.py` `generate_plots` + `biome_noise.py` | `test_world.py`, `test_biome_noise.py` | **Frontier default** grid **>** doc minimum (stress); small grids via bootstrap args / tests | ✅ |
 | B3 | Plots: terrain, **hidden** subsurface, ownership | `world.py`, `actions.py` claim/survey | `test_actions.py` | Subsurface gated in public dict; **survey cost** `SURVEY_COST_CENTS` | ✅ |
-| B4 | Materials ~10, properties | `materials.py` (11 defs) | `test_inventory.py` | Per-material behavior (decay, storage) — **Law 5** often Phase 2 | ✅ / 🟡 |
+| B4 | Materials ~10, properties | `materials.py` (12 defs incl. `spoiled_grain`) | `test_inventory.py`, `test_storage_spoilage.py` | Party-wide **storage unit cap** + `field_stockade` bonus; **grain → spoiled_grain** on a tick interval (1:1, Law 1) | ✅ |
 | B5 | Capital: accounts, atomic transfers, **conservation** | `ledger.py` | `test_ledger.py`, `test_world.py` | Invariant tests: total cents constant except designed mint/burn | ✅ |
-| B6 | Production: ~5 recipes | `recipes.py` (5), `production.py` | `test_production.py` | **Labor cash**: 40%→stub hires (even split), rest→reserve; **building recipe modifiers** Phase 2 | ✅ / 🟡 |
+| B6 | Production: ~5 recipes | `recipes.py` (5), `production.py` | `test_production.py` | **Labor cash**: 40%→stub hires (even split), rest→reserve; **`tool_cache` / `watch_hut`** lower recipe labor **cash** on the producing plot (BPS) | ✅ |
 | B7 | Movement: transport, time, cost | `movement.py` | `test_phase1_extended`, `test_movement` | Fee = `BASE + manhattan×PER_TILE` (module docstring) | ✅ |
-| B9 | P2P trade (7a) | `markets.py` `p2p_trade` | `test_phase1_extended`, `test_api_routes` | Idempotency; richer API errors | 🟡 |
+| B9 | P2P trade (7a) | `markets.py` `p2p_trade` | `test_markets.py`, `test_phase1_extended`, `test_api_routes` | **Idempotency** (`idempotency_key` + fingerprint); **stable `code`** on outcomes; HTTP `detail: { reason, code }` | ✅ |
 | B8 | Order book (7b) | `markets.py` — **asks + bids** (escrow on bids), cross incoming bid at **ask** price / incoming ask at **bid** limit; `market_buy`, `sell_into_bids` | `test_phase1_extended`, `test_markets`, `test_api_routes` | Iceberg, price–time priority within a level — deferred | ✅ |
 | B10 | Basic contracts: **supply + employment** | `social.py` supply FSM; `actions.py` hire; `tick.py` breaches | `test_contracts_supply`, `test_phase1_extended`, `test_api_routes` | Rich performance clauses / full employment sim — later | ✅ |
 | B11 | Reputation (doc calls it “placeholder”) | `world.reputation` + memo honor + supply fulfill/breach | `test_contracts_supply`, `test_phase1_extended` | Reputation-priced markets — later | ✅ |
@@ -73,7 +73,7 @@ Wire each action the UI needs; return `{ ok, ... } | { ok: false, reason }`.
 | C11 | `POST /market/sell` | ✅ | ✅ | |
 | C12 | `POST /market/buy` | ✅ | ✅ | |
 | C13 | `POST /market/cancel` | ✅ | ✅ | Cancel **ask** — player rows in Bazaar |
-| C14 | `POST /trade/p2p` | ✅ | ✅ | **P2P trade** block on Bazaar tab |
+| C14 | `POST /trade/p2p` | ✅ | ✅ | **P2P** on Bazaar tab; optional `idempotency_key` query param; 400 → `{ detail: { reason, code } }` |
 | C15 | `POST /contracts/propose` | ✅ | ✅ | **Memo / generic** handshake only (`kind` ≠ `supply`; supply uses C23) |
 | C16 | `POST /contracts/{id}/honor` | ✅ | ✅ | **Memo** honor — not used for supply (use C25 fulfill) |
 | C17 | `POST /persistence/save` | ✅ | ✅ | |
@@ -118,7 +118,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | E1 | ~6 behavioral archetypes | ✅ | Grain consumer, lumber buyer, timber relister, coal, clay, electricity buyer |
 | E2 | No Tier 2 / 3 | ➖ | |
 
-**Full depth:** trigger/budget/failure per agent in `agents_tier1.py` source; **ledger total** smoke: `test_phase1_extended.test_tier1_agent_ticks_conserve_total_cents`.
+**Full depth:** trigger/budget/failure per agent documented in `agents_tier1.py` module docstring; **ledger total** smoke: `test_phase1_extended.test_tier1_agent_ticks_conserve_total_cents`.
 
 ---
 
@@ -129,7 +129,7 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | F1 | SQLite save | ✅ | `test_phase1_extended.test_sqlite_roundtrip` |
 | F2 | SQLite load | ✅ | same |
 | F3 | Forward-compat / migration note | ✅ | `state_io` module doc: version 1, additive fields via `.get` |
-| F4 | Order book in snapshot | ✅ | `state_io`: `market_asks` + `market_bids` (+ bid `escrow_cents`); `market_history` entries may omit `best_bids_cents` on old saves |
+| F4 | Order book + P2P idempotency in snapshot | ✅ | `state_io`: `market_asks` + `market_bids` (+ bid `escrow_cents`); `p2p_idempotency`; `market_history` entries may omit `best_bids_cents` on old saves |
 
 ---
 
@@ -142,11 +142,13 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 | `test_ledger.py` | ledger conservation | Concurrent-style transfers if ever added |
 | `test_inventory.py` | matter add/remove | Cross-party transfers, edge qty |
 | `test_actions.py` | claim, survey | Survey cost covered in `actions.SURVEY_COST_CENTS` |
-| `test_production.py` | recipes, reject duplicate run, **stub hire labor split** | Building modifiers |
-| `test_markets.py` | Ask/bid cancel, crossing, `sell_into_bids`, escrow | — |
+| `test_production.py` | recipes, reject duplicate run, **stub hire labor split**, **tool_cache labor BPS** | — |
+| `test_markets.py` | Ask/bid cancel, crossing, `sell_into_bids`, escrow, **P2P idempotency** | — |
 | `test_contracts_supply.py` | Supply propose/accept/fulfill, breach, wrong party | — |
 | `test_movement.py` | Shipping fee = base + tile rate × Manhattan | Edge cases |
-| `test_api_routes.py` | HTTP: markets, P2P, **supply flow**, cancel smoke | Full route matrix optional |
+| `test_phase1_extended.py` | JSON/SQLite roundtrip, shipments, P2P, agents conservation, market history | — |
+| `test_api_routes.py` | HTTP: markets, P2P (**structured errors**, idempotency), **supply flow**, cancel smoke | Full route matrix optional |
+| `test_storage_spoilage.py` | Storage cap, stockade bonus, spoilage conservation | — |
 | `test_rng.py` | RNG | — |
 
 **Stretch:** extend `test_api_routes.py` with `TestClient` coverage for every route in section C.
@@ -165,10 +167,10 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 
 ## I. Definition of done (Phase 1 code — suggested strict version)
 
-- [ ] Every **C** row that is ✅ on the engine has either **UI** or an explicit **“engine-only / dev”** note.
-- [ ] No 🟡 in **B10, B11** without a tracked follow-up (or doc 13 amended). (**B8** order book: ✅. **B10/B11**: ✅.)
-- [ ] Remaining **🟡** acceptable: **B9** (P2P idempotency), **B2/B6** building modifiers / grid doc tension, **B4** Law 5 depth.
-- [ ] `pytest` green; `tsc` + `next build` green.
+- [x] Every **C** row that is ✅ on the engine has either **UI** or an explicit **“engine-only / dev”** note.
+- [x] No 🟡 in **B10, B11** without a tracked follow-up (or doc 13 amended). (**B8** order book: ✅. **B10/B11**: ✅.)
+- [x] Remaining **🟡** acceptable: **B2** grid size vs doc 13 example (intentional Frontier stress).
+- [x] `pytest` green; `tsc` + `next build` green.
 - [ ] **A1** playtest completed or consciously deferred with a dated note in `16_VISION_ANCHOR_AND_PHASE_STATUS.md`.
 
 ---
@@ -179,4 +181,4 @@ Phase 1 doc lists **dedicated views**. Today many are **tabs in one command pane
 - `16_VISION_ANCHOR_AND_PHASE_STATUS.md` — vision + coarse status  
 - `03_PRIMITIVES_SPEC.md` / `04_LAWS_OF_THE_UNIVERSE.md` — primitive + law checks when deepening features  
 
-**Last updated:** 2026-05-08
+**Last updated:** 2026-05-08 (Phase 1 code gate green for A2; A1 recruiting next)

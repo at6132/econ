@@ -34,28 +34,30 @@ We are **not** in Phase 0 as a coding freeze (spec exists and code is underway).
 
 This is a **status snapshot**, not a promise every box is finished to final quality.
 
+**2026-05-08 — Code side:** Phase 1 **B–E** items in `17_PHASE_1_COMPLETION_CHECKLIST.md` are marked ✅ for the minimum bar (A2). **Next focus:** **A1** stranger playtests (process / evidence, not a repo checkbox).
+
 **Engine core (Phase 1 intent)**
 
 | Item | Status |
 |------|--------|
-| Tick-based deterministic loop | **In progress** — manual tick, deterministic RNG patterns |
-| World generation | **Partial** — Frontier bootstrap; plot grid + coherent biomes; larger than doc’s “30–50 plots” example |
-| Plots (Primitive 1) | **Partial** — terrain, ownership, survey reveals subsurface |
-| Materials (Primitive 2) | **Partial** — starter set; conservation paths tested on key flows |
-| Capital (Primitive 5) | **Partial** — accounts, transfers, conservation enforced |
-| Production (Primitive 6) | **Partial** — recipes, runs, ticks |
-| Movement (Primitive 4) | **Partial** — shipping / transit by tick distance |
-| Order books (Primitive 7b) | **Partial** — asks + buy; not full matching engine |
-| P2P trade (Primitive 7a) | **Stub / partial** |
-| Contracts (Primitive 8) | **Stub** — not full primitive |
-| Reputation | **Stub / partial** — counters exist |
+| Tick-based deterministic loop | **Yes** — `advance_tick`; RNG via `(tick, purpose)` |
+| World generation | **Yes** — Frontier bootstrap; grid larger than doc’s “30–50 plots” example (stress) |
+| Plots (Primitive 1) | **Yes** — terrain, ownership, survey reveals subsurface |
+| Materials (Primitive 2) | **Yes** — starter set + spoilage transform; party storage cap + building bonus |
+| Capital (Primitive 5) | **Yes** — accounts, transfers, conservation enforced |
+| Production (Primitive 6) | **Yes** — recipes, runs, ticks; building labor BPS on plot |
+| Movement (Primitive 4) | **Yes** — shipping / transit by tick distance; deliveries respect storage cap |
+| Order books (Primitive 7b) | **Yes** — asks + bids, escrow, crossing; FIFO at price level by `order_id` |
+| P2P trade (Primitive 7a) | **Yes** — atomic trade + optional idempotency + stable error codes |
+| Contracts (Primitive 8) | **Phase 1 slice** — supply FSM + stub memo / hire |
+| Reputation | **Phase 1 slice** — counters + supply / memo hooks |
 | Code / Lua services (Primitive 9) | **Explicitly later** — Phase 4+ per roadmap |
 
 **AI agents**
 
 | Item | Status |
 |------|--------|
-| Tier 1 behavioral NPC loops | **Partial** — several scripted parties / market stubs |
+| Tier 1 behavioral NPC loops | **Yes** — six loops (see `agents_tier1.py` docstring) |
 | Tier 2 / 3 | **Not Phase 1** |
 
 **Frontend**
@@ -64,14 +66,14 @@ This is a **status snapshot**, not a promise every box is finished to final qual
 |------|--------|
 | Next.js shell | **Yes** |
 | Map | **Yes** — data still plot lattice; **organic SVG mesh** is presentation |
-| Market / logistics / contracts / log UI | **Partial** — Bloomberg-style panels, not all Phase 1 menu items as separate pages |
+| Market / logistics / contracts / log UI | **Yes** — Bloomberg-style panels; tabs cover Phase 1 actions |
 | Schematic plot view | **No** (Phase 2 territory per doc 13) |
 
 **Persistence**
 
 | Item | Status |
 |------|--------|
-| SQLite save / load | **Present** in stack |
+| SQLite save / load | **Yes** — includes order books, `p2p_idempotency`, market history |
 
 ### Phase 1 **test gate** (from doc 13)
 
@@ -97,4 +99,4 @@ This is a **status snapshot**, not a promise every box is finished to final qual
 - `03_PRIMITIVES_SPEC.md`, `04_LAWS_OF_THE_UNIVERSE.md` — technical heart
 - `13_PHASED_TODO.md` — operational phases and gates
 
-**Last updated:** 2026-05-10 (doc 16 introduced)
+**Last updated:** 2026-05-08 (code checklist aligned with doc 17; A1 playtest gate still open)
