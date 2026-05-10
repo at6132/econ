@@ -715,15 +715,35 @@ export default function HomePage() {
     try {
       const seller = p2pRole === "sell" ? "player" : p2pParty.trim();
       const buyer = p2pRole === "sell" ? p2pParty.trim() : "player";
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `p2p-${Date.now()}`;
       const q = new URLSearchParams({
         seller,
         buyer,
         material: p2pMaterial.trim(),
         qty: String(qty),
         total_price_cents: String(total),
+        idempotency_key: idempotencyKey,
       });
       const r = await fetch(`/api/engine/trade/p2p?${q.toString()}`, { method: "POST" });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) {
+        const raw = await r.text();
+        let msg = raw;
+        try {
+          const j = JSON.parse(raw) as { detail?: unknown };
+          const d = j.detail;
+          if (d && typeof d === "object" && d !== null && "reason" in d) {
+            msg = String((d as { reason: string }).reason);
+          } else if (typeof d === "string") {
+            msg = d;
+          }
+        } catch {
+          /* keep raw */
+        }
+        throw new Error(msg);
+      }
       if (grid.w > 0 && grid.h > 0) {
         queueFx({
           kind: "trade",
