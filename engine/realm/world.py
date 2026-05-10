@@ -375,7 +375,13 @@ def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
             scenario_id="bootstrapper",
         )
     if sid == "speculator":
-        return bootstrap_frontier(seed=seed, starting_cash_cents=2_000_000, scenario_id="speculator")
+        return bootstrap_frontier(
+            seed=seed,
+            grid_width=40,
+            grid_height=30,
+            starting_cash_cents=2_000_000,
+            scenario_id="speculator",
+        )
     raise ValueError(f"unknown scenario: {scenario!r}")
 
 
