@@ -126,6 +126,18 @@ type HireCatalogRow = {
   suggested_signing_cents: number;
 };
 
+type SupplyContractDto = {
+  id: string;
+  kind?: string;
+  status?: string;
+  supplier?: string;
+  buyer?: string;
+  material?: string;
+  qty?: number;
+  total_price_cents?: number;
+  deliver_by_tick?: number;
+};
+
 type WorldDto = {
   seed: number;
   tick: number;
@@ -177,6 +189,11 @@ export default function HomePage() {
   const [p2pQty, setP2pQty] = useState("1");
   const [p2pTotalCents, setP2pTotalCents] = useState("50");
   const [lastContractId, setLastContractId] = useState<string | null>(null);
+  const [supplyBuyer, setSupplyBuyer] = useState("t1_consumer");
+  const [supplyMaterial, setSupplyMaterial] = useState("grain");
+  const [supplyQty, setSupplyQty] = useState("2");
+  const [supplyTotalCents, setSupplyTotalCents] = useState("80");
+  const [supplyDueTicks, setSupplyDueTicks] = useState("10");
   const [commandOpen, setCommandOpen] = useState(true);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const [viewportPx, setViewportPx] = useState({ w: 720, h: 520 });
@@ -353,6 +370,13 @@ export default function HomePage() {
     const ev = world?.event_log ?? [];
     return [...ev].reverse();
   }, [world?.event_log]);
+
+  const supplyContractRows = useMemo(() => {
+    if (!world?.contracts) return [];
+    return (world.contracts as unknown[]).filter(
+      (c): c is SupplyContractDto => (c as SupplyContractDto).kind === "supply",
+    );
+  }, [world?.contracts]);
 
   const playerCash =
     world?.balances_cents["cash:player"] != null
@@ -716,11 +740,11 @@ export default function HomePage() {
     }
   }
 
-  async function proposeContract() {
+  async function proposeMemoContract() {
     setBusy(true);
     setError(null);
     try {
-      const q = new URLSearchParams({ party_a: "player", party_b: "npc_grain_vendor", kind: "supply" });
+      const q = new URLSearchParams({ party_a: "player", party_b: "npc_grain_vendor", kind: "memo" });
       const r = await fetch(`/api/engine/contracts/propose?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       const body = (await r.json()) as { contract_id?: string };
@@ -741,9 +765,84 @@ export default function HomePage() {
     }
   }
 
+  async function proposeSupplyContract() {
+    const qty = Number(supplyQty);
+    const total = Number(supplyTotalCents);
+    const due = Number(supplyDueTicks);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(total) || total < 0 || !Number.isFinite(due) || due < 1) {
+      setError("Supply: qty and due ticks must be positive; total price (cents) must be zero or more.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        supplier: "player",
+        buyer: supplyBuyer.trim(),
+        material: supplyMaterial.trim(),
+        qty: String(qty),
+        total_price_cents: String(total),
+        due_in_ticks: String(due),
+      });
+      const r = await fetch(`/api/engine/contracts/supply/propose?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "contract",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+          label: "PACT",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptSupplyContractRow(contractId: string, buyerParty: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ buyer: buyerParty, contract_id: contractId });
+      const r = await fetch(`/api/engine/contracts/supply/accept?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function fulfillSupplyContractRow(contractId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ supplier: "player", contract_id: contractId });
+      const r = await fetch(`/api/engine/contracts/supply/fulfill?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      if (grid.w > 0 && grid.h > 0) {
+        queueFx({
+          kind: "contract",
+          gx: Math.max(0, Math.floor((grid.w - 1) / 2)),
+          gy: Math.max(0, Math.floor((grid.h - 1) / 2)),
+          label: "OK",
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function honorContract() {
     if (!lastContractId) {
-      setError("Propose a contract first.");
+      setError("Propose a memo contract first.");
       return;
     }
     setBusy(true);
@@ -1497,9 +1596,14 @@ export default function HomePage() {
 
                   {tab === "contracts" ? (
                     <>
-                      <SectionTitle>Hire (employment stub)</SectionTitle>
+                      <SectionTitle>Hire (employment)</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
-                        Signing bonus creates an <code>employment</code> contract. Hires so far: {(world.stub_hires ?? []).length}
+                        Signing bonus + employment record. Production runs route{" "}
+                        <strong>40%</strong> of recipe labor cash to hired parties (split evenly); the rest goes to system
+                        reserve as before.
+                      </p>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Hires so far: {(world.stub_hires ?? []).length}
                       </p>
                       <ul style={{ listStyle: "none", padding: 0, margin: "0 0 16px" }}>
                         {(world.hire_catalog ?? []).map((row) => (
@@ -1515,17 +1619,128 @@ export default function HomePage() {
                           </li>
                         ))}
                       </ul>
-                      <SectionTitle>Supply contract (stub)</SectionTitle>
+
+                      <SectionTitle>Supply contract (deliver by tick)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        You are the <strong>supplier</strong>. Buyer must <strong>accept</strong>, then you <strong>fulfill</strong> (goods +
+                        payment) before the deadline tick or the supplier is marked <strong>breached</strong>.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
+                        <label className="realm-label">
+                          buyer party
+                          <input
+                            className="realm-input"
+                            value={supplyBuyer}
+                            onChange={(e) => setSupplyBuyer(e.target.value)}
+                            style={{ width: 160 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          material
+                          <input
+                            className="realm-input"
+                            value={supplyMaterial}
+                            onChange={(e) => setSupplyMaterial(e.target.value)}
+                            style={{ width: 100 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          qty
+                          <input
+                            className="realm-input"
+                            value={supplyQty}
+                            onChange={(e) => setSupplyQty(e.target.value)}
+                            style={{ width: 48 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          total ¢
+                          <input
+                            className="realm-input"
+                            value={supplyTotalCents}
+                            onChange={(e) => setSupplyTotalCents(e.target.value)}
+                            style={{ width: 64 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          due in ticks
+                          <input
+                            className="realm-input"
+                            value={supplyDueTicks}
+                            onChange={(e) => setSupplyDueTicks(e.target.value)}
+                            style={{ width: 72 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void proposeSupplyContract()}>
+                          Propose supply
+                        </button>
+                      </div>
+
+                      {supplyContractRows.length === 0 ? (
+                        <p className="realm-help">No supply contracts yet.</p>
+                      ) : (
+                        <table className="realm-table" style={{ marginBottom: 16 }}>
+                          <thead>
+                            <tr>
+                              <th>Id</th>
+                              <th>Status</th>
+                              <th>Buyer</th>
+                              <th>Mat</th>
+                              <th style={{ textAlign: "right" }}>Qty</th>
+                              <th style={{ textAlign: "right" }}>¢</th>
+                              <th style={{ textAlign: "right" }}>Due≤t</th>
+                              <th style={{ textAlign: "right" }}> </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {supplyContractRows.map((c) => (
+                              <tr key={c.id}>
+                                <td style={{ fontFamily: "var(--realm-mono)", fontSize: 12 }}>{c.id}</td>
+                                <td>{c.status}</td>
+                                <td>{c.buyer}</td>
+                                <td>{c.material}</td>
+                                <td style={{ textAlign: "right" }}>{c.qty}</td>
+                                <td style={{ textAlign: "right" }}>{c.total_price_cents}</td>
+                                <td style={{ textAlign: "right" }}>{c.deliver_by_tick ?? "—"}</td>
+                                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                                  {c.status === "proposed" && c.buyer ? (
+                                    <button
+                                      type="button"
+                                      className="realm-btn realm-btn--ghost realm-btn--sm"
+                                      disabled={busy}
+                                      onClick={() => void acceptSupplyContractRow(c.id, String(c.buyer))}
+                                    >
+                                      Accept (buyer)
+                                    </button>
+                                  ) : null}
+                                  {c.status === "active" && c.supplier === "player" ? (
+                                    <button
+                                      type="button"
+                                      className="realm-btn realm-btn--ghost realm-btn--sm"
+                                      disabled={busy}
+                                      onClick={() => void fulfillSupplyContractRow(c.id)}
+                                      style={{ marginLeft: 6 }}
+                                    >
+                                      Fulfill
+                                    </button>
+                                  ) : null}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      <SectionTitle>Generic memo contract (dev)</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 8 }}>
-                        Last id: {lastContractId ?? "—"} · open supply:{" "}
-                        {(world.contracts ?? []).filter((c) => (c as { status?: string; kind?: string }).status === "open" && (c as { kind?: string }).kind !== "employment").length}
+                        Last memo id: {lastContractId ?? "—"} — honor increments both parties&apos; <code>honored</code> (no goods).
                       </p>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void proposeContract()}>
-                          Propose with vendor
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void proposeMemoContract()}>
+                          Propose memo
                         </button>
                         <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void honorContract()}>
-                          Honor last
+                          Honor last memo
                         </button>
                       </div>
                     </>
