@@ -41,6 +41,7 @@ from realm.contract_stubs import (
     repay_loan_contract,
 )
 from realm.schematic import validate_linear_recipe_chain
+from realm.tick import advance_tick
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
