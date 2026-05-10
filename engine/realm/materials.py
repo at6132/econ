@@ -18,7 +18,7 @@ class MaterialDef:
     spoilage_interval_ticks: int = 0  # 0 = disabled; checked as tick % interval == 0
 
 
-# ~10 starter materials for Phase 1 prototype
+# Phase 1–2 catalog: construction + ores + organics + industry chain (slag models process waste).
 MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("timber"): MaterialDef(
         MaterialId("timber"), "Timber", 450.0, "construction"
@@ -56,6 +56,40 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     ),
     MaterialId("brick"): MaterialDef(
         MaterialId("brick"), "Fired brick", 1900.0, "construction"
+    ),
+    MaterialId("stone"): MaterialDef(MaterialId("stone"), "Crushed stone", 2600.0, "construction"),
+    MaterialId("sand"): MaterialDef(MaterialId("sand"), "Sand", 1600.0, "construction"),
+    MaterialId("limestone"): MaterialDef(
+        MaterialId("limestone"), "Limestone", 2700.0, "construction"
+    ),
+    MaterialId("quicklime"): MaterialDef(
+        MaterialId("quicklime"), "Quicklime", 1200.0, "processed"
+    ),
+    MaterialId("mortar"): MaterialDef(MaterialId("mortar"), "Mortar mix", 2100.0, "construction"),
+    MaterialId("glass"): MaterialDef(MaterialId("glass"), "Glass", 2500.0, "processed"),
+    MaterialId("flour"): MaterialDef(MaterialId("flour"), "Flour", 600.0, "organic"),
+    MaterialId("bread"): MaterialDef(
+        MaterialId("bread"),
+        "Bread",
+        500.0,
+        "organic",
+        spoils_to=MaterialId("spoiled_grain"),
+        spoilage_interval_ticks=14,
+    ),
+    MaterialId("steel_ingot"): MaterialDef(
+        MaterialId("steel_ingot"), "Steel ingot", 7850.0, "processed"
+    ),
+    MaterialId("copper_wire"): MaterialDef(
+        MaterialId("copper_wire"), "Copper wire", 8960.0, "processed"
+    ),
+    MaterialId("charcoal"): MaterialDef(
+        MaterialId("charcoal"), "Charcoal", 400.0, "energy"
+    ),
+    MaterialId("pottery"): MaterialDef(
+        MaterialId("pottery"), "Fired pottery", 2000.0, "construction"
+    ),
+    MaterialId("slag"): MaterialDef(
+        MaterialId("slag"), "Slag / tailings", 2500.0, "processed"
     ),
 }
 
