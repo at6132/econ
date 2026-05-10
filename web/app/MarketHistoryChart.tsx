@@ -13,6 +13,8 @@ import {
 export type MarketHistorySnap = {
   tick: number;
   best_asks_cents: Record<string, number>;
+  /** Highest resting limit bid (¢/u) per material, if any. */
+  best_bids_cents?: Record<string, number>;
 };
 
 const SERIES = ["grain", "timber", "coal", "clay", "electricity"] as const;
@@ -22,8 +24,10 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
   const data = history.map((h) => {
     const row: Record<string, number | undefined> = { tick: h.tick };
     const asks = h.best_asks_cents ?? {};
+    const bids = h.best_bids_cents ?? {};
     for (const m of SERIES) {
       row[m] = asks[m];
+      row[`${m}_bid`] = bids[m];
     }
     return row;
   });
@@ -31,7 +35,7 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
   if (data.length < 1) {
     return (
       <p className="realm-help" style={{ margin: 0 }}>
-        No market snapshots yet. Advance ticks to record best ask prices.
+        No market snapshots yet. Advance ticks to record best ask and bid prices.
       </p>
     );
   }
@@ -64,12 +68,26 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
         <Legend wrapperStyle={{ fontSize: 13, color: "#a894c4", fontFamily: "VT323, ui-monospace, monospace" }} />
         {SERIES.map((m, i) => (
           <Line
-            key={m}
+            key={`ask-${m}`}
             type="monotone"
             dataKey={m}
-            name={m}
+            name={`${m} ask`}
             stroke={COLORS[i]}
             strokeWidth={2}
+            dot={false}
+            connectNulls
+            isAnimationActive={false}
+          />
+        ))}
+        {SERIES.map((m, i) => (
+          <Line
+            key={`bid-${m}`}
+            type="monotone"
+            dataKey={`${m}_bid`}
+            name={`${m} bid`}
+            stroke={COLORS[i]}
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
             dot={false}
             connectNulls
             isAnimationActive={false}

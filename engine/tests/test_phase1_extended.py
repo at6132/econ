@@ -113,9 +113,18 @@ def test_bootstrap_default_plot_count() -> None:
 def test_market_history_after_ticks() -> None:
     w = bootstrap_frontier(seed=1, grid_width=2, grid_height=2)
     assert len(w.market_history) >= 1
+    assert "best_bids_cents" in w.market_history[0]
     advance_tick(w)
     assert len(w.market_history) >= 2
     assert w.market_history[-1]["tick"] == w.tick
+
+
+def test_market_history_records_best_bid() -> None:
+    w = bootstrap_frontier(seed=92, grid_width=2, grid_height=2)
+    assert place_buy_order(w, PartyId("t1_consumer"), MaterialId("electricity"), 1, 144)["ok"] is True
+    advance_tick(w)
+    snap = w.market_history[-1]
+    assert snap.get("best_bids_cents", {}).get("electricity") == 144
 
 
 def test_contract_honor_increments_reputation() -> None:

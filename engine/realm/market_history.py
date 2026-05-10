@@ -1,4 +1,4 @@
-"""Best-ask snapshots per tick for solo market chart (Phase 1 observability)."""
+"""Best ask / best bid snapshots per tick for solo market chart (Phase 1 observability)."""
 
 from __future__ import annotations
 
@@ -8,12 +8,23 @@ _MAX_POINTS = 500
 
 
 def record_market_snapshot(world: World) -> None:
-    """Append lowest limit price per material (if any asks). Call once per tick after tick increments."""
-    best: dict[str, int] = {}
+    """
+    Append per-material best ask (lowest limit sell) and best bid (highest limit buy).
+
+    Call once per tick after tick increments.
+    """
+    best_ask: dict[str, int] = {}
     for mat_key, lst in world.market_asks_by_material.items():
         if not lst:
             continue
-        best[mat_key] = min(o.price_per_unit_cents for o in lst)
-    world.market_history.append({"tick": world.tick, "best_asks_cents": best})
+        best_ask[mat_key] = min(o.price_per_unit_cents for o in lst)
+    best_bid: dict[str, int] = {}
+    for mat_key, lst in world.market_bids_by_material.items():
+        if not lst:
+            continue
+        best_bid[mat_key] = max(b.max_price_per_unit_cents for b in lst)
+    world.market_history.append(
+        {"tick": world.tick, "best_asks_cents": best_ask, "best_bids_cents": best_bid}
+    )
     if len(world.market_history) > _MAX_POINTS:
         world.market_history = world.market_history[-_MAX_POINTS:]
