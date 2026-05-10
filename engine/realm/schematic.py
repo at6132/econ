@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from realm.ids import PartyId
 from realm.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
+from realm.recipe_workshops import plot_has_workshop_for_recipe
 from realm.recipes import recipe_public_list
 from realm.world import Plot, World
 
@@ -38,6 +39,13 @@ def validate_linear_recipe_chain(
             errors.append(
                 f"Step {i + 1} — {display}: not available on this plot "
                 f"(terrain {plot.terrain.value}).",
+            )
+            break
+        if not plot_has_workshop_for_recipe(world, party, plot.plot_id, rid):
+            display = str(r.get("display_name", rid))
+            req = str(r.get("requires_building_id", ""))
+            errors.append(
+                f"Step {i + 1} — {display}: needs workshop “{req}” built on this plot.",
             )
             break
         display = str(r.get("display_name", rid))

@@ -11,7 +11,7 @@ from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, sta
 from realm.buildings import build_on_plot
 from realm.decay import maintain_building
 from realm.ids import MaterialId, PartyId, PlotId
-from realm.recipe_sites import recipe_ids_for_surveyed_terrain
+from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.intel import purchase_market_intel
 from realm.markets import (
     cancel_buy_order,
@@ -121,7 +121,7 @@ def post_survey(plot_id: str, party: Annotated[str, Query()] = "player") -> dict
     plot = _world.plots.get(pid)
     if plot is not None:
         out["terrain"] = plot.terrain.value
-        out["recipe_ids"] = recipe_ids_for_surveyed_terrain(plot.terrain, surveyed=plot.surveyed)
+        out["recipe_ids"] = recipe_ids_on_plot_for_owner(_world, plot)
     return out
 
 
@@ -152,8 +152,9 @@ def post_build(
     plot_id: str,
     building_id: Annotated[str, Query()],
     party: Annotated[str, Query()] = "player",
+    build_mode: Annotated[str | None, Query()] = None,
 ) -> dict:
-    r = build_on_plot(_world, PartyId(party), PlotId(plot_id), building_id)
+    r = build_on_plot(_world, PartyId(party), PlotId(plot_id), building_id, build_mode=build_mode)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)

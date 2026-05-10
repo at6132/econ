@@ -7,6 +7,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.recipe_workshops import plot_has_workshop_for_recipe
 from realm.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
@@ -128,6 +129,9 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         return {"ok": False, "reason": "unknown recipe"}
     if not recipe_allowed_on_terrain(plot.terrain, recipe_id):
         return {"ok": False, "reason": "recipe not available on this plot"}
+    if not plot_has_workshop_for_recipe(world, party, plot_id, recipe_id):
+        req = recipe.requires_building_id
+        return {"ok": False, "reason": f"missing workshop: {req}"}
     labor_bps = _labor_bps_for_plot(world, party, plot_id)
     labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)

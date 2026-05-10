@@ -12,7 +12,6 @@ from realm.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_ac
 from realm.materials import MaterialId
 from realm.recipes import recipe_public_list
 from realm.biome_noise import terrain_for_cell
-from realm.recipe_sites import recipe_ids_for_surveyed_terrain
 from realm.rng import make_rng
 from realm.terrain import Terrain
 
@@ -384,6 +383,7 @@ def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
     from realm.buildings import building_catalog_public
     from realm.markets import market_book_public, market_bids_public
+    from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 
     plots_out: list[dict] = []
     for p in world.plots.values():
@@ -402,7 +402,7 @@ def world_public_dict(world: World) -> dict:
                 "clay_grade": p.subsurface.clay_grade,
                 "coal_grade": p.subsurface.coal_grade,
             }
-            entry["recipe_ids"] = recipe_ids_for_surveyed_terrain(p.terrain, surveyed=p.surveyed)
+            entry["recipe_ids"] = recipe_ids_on_plot_for_owner(world, p)
         plots_out.append(entry)
     balances = {str(k): v for k, v in world.ledger.snapshot().items()}
     inv = {

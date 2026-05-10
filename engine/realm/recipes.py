@@ -16,6 +16,7 @@ class Recipe:
     outputs: dict[MaterialId, int]
     duration_ticks: int
     labor_cents: int  # paid to system reserve at production start (wage reserve)
+    requires_building_id: str  # plot must have this building_id (effective) to run recipe
 
 
 RECIPES: Final[Mapping[str, Recipe]] = {
@@ -26,6 +27,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("lumber"): 1},
         duration_ticks=2,
         labor_cents=5_00,
+        requires_building_id="wood_shop",
     ),
     "smelt_iron": Recipe(
         recipe_id="smelt_iron",
@@ -38,6 +40,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("iron_ingot"): 1},
         duration_ticks=3,
         labor_cents=8_00,
+        requires_building_id="foundry",
     ),
     "smelt_copper": Recipe(
         recipe_id="smelt_copper",
@@ -50,6 +53,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("copper_ingot"): 1},
         duration_ticks=3,
         labor_cents=8_00,
+        requires_building_id="foundry",
     ),
     "coal_generator": Recipe(
         recipe_id="coal_generator",
@@ -58,6 +62,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("electricity"): 2},
         duration_ticks=2,
         labor_cents=2_00,
+        requires_building_id="power_shed",
     ),
     "kiln_brick": Recipe(
         recipe_id="kiln_brick",
@@ -70,6 +75,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("brick"): 2},
         duration_ticks=4,
         labor_cents=6_00,
+        requires_building_id="kiln_shed",
     ),
     "mine_stone": Recipe(
         recipe_id="mine_stone",
@@ -78,6 +84,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("stone"): 2},
         duration_ticks=2,
         labor_cents=3_00,
+        requires_building_id="stone_works",
     ),
     "wash_sand": Recipe(
         recipe_id="wash_sand",
@@ -86,6 +93,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("sand"): 3},
         duration_ticks=2,
         labor_cents=3_00,
+        requires_building_id="stone_works",
     ),
     "crush_limestone": Recipe(
         recipe_id="crush_limestone",
@@ -94,6 +102,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("limestone"): 2, MaterialId("slag"): 2},
         duration_ticks=3,
         labor_cents=4_00,
+        requires_building_id="stone_works",
     ),
     "lime_burn": Recipe(
         recipe_id="lime_burn",
@@ -106,6 +115,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("quicklime"): 1, MaterialId("slag"): 3},
         duration_ticks=4,
         labor_cents=6_00,
+        requires_building_id="stone_works",
     ),
     "mortar_mix": Recipe(
         recipe_id="mortar_mix",
@@ -118,6 +128,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("mortar"): 2, MaterialId("slag"): 2},
         duration_ticks=2,
         labor_cents=3_00,
+        requires_building_id="stone_works",
     ),
     "glass_blow": Recipe(
         recipe_id="glass_blow",
@@ -130,6 +141,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("glass"): 1, MaterialId("slag"): 3},
         duration_ticks=4,
         labor_cents=7_00,
+        requires_building_id="stone_works",
     ),
     "steel_alloy": Recipe(
         recipe_id="steel_alloy",
@@ -142,6 +154,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("steel_ingot"): 1, MaterialId("slag"): 2},
         duration_ticks=4,
         labor_cents=10_00,
+        requires_building_id="foundry",
     ),
     "wire_draw": Recipe(
         recipe_id="wire_draw",
@@ -150,6 +163,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("copper_wire"): 2},
         duration_ticks=2,
         labor_cents=4_00,
+        requires_building_id="foundry",
     ),
     "charcoal_burn": Recipe(
         recipe_id="charcoal_burn",
@@ -158,6 +172,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("charcoal"): 2, MaterialId("slag"): 1},
         duration_ticks=5,
         labor_cents=2_00,
+        requires_building_id="wood_shop",
     ),
     "pottery_kiln": Recipe(
         recipe_id="pottery_kiln",
@@ -170,6 +185,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("pottery"): 2, MaterialId("slag"): 2},
         duration_ticks=4,
         labor_cents=5_00,
+        requires_building_id="kiln_shed",
     ),
     "mill_flour": Recipe(
         recipe_id="mill_flour",
@@ -178,6 +194,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("flour"): 4},
         duration_ticks=2,
         labor_cents=3_00,
+        requires_building_id="gristmill",
     ),
     "bake_bread": Recipe(
         recipe_id="bake_bread",
@@ -186,6 +203,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("bread"): 4},
         duration_ticks=3,
         labor_cents=4_00,
+        requires_building_id="gristmill",
     ),
     "twist_rope": Recipe(
         recipe_id="twist_rope",
@@ -194,6 +212,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("rope"): 3},
         duration_ticks=2,
         labor_cents=2_00,
+        requires_building_id="wood_shop",
     ),
     "build_ladder": Recipe(
         recipe_id="build_ladder",
@@ -206,6 +225,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         outputs={MaterialId("ladder"): 1},
         duration_ticks=3,
         labor_cents=6_00,
+        requires_building_id="wood_shop",
     ),
 }
 
@@ -221,6 +241,7 @@ def recipe_public_list() -> list[dict]:
                 "outputs": {str(k): v for k, v in r.outputs.items()},
                 "duration_ticks": r.duration_ticks,
                 "labor_cents": r.labor_cents,
+                "requires_building_id": r.requires_building_id,
             }
         )
     return out

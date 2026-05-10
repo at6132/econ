@@ -1,59 +1,181 @@
-"""Plot buildings — Phase 1: pay cash, record on plot; storage + recipe labor modifiers where implemented."""
+"""Plot buildings — cash + (for workshops) contractor paths: self-supply vs turnkey procurement."""
 
 from __future__ import annotations
 
+from typing import Any
+
 from realm.decay import BUILDING_CONDITION_FULL_BPS
 from realm.event_log import log_event
-from realm.ids import PartyId, PlotId
+from realm.ids import MaterialId, PartyId, PlotId
+from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.world import World
 
-# Small costs so early game stays liquid (Phase 1 ugly-but-functional).
-BUILDINGS: dict[str, dict[str, int | str]] = {
+# ``kind``:
+# - ``simple``: single ``cost_cents`` cash to reserve (legacy sheds).
+# - ``contracted``: self path pays shell + contractor fee + removes ``self_materials`` from player;
+#   turnkey pays ``turnkey_total_cents`` only (vendor procures stock — fictionally more expensive).
+BUILDINGS: dict[str, dict[str, Any]] = {
     "field_stockade": {
+        "kind": "simple",
         "label": "Field stockade (+5k storage units)",
         "cost_cents": 25_000,
     },
     "tool_cache": {
+        "kind": "simple",
         "label": "Tool cache (−10% recipe labor cash on this plot)",
         "cost_cents": 50_000,
     },
     "watch_hut": {
+        "kind": "simple",
         "label": "Watch hut (−3% recipe labor cash on this plot)",
         "cost_cents": 15_000,
+    },
+    "power_shed": {
+        "kind": "contracted",
+        "label": "Power shed (generator pad + intertie)",
+        "self_shell_cents": 30_000,
+        "self_contractor_fee_cents": 12_000,
+        "self_materials": {"timber": 4, "lumber": 2},
+        "turnkey_total_cents": 78_000,
+    },
+    "wood_shop": {
+        "kind": "contracted",
+        "label": "Wood shop (saw line, cordage bench, charcoal retort)",
+        "self_shell_cents": 48_000,
+        "self_contractor_fee_cents": 20_000,
+        "self_materials": {"timber": 6, "lumber": 2, "coal": 2},
+        "turnkey_total_cents": 118_000,
+    },
+    "foundry": {
+        "kind": "contracted",
+        "label": "Foundry (smelt, steel, wire draw)",
+        "self_shell_cents": 95_000,
+        "self_contractor_fee_cents": 42_000,
+        "self_materials": {"brick": 6, "stone": 4, "coal": 4},
+        "turnkey_total_cents": 215_000,
+    },
+    "kiln_shed": {
+        "kind": "contracted",
+        "label": "Kiln shed (brick + pottery)",
+        "self_shell_cents": 55_000,
+        "self_contractor_fee_cents": 22_000,
+        "self_materials": {"clay": 8, "brick": 2, "coal": 2},
+        "turnkey_total_cents": 128_000,
+    },
+    "stone_works": {
+        "kind": "contracted",
+        "label": "Stone works (crush, lime, mortar, glass)",
+        "self_shell_cents": 50_000,
+        "self_contractor_fee_cents": 20_000,
+        "self_materials": {"stone": 6, "timber": 3, "coal": 2},
+        "turnkey_total_cents": 112_000,
+    },
+    "gristmill": {
+        "kind": "contracted",
+        "label": "Gristmill & bakehouse",
+        "self_shell_cents": 40_000,
+        "self_contractor_fee_cents": 16_000,
+        "self_materials": {"grain": 6, "lumber": 2, "brick": 2},
+        "turnkey_total_cents": 96_000,
     },
 }
 
 
 def building_catalog_public() -> list[dict]:
-    return [
-        {"id": bid, "label": str(spec["label"]), "cost_cents": int(spec["cost_cents"])}
-        for bid, spec in sorted(BUILDINGS.items(), key=lambda x: x[0])
-    ]
+    out: list[dict] = []
+    for bid, spec in sorted(BUILDINGS.items(), key=lambda x: x[0]):
+        kind = str(spec.get("kind", "simple"))
+        if kind == "simple":
+            out.append(
+                {
+                    "id": bid,
+                    "label": str(spec["label"]),
+                    "kind": "simple",
+                    "cost_cents": int(spec["cost_cents"]),
+                }
+            )
+        elif kind == "contracted":
+            mats = spec.get("self_materials") or {}
+            out.append(
+                {
+                    "id": bid,
+                    "label": str(spec["label"]),
+                    "kind": "contracted",
+                    "self_shell_cents": int(spec["self_shell_cents"]),
+                    "self_contractor_fee_cents": int(spec["self_contractor_fee_cents"]),
+                    "self_materials": {str(k): int(v) for k, v in mats.items()},
+                    "turnkey_total_cents": int(spec["turnkey_total_cents"]),
+                }
+            )
+    return out
 
 
-def build_on_plot(world: World, party: PartyId, plot_id: PlotId, building_id: str) -> dict:
-    """Spend cash; attach a building record to an owned plot (no recipe unlock yet)."""
+def build_on_plot(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    building_id: str,
+    build_mode: str | None = None,
+) -> dict:
+    """
+    Place a structure: simple buildings pay ``cost_cents``; contracted workshops need
+    ``build_mode`` ∈ {``self_contract``, ``turnkey``}.
+    """
     spec = BUILDINGS.get(building_id)
     if spec is None:
         return {"ok": False, "reason": "unknown building"}
-    cost = int(spec["cost_cents"])
+    kind = str(spec.get("kind", "simple"))
     plot = world.plots.get(plot_id)
     if plot is None:
         return {"ok": False, "reason": "unknown plot"}
     if plot.owner != party:
         return {"ok": False, "reason": "not your plot"}
     cash = party_cash_account(party)
-    if world.ledger.balance(cash) < cost:
-        return {"ok": False, "reason": "insufficient cash"}
+    label = str(spec["label"])
+    total_cents: int
+    mode_out: str
+
+    if kind == "simple":
+        total_cents = int(spec["cost_cents"])
+        mode_out = "simple"
+        if world.ledger.balance(cash) < total_cents:
+            return {"ok": False, "reason": "insufficient cash"}
+    else:
+        if build_mode not in ("self_contract", "turnkey"):
+            return {"ok": False, "reason": "build_mode required: self_contract or turnkey"}
+        shell = int(spec["self_shell_cents"])
+        fee = int(spec["self_contractor_fee_cents"])
+        mats_raw = spec.get("self_materials") or {}
+        mats: dict[str, int] = {str(k): int(v) for k, v in mats_raw.items()}
+        turnkey = int(spec["turnkey_total_cents"])
+        if build_mode == "turnkey":
+            total_cents = turnkey
+            mode_out = "turnkey"
+            if world.ledger.balance(cash) < total_cents:
+                return {"ok": False, "reason": "insufficient cash"}
+        else:
+            total_cents = shell + fee
+            mode_out = "self_contract"
+            if world.ledger.balance(cash) < total_cents:
+                return {"ok": False, "reason": "insufficient cash"}
+            for mid_s, qty in mats.items():
+                mid = MaterialId(mid_s)
+                if world.inventory.qty(party, mid) < qty:
+                    return {"ok": False, "reason": f"insufficient {mid_s} for contractor build"}
+            for mid_s, qty in mats.items():
+                mid = MaterialId(mid_s)
+                rm = world.inventory.remove(party, mid, qty)
+                if isinstance(rm, MatterErr):
+                    return {"ok": False, "reason": rm.reason}
+
     pay = world.ledger.transfer(
         debit=cash,
         credit=system_reserve_account(),
-        amount_cents=cost,
+        amount_cents=total_cents,
     )
     if isinstance(pay, MoneyErr):
         return {"ok": False, "reason": pay.reason}
-    label = str(spec["label"])
     world.next_building_instance_seq += 1
     instance_id = f"b{world.next_building_instance_seq:06d}"
     world.plot_buildings.append(
@@ -64,16 +186,18 @@ def build_on_plot(world: World, party: PartyId, plot_id: PlotId, building_id: st
             "party": str(party),
             "building_id": building_id,
             "label": label,
-            "cost_cents": cost,
+            "cost_cents": total_cents,
+            "build_mode": mode_out,
         }
     )
     log_event(
         world,
         "build",
-        f"{party} built {label} on {plot_id} for ${cost / 100:.2f}",
+        f"{party} built {label} on {plot_id} ({mode_out}) for ${total_cents / 100:.2f}",
         party=str(party),
         plot_id=str(plot_id),
         building_id=building_id,
-        cost_cents=cost,
+        cost_cents=total_cents,
+        build_mode=mode_out,
     )
-    return {"ok": True, "building_id": building_id}
+    return {"ok": True, "building_id": building_id, "instance_id": instance_id, "build_mode": mode_out}
