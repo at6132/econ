@@ -30,6 +30,8 @@ import { getFrontierMenu, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
+import { PlotSchematicPanel } from "./PlotSchematicPanel";
+import type { SchematicRecipe } from "./plotSchematic";
 import { buildOrganicMesh } from "./mapOrganicMesh";
 import { computeStarterHintPlotIds } from "./mapStarterHints";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
@@ -528,6 +530,14 @@ export default function HomePage() {
         .sort((a, b) => a.id.localeCompare(b.id)),
     [world?.plots],
   );
+
+  const schematicEligiblePlots = useMemo(() => {
+    if (!world?.plots) return [];
+    return world.plots
+      .filter((p) => p.owner === "player" && p.surveyed)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((p) => ({ id: p.id, shortLabel: `${p.id} · ${p.terrain}` }));
+  }, [world?.plots]);
 
   const shipPreview = useMemo(() => {
     if (!world) return null;
@@ -2395,6 +2405,20 @@ export default function HomePage() {
                           Pick two different owned plots to see fee and arrival time.
                         </p>
                       )}
+                    </>
+                  ) : null}
+
+                  {tab === "schematic" ? (
+                    <>
+                      <SectionTitle>Plot schematic</SectionTitle>
+                      <PlotSchematicPanel
+                        recipes={(world.recipes ?? []) as SchematicRecipe[]}
+                        playerInventory={playerInv}
+                        eligiblePlots={schematicEligiblePlots}
+                        selectedPlotId={selectedPlotId}
+                        onSelectPlot={setSelectedPlotId}
+                        disabled={busy}
+                      />
                     </>
                   ) : null}
 

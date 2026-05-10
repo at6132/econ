@@ -3,7 +3,7 @@
  */
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 
-export type TabId = "world" | "market" | "logistics" | "hire" | "pacts" | "log" | "codex";
+export type TabId = "world" | "schematic" | "market" | "logistics" | "hire" | "pacts" | "log" | "codex";
 
 export type MenuItem = {
   id: string;
@@ -36,7 +36,10 @@ export function getFrontierMenu(): MenuGroup[] {
     {
       id: "field",
       label: "Field ops",
-      items: [{ id: "territory", label: "Territory & works", tab: "world", hint: "Map, recipes, builds" }],
+      items: [
+        { id: "territory", label: "Territory & works", tab: "world", hint: "Map, recipes, builds" },
+        { id: "schematic", label: "Schematic", tab: "schematic", hint: "Drag recipe chain, validate flow" },
+      ],
     },
     {
       id: "commerce",

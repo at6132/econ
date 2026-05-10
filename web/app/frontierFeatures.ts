@@ -145,10 +145,11 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
   },
   {
     id: "schematic_plot",
-    title: "Plot schematic view",
-    detail: "Flowchart of boxes/arrows per realm_docs plot view.",
-    lane: "planned",
-    jumpTab: "world",
+    title: "Plot schematic (recipe chain)",
+    detail:
+      "Per surveyed plot: build an ordered recipe pipeline with drag-reorder; validate against your current inventory as if runs complete in sequence (solo planning aid).",
+    lane: "live",
+    jumpTab: "schematic",
   },
   {
     id: "lua_services",
