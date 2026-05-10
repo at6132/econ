@@ -31,6 +31,14 @@ class Inventory:
     def qty(self, party: PartyId, material: MaterialId) -> int:
         return self.stock.get(party, {}).get(material, 0)
 
+    def ensure_party_bucket(self, party: PartyId) -> None:
+        """Ensure ``party`` exists in ``stock`` (empty dict). Used when rehydrating saves."""
+        self._ensure_party(party)
+
+    def stock_for_party(self, party: PartyId) -> dict[MaterialId, int]:
+        """Shallow copy of ``party``'s holdings; empty if no bucket has been created yet."""
+        return dict(self.stock.get(party, {}))
+
     def _ensure_party(self, party: PartyId) -> dict[MaterialId, int]:
         if party not in self.stock:
             self.stock[party] = {}

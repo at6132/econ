@@ -9,7 +9,7 @@ from realm.ids import MaterialId, PartyId, PlotId
 from realm.movement import dispatch_shipment
 from realm.markets import market_buy, p2p_trade, place_buy_order, place_sell_order
 from realm.persistence import load_snapshot, save_snapshot
-from realm.state_io import dumps_json, loads_json
+from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.tick import advance_tick
 from realm.social import honor_contract_stub, propose_contract_stub
 from realm.world import bootstrap_frontier
@@ -20,6 +20,7 @@ def test_json_roundtrip_preserves_new_world_fields() -> None:
     w.market_intel_expires_tick = 777
     w.next_building_instance_seq = 42
     w.scenario_id = "speculator"
+    assert dump_world(w)["version"] == SNAPSHOT_VERSION
     blob = dumps_json(w)
     w2 = loads_json(blob)
     assert w2.market_intel_expires_tick == 777

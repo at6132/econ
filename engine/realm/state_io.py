@@ -1,12 +1,15 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``1``. Nested dicts may gain optional keys in newer builds;
-``load_world`` uses defaults via ``dict.get`` so slightly older SQLite/JSON rows remain loadable
-when new fields are additive (e.g. ``market_bids``, ``best_bids_cents`` in history).
+Snapshot ``version`` is ``2`` (``1`` still loads). Nested dict/list values are deep-copied on dump
+so JSON round-trips do not share mutable subgraphs with the live ``World``.
+
+``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
+fields are additive (e.g. ``market_bids``, ``best_bids_cents`` in history).
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -23,6 +26,21 @@ from realm.world import (
     generate_plots,
 )
 from realm.terrain import Terrain
+
+# Bump when serialized shape or semantics change; loaders accept older versions they understand.
+SNAPSHOT_VERSION = 2
+
+
+def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
+    m = 0
+    for row in rows:
+        sid = str(row.get("instance_id") or "")
+        if len(sid) == 7 and sid.startswith("b"):
+            try:
+                m = max(m, int(sid[1:], 10))
+            except ValueError:
+                pass
+    return m
 
 
 def dump_world(world: World) -> dict[str, Any]:
@@ -73,10 +91,13 @@ def dump_world(world: World) -> dict[str, Any]:
             for b in lst
         ]
     inv: dict[str, dict[str, int]] = {}
-    for party, mats in world.inventory.snapshot().items():
+    for party in sorted(world.parties, key=str):
+        if party not in world.inventory.stock:
+            continue
+        mats = world.inventory.stock_for_party(party)
         inv[str(party)] = {str(m): q for m, q in mats.items()}
     return {
-        "version": 1,
+        "version": SNAPSHOT_VERSION,
         "seed": world.seed,
         "tick": world.tick,
         "next_production_seq": world.next_production_seq,
@@ -110,13 +131,13 @@ def dump_world(world: World) -> dict[str, Any]:
         ],
         "market_asks": asks,
         "market_bids": bids,
-        "reputation": dict(world.reputation),
-        "contracts": list(world.contracts),
-        "event_log": list(world.event_log),
-        "plot_buildings": list(world.plot_buildings),
-        "stub_hires": list(world.stub_hires),
-        "market_history": list(world.market_history),
-        "p2p_idempotency": {str(k): dict(v) for k, v in world.p2p_idempotency.items()},
+        "reputation": copy.deepcopy(dict(world.reputation)),
+        "contracts": [copy.deepcopy(c) for c in world.contracts],
+        "event_log": [copy.deepcopy(e) for e in world.event_log],
+        "plot_buildings": [copy.deepcopy(b) for b in world.plot_buildings],
+        "stub_hires": [copy.deepcopy(h) for h in world.stub_hires],
+        "market_history": [copy.deepcopy(h) for h in world.market_history],
+        "p2p_idempotency": {str(k): copy.deepcopy(dict(v)) for k, v in world.p2p_idempotency.items()},
         "scenario_id": world.scenario_id,
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "next_building_instance_seq": world.next_building_instance_seq,
@@ -124,8 +145,9 @@ def dump_world(world: World) -> dict[str, Any]:
 
 
 def load_world(d: dict[str, Any]) -> World:
-    if d.get("version") != 1:
-        raise ValueError("unsupported snapshot version")
+    ver = d.get("version", 1)
+    if ver not in (1, 2):
+        raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
     height = max(int(p["y"]) for p in d["plots"].values()) + 1
@@ -151,8 +173,11 @@ def load_world(d: dict[str, Any]) -> World:
     inv = Inventory()
     for ps, mats in d["inventory"].items():
         party = PartyId(ps)
-        for ms, q in mats.items():
-            inv.add(party, MaterialId(ms), int(q))
+        if not mats:
+            inv.ensure_party_bucket(party)
+        else:
+            for ms, q in mats.items():
+                inv.add(party, MaterialId(ms), int(q))
     parties = {PartyId(p) for p in d["parties"]}
     active: list[ActiveProduction] = []
     for row in d.get("active_production", []):
@@ -208,16 +233,20 @@ def load_world(d: dict[str, Any]) -> World:
             )
             for r in rows
         ]
-    next_bseq = int(d.get("next_building_instance_seq", 0))
-    plot_buildings_m: list[dict] = []
+    saved_bseq = int(d.get("next_building_instance_seq", 0))
+    plot_buildings_m: list[dict[str, Any]] = []
     for raw in d.get("plot_buildings", []):
-        row = dict(raw)
-        if not row.get("instance_id"):
-            next_bseq += 1
-            row["instance_id"] = f"b{next_bseq:06d}"
+        plot_buildings_m.append(copy.deepcopy(dict(raw)))
+    for row in plot_buildings_m:
         if row.get("condition_bps") is None:
             row["condition_bps"] = BUILDING_CONDITION_FULL_BPS
-        plot_buildings_m.append(row)
+    m_from_ids = _max_building_instance_seq_from_rows(plot_buildings_m)
+    assign_counter = max(saved_bseq, m_from_ids)
+    for row in plot_buildings_m:
+        if not row.get("instance_id"):
+            assign_counter += 1
+            row["instance_id"] = f"b{assign_counter:06d}"
+    next_bseq = max(saved_bseq, _max_building_instance_seq_from_rows(plot_buildings_m), assign_counter)
     world = World(
         seed=seed,
         tick=int(d["tick"]),
@@ -232,14 +261,14 @@ def load_world(d: dict[str, Any]) -> World:
         market_asks_by_material=asks_map,
         market_bids_by_material=bids_map,
         next_order_seq=int(d.get("next_order_seq", 0)),
-        reputation=dict(d.get("reputation", {})),
-        contracts=list(d.get("contracts", [])),
+        reputation=copy.deepcopy(dict(d.get("reputation", {}))),
+        contracts=[copy.deepcopy(c) for c in d.get("contracts", [])],
         next_contract_seq=int(d.get("next_contract_seq", 0)),
-        event_log=list(d.get("event_log", [])),
+        event_log=[copy.deepcopy(e) for e in d.get("event_log", [])],
         plot_buildings=plot_buildings_m,
-        stub_hires=list(d.get("stub_hires", [])),
-        market_history=list(d.get("market_history", [])),
-        p2p_idempotency={str(k): dict(v) for k, v in d.get("p2p_idempotency", {}).items()},
+        stub_hires=[copy.deepcopy(h) for h in d.get("stub_hires", [])],
+        market_history=[copy.deepcopy(h) for h in d.get("market_history", [])],
+        p2p_idempotency={str(k): copy.deepcopy(v) for k, v in d.get("p2p_idempotency", {}).items()},
         scenario_id=str(d.get("scenario_id", "frontier")),
         market_intel_expires_tick=int(d.get("market_intel_expires_tick", 0)),
         next_building_instance_seq=next_bseq,
