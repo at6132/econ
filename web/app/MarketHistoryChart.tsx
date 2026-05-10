@@ -66,7 +66,14 @@ export function MarketHistoryChart({ history, symbol }: Props) {
     );
   }
 
+  const last = data[data.length - 1];
+  const lastAsk = last && Number.isFinite(last.ask) ? last.ask : null;
+  const lastBid = last && Number.isFinite(last.bid) ? last.bid : null;
+  const spreadCents =
+    lastAsk != null && lastBid != null && lastAsk >= lastBid ? lastAsk - lastBid : null;
+
   return (
+    <div>
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 4 }}>
         <CartesianGrid
@@ -128,5 +135,29 @@ export function MarketHistoryChart({ history, symbol }: Props) {
         />
       </LineChart>
     </ResponsiveContainer>
+    {last ? (
+      <p className="realm-help" style={{ margin: "8px 0 0", fontSize: 12 }}>
+        Last snapshot tick <strong>{last.tick}</strong>
+        {spreadCents != null ? (
+          <>
+            {" "}
+            · spread <strong>${(spreadCents / 100).toFixed(2)}</strong>
+          </>
+        ) : null}
+        {lastAsk != null ? (
+          <>
+            {" "}
+            · ask <strong>${(lastAsk / 100).toFixed(2)}</strong>
+          </>
+        ) : null}
+        {lastBid != null ? (
+          <>
+            {" "}
+            · bid <strong>${(lastBid / 100).toFixed(2)}</strong>
+          </>
+        ) : null}
+      </p>
+    ) : null}
+    </div>
   );
 }
