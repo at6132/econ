@@ -47,8 +47,8 @@ export function MarketHistoryChart({ history, symbol }: Props) {
     return (
       <div className="realm-chart-empty" role="status">
         <p className="realm-help" style={{ margin: 0 }}>
-          No market snapshots yet. The chart fills as the simulation runs — each tick records best bid and ask for watched
-          materials.
+          No market snapshots yet. Advance the simulation (header <strong>Run</strong> / speed controls) so ticks record best bid and ask for watched materials —
+          the chart will fill in here.
         </p>
       </div>
     );
@@ -85,6 +85,7 @@ export function MarketHistoryChart({ history, symbol }: Props) {
           dataKey="tick"
           tick={{ fontSize: 11, fill: "#a894c4" }}
           stroke="rgba(107, 90, 138, 0.5)"
+          label={{ value: "World tick", position: "insideBottom", offset: -4, fill: "#8a7a98", fontSize: 12 }}
         />
         <YAxis
           tick={{ fontSize: 11, fill: "#a894c4" }}
@@ -92,6 +93,7 @@ export function MarketHistoryChart({ history, symbol }: Props) {
           domain={["auto", "auto"]}
           stroke="rgba(107, 90, 138, 0.5)"
           tickFormatter={(v) => `$${(Number(v) / 100).toFixed(2)}`}
+          label={{ value: "$/unit", angle: -90, position: "insideLeft", fill: "#8a7a98", fontSize: 12 }}
         />
         <Tooltip
           contentStyle={{
