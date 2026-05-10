@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PLOT_SCHEMATIC_STORAGE_PREFIX } from "./frontierConstants";
 import { displayMaterial } from "./formatters";
 import { reorderChain, validateLinearRecipeChain, type SchematicRecipe } from "./plotSchematic";
+import { useRealmToast } from "./realmToast";
 
 export type PlotSchematicPanelProps = {
   recipes: SchematicRecipe[];
@@ -23,6 +24,7 @@ export function PlotSchematicPanel({
   onSelectPlot,
   disabled,
 }: PlotSchematicPanelProps) {
+  const { pushToast } = useRealmToast();
   const storageKey = selectedPlotId ? `${PLOT_SCHEMATIC_STORAGE_PREFIX}${selectedPlotId}` : null;
 
   const [chain, setChain] = useState<string[]>([]);
@@ -80,6 +82,7 @@ export function PlotSchematicPanel({
         const body = (await r.json()) as { ok?: boolean; errors?: string[] };
         if (body.ok === true) {
           setValidation({ ok: true, source: "engine" });
+          pushToast({ message: "Schematic chain validated (engine).", kind: "ok" });
           return;
         }
         setValidation({ ok: false, errors: Array.isArray(body.errors) ? body.errors : ["Engine rejected the chain."] });
@@ -101,13 +104,14 @@ export function PlotSchematicPanel({
       const res = validateLinearRecipeChain(recipes, playerInventory, chain);
       if (res.ok) {
         setValidation({ ok: true, source: "client" });
+        pushToast({ message: "Schematic OK (offline check).", kind: "ok" });
       } else {
         setValidation(res);
       }
     } finally {
       setValidating(false);
     }
-  }, [selectedPlotId, chain, recipes, playerInventory]);
+  }, [selectedPlotId, chain, recipes, playerInventory, pushToast]);
 
   const addRecipe = useCallback((recipeId: string) => {
     setChain((c) => [...c, recipeId]);

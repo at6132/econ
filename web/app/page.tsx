@@ -1638,7 +1638,16 @@ export default function HomePage() {
                   aria-pressed={!simPaused}
                   aria-label={simPaused ? "Run simulation" : "Pause simulation"}
                   disabled={busy}
-                  onClick={() => setSimPaused((p) => !p)}
+                  onClick={() => {
+                    setSimPaused((p) => {
+                      const next = !p;
+                      pushToast({
+                        message: next ? "Simulation paused." : "Simulation running.",
+                        kind: "ok",
+                      });
+                      return next;
+                    });
+                  }}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                 >
