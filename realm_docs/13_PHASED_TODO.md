@@ -54,7 +54,7 @@
 
 **Engine core:**
 - [ ] Tick-based simulation loop with deterministic time
-- [ ] World generation (small: 30–50 plots in a single region)
+- [ ] World generation (small: 30–50 plots in a single region — **Frontier dev scenario** uses a larger default grid for stress; `bootstrap_frontier(grid_width=…, grid_height=…)` matches the doc when needed)
 - [ ] Plot system (Primitive 1) — terrain, hidden subsurface, ownership
 - [ ] Material system (Primitive 2) — ~10 starter materials with realistic properties
 - [ ] Capital system (Primitive 5) — accounts, atomic transfers, conservation enforced at data layer

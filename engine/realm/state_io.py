@@ -1,4 +1,9 @@
-"""Serialize / deserialize full World for SQLite persistence."""
+"""Serialize / deserialize full World for SQLite persistence.
+
+Snapshot ``version`` is ``1``. Nested dicts may gain optional keys in newer builds;
+``load_world`` uses defaults via ``dict.get`` so slightly older SQLite/JSON rows remain loadable
+when new fields are additive (e.g. ``market_bids``, ``best_bids_cents`` in history).
+"""
 
 from __future__ import annotations
 
