@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { FRONTIER_FEATURES } from "./frontierFeatures";
 import {
@@ -28,6 +28,7 @@ import {
 import { getFrontierMenu, type TabId } from "./frontierMenu";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
+import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
 import { buildOrganicMesh } from "./mapOrganicMesh";
 import { computeStarterHintPlotIds } from "./mapStarterHints";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
@@ -119,6 +120,24 @@ type MarketBidDto = {
   side?: string;
 };
 
+function liveBestAskForMaterial(asks: MarketAskDto[] | undefined, m: string): number | null {
+  let best: number | null = null;
+  for (const a of asks ?? []) {
+    if (a.material !== m) continue;
+    if (best == null || a.price_per_unit_cents < best) best = a.price_per_unit_cents;
+  }
+  return best;
+}
+
+function liveBestBidForMaterial(bids: MarketBidDto[] | undefined, m: string): number | null {
+  let best: number | null = null;
+  for (const b of bids ?? []) {
+    if (b.material !== m) continue;
+    if (best == null || b.max_price_per_unit_cents > best) best = b.max_price_per_unit_cents;
+  }
+  return best;
+}
+
 type EventLogEntryDto = {
   tick: number;
   kind: string;
@@ -187,8 +206,12 @@ type WorldDto = {
   hire_catalog?: HireCatalogRow[];
 };
 
-function SectionTitle({ children }: { children: string }) {
-  return <h3 className="realm-section-title">{children}</h3>;
+function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <h3 className="realm-section-title" style={style}>
+      {children}
+    </h3>
+  );
 }
 
 function readSimPausedFromStorage(): boolean {
@@ -225,13 +248,11 @@ export default function HomePage() {
   const [shipTo, setShipTo] = useState("p-1-0");
   const [shipMaterial, setShipMaterial] = useState("timber");
   const [shipQty, setShipQty] = useState("1");
-  const [sellMaterial, setSellMaterial] = useState("timber");
+  const [bazaarSymbol, setBazaarSymbol] = useState("timber");
   const [sellQty, setSellQty] = useState("1");
   const [sellPriceDollars, setSellPriceDollars] = useState("5.00");
-  const [bidMaterial, setBidMaterial] = useState("timber");
   const [bidQty, setBidQty] = useState("1");
   const [bidMaxDollars, setBidMaxDollars] = useState("5.00");
-  const [sellFillMaterial, setSellFillMaterial] = useState("timber");
   const [sellFillQty, setSellFillQty] = useState("1");
   const [p2pRole, setP2pRole] = useState<"sell" | "buy">("sell");
   const [p2pParty, setP2pParty] = useState("t1_consumer");
@@ -509,6 +530,20 @@ export default function HomePage() {
     }
   }, [pactCounterpartyChoices, supplyCounterparty]);
 
+  const bazaarSymbolList = useMemo(() => {
+    const base = collectBazaarSymbolIds(world ?? undefined);
+    const id = normalizeBazaarSymbolId(bazaarSymbol);
+    if (!id) return base;
+    if (!base.includes(id)) return [...base, id].sort((a, b) => a.localeCompare(b));
+    return base;
+  }, [world, bazaarSymbol]);
+
+  const bazaarActiveId = useMemo(() => {
+    const s = normalizeBazaarSymbolId(bazaarSymbol);
+    if (s) return s;
+    return bazaarSymbolList[0] ?? "timber";
+  }, [bazaarSymbol, bazaarSymbolList]);
+
   const playerCash =
     world?.balances_cents["cash:player"] != null
       ? (world.balances_cents["cash:player"] / 100).toFixed(2)
@@ -686,7 +721,7 @@ export default function HomePage() {
     try {
       const q = new URLSearchParams({
         party: "player",
-        material: sellMaterial,
+        material: bazaarActiveId,
         qty: String(qty),
         price_per_unit_cents: String(priceCents),
       });
@@ -752,7 +787,7 @@ export default function HomePage() {
     try {
       const q = new URLSearchParams({
         party: "player",
-        material: bidMaterial.trim(),
+        material: bazaarActiveId,
         qty: String(qty),
         max_price_per_unit_cents: String(maxCents),
       });
@@ -817,7 +852,7 @@ export default function HomePage() {
     try {
       const q = new URLSearchParams({
         party: "player",
-        material: sellFillMaterial.trim(),
+        material: bazaarActiveId,
         max_qty: String(maxQty),
       });
       const r = await fetch(`/api/engine/market/sell_fill?${q.toString()}`, { method: "POST" });
@@ -1590,16 +1625,110 @@ export default function HomePage() {
 
                   {tab === "market" ? (
                     <>
-                      <SectionTitle>Asks (sellers)</SectionTitle>
-                      {(world.market_asks ?? []).length === 0 ? (
+                      <SectionTitle>Markets</SectionTitle>
+                      <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+                        Pick a commodity to load its chart and order book. Use ◀ ▶, click a tile, or type an engine id (e.g. <code>grain</code>).
+                      </p>
+                      <div className="realm-bazaar-watchlist">
+                        <div className="realm-bazaar-watchlist__controls">
+                          <button
+                            type="button"
+                            className="realm-btn realm-btn--ghost realm-btn--sm"
+                            aria-label="Previous market"
+                            disabled={bazaarSymbolList.length === 0}
+                            onClick={() => {
+                              const list = bazaarSymbolList;
+                              if (!list.length) return;
+                              const cur = bazaarActiveId;
+                              const i = list.indexOf(cur);
+                              const from = i >= 0 ? i : 0;
+                              setBazaarSymbol(list[(from - 1 + list.length) % list.length]);
+                            }}
+                          >
+                            ◀
+                          </button>
+                          <label className="realm-label">
+                            Symbol
+                            <input
+                              className="realm-input"
+                              value={bazaarSymbol}
+                              onChange={(e) => setBazaarSymbol(e.target.value.toLowerCase())}
+                              onBlur={() =>
+                                setBazaarSymbol((s) => normalizeBazaarSymbolId(s) || bazaarSymbolList[0] || "timber")
+                              }
+                              list="realm-bazaar-datalist"
+                              spellCheck={false}
+                              autoCapitalize="off"
+                              autoCorrect="off"
+                              style={{ width: 140 }}
+                            />
+                          </label>
+                          <datalist id="realm-bazaar-datalist">
+                            {bazaarSymbolList.map((s) => (
+                              <option key={s} value={s} />
+                            ))}
+                          </datalist>
+                          <button
+                            type="button"
+                            className="realm-btn realm-btn--ghost realm-btn--sm"
+                            aria-label="Next market"
+                            disabled={bazaarSymbolList.length === 0}
+                            onClick={() => {
+                              const list = bazaarSymbolList;
+                              if (!list.length) return;
+                              const cur = bazaarActiveId;
+                              const i = list.indexOf(cur);
+                              const from = i >= 0 ? i : 0;
+                              setBazaarSymbol(list[(from + 1) % list.length]);
+                            }}
+                          >
+                            ▶
+                          </button>
+                        </div>
+                        <div className="realm-bazaar-watchlist__chips" role="listbox" aria-label="Markets">
+                          {bazaarSymbolList.map((s) => {
+                            const on = s === bazaarActiveId;
+                            const bidC = liveBestBidForMaterial(world.market_bids, s);
+                            const askC = liveBestAskForMaterial(world.market_asks, s);
+                            const bidS = bidC != null ? formatUsdFromCents(bidC) : "—";
+                            const askS = askC != null ? formatUsdFromCents(askC) : "—";
+                            return (
+                              <button
+                                key={s}
+                                type="button"
+                                role="option"
+                                aria-selected={on}
+                                className={`realm-bazaar-chip${on ? " realm-bazaar-chip--on" : ""}`}
+                                onClick={() => setBazaarSymbol(s)}
+                              >
+                                <span className="realm-bazaar-chip__name">{displayMaterial(s)}</span>
+                                <span className="realm-bazaar-chip__quote">
+                                  {bidS} bid · {askS} ask
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <SectionTitle>Price · {displayMaterial(bazaarActiveId)}</SectionTitle>
+                      <div className="realm-chart-card">
+                        <MarketHistoryChart history={world.market_history ?? []} symbol={bazaarActiveId} />
+                      </div>
+
+                      <SectionTitle>Order book · {displayMaterial(bazaarActiveId)}</SectionTitle>
+                      <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+                        Only resting orders for the symbol above. Switch markets to see other commodities.
+                      </p>
+                      <SectionTitle style={{ fontSize: "0.92em", opacity: 0.95 }}>Asks (sellers)</SectionTitle>
+                      {(world.market_asks ?? []).filter((a) => a.material === bazaarActiveId).length === 0 ? (
                         <p className="realm-help">
-                          No one is offering these goods yet. <strong>List for sale</strong> below to post a price, or check back after a few ticks.
+                          No asks for {displayMaterial(bazaarActiveId)}. <strong>List for sale</strong> below to post a price.
                         </p>
                       ) : (
                         <table className="realm-table">
                           <thead>
                             <tr>
-                              <th>Material</th>
                               <th style={{ textAlign: "right" }}>Qty</th>
                               <th style={{ textAlign: "right" }}>~$/unit</th>
                               <th>Seller</th>
@@ -1607,41 +1736,41 @@ export default function HomePage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(world.market_asks ?? []).map((a) => (
-                              <tr key={a.order_id}>
-                                <td>{displayMaterial(a.material)}</td>
-                                <td style={{ textAlign: "right" }}>{a.qty}</td>
-                                <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(a.price_per_unit_cents)}</td>
-                                <td>{displayParty(a.party)}</td>
-                                <td style={{ textAlign: "right" }}>
-                                  {a.party === "player" ? (
-                                    <button
-                                      type="button"
-                                      className="realm-btn realm-btn--ghost realm-btn--sm"
-                                      disabled={busy}
-                                      onClick={() => void cancelAsk(a.order_id)}
-                                    >
-                                      Cancel
-                                    </button>
-                                  ) : (
-                                    <span className="realm-help"> </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
+                            {(world.market_asks ?? [])
+                              .filter((a) => a.material === bazaarActiveId)
+                              .map((a) => (
+                                <tr key={a.order_id}>
+                                  <td style={{ textAlign: "right" }}>{a.qty}</td>
+                                  <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(a.price_per_unit_cents)}</td>
+                                  <td>{displayParty(a.party)}</td>
+                                  <td style={{ textAlign: "right" }}>
+                                    {a.party === "player" ? (
+                                      <button
+                                        type="button"
+                                        className="realm-btn realm-btn--ghost realm-btn--sm"
+                                        disabled={busy}
+                                        onClick={() => void cancelAsk(a.order_id)}
+                                      >
+                                        Cancel
+                                      </button>
+                                    ) : (
+                                      <span className="realm-help"> </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       )}
-                      <SectionTitle>Bids (buyers)</SectionTitle>
-                      {(world.market_bids ?? []).length === 0 ? (
+                      <SectionTitle style={{ fontSize: "0.92em", opacity: 0.95 }}>Bids (buyers)</SectionTitle>
+                      {(world.market_bids ?? []).filter((b) => b.material === bazaarActiveId).length === 0 ? (
                         <p className="realm-help">
-                          Be the first bidder — sellers will see your offer on the book. Use <strong>Place limit bid</strong> below.
+                          No bids for {displayMaterial(bazaarActiveId)}. <strong>Place limit bid</strong> below to join the book.
                         </p>
                       ) : (
                         <table className="realm-table">
                           <thead>
                             <tr>
-                              <th>Material</th>
                               <th style={{ textAlign: "right" }}>Qty</th>
                               <th style={{ textAlign: "right" }}>Max ~$/unit</th>
                               <th>Buyer</th>
@@ -1649,49 +1778,46 @@ export default function HomePage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(world.market_bids ?? []).map((b) => (
-                              <tr key={b.order_id}>
-                                <td>{displayMaterial(b.material)}</td>
-                                <td style={{ textAlign: "right" }}>{b.qty}</td>
-                                <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(b.max_price_per_unit_cents)}</td>
-                                <td>{displayParty(b.party)}</td>
-                                <td style={{ textAlign: "right" }}>
-                                  {b.party === "player" ? (
-                                    <button
-                                      type="button"
-                                      className="realm-btn realm-btn--ghost realm-btn--sm"
-                                      disabled={busy}
-                                      onClick={() => void cancelBid(b.order_id)}
-                                    >
-                                      Cancel
-                                    </button>
-                                  ) : (
-                                    <span className="realm-help"> </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
+                            {(world.market_bids ?? [])
+                              .filter((b) => b.material === bazaarActiveId)
+                              .map((b) => (
+                                <tr key={b.order_id}>
+                                  <td style={{ textAlign: "right" }}>{b.qty}</td>
+                                  <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(b.max_price_per_unit_cents)}</td>
+                                  <td>{displayParty(b.party)}</td>
+                                  <td style={{ textAlign: "right" }}>
+                                    {b.party === "player" ? (
+                                      <button
+                                        type="button"
+                                        className="realm-btn realm-btn--ghost realm-btn--sm"
+                                        disabled={busy}
+                                        onClick={() => void cancelBid(b.order_id)}
+                                      >
+                                        Cancel
+                                      </button>
+                                    ) : (
+                                      <span className="realm-help"> </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       )}
-                      <SectionTitle>Market depth</SectionTitle>
-                      <div className="realm-chart-card">
-                        <MarketHistoryChart history={world.market_history ?? []} />
-                      </div>
-                      <SectionTitle>Place limit bid</SectionTitle>
+
+                      <SectionTitle>Trade · {displayMaterial(bazaarActiveId)}</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Bids and asks below use the <strong>selected symbol</strong> only. Mid from history (if any):{" "}
+                        {(() => {
+                          const u = bookMidpointCentsPerUnit(world.market_history, bazaarActiveId);
+                          return u != null ? `~${formatUsdFromCents(u)}/u` : "—";
+                        })()}
+                      </p>
+                      <SectionTitle style={{ fontSize: "0.92em", opacity: 0.95 }}>Place limit bid</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
                         Locks cash for up to quantity × your max price; matches cheaper listed offers automatically.
                       </p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-                        <label className="realm-label">
-                          Material
-                          <input
-                            className="realm-input"
-                            value={bidMaterial}
-                            onChange={(e) => setBidMaterial(e.target.value)}
-                            style={{ width: 120 }}
-                          />
-                        </label>
                         <label className="realm-label">
                           Qty
                           <input
@@ -1714,17 +1840,8 @@ export default function HomePage() {
                           Place bid
                         </button>
                       </div>
-                      <SectionTitle>List for sale</SectionTitle>
+                      <SectionTitle style={{ fontSize: "0.92em", opacity: 0.95 }}>List for sale</SectionTitle>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-                        <label className="realm-label">
-                          Material
-                          <input
-                            className="realm-input"
-                            value={sellMaterial}
-                            onChange={(e) => setSellMaterial(e.target.value)}
-                            style={{ width: 120 }}
-                          />
-                        </label>
                         <label className="realm-label">
                           Qty
                           <input
@@ -1803,18 +1920,10 @@ export default function HomePage() {
                           </div>
                           <SectionTitle>Sell into bids</SectionTitle>
                           <p className="realm-help" style={{ marginBottom: 10 }}>
-                            Walks the bid side; you must hold the goods. You are paid from buyers&apos; escrow up to their limits.
+                            Walks the bid side for <strong>{displayMaterial(bazaarActiveId)}</strong>; you must hold the goods. Paid from buyers&apos;
+                            escrow up to their limits.
                           </p>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-                            <label className="realm-label">
-                              Material
-                              <input
-                                className="realm-input"
-                                value={sellFillMaterial}
-                                onChange={(e) => setSellFillMaterial(e.target.value)}
-                                style={{ width: 120 }}
-                              />
-                            </label>
                             <label className="realm-label">
                               Max qty
                               <input
@@ -1830,7 +1939,7 @@ export default function HomePage() {
                           </div>
                           <SectionTitle>Direct trade (P2P)</SectionTitle>
                           <p className="realm-help" style={{ marginBottom: 10 }}>
-                            One-shot exchange with a named party — no central book. Example: sell grain to Townfolk.
+                            One-shot exchange with a named party — no central book. Material is independent of the chart symbol.
                           </p>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
                             <label className="realm-label">

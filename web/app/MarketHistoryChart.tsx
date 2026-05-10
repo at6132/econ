@@ -10,6 +10,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { displayMaterial } from "./formatters";
+
 export type MarketHistorySnap = {
   tick: number;
   best_asks_cents: Record<string, number>;
@@ -17,19 +19,25 @@ export type MarketHistorySnap = {
   best_bids_cents?: Record<string, number>;
 };
 
-const SERIES = ["grain", "timber", "coal", "clay", "electricity"] as const;
-const COLORS = ["#6ee7ff", "#7bed9f", "#ffd84a", "#c9a8ff", "#ff8a7a"];
+const ASK_STROKE = "#6ee7ff";
+const BID_STROKE = "#ffd84a";
 
-export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }) {
+type Props = {
+  history: MarketHistorySnap[];
+  /** Engine material id (e.g. grain). Chart shows best ask + best bid for this symbol only. */
+  symbol: string;
+};
+
+export function MarketHistoryChart({ history, symbol }: Props) {
+  const sym = symbol.trim();
   const data = history.map((h) => {
-    const row: Record<string, number | undefined> = { tick: h.tick };
     const asks = h.best_asks_cents ?? {};
     const bids = h.best_bids_cents ?? {};
-    for (const m of SERIES) {
-      row[m] = asks[m];
-      row[`${m}_bid`] = bids[m];
-    }
-    return row;
+    return {
+      tick: h.tick,
+      ask: asks[sym],
+      bid: bids[sym],
+    };
   });
 
   if (data.length < 1) {
@@ -39,6 +47,8 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
       </p>
     );
   }
+
+  const label = displayMaterial(sym || "—");
 
   return (
     <ResponsiveContainer width="100%" height={220}>
@@ -50,9 +60,10 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
         />
         <YAxis
           tick={{ fontSize: 11, fill: "#a894c4" }}
-          width={40}
+          width={44}
           domain={["auto", "auto"]}
           stroke="rgba(107, 90, 138, 0.5)"
+          tickFormatter={(v) => `$${(Number(v) / 100).toFixed(2)}`}
         />
         <Tooltip
           contentStyle={{
@@ -64,35 +75,34 @@ export function MarketHistoryChart({ history }: { history: MarketHistorySnap[] }
             fontFamily: "VT323, ui-monospace, monospace",
           }}
           labelStyle={{ color: "#8a7a98" }}
+          formatter={(value: unknown) => {
+            const n = typeof value === "number" ? value : Number(value);
+            if (value == null || !Number.isFinite(n)) return ["—", ""];
+            return [`$${(n / 100).toFixed(2)}/u`, ""];
+          }}
         />
         <Legend wrapperStyle={{ fontSize: 13, color: "#a894c4", fontFamily: "VT323, ui-monospace, monospace" }} />
-        {SERIES.map((m, i) => (
-          <Line
-            key={`ask-${m}`}
-            type="monotone"
-            dataKey={m}
-            name={`${m} ask`}
-            stroke={COLORS[i]}
-            strokeWidth={2}
-            dot={false}
-            connectNulls
-            isAnimationActive={false}
-          />
-        ))}
-        {SERIES.map((m, i) => (
-          <Line
-            key={`bid-${m}`}
-            type="monotone"
-            dataKey={`${m}_bid`}
-            name={`${m} bid`}
-            stroke={COLORS[i]}
-            strokeWidth={1.5}
-            strokeDasharray="5 4"
-            dot={false}
-            connectNulls
-            isAnimationActive={false}
-          />
-        ))}
+        <Line
+          type="monotone"
+          dataKey="ask"
+          name={`${label} · best ask`}
+          stroke={ASK_STROKE}
+          strokeWidth={2}
+          dot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="bid"
+          name={`${label} · best bid`}
+          stroke={BID_STROKE}
+          strokeWidth={2}
+          strokeDasharray="6 4"
+          dot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
       </LineChart>
     </ResponsiveContainer>
   );
