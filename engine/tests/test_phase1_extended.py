@@ -7,7 +7,7 @@ import tempfile
 
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.movement import dispatch_shipment
-from realm.markets import market_buy, p2p_trade, place_sell_order
+from realm.markets import market_buy, p2p_trade, place_buy_order, place_sell_order
 from realm.persistence import load_snapshot, save_snapshot
 from realm.state_io import dumps_json, loads_json
 from realm.tick import advance_tick
@@ -22,6 +22,21 @@ def test_json_roundtrip_preserves_ledger_total() -> None:
     w2 = loads_json(blob)
     assert w2.ledger.total_cents() == t0
     assert w2.tick == w.tick
+
+
+def test_json_roundtrip_preserves_market_bids() -> None:
+    w = bootstrap_frontier(seed=19, grid_width=2, grid_height=2)
+    consumer = PartyId("t1_consumer")
+    assert place_buy_order(w, consumer, MaterialId("electricity"), 1, 40)["ok"] is True
+    key = str(MaterialId("electricity"))
+    row = w.market_bids_by_material[key][0]
+    t0 = w.ledger.total_cents()
+    w2 = loads_json(dumps_json(w))
+    assert w2.ledger.total_cents() == t0
+    row2 = w2.market_bids_by_material[key][0]
+    assert row2.order_id == row.order_id
+    assert row2.escrow_cents == row.escrow_cents
+    assert row2.qty == row.qty
 
 
 def test_sqlite_roundtrip() -> None:

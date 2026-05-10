@@ -35,6 +35,27 @@ def test_market_cancel_400_wrong_party() -> None:
     assert r2.status_code == 400
 
 
+def test_market_bid_cancel_via_http() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 58})
+    r = c.post(
+        "/market/bid",
+        params={
+            "party": "t1_consumer",
+            "material": "electricity",
+            "qty": 1,
+            "max_price_per_unit_cents": 100,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("ok") is True
+    oid = body["order_id"]
+    r2 = c.post("/market/cancel_bid", params={"party": "t1_consumer", "order_id": oid})
+    assert r2.status_code == 200
+    assert r2.json().get("ok") is True
+
+
 def test_p2p_trade_via_http() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"seed": 57})
