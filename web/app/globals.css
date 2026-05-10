@@ -361,6 +361,12 @@ body::after {
   stroke-dasharray: 4 3;
 }
 
+.realm-map-world-surface[data-map-style="political"] .realm-map-region.realm-map-region--selected {
+  stroke: var(--realm-accent);
+  stroke-width: 3.5px;
+  stroke-dasharray: none;
+}
+
 .realm-map-particles-canvas {
   position: absolute;
   left: 0;
@@ -477,6 +483,11 @@ body::after {
     stroke 0.12s ease;
 }
 
+.realm-map-region:focus,
+.realm-map-region:focus-visible {
+  outline: none;
+}
+
 .realm-map-region:hover {
   filter: brightness(1.08);
 }
@@ -540,21 +551,21 @@ body::after {
   }
 }
 
-.realm-map-plot-outline {
+.realm-map-region--selected {
   stroke: var(--realm-accent);
   stroke-width: 3.5px;
   stroke-linejoin: round;
   stroke-linecap: round;
-  pointer-events: none;
-  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 8px rgba(255, 216, 74, 0.4));
+  stroke-dasharray: none;
+  filter: brightness(1.08) drop-shadow(0 0 5px rgba(255, 216, 74, 0.45));
 }
 
-.realm-map-region--mine {
+.realm-map-region--mine:not(.realm-map-region--selected) {
   stroke: rgba(110, 231, 255, 0.5);
   stroke-width: 1.5px;
 }
 
-.realm-map-region--surveyed {
+.realm-map-region--surveyed:not(.realm-map-region--selected) {
   stroke-dasharray: 3 4;
 }
 

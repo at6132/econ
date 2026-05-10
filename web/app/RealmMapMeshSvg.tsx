@@ -64,9 +64,6 @@ export function RealmMapMeshSvg({
     return a.y - b.y || a.x - b.x;
   });
 
-  const selected = selectedPlotId ? plots.find((p) => p.id === selectedPlotId) : undefined;
-  const outlineD = selected ? mesh.plotPath(selected.x, selected.y) : null;
-
   return (
     <svg
       className="realm-map-mesh-svg"
@@ -123,10 +120,12 @@ export function RealmMapMeshSvg({
           const mine = p.owner === "player";
           const nBuild = buildsByPlot.get(p.id) ?? 0;
           const tint = ownerTint(p.owner);
+          const isSelected = p.id === selectedPlotId;
           const cls = [
             "realm-map-region",
             mine ? "realm-map-region--mine" : "",
             p.surveyed ? "realm-map-region--surveyed" : "",
+            isSelected ? "realm-map-region--selected" : "",
           ]
             .filter(Boolean)
             .join(" ");
@@ -138,7 +137,7 @@ export function RealmMapMeshSvg({
                 d={d}
                 data-owner={p.owner ?? ""}
                 fill={terrainFill(p.terrain)}
-                tabIndex={-1}
+                focusable={false}
                 onClick={() => {
                   if (busy) return;
                   if (mapNavSuppress.current) {
@@ -177,19 +176,11 @@ export function RealmMapMeshSvg({
                 key={`starter-${p.id}`}
                 className="realm-map-starter-pulse"
                 d={mesh.plotPath(p.x, p.y)}
+                focusable={false}
                 aria-hidden
               />
             ))
         : null}
-      {outlineD ? (
-        <path
-          className="realm-map-plot-outline"
-          d={outlineD}
-          fill="none"
-          pointerEvents="none"
-          aria-hidden
-        />
-      ) : null}
       {mapAnchor ? (
         <g className="realm-map-anchor" pointerEvents="none" aria-hidden>
           <circle className="realm-map-anchor__dot" cx={mapAnchor.cx} cy={mapAnchor.cy} r={5} />
