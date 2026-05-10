@@ -163,7 +163,14 @@ type EventLogEntryDto = {
 type BuildingCatalogDto = {
   id: string;
   label: string;
-  cost_cents: number;
+  kind?: string;
+  /** Simple buildings only */
+  cost_cents?: number;
+  /** Contracted workshops — engine requires build_mode */
+  self_shell_cents?: number;
+  self_contractor_fee_cents?: number;
+  self_materials?: Record<string, number>;
+  turnkey_total_cents?: number;
 };
 
 type PlotBuildingDto = {
@@ -174,6 +181,7 @@ type PlotBuildingDto = {
   building_id: string;
   label: string;
   cost_cents: number;
+  build_mode?: string;
 };
 
 type StubHireDto = {
@@ -806,7 +814,7 @@ export default function HomePage() {
         pushToast({
           message:
             n === 0
-              ? `Survey complete — no workshops on ${terr} (claim dry land for industry).`
+              ? `Survey complete on ${terr} — build a workshop here to unlock recipes.`
               : `Survey complete — ${n} recipes unlocked on ${terr}.`,
           kind: n === 0 ? "info" : "ok",
         });
@@ -1507,7 +1515,7 @@ export default function HomePage() {
     }
   }
 
-  async function buildOnSelectedPlot(buildingId: string) {
+  async function buildOnSelectedPlot(buildingId: string, buildMode?: "turnkey" | "self_contract") {
     if (!selectedPlotId) {
       setError("Select a surveyed plot you own.");
       return;
@@ -1517,6 +1525,7 @@ export default function HomePage() {
     setError(null);
     try {
       const q = new URLSearchParams({ building_id: buildingId, party: "player" });
+      if (buildMode) q.set("build_mode", buildMode);
       const r = await fetch(
         `/api/engine/plots/${encodeURIComponent(selectedPlotId)}/build?${q.toString()}`,
         { method: "POST" },
@@ -2024,8 +2033,8 @@ export default function HomePage() {
                               </p>
                               {workshopRecipesForSelectedPlot.length === 0 ? (
                                 <p className="realm-help" style={{ marginBottom: 8 }}>
-                                  No workshop recipes on this terrain. Claim and survey <strong>dry land</strong> with the industry you need (check terrain on
-                                  the map).
+                                  After survey, recipes appear only when the matching <strong>workshop</strong> is built on this plot (see Build below). On
+                                  water, workshops are not available.
                                 </p>
                               ) : (
                                 <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
@@ -2045,18 +2054,50 @@ export default function HomePage() {
                               )}
                               <SectionTitle>Build on this plot</SectionTitle>
                               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                                {(world.building_catalog ?? []).map((b) => (
-                                  <li key={b.id} style={{ marginBottom: 6 }}>
-                                    <button
-                                      type="button"
-                                      className="realm-list-btn"
-                                      disabled={busy}
-                                      onClick={() => void buildOnSelectedPlot(b.id)}
-                                    >
-                                      {b.label} · ${(b.cost_cents / 100).toFixed(2)}
-                                    </button>
-                                  </li>
-                                ))}
+                                {(world.building_catalog ?? []).map((b) => {
+                                  const kind = b.kind ?? "simple";
+                                  if (kind === "contracted") {
+                                    const tt = b.turnkey_total_cents ?? 0;
+                                    const selfCash = (b.self_shell_cents ?? 0) + (b.self_contractor_fee_cents ?? 0);
+                                    const matParts = Object.entries(b.self_materials ?? {}).map(([k, v]) => `${v}×${k}`);
+                                    const matHint = matParts.length ? matParts.join(", ") : "mats";
+                                    return (
+                                      <li key={b.id} style={{ marginBottom: 10 }}>
+                                        <div style={{ marginBottom: 4, opacity: 0.9 }}>{b.label}</div>
+                                        <button
+                                          type="button"
+                                          className="realm-list-btn"
+                                          disabled={busy}
+                                          onClick={() => void buildOnSelectedPlot(b.id, "turnkey")}
+                                        >
+                                          Turnkey · ${(tt / 100).toFixed(2)} <span style={{ opacity: 0.75 }}>(vendor supplies)</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="realm-list-btn"
+                                          style={{ marginTop: 6 }}
+                                          disabled={busy}
+                                          onClick={() => void buildOnSelectedPlot(b.id, "self_contract")}
+                                        >
+                                          Self + contractor · ${(selfCash / 100).toFixed(2)} + {matHint}
+                                        </button>
+                                      </li>
+                                    );
+                                  }
+                                  const c = b.cost_cents ?? 0;
+                                  return (
+                                    <li key={b.id} style={{ marginBottom: 6 }}>
+                                      <button
+                                        type="button"
+                                        className="realm-list-btn"
+                                        disabled={busy}
+                                        onClick={() => void buildOnSelectedPlot(b.id)}
+                                      >
+                                        {b.label} · ${(c / 100).toFixed(2)}
+                                      </button>
+                                    </li>
+                                  );
+                                })}
                               </ul>
                               {buildingsHere.length > 0 ? (
                                 <>
