@@ -6,6 +6,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account
+from realm.storage_caps import try_add_inventory
 from realm.world import World
 
 
@@ -165,7 +166,7 @@ def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -
             if price > 0:
                 world.ledger.transfer(debit=sc, credit=bc, amount_cents=price)
             return {"ok": False, "reason": rm.reason}
-        ad = world.inventory.add(buyer, mat, qty)
+        ad = try_add_inventory(world, buyer, mat, qty)
         if isinstance(ad, MatterErr):
             world.inventory.add(supplier, mat, qty)
             if price > 0:

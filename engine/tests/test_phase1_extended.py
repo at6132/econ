@@ -24,6 +24,23 @@ def test_json_roundtrip_preserves_ledger_total() -> None:
     assert w2.tick == w.tick
 
 
+def test_json_roundtrip_preserves_p2p_idempotency() -> None:
+    w = bootstrap_frontier(seed=96, grid_width=2, grid_height=2)
+    assert p2p_trade(
+        w,
+        PartyId("player"),
+        PartyId("t1_consumer"),
+        MaterialId("grain"),
+        1,
+        50,
+        idempotency_key="snap-k",
+    )["ok"] is True
+    assert "snap-k" in w.p2p_idempotency
+    w2 = loads_json(dumps_json(w))
+    assert w2.p2p_idempotency["snap-k"]["fingerprint"] == w.p2p_idempotency["snap-k"]["fingerprint"]
+    assert w2.p2p_idempotency["snap-k"]["response"].get("ok") is True
+
+
 def test_json_roundtrip_preserves_market_bids() -> None:
     w = bootstrap_frontier(seed=19, grid_width=2, grid_height=2)
     consumer = PartyId("t1_consumer")

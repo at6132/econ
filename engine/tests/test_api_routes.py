@@ -94,3 +94,43 @@ def test_p2p_trade_via_http() -> None:
     )
     assert r.status_code == 200
     assert r.json().get("ok") is True
+
+
+def test_p2p_http_error_returns_reason_and_code() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 59})
+    r = c.post(
+        "/trade/p2p",
+        params={
+            "seller": "player",
+            "buyer": "t1_consumer",
+            "material": "grain",
+            "qty": 0,
+            "total_price_cents": 50,
+        },
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert body["detail"]["code"] == "P2P_INVALID"
+    assert "invalid" in body["detail"]["reason"].lower()
+
+
+def test_p2p_http_idempotency_replay() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 60})
+    params = {
+        "seller": "player",
+        "buyer": "t1_consumer",
+        "material": "grain",
+        "qty": 1,
+        "total_price_cents": 50,
+        "idempotency_key": "http-idem-1",
+    }
+    r1 = c.post("/trade/p2p", params=params)
+    assert r1.status_code == 200
+    j1 = r1.json()
+    assert j1.get("ok") is True
+    r2 = c.post("/trade/p2p", params=params)
+    assert r2.status_code == 200
+    j2 = r2.json()
+    assert j2.get("idempotent_replay") is True

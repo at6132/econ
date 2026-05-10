@@ -2,6 +2,9 @@
 
 Bids lock cash in ``system:market_escrow`` up to qty × limit price.
 Crossing: incoming bid lifts resting asks at ask price; incoming ask lifts resting bids at bid limit.
+
+**Matching:** at each price level, resting orders are **FIFO** by ``order_id`` (lexicographic order
+matches creation order for ``ord-{seq}`` ids).
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, market_escrow_account, party_cash_account
+from realm.storage_caps import try_add_inventory
 from realm.world import World
 
 
@@ -85,7 +89,7 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     bid.escrow_cents -= reserve
     bid.qty -= fill
     ask.qty -= fill
-    ad = world.inventory.add(bid.party, ask.material, fill)
+    ad = try_add_inventory(world, bid.party, ask.material, fill)
     if isinstance(ad, MatterErr):
         bid.escrow_cents += reserve
         bid.qty += fill
@@ -122,7 +126,7 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     bid.escrow_cents -= reserve
     bid.qty -= fill
     ask.qty -= fill
-    ad = world.inventory.add(bid.party, ask.material, fill)
+    ad = try_add_inventory(world, bid.party, ask.material, fill)
     if isinstance(ad, MatterErr):
         bid.escrow_cents += reserve
         bid.qty += fill
@@ -240,7 +244,7 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
                 if o.party != party:
                     return {"ok": False, "reason": "not your order"}
                 lst.pop(i)
-                ad = world.inventory.add(party, o.material, o.qty)
+                ad = try_add_inventory(world, party, o.material, o.qty)
                 if isinstance(ad, MatterErr):
                     lst.insert(i, o)
                     return {"ok": False, "reason": ad.reason}
@@ -362,7 +366,7 @@ def market_buy(world: World, buyer: PartyId, material: MaterialId, max_qty: int)
         )
         if isinstance(tr, MoneyErr):
             break
-        ad = world.inventory.add(buyer, material, fill)
+        ad = try_add_inventory(world, buyer, material, fill)
         if isinstance(ad, MatterErr):
             world.ledger.transfer(
                 debit=party_cash_account(o.party),
@@ -429,7 +433,7 @@ def sell_into_bids(world: World, seller: PartyId, material: MaterialId, max_qty:
             bid.escrow_cents += reserve
             bid.qty += fill
             break
-        ad = world.inventory.add(bid.party, material, fill)
+        ad = try_add_inventory(world, bid.party, material, fill)
         if isinstance(ad, MatterErr):
             world.inventory.add(seller, material, fill)
             world.ledger.transfer(debit=seller_cash, credit=escrow, amount_cents=payment)
@@ -458,7 +462,25 @@ def sell_into_bids(world: World, seller: PartyId, material: MaterialId, max_qty:
     return {"ok": True, "filled": filled, "received_cents": received}
 
 
-def p2p_trade(
+_P2P_IDEMPOTENCY_MAX = 400
+
+
+def _p2p_fingerprint(
+    seller: PartyId,
+    buyer: PartyId,
+    material: MaterialId,
+    qty: int,
+    total_price_cents: int,
+) -> list[str | int]:
+    return [str(seller), str(buyer), str(material), qty, total_price_cents]
+
+
+def _trim_p2p_idempotency(world: World) -> None:
+    while len(world.p2p_idempotency) > _P2P_IDEMPOTENCY_MAX:
+        world.p2p_idempotency.pop(next(iter(world.p2p_idempotency)))
+
+
+def _p2p_trade_execute(
     world: World,
     seller: PartyId,
     buyer: PartyId,
@@ -468,25 +490,26 @@ def p2p_trade(
 ) -> dict:
     """Atomic: buyer pays seller total_price_cents; seller delivers qty material."""
     if qty <= 0 or total_price_cents < 0:
-        return {"ok": False, "reason": "invalid trade"}
+        return {"ok": False, "reason": "invalid trade", "code": "P2P_INVALID"}
     if world.inventory.qty(seller, material) < qty:
-        return {"ok": False, "reason": "seller lacks material"}
+        return {"ok": False, "reason": "seller lacks material", "code": "P2P_SELLER_LACKS_MATERIAL"}
     bc = party_cash_account(buyer)
     sc = party_cash_account(seller)
     if world.ledger.balance(bc) < total_price_cents:
-        return {"ok": False, "reason": "buyer insufficient cash"}
+        return {"ok": False, "reason": "buyer insufficient cash", "code": "P2P_BUYER_INSUFFICIENT_CASH"}
     pay = world.ledger.transfer(debit=bc, credit=sc, amount_cents=total_price_cents)
     if isinstance(pay, MoneyErr):
-        return {"ok": False, "reason": pay.reason}
+        return {"ok": False, "reason": pay.reason, "code": "P2P_PAYMENT_FAILED"}
     rm = world.inventory.remove(seller, material, qty)
     if isinstance(rm, MatterErr):
         world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
-        return {"ok": False, "reason": rm.reason}
-    ad = world.inventory.add(buyer, material, qty)
+        return {"ok": False, "reason": rm.reason, "code": "P2P_SELLER_REMOVE_FAILED"}
+    ad = try_add_inventory(world, buyer, material, qty)
     if isinstance(ad, MatterErr):
         world.inventory.add(seller, material, qty)
         world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
-        return {"ok": False, "reason": ad.reason}
+        code = "P2P_BUYER_STORAGE_FULL" if ad.reason == "storage capacity exceeded" else "P2P_BUYER_ADD_FAILED"
+        return {"ok": False, "reason": ad.reason, "code": code}
     log_event(
         world,
         "p2p_trade",
@@ -497,7 +520,45 @@ def p2p_trade(
         qty=qty,
         total_price_cents=total_price_cents,
     )
-    return {"ok": True}
+    return {"ok": True, "code": "P2P_OK"}
+
+
+def p2p_trade(
+    world: World,
+    seller: PartyId,
+    buyer: PartyId,
+    material: MaterialId,
+    qty: int,
+    total_price_cents: int,
+    *,
+    idempotency_key: str | None = None,
+) -> dict:
+    """
+    P2P atomic trade. Optional ``idempotency_key``: same key + same parameters replays the stored
+    outcome (success or failure) without double-settling.
+    """
+    fp = _p2p_fingerprint(seller, buyer, material, qty, total_price_cents)
+    ikey = idempotency_key.strip() if idempotency_key else None
+    if ikey:
+        prior = world.p2p_idempotency.get(ikey)
+        if prior is not None:
+            if prior["fingerprint"] != fp:
+                return {
+                    "ok": False,
+                    "reason": "idempotency key reused with different trade parameters",
+                    "code": "P2P_IDEMPOTENCY_MISMATCH",
+                }
+            out = dict(prior["response"])
+            out["idempotent_replay"] = True
+            return out
+    result = _p2p_trade_execute(world, seller, buyer, material, qty, total_price_cents)
+    if ikey:
+        _trim_p2p_idempotency(world)
+        world.p2p_idempotency[ikey] = {
+            "fingerprint": fp,
+            "response": {k: v for k, v in result.items()},
+        }
+    return result
 
 
 def market_book_public(world: World) -> list[dict]:

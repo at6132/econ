@@ -47,6 +47,20 @@ def test_rejects_second_production_same_plot() -> None:
     assert r["ok"] is False
 
 
+def test_tool_cache_reduces_recipe_labor_cash() -> None:
+    from realm.buildings import build_on_plot
+
+    w = bootstrap_frontier(seed=5, grid_width=3, grid_height=2)
+    pid = PlotId("p-0-0")
+    player = PartyId("player")
+    assert claim_plot(w, player, pid)["ok"] is True
+    assert build_on_plot(w, player, pid, "tool_cache")["ok"] is True
+    cash0 = w.ledger.balance(party_cash_account(player))
+    assert start_production(w, player, pid, "sawmill")["ok"] is True
+    cash1 = w.ledger.balance(party_cash_account(player))
+    assert cash1 == cash0 - 450  # 500¢ × 90% (tool_cache labor BPS)
+
+
 def test_stub_hire_routes_part_of_labor_to_employee() -> None:
     from realm.actions import hire_worker_stub
 

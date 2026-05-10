@@ -1,4 +1,4 @@
-"""Stub plot buildings — Phase 1 pays cash, records structure (no production bonus yet)."""
+"""Plot buildings — Phase 1: pay cash, record on plot; storage + recipe labor modifiers where implemented."""
 
 from __future__ import annotations
 
@@ -9,9 +9,18 @@ from realm.world import World
 
 # Small costs so early game stays liquid (Phase 1 ugly-but-functional).
 BUILDINGS: dict[str, dict[str, int | str]] = {
-    "field_stockade": {"label": "Field stockade (storage stub)", "cost_cents": 25_000},
-    "tool_cache": {"label": "Tool cache (workshop stub)", "cost_cents": 50_000},
-    "watch_hut": {"label": "Watch hut (logistics stub)", "cost_cents": 15_000},
+    "field_stockade": {
+        "label": "Field stockade (+5k storage units)",
+        "cost_cents": 25_000,
+    },
+    "tool_cache": {
+        "label": "Tool cache (−10% recipe labor cash on this plot)",
+        "cost_cents": 50_000,
+    },
+    "watch_hut": {
+        "label": "Watch hut (−3% recipe labor cash on this plot)",
+        "cost_cents": 15_000,
+    },
 }
 
 

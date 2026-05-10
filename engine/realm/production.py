@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from realm.event_log import log_event
-from realm.ids import PartyId, PlotId
+from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.recipes import RECIPES
+from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
 from realm.world import ActiveProduction, World
 
 # Basis points: share of recipe labor paid out to hired workers (rest + remainder → system reserve).
 EMPLOYMENT_LABOR_TO_WORKERS_BPS = 4000  # 40%
+
+# Recipe labor multiplier when producing on a plot with workshop / logistics buildings.
+TOOL_CACHE_LABOR_BPS = 9000  # −10% cash labor vs recipe
+WATCH_HUT_LABOR_BPS = 9700  # −3%
 
 
 def _plot_owned_by(world: World, party: PartyId, plot_id: PlotId) -> bool:
@@ -20,6 +25,20 @@ def _plot_owned_by(world: World, party: PartyId, plot_id: PlotId) -> bool:
 
 def _active_on_plot(world: World, plot_id: PlotId) -> bool:
     return any(a.plot_id == plot_id for a in world.active_production)
+
+
+def _labor_bps_for_plot(world: World, party: PartyId, plot_id: PlotId) -> int:
+    """Lowest (best for player) labor BPS among buildings on this plot."""
+    bps = 10_000
+    for b in world.plot_buildings:
+        if b.get("party") != str(party) or b.get("plot_id") != str(plot_id):
+            continue
+        bid = b.get("building_id")
+        if bid == "tool_cache":
+            bps = min(bps, TOOL_CACHE_LABOR_BPS)
+        elif bid == "watch_hut":
+            bps = min(bps, WATCH_HUT_LABOR_BPS)
+    return bps
 
 
 def _distinct_employees_for_employer(world: World, employer: PartyId) -> list[PartyId]:
@@ -96,8 +115,10 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     recipe = RECIPES.get(recipe_id)
     if recipe is None:
         return {"ok": False, "reason": "unknown recipe"}
+    labor_bps = _labor_bps_for_plot(world, party, plot_id)
+    labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)
-    if world.ledger.balance(cash) < recipe.labor_cents:
+    if world.ledger.balance(cash) < labor_cents:
         return {"ok": False, "reason": "insufficient cash for labor"}
     for mid, qty in recipe.inputs.items():
         if world.inventory.qty(party, mid) < qty:
@@ -106,7 +127,7 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         rm = world.inventory.remove(party, mid, qty)
         if isinstance(rm, MatterErr):
             return {"ok": False, "reason": rm.reason}
-    labor_err = _pay_recipe_labor(world, party, recipe.labor_cents)
+    labor_err = _pay_recipe_labor(world, party, labor_cents)
     if labor_err is not None:
         for mid, qty in recipe.inputs.items():
             world.inventory.add(party, mid, qty)
@@ -125,11 +146,12 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     log_event(
         world,
         "production_start",
-        f"{party} started {recipe_id} on {plot_id} (outputs in {recipe.duration_ticks} ticks)",
+        f"{party} started {recipe_id} on {plot_id} (outputs in {recipe.duration_ticks} ticks; labor {labor_bps / 100:.1f}% of recipe)",
         party=str(party),
         plot_id=str(plot_id),
         recipe_id=recipe_id,
         run_id=run_id,
+        labor_bps=labor_bps,
     )
     return {"ok": True, "run_id": run_id}
 
@@ -145,11 +167,43 @@ def tick_production(world: World) -> None:
         recipe = RECIPES.get(run.recipe_id)
         if recipe is None:
             continue
+        out_total = sum(recipe.outputs.values())
+        if party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(world, run.party):
+            run.ticks_remaining = 1
+            still.append(run)
+            log_event(
+                world,
+                "production_stalled_storage",
+                f"{run.party} cannot take {recipe.recipe_id} outputs (storage full) — retry next tick",
+                party=str(run.party),
+                plot_id=str(run.plot_id),
+                recipe_id=run.recipe_id,
+                run_id=run.run_id,
+            )
+            continue
+        staged: list[tuple[MaterialId, int]] = []
+        blocked = False
         for mid, qty in recipe.outputs.items():
-            ad = world.inventory.add(run.party, mid, qty)
+            ad = try_add_inventory(world, run.party, mid, qty)
             if isinstance(ad, MatterErr):
-                # should not happen for positive qty
-                pass
+                blocked = True
+                break
+            staged.append((mid, qty))
+        if blocked:
+            for mid, qty in staged:
+                world.inventory.remove(run.party, mid, qty)
+            run.ticks_remaining = 1
+            still.append(run)
+            log_event(
+                world,
+                "production_stalled_storage",
+                f"{run.party} output blocked for {recipe.recipe_id} — retry next tick",
+                party=str(run.party),
+                plot_id=str(run.plot_id),
+                recipe_id=run.recipe_id,
+                run_id=run.run_id,
+            )
+            continue
         log_event(
             world,
             "production_done",
@@ -160,4 +214,3 @@ def tick_production(world: World) -> None:
             run_id=run.run_id,
         )
     world.active_production = still
-

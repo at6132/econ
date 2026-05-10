@@ -14,6 +14,8 @@ class MaterialDef:
     display_name: str
     mass_per_unit_kg: float
     category: str  # ore, organic, processed, energy, construction
+    spoils_to: MaterialId | None = None
+    spoilage_interval_ticks: int = 0  # 0 = disabled; checked as tick % interval == 0
 
 
 # ~10 starter materials for Phase 1 prototype
@@ -37,7 +39,17 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         MaterialId("copper_ingot"), "Copper ingot", 8960.0, "processed"
     ),
     MaterialId("clay"): MaterialDef(MaterialId("clay"), "Clay", 1800.0, "construction"),
-    MaterialId("grain"): MaterialDef(MaterialId("grain"), "Grain", 780.0, "organic"),
+    MaterialId("grain"): MaterialDef(
+        MaterialId("grain"),
+        "Grain",
+        780.0,
+        "organic",
+        spoils_to=MaterialId("spoiled_grain"),
+        spoilage_interval_ticks=10,
+    ),
+    MaterialId("spoiled_grain"): MaterialDef(
+        MaterialId("spoiled_grain"), "Spoiled grain", 780.0, "organic"
+    ),
     MaterialId("coal"): MaterialDef(MaterialId("coal"), "Coal", 1300.0, "energy"),
     MaterialId("electricity"): MaterialDef(
         MaterialId("electricity"), "Electricity (MWh)", 0.0, "energy"

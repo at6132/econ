@@ -7,6 +7,7 @@ from realm.ledger import market_escrow_account, party_cash_account
 from realm.markets import (
     cancel_buy_order,
     cancel_sell_order,
+    p2p_trade,
     place_buy_order,
     place_sell_order,
     sell_into_bids,
@@ -100,3 +101,56 @@ def test_sell_into_bids_moves_inventory_and_conserves() -> None:
     assert r["ok"] is True
     assert w.ledger.total_cents() == t0
     assert w.inventory.qty(player, MaterialId("electricity")) == before_e - 1
+
+
+def test_p2p_idempotent_replay_does_not_double_settle() -> None:
+    w = bootstrap_frontier(seed=93, grid_width=2, grid_height=2)
+    buyer = PartyId("t1_consumer")
+    before = w.inventory.qty(buyer, MaterialId("grain"))
+    r1 = p2p_trade(
+        w,
+        PartyId("player"),
+        buyer,
+        MaterialId("grain"),
+        1,
+        50,
+        idempotency_key="idem-a",
+    )
+    assert r1["ok"] is True
+    mid = before + 1
+    assert w.inventory.qty(buyer, MaterialId("grain")) == mid
+    r2 = p2p_trade(
+        w,
+        PartyId("player"),
+        buyer,
+        MaterialId("grain"),
+        1,
+        50,
+        idempotency_key="idem-a",
+    )
+    assert r2.get("idempotent_replay") is True
+    assert w.inventory.qty(buyer, MaterialId("grain")) == mid
+
+
+def test_p2p_idempotency_mismatch() -> None:
+    w = bootstrap_frontier(seed=94, grid_width=2, grid_height=2)
+    assert p2p_trade(
+        w,
+        PartyId("player"),
+        PartyId("t1_consumer"),
+        MaterialId("grain"),
+        1,
+        50,
+        idempotency_key="idem-b",
+    )["ok"] is True
+    r = p2p_trade(
+        w,
+        PartyId("player"),
+        PartyId("t1_consumer"),
+        MaterialId("grain"),
+        2,
+        50,
+        idempotency_key="idem-b",
+    )
+    assert r["ok"] is False
+    assert r.get("code") == "P2P_IDEMPOTENCY_MISMATCH"

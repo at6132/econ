@@ -109,6 +109,7 @@ def dump_world(world: World) -> dict[str, Any]:
         "plot_buildings": list(world.plot_buildings),
         "stub_hires": list(world.stub_hires),
         "market_history": list(world.market_history),
+        "p2p_idempotency": {str(k): dict(v) for k, v in world.p2p_idempotency.items()},
     }
 
 
@@ -212,6 +213,7 @@ def load_world(d: dict[str, Any]) -> World:
         plot_buildings=list(d.get("plot_buildings", [])),
         stub_hires=list(d.get("stub_hires", [])),
         market_history=list(d.get("market_history", [])),
+        p2p_idempotency={str(k): dict(v) for k, v in d.get("p2p_idempotency", {}).items()},
     )
     return world
 

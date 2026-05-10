@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -79,8 +80,9 @@ class World:
     plot_buildings: list[dict] = field(default_factory=list)
     stub_hires: list[dict] = field(default_factory=list)
     market_history: list[dict] = field(default_factory=list)
+    p2p_idempotency: dict[str, dict] = field(default_factory=dict)
 
-    def rng(self, purpose: str):
+    def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
 
 

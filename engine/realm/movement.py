@@ -11,6 +11,7 @@ from realm.geo import manhattan
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.storage_caps import try_add_inventory
 from realm.world import InTransit, World
 
 BASE_SHIP_FEE_CENTS = 100
@@ -95,7 +96,7 @@ def deliver_transit(world: World) -> None:
         if s.arrive_tick > t:
             keep.append(s)
             continue
-        ad = world.inventory.add(s.party, s.material, s.qty)
+        ad = try_add_inventory(world, s.party, s.material, s.qty)
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue

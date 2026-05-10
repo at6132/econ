@@ -245,6 +245,7 @@ def post_trade_p2p(
     material: Annotated[str, Query()],
     qty: Annotated[int, Query()],
     total_price_cents: Annotated[int, Query()],
+    idempotency_key: Annotated[str | None, Query()] = None,
 ) -> dict:
     r = p2p_trade(
         _world,
@@ -253,9 +254,11 @@ def post_trade_p2p(
         MaterialId(material),
         qty,
         total_price_cents,
+        idempotency_key=idempotency_key,
     )
     if not r["ok"]:
-        raise HTTPException(status_code=400, detail=r["reason"])
+        code = r.get("code", "P2P_ERROR")
+        raise HTTPException(status_code=400, detail={"reason": r["reason"], "code": code})
     return dict(r)
 
 

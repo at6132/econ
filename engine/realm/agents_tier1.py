@@ -1,4 +1,17 @@
-"""Tier 1 behavioral agents — six cheap NPC loops (Phase 1 / doc 06)."""
+"""Tier 1 behavioral agents — six cheap NPC loops (Phase 1 / doc 06).
+
+Archetype summary (all respect ``world.tick``; no wall-clock):
+
+- **t1_consumer** — every 5 ticks: ``market_buy`` grain (1u).
+- **t1_lumber_buyer** — every 7 ticks: ``market_buy`` lumber (1u).
+- **t1_timber_merchant** — tick 0 or every 14 ticks: if holding ≥2 timber, ``place_sell_order`` (2u @ 72¢).
+- **t1_coal_vendor** — tick 0 or every 18 ticks: if holding ≥1 coal, ``place_sell_order`` (1u @ 40¢).
+- **t1_clay_vendor** — tick 0 or every 22 ticks: if holding ≥1 clay, ``place_sell_order`` (1u @ 52¢).
+- **t1_electricity_buyer** — every 9 ticks: ``market_buy`` electricity (2u).
+
+Failures are silent (engine returns ``ok: false``); agents do not retry within the same tick.
+Ledger total should stay constant across ticks (see ``test_tier1_agent_ticks_conserve_total_cents``).
+"""
 
 from __future__ import annotations
 
