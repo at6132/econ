@@ -7,11 +7,14 @@ does not model labor, energy cost, or concurrent production runs.
 from __future__ import annotations
 
 from realm.ids import PartyId
+from realm.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
 from realm.recipes import recipe_public_list
-from realm.world import World
+from realm.world import Plot, World
 
 
-def validate_linear_recipe_chain(world: World, party: PartyId, chain_recipe_ids: list[str]) -> dict:
+def validate_linear_recipe_chain(
+    world: World, party: PartyId, chain_recipe_ids: list[str], *, plot: Plot
+) -> dict:
     """Return ``{ok: true, final_inventory}`` or ``{ok: false, errors: [...]}``."""
     catalog_list = recipe_public_list()
     by_id = {r["id"]: r for r in catalog_list}
@@ -20,10 +23,22 @@ def validate_linear_recipe_chain(world: World, party: PartyId, chain_recipe_ids:
     inv: dict[str, int] = {str(k): int(v) for k, v in bucket.items()}
     errors: list[str] = []
 
+    if not terrain_allows_workshop(plot.terrain):
+        errors.append(f"This plot ({plot.terrain.value}) cannot host workshop chains — pick dry land.")
+
     for i, rid in enumerate(chain_recipe_ids):
+        if errors:
+            break
         r = by_id.get(rid)
         if r is None:
             errors.append(f"Step {i + 1}: unknown recipe “{rid}”.")
+            break
+        if not recipe_allowed_on_terrain(plot.terrain, rid):
+            display = str(r.get("display_name", rid))
+            errors.append(
+                f"Step {i + 1} — {display}: not available on this plot "
+                f"(terrain {plot.terrain.value}).",
+            )
             break
         display = str(r.get("display_name", rid))
         inputs: dict[str, int] = r.get("inputs") or {}

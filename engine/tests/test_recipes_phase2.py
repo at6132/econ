@@ -61,7 +61,7 @@ def test_mill_flour_run_conserves_player_inventory_units() -> None:
 
 
 def test_steel_alloy_outputs_match_inputs_units() -> None:
-    w = bootstrap_frontier(seed=32, grid_width=3, grid_height=2)
+    w = bootstrap_frontier(seed=9, grid_width=3, grid_height=2)
     player = PartyId("player")
     pid = PlotId("p-0-0")
     assert claim_plot(w, player, pid)["ok"] is True

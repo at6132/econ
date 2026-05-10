@@ -7,6 +7,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
 from realm.world import ActiveProduction, World
@@ -113,11 +114,20 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     """
     if not _plot_owned_by(world, party, plot_id):
         return {"ok": False, "reason": "plot not owned"}
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return {"ok": False, "reason": "unknown plot"}
+    if not plot.surveyed:
+        return {"ok": False, "reason": "plot not surveyed"}
+    if not terrain_allows_workshop(plot.terrain):
+        return {"ok": False, "reason": "cannot produce on water"}
     if _active_on_plot(world, plot_id):
         return {"ok": False, "reason": "plot already has active production"}
     recipe = RECIPES.get(recipe_id)
     if recipe is None:
         return {"ok": False, "reason": "unknown recipe"}
+    if not recipe_allowed_on_terrain(plot.terrain, recipe_id):
+        return {"ok": False, "reason": "recipe not available on this plot"}
     labor_bps = _labor_bps_for_plot(world, party, plot_id)
     labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)

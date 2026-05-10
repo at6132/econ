@@ -137,7 +137,7 @@ def post_schematic_validate(
     raw = body.get("recipe_ids")
     if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
         raise HTTPException(status_code=400, detail="body.recipe_ids must be a list of strings")
-    return validate_linear_recipe_chain(_world, party_id, raw)
+    return validate_linear_recipe_chain(_world, party_id, raw, plot=plot)
 
 
 @app.post("/plots/{plot_id}/build")
