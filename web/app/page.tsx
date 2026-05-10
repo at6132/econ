@@ -23,6 +23,7 @@ import {
   FRONTIER_ONBOARD_STORAGE_KEY,
   FRONTIER_SIM_PAUSED_STORAGE_KEY,
   FRONTIER_SIM_SPEED_STORAGE_KEY,
+  FRONTIER_SCENARIO_STORAGE_KEY,
   FRONTIER_SURVEY_COST_CENTS,
 } from "./frontierConstants";
 import { getFrontierMenu, type TabId } from "./frontierMenu";
@@ -41,6 +42,9 @@ import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 
 const MAP_PAD = 4;
+
+const DEV_RESET_SCENARIOS = ["frontier", "bootstrapper", "speculator", "cartel"] as const;
+type DevResetScenarioId = (typeof DEV_RESET_SCENARIOS)[number];
 
 /** Real-time gap between engine ticks when the sim is running (solo pacing; not wall-clock canon). */
 const SIM_SPEEDS_MS: readonly [number, number, number] = [2800, 1400, 700];
@@ -151,6 +155,8 @@ type BuildingCatalogDto = {
 };
 
 type PlotBuildingDto = {
+  instance_id?: string;
+  condition_bps?: number;
   plot_id: string;
   party: string;
   building_id: string;
@@ -187,6 +193,10 @@ type SupplyContractDto = {
 type WorldDto = {
   seed: number;
   tick: number;
+  scenario_id?: string;
+  market_intel_expires_tick?: number;
+  market_intel_active?: boolean;
+  market_history_free_window_ticks?: number;
   plots: PlotDto[];
   balances_cents: Record<string, number>;
   inventory: Record<string, Record<string, number>>;
@@ -234,6 +244,17 @@ function readSimSpeedIdxFromStorage(): 0 | 1 | 2 {
   return 1;
 }
 
+function readDevResetScenarioFromStorage(): DevResetScenarioId {
+  if (typeof window === "undefined") return "frontier";
+  try {
+    const s = localStorage.getItem(FRONTIER_SCENARIO_STORAGE_KEY);
+    if (s && (DEV_RESET_SCENARIOS as readonly string[]).includes(s)) return s as DevResetScenarioId;
+  } catch {
+    /* ignore */
+  }
+  return "frontier";
+}
+
 export default function HomePage() {
   const [world, setWorld] = useState<WorldDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -241,6 +262,7 @@ export default function HomePage() {
   const tickInFlightRef = useRef(false);
   const [simPaused, setSimPaused] = useState(readSimPausedFromStorage);
   const [simSpeedIdx, setSimSpeedIdx] = useState<0 | 1 | 2>(readSimSpeedIdxFromStorage);
+  const [devResetScenario, setDevResetScenario] = useState<DevResetScenarioId>(readDevResetScenarioFromStorage);
   const [tab, setTab] = useState<TabId>("world");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
@@ -311,6 +333,14 @@ export default function HomePage() {
       /* ignore */
     }
   }, [simPaused, simSpeedIdx]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FRONTIER_SCENARIO_STORAGE_KEY, devResetScenario);
+    } catch {
+      /* ignore */
+    }
+  }, [devResetScenario]);
 
   useEffect(() => {
     didInitPan.current = false;
@@ -662,7 +692,7 @@ export default function HomePage() {
     if (
       typeof window !== "undefined" &&
       !window.confirm(
-        "Reset the in-memory Frontier world to a fresh bootstrap (seed 42)? Unsaved progress is lost unless you saved to SQLite first.",
+        `Reset the in-memory world to a fresh bootstrap (seed 42, scenario “${devResetScenario}”)? Unsaved progress is lost unless you saved to SQLite first.`,
       )
     ) {
       return;
@@ -670,7 +700,8 @@ export default function HomePage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/engine/dev/reset?seed=42", { method: "POST" });
+      const q = new URLSearchParams({ seed: "42", scenario: devResetScenario });
+      const r = await fetch(`/api/engine/dev/reset?${q.toString()}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       didInitPan.current = false;
       await load();
@@ -1065,6 +1096,37 @@ export default function HomePage() {
     }
   }
 
+  async function maintainBuildingOnPlot(plotId: string, instanceId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ instance_id: instanceId, party: "player" });
+      const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/maintain?${q.toString()}`, {
+        method: "POST",
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function buyMarketIntel() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/engine/market/intel?party=player`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function buildOnSelectedPlot(buildingId: string) {
     if (!selectedPlotId) {
       setError("Select a surveyed plot you own.");
@@ -1248,6 +1310,11 @@ export default function HomePage() {
                 <span className="realm-pill">
                   Seed <strong>{world.seed}</strong>
                 </span>
+                {world.scenario_id ? (
+                  <span className="realm-pill">
+                    Scenario <strong>{world.scenario_id}</strong>
+                  </span>
+                ) : null}
                 <span className="realm-pill">
                   Cash <strong>${playerCash}</strong>
                 </span>
@@ -1540,9 +1607,31 @@ export default function HomePage() {
                               {buildingsHere.length > 0 ? (
                                 <>
                                   <SectionTitle>Built here</SectionTitle>
-                                  <ul className="realm-help" style={{ marginTop: 4 }}>
+                                  <ul className="realm-help" style={{ marginTop: 4, paddingLeft: 18 }}>
                                     {buildingsHere.map((x, i) => (
-                                      <li key={`${x.building_id}-${i}`}>{x.label}</li>
+                                      <li key={x.instance_id ?? `${x.building_id}-${i}`} style={{ marginBottom: 8 }}>
+                                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                                          <span>
+                                            {x.label}
+                                            {typeof x.condition_bps === "number" ? (
+                                              <span style={{ opacity: 0.85 }}>
+                                                {" "}
+                                                · condition {(x.condition_bps / 100).toFixed(0)}%
+                                              </span>
+                                            ) : null}
+                                          </span>
+                                          {x.instance_id && selectedPlotId ? (
+                                            <button
+                                              type="button"
+                                              className="realm-btn realm-btn--ghost realm-btn--sm"
+                                              disabled={busy}
+                                              onClick={() => void maintainBuildingOnPlot(selectedPlotId, x.instance_id!)}
+                                            >
+                                              Maintain
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                      </li>
                                     ))}
                                   </ul>
                                 </>
@@ -1712,6 +1801,23 @@ export default function HomePage() {
                       </div>
 
                       <SectionTitle>Price · {displayMaterial(bazaarActiveId)}</SectionTitle>
+                      <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+                        {world.market_intel_active ? (
+                          <>
+                            <strong>Full history</strong> — market analytics active through tick{" "}
+                            {world.market_intel_expires_tick ?? "—"}.
+                          </>
+                        ) : (
+                          <>
+                            Free chart shows only the last{" "}
+                            <strong>{world.market_history_free_window_ticks ?? 48}</strong> recorded ticks. Purchase extended visibility to see the full feed
+                            in this client.
+                          </>
+                        )}{" "}
+                        <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" disabled={busy} onClick={() => void buyMarketIntel()}>
+                          Buy market intel ($250)
+                        </button>
+                      </p>
                       <div className="realm-chart-card">
                         <MarketHistoryChart history={world.market_history ?? []} symbol={bazaarActiveId} />
                       </div>
@@ -2381,9 +2487,26 @@ export default function HomePage() {
                           Load snapshot
                         </button>
                         {SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS ? (
-                          <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void devResetWorld()}>
-                            Dev: reset world
-                          </button>
+                          <>
+                            <label className="realm-label" style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+                              Reset scenario
+                              <select
+                                className="realm-input"
+                                style={{ minWidth: 140 }}
+                                value={devResetScenario}
+                                onChange={(e) => setDevResetScenario(e.target.value as DevResetScenarioId)}
+                              >
+                                {DEV_RESET_SCENARIOS.map((s) => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void devResetWorld()}>
+                              Dev: reset world
+                            </button>
+                          </>
                         ) : null}
                       </div>
                     </>
