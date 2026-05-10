@@ -288,6 +288,20 @@ export default function HomePage() {
   const [supplyQty, setSupplyQty] = useState("2");
   const [supplyTotalDollars, setSupplyTotalDollars] = useState("0.80");
   const [supplyDueTicks, setSupplyDueTicks] = useState("10");
+  const [stubPhase2ContractId, setStubPhase2ContractId] = useState("");
+  const [stubLoanBorrower, setStubLoanBorrower] = useState("t1_consumer");
+  const [stubLoanPrincipalDollars, setStubLoanPrincipalDollars] = useState("100.00");
+  const [stubLoanRepayDollars, setStubLoanRepayDollars] = useState("110.00");
+  const [stubLoanDueTicks, setStubLoanDueTicks] = useState("15");
+  const [stubEquityIssuer, setStubEquityIssuer] = useState("player");
+  const [stubEquityInvestor, setStubEquityInvestor] = useState("t1_consumer");
+  const [stubEquityInvestmentDollars, setStubEquityInvestmentDollars] = useState("20.00");
+  const [stubEquityDivCents, setStubEquityDivCents] = useState("25");
+  const [stubEquityDivTicks, setStubEquityDivTicks] = useState("4");
+  const [stubServiceProvider, setStubServiceProvider] = useState("player");
+  const [stubServiceSubscriber, setStubServiceSubscriber] = useState("t1_consumer");
+  const [stubServiceFeeDollars, setStubServiceFeeDollars] = useState("5.00");
+  const [stubServiceDurationTicks, setStubServiceDurationTicks] = useState("8");
   const [bazaarAdvancedOpen, setBazaarAdvancedOpen] = useState(false);
   const [advBidIceberg, setAdvBidIceberg] = useState("");
   const [advBidHonored, setAdvBidHonored] = useState("0");
@@ -545,6 +559,13 @@ export default function HomePage() {
     if (!world?.contracts) return [];
     return (world.contracts as unknown[]).filter(
       (c): c is SupplyContractDto => (c as SupplyContractDto).kind === "supply",
+    );
+  }, [world?.contracts]);
+
+  const financialStubRows = useMemo(() => {
+    if (!world?.contracts) return [];
+    return (world.contracts as Record<string, unknown>[]).filter((c) =>
+      ["loan", "equity_stub", "service_sub"].includes(String(c.kind)),
     );
   }, [world?.contracts]);
 
@@ -1060,6 +1081,178 @@ export default function HomePage() {
           label: "OK",
         });
       }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function proposeLoanStub() {
+    const principal = parseDollarsToCents(stubLoanPrincipalDollars);
+    const repay = parseDollarsToCents(stubLoanRepayDollars);
+    const due = Number(stubLoanDueTicks);
+    if (principal == null || principal <= 0 || repay == null || repay <= 0 || !Number.isFinite(due) || due < 1) {
+      setError("Loan: enter positive dollar amounts and a deadline of at least 1 tick.");
+      return;
+    }
+    if (repay < principal) {
+      setError("Loan: repay total must be at least the principal.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        lender: "player",
+        borrower: stubLoanBorrower.trim(),
+        principal_cents: String(principal),
+        repay_cents: String(repay),
+        due_in_ticks: String(Math.floor(due)),
+      });
+      const r = await fetch(`/api/engine/contracts/loan/propose?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      const body = (await r.json()) as { contract_id?: string };
+      if (body.contract_id) setStubPhase2ContractId(body.contract_id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptLoanStubAsBorrower() {
+    const cid = stubPhase2ContractId.trim();
+    if (!cid) {
+      setError("Set contract id (from your last propose) before accepting.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ borrower: stubLoanBorrower.trim(), contract_id: cid });
+      const r = await fetch(`/api/engine/contracts/loan/accept?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function repayLoanStub() {
+    const cid = stubPhase2ContractId.trim();
+    if (!cid) {
+      setError("Set contract id before repaying.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ borrower: stubLoanBorrower.trim(), contract_id: cid });
+      const r = await fetch(`/api/engine/contracts/loan/repay?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function proposeEquityStubPanel() {
+    const inv = parseDollarsToCents(stubEquityInvestmentDollars);
+    const div = Number(stubEquityDivCents);
+    const ticks = Number(stubEquityDivTicks);
+    if (inv == null || inv <= 0 || !Number.isFinite(div) || div <= 0 || !Number.isFinite(ticks) || ticks < 1) {
+      setError("Equity stub: positive investment (dollars), positive dividend (cents per tick), and tick count.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        issuer: stubEquityIssuer.trim(),
+        investor: stubEquityInvestor.trim(),
+        investment_cents: String(inv),
+        dividend_per_tick_cents: String(Math.floor(div)),
+        dividend_ticks: String(Math.floor(ticks)),
+      });
+      const r = await fetch(`/api/engine/contracts/equity/propose?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      const body = (await r.json()) as { contract_id?: string };
+      if (body.contract_id) setStubPhase2ContractId(body.contract_id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptEquityStubPanel() {
+    const cid = stubPhase2ContractId.trim();
+    if (!cid) {
+      setError("Set contract id before accepting equity stub.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ investor: stubEquityInvestor.trim(), contract_id: cid });
+      const r = await fetch(`/api/engine/contracts/equity/accept?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function proposeServiceStubPanel() {
+    const fee = parseDollarsToCents(stubServiceFeeDollars);
+    const dur = Number(stubServiceDurationTicks);
+    if (fee == null || fee <= 0 || !Number.isFinite(dur) || dur < 1) {
+      setError("Service stub: positive fee and duration ticks.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        provider: stubServiceProvider.trim(),
+        subscriber: stubServiceSubscriber.trim(),
+        fee_cents: String(fee),
+        duration_ticks: String(Math.floor(dur)),
+      });
+      const r = await fetch(`/api/engine/contracts/service/propose?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      const body = (await r.json()) as { contract_id?: string };
+      if (body.contract_id) setStubPhase2ContractId(body.contract_id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptServiceStubPanel() {
+    const cid = stubPhase2ContractId.trim();
+    if (!cid) {
+      setError("Set contract id before accepting service stub.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ subscriber: stubServiceSubscriber.trim(), contract_id: cid });
+      const r = await fetch(`/api/engine/contracts/service/accept?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -2383,6 +2576,243 @@ export default function HomePage() {
                                       Fulfill
                                     </button>
                                   ) : null}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      <SectionTitle>Financial stubs (Phase 2)</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Engine FSMs for <strong>loan</strong> (principal → repay), <strong>equity_stub</strong> (investment + per-tick dividends), and{" "}
+                        <strong>service_sub</strong> (prepaid window). Use the contract id field after each propose; run the clock for tick-driven equity and
+                        loan collections.
+                      </p>
+                      <label className="realm-label" style={{ display: "block", marginBottom: 10 }}>
+                        Last stub contract id
+                        <input
+                          className="realm-input"
+                          value={stubPhase2ContractId}
+                          onChange={(e) => setStubPhase2ContractId(e.target.value)}
+                          spellCheck={false}
+                          style={{ width: "100%", maxWidth: 360 }}
+                          placeholder="c-…"
+                        />
+                      </label>
+
+                      <p className="realm-help" style={{ margin: "12px 0 6px", fontWeight: 600 }}>
+                        Loan (you lend as player)
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 12 }}>
+                        <label className="realm-label">
+                          Borrower
+                          <select
+                            className="realm-input"
+                            value={pactCounterpartyChoices.includes(stubLoanBorrower) ? stubLoanBorrower : pactCounterpartyChoices[0] ?? ""}
+                            onChange={(e) => setStubLoanBorrower(e.target.value)}
+                            style={{ minWidth: 160 }}
+                          >
+                            {pactCounterpartyChoices.map((p) => (
+                              <option key={p} value={p}>
+                                {displayParty(p)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          Principal ($)
+                          <input
+                            className="realm-input"
+                            value={stubLoanPrincipalDollars}
+                            onChange={(e) => setStubLoanPrincipalDollars(e.target.value)}
+                            style={{ width: 80 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          Repay total ($)
+                          <input
+                            className="realm-input"
+                            value={stubLoanRepayDollars}
+                            onChange={(e) => setStubLoanRepayDollars(e.target.value)}
+                            style={{ width: 80 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          Due in (ticks)
+                          <input
+                            className="realm-input"
+                            value={stubLoanDueTicks}
+                            onChange={(e) => setStubLoanDueTicks(e.target.value)}
+                            style={{ width: 56 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void proposeLoanStub()}>
+                          Propose loan
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void acceptLoanStubAsBorrower()}>
+                          Accept as borrower
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void repayLoanStub()}>
+                          Repay
+                        </button>
+                      </div>
+
+                      <p className="realm-help" style={{ margin: "12px 0 6px", fontWeight: 600 }}>
+                        Equity stub
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 12 }}>
+                        <label className="realm-label">
+                          Issuer
+                          <select
+                            className="realm-input"
+                            value={["player", ...pactCounterpartyChoices].includes(stubEquityIssuer) ? stubEquityIssuer : "player"}
+                            onChange={(e) => setStubEquityIssuer(e.target.value)}
+                          >
+                            <option value="player">You</option>
+                            {pactCounterpartyChoices.map((p) => (
+                              <option key={p} value={p}>
+                                {displayParty(p)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          Investor
+                          <select
+                            className="realm-input"
+                            value={["player", ...pactCounterpartyChoices].includes(stubEquityInvestor) ? stubEquityInvestor : "t1_consumer"}
+                            onChange={(e) => setStubEquityInvestor(e.target.value)}
+                          >
+                            <option value="player">You</option>
+                            {pactCounterpartyChoices.map((p) => (
+                              <option key={`inv-${p}`} value={p}>
+                                {displayParty(p)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          Investment ($)
+                          <input
+                            className="realm-input"
+                            value={stubEquityInvestmentDollars}
+                            onChange={(e) => setStubEquityInvestmentDollars(e.target.value)}
+                            style={{ width: 72 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          Dividend (¢/tick)
+                          <input
+                            className="realm-input"
+                            value={stubEquityDivCents}
+                            onChange={(e) => setStubEquityDivCents(e.target.value)}
+                            style={{ width: 56 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          Ticks
+                          <input
+                            className="realm-input"
+                            value={stubEquityDivTicks}
+                            onChange={(e) => setStubEquityDivTicks(e.target.value)}
+                            style={{ width: 48 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void proposeEquityStubPanel()}>
+                          Propose equity
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void acceptEquityStubPanel()}>
+                          Accept as investor
+                        </button>
+                      </div>
+
+                      <p className="realm-help" style={{ margin: "12px 0 6px", fontWeight: 600 }}>
+                        Service subscription (prepaid)
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
+                        <label className="realm-label">
+                          Provider
+                          <select
+                            className="realm-input"
+                            value={["player", ...pactCounterpartyChoices].includes(stubServiceProvider) ? stubServiceProvider : "player"}
+                            onChange={(e) => setStubServiceProvider(e.target.value)}
+                          >
+                            <option value="player">You</option>
+                            {pactCounterpartyChoices.map((p) => (
+                              <option key={`pr-${p}`} value={p}>
+                                {displayParty(p)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          Subscriber
+                          <select
+                            className="realm-input"
+                            value={["player", ...pactCounterpartyChoices].includes(stubServiceSubscriber) ? stubServiceSubscriber : "t1_consumer"}
+                            onChange={(e) => setStubServiceSubscriber(e.target.value)}
+                          >
+                            <option value="player">You</option>
+                            {pactCounterpartyChoices.map((p) => (
+                              <option key={`sub-${p}`} value={p}>
+                                {displayParty(p)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="realm-label">
+                          Fee ($)
+                          <input
+                            className="realm-input"
+                            value={stubServiceFeeDollars}
+                            onChange={(e) => setStubServiceFeeDollars(e.target.value)}
+                            style={{ width: 64 }}
+                          />
+                        </label>
+                        <label className="realm-label">
+                          Duration (ticks)
+                          <input
+                            className="realm-input"
+                            value={stubServiceDurationTicks}
+                            onChange={(e) => setStubServiceDurationTicks(e.target.value)}
+                            style={{ width: 56 }}
+                          />
+                        </label>
+                        <button type="button" className="realm-btn realm-btn--primary" disabled={busy} onClick={() => void proposeServiceStubPanel()}>
+                          Propose service
+                        </button>
+                        <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void acceptServiceStubPanel()}>
+                          Accept as subscriber
+                        </button>
+                      </div>
+
+                      {financialStubRows.length === 0 ? (
+                        <p className="realm-help" style={{ marginBottom: 16 }}>
+                          No financial stub rows in this snapshot yet.
+                        </p>
+                      ) : (
+                        <table className="realm-table" style={{ marginBottom: 16 }}>
+                          <thead>
+                            <tr>
+                              <th>Id</th>
+                              <th>Kind</th>
+                              <th>Status</th>
+                              <th>Notes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {financialStubRows.map((c) => (
+                              <tr key={String(c.id)}>
+                                <td style={{ fontFamily: "var(--realm-mono)", fontSize: 12 }}>{String(c.id)}</td>
+                                <td>{String(c.kind)}</td>
+                                <td>{String(c.status ?? "—")}</td>
+                                <td style={{ fontSize: 12 }} className="realm-help">
+                                  {c.kind === "loan"
+                                    ? `${String(c.lender)} → ${String(c.borrower)} · repay ${formatUsdFromCents(Number(c.repay_cents))}`
+                                    : c.kind === "equity_stub"
+                                      ? `${String(c.issuer)} / ${String(c.investor)} · ${String(c.dividends_remaining ?? "—")} div left`
+                                      : `${String(c.provider)} → ${String(c.subscriber)} · to tick ${String(c.expires_tick ?? "—")}`}
                                 </td>
                               </tr>
                             ))}
