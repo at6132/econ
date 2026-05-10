@@ -46,7 +46,7 @@ export const FRONTIER_FEATURES: FrontierFeature[] = [
     id: "sim_clock",
     title: "Running sim clock",
     detail:
-      "Engine ticks advance on a client timer (pause, speed presets, optional single-step). Solo pacing only — multiplayer wall-clock comes later.",
+      "Engine ticks advance on a client timer (pause and speed presets). Solo pacing only — multiplayer wall-clock comes later.",
     lane: "live",
     jumpTab: "world",
   },

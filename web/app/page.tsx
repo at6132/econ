@@ -201,7 +201,6 @@ export default function HomePage() {
   const tickInFlightRef = useRef(false);
   const [simPaused, setSimPaused] = useState(readSimPausedFromStorage);
   const [simSpeedIdx, setSimSpeedIdx] = useState<0 | 1 | 2>(readSimSpeedIdxFromStorage);
-  const [simAdvancing, setSimAdvancing] = useState(false);
   const [tab, setTab] = useState<TabId>("world");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
@@ -430,36 +429,28 @@ export default function HomePage() {
   const canAffordSurvey =
     typeof playerCashCents === "number" && playerCashCents >= FRONTIER_SURVEY_COST_CENTS;
 
-  const advanceSimTick = useCallback(
-    async (opts: { lockCommandUi?: boolean } = {}) => {
-      if (tickInFlightRef.current) return;
-      tickInFlightRef.current = true;
-      const lockUi = opts.lockCommandUi ?? false;
-      if (lockUi) setBusy(true);
-      setSimAdvancing(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/engine/tick", { method: "POST" });
-        if (!r.ok) throw new Error(await r.text());
-        await load();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        setSimPaused(true);
-      } finally {
-        tickInFlightRef.current = false;
-        setSimAdvancing(false);
-        if (lockUi) setBusy(false);
-      }
-    },
-    [load],
-  );
+  const advanceSimTick = useCallback(async () => {
+    if (tickInFlightRef.current) return;
+    tickInFlightRef.current = true;
+    setError(null);
+    try {
+      const r = await fetch("/api/engine/tick", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSimPaused(true);
+    } finally {
+      tickInFlightRef.current = false;
+    }
+  }, [load]);
 
   const simIntervalMs = SIM_SPEEDS_MS[simSpeedIdx];
 
   useEffect(() => {
     if (!world || simPaused || onboardingOpen) return;
     const id = window.setInterval(() => {
-      void advanceSimTick({});
+      void advanceSimTick();
     }, simIntervalMs);
     return () => window.clearInterval(id);
   }, [world?.seed, simPaused, simIntervalMs, advanceSimTick, onboardingOpen]);
@@ -1054,6 +1045,7 @@ export default function HomePage() {
       localStorage.removeItem("realm_frontier_onboard_v4");
       localStorage.removeItem("realm_frontier_onboard_v5");
       localStorage.removeItem("realm_frontier_onboard_v6");
+      localStorage.removeItem("realm_frontier_onboard_v7");
       localStorage.removeItem(FRONTIER_SIM_PAUSED_STORAGE_KEY);
       localStorage.removeItem(FRONTIER_SIM_SPEED_STORAGE_KEY);
     } catch {
@@ -1118,17 +1110,6 @@ export default function HomePage() {
                 >
                   {SIM_SPEED_LABELS[simSpeedIdx]}
                 </button>
-                <motion.button
-                  type="button"
-                  className="realm-btn realm-btn--ghost realm-btn--sm"
-                  disabled={busy || simAdvancing}
-                  title="Advance exactly one engine tick (useful while paused)"
-                  onClick={() => void advanceSimTick({ lockCommandUi: true })}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  Step +1
-                </motion.button>
                 <button type="button" className="realm-btn realm-btn--ghost realm-btn--sm" onClick={() => setCommandOpen((o) => !o)}>
                   {commandOpen ? "Hide command" : "Command"}
                 </button>

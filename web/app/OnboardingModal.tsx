@@ -30,7 +30,7 @@ Produce queues a recipe: inputs and labor cash leave up front; outputs land when
   },
   {
     title: "Time: the clock runs",
-    body: `The engine advances in discrete ticks, but the client runs them for you on a timer. Use Pause when you want to read or stack orders without the world moving. Step +1 moves exactly one tick (handy while paused). The speed control changes how fast real time maps to ticks — it is solo pacing only, not a lore clock.
+    body: `The engine advances in discrete ticks, but the client runs them for you on a timer. Use Pause when you want to read or stack orders without the world moving. The speed control changes how fast real time maps to ticks — it is solo pacing only, not a lore clock.
 
 Each tick walks transit, production, spoilage where applicable, wages, scripted NPC trading, and contract deadlines.`,
   },
