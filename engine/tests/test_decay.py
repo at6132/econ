@@ -6,6 +6,7 @@ from realm.actions import claim_plot, survey_plot
 from realm.buildings import build_on_plot
 from realm.decay import (
     BUILDING_CONDITION_FULL_BPS,
+    MAINTENANCE_COST_DIVISOR,
     maintain_building,
     tick_building_decay,
 )
@@ -30,6 +31,21 @@ def test_tick_building_decay_reduces_condition() -> None:
     )
     tick_building_decay(w)
     assert w.plot_buildings[-1]["condition_bps"] < BUILDING_CONDITION_FULL_BPS
+
+
+def test_maintenance_fee_is_max_of_floor_and_build_cost_fraction() -> None:
+    w = bootstrap_frontier(seed=41, grid_width=3, grid_height=2)
+    pid = PlotId("p-0-0")
+    assert claim_plot(w, PartyId("player"), pid)["ok"] is True
+    assert survey_plot(w, PartyId("player"), pid)["ok"] is True
+    assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
+    row = next(b for b in w.plot_buildings if b.get("building_id") == "watch_hut")
+    base = int(row["cost_cents"])
+    expected = max(1_000, base // MAINTENANCE_COST_DIVISOR)
+    row["condition_bps"] = 1_000
+    r = maintain_building(w, PartyId("player"), str(row["instance_id"]))
+    assert r["ok"] is True
+    assert r["fee_cents"] == expected
 
 
 def test_maintain_building_restores_condition_and_conserves_ledger_total() -> None:

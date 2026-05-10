@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from realm.api import app
+from realm.decay import BUILDING_CONDITION_FULL_BPS
 
 
 def test_market_cancel_via_http_round_trip() -> None:
@@ -154,3 +155,48 @@ def test_survey_http_returns_terrain_and_recipe_ids() -> None:
     assert isinstance(body.get("recipe_ids"), list)
     assert "sawmill" in body["recipe_ids"]
     assert len(body["recipe_ids"]) >= 3
+
+
+def test_survey_http_conserves_ledger_total() -> None:
+    import realm.api as api
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 96})
+    c.post("/plots/p-1-0/claim", params={"party": "player"})
+    total_before = api._world.ledger.total_cents()
+    r = c.post("/plots/p-1-0/survey", params={"party": "player"})
+    assert r.status_code == 200
+    assert api._world.ledger.total_cents() == total_before
+
+
+def test_market_intel_http_conserves_ledger_total() -> None:
+    import realm.api as api
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 97})
+    total_before = api._world.ledger.total_cents()
+    r = c.post("/market/intel", params={"party": "player"})
+    assert r.status_code == 200
+    assert r.json().get("fee_cents") is not None
+    assert api._world.ledger.total_cents() == total_before
+
+
+def test_maintain_http_conserves_ledger_total() -> None:
+    import realm.api as api
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 98})
+    c.post("/plots/p-0-0/claim", params={"party": "player"})
+    c.post("/plots/p-0-0/survey", params={"party": "player"})
+    rb = c.post("/plots/p-0-0/build", params={"party": "player", "building_id": "watch_hut"})
+    assert rb.status_code == 200
+    row = next(b for b in api._world.plot_buildings if b.get("building_id") == "watch_hut")
+    row["condition_bps"] = 500
+    total_before = api._world.ledger.total_cents()
+    r = c.post(
+        "/plots/p-0-0/maintain",
+        params={"party": "player", "instance_id": str(row["instance_id"])},
+    )
+    assert r.status_code == 200
+    assert api._world.ledger.total_cents() == total_before
+    assert row["condition_bps"] == BUILDING_CONDITION_FULL_BPS
