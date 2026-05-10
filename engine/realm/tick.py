@@ -11,6 +11,7 @@ from realm.movement import deliver_transit
 from realm.production import tick_production
 from realm.spoilage import tick_material_spoilage
 from realm.social import tick_supply_contract_breaches
+from realm.contract_stubs import tick_phase2_financial_contracts
 from realm.world import World
 
 
@@ -25,4 +26,5 @@ def advance_tick(world: World) -> None:
     tick_tier2_agents(world)
     world.tick += 1
     tick_supply_contract_breaches(world)
+    tick_phase2_financial_contracts(world)
     record_market_snapshot(world)

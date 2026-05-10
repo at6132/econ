@@ -12,6 +12,11 @@ from realm.world import World
 
 def propose_contract_stub(world: World, party_a: PartyId, party_b: PartyId, kind: str) -> dict:
     """Legacy generic handshake (honor-only). Supply deals use ``propose_supply_contract``."""
+    if kind in ("loan", "equity_stub", "service_sub"):
+        return {
+            "ok": False,
+            "reason": "use POST /contracts/loan/propose, /contracts/equity/propose, or /contracts/service/propose",
+        }
     if kind == "supply":
         return {
             "ok": False,
@@ -44,6 +49,8 @@ def honor_contract_stub(world: World, contract_id: str) -> dict:
     for c in world.contracts:
         if c.get("id") != contract_id:
             continue
+        if c.get("kind") in ("loan", "equity_stub", "service_sub"):
+            return {"ok": False, "reason": "use phase-2 contract routes for this kind"}
         if c.get("kind") == "supply" and "deliver_by_tick" in c:
             return {"ok": False, "reason": "supply contracts use accept then fulfill endpoints"}
         if c.get("status") not in ("open", "active"):

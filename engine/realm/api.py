@@ -30,6 +30,15 @@ from realm.social import (
     propose_contract_stub,
     propose_supply_contract,
 )
+from realm.contract_stubs import (
+    accept_equity_stub,
+    accept_loan_contract,
+    accept_service_sub,
+    propose_equity_stub,
+    propose_loan_contract,
+    propose_service_sub,
+    repay_loan_contract,
+)
 from realm.tick import advance_tick
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
 
@@ -370,6 +379,111 @@ def post_contract_supply_fulfill(
     contract_id: Annotated[str, Query()],
 ) -> dict:
     r = fulfill_supply_contract(_world, PartyId(supplier), contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/loan/propose")
+def post_contract_loan_propose(
+    lender: Annotated[str, Query()],
+    borrower: Annotated[str, Query()],
+    principal_cents: Annotated[int, Query()],
+    repay_cents: Annotated[int, Query()],
+    due_in_ticks: Annotated[int, Query()],
+) -> dict:
+    r = propose_loan_contract(
+        _world,
+        PartyId(lender),
+        PartyId(borrower),
+        principal_cents,
+        repay_cents,
+        due_in_ticks,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/loan/accept")
+def post_contract_loan_accept(
+    borrower: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_loan_contract(_world, PartyId(borrower), contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/loan/repay")
+def post_contract_loan_repay(
+    borrower: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = repay_loan_contract(_world, PartyId(borrower), contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/equity/propose")
+def post_contract_equity_propose(
+    issuer: Annotated[str, Query()],
+    investor: Annotated[str, Query()],
+    investment_cents: Annotated[int, Query()],
+    dividend_per_tick_cents: Annotated[int, Query()],
+    dividend_ticks: Annotated[int, Query()],
+) -> dict:
+    r = propose_equity_stub(
+        _world,
+        PartyId(issuer),
+        PartyId(investor),
+        investment_cents,
+        dividend_per_tick_cents,
+        dividend_ticks,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/equity/accept")
+def post_contract_equity_accept(
+    investor: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_equity_stub(_world, PartyId(investor), contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/service/propose")
+def post_contract_service_propose(
+    provider: Annotated[str, Query()],
+    subscriber: Annotated[str, Query()],
+    fee_cents: Annotated[int, Query()],
+    duration_ticks: Annotated[int, Query()],
+) -> dict:
+    r = propose_service_sub(
+        _world,
+        PartyId(provider),
+        PartyId(subscriber),
+        fee_cents,
+        duration_ticks,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@app.post("/contracts/service/accept")
+def post_contract_service_accept(
+    subscriber: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_service_sub(_world, PartyId(subscriber), contract_id)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
