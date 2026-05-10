@@ -91,9 +91,7 @@ def dump_world(world: World) -> dict[str, Any]:
             for b in lst
         ]
     inv: dict[str, dict[str, int]] = {}
-    for party in sorted(world.parties, key=str):
-        if party not in world.inventory.stock:
-            continue
+    for party in sorted(world.inventory.parties_with_stock_rows(), key=str):
         mats = world.inventory.stock_for_party(party)
         inv[str(party)] = {str(m): q for m, q in mats.items()}
     return {

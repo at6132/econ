@@ -39,6 +39,10 @@ class Inventory:
         """Shallow copy of ``party``'s holdings; empty if no bucket has been created yet."""
         return dict(self.stock.get(party, {}))
 
+    def parties_with_stock_rows(self) -> list[PartyId]:
+        """Parties that have an inventory bucket (possibly empty)."""
+        return list(self.stock.keys())
+
     def _ensure_party(self, party: PartyId) -> dict[MaterialId, int]:
         if party not in self.stock:
             self.stock[party] = {}
