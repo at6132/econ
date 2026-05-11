@@ -11,7 +11,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-Tier-3 Haiku agents (optional): install `pip install -e ".[llm]"`, set `ANTHROPIC_API_KEY`, then `python -m realm.llm_cli --party llm_margaux` or `POST /llm/step?party=llm_margaux`. Disable with `REALM_LLM_DISABLE=1`. Model override: `REALM_LLM_MODEL` (default `claude-3-5-haiku-20241022`).
+Tier-3 Haiku (optional): `pip install -e ".[llm]"`, `ANTHROPIC_API_KEY`. Party ids are scenario-specific (e.g. frontier/millrace → `llm_margaux`, cartel → `llm_elira`). CLI: `python -m realm.llm_cli --party <id> --scenario <name>`. **Session spend cap:** `REALM_LLM_SESSION_CAP_USD` (default `2.0`); pricing estimates use `REALM_LLM_PRICE_INPUT_PER_MTOK_USD` / `OUTPUT`. Disable: `REALM_LLM_DISABLE=1`. Model: `REALM_LLM_MODEL` (default `claude-3-5-haiku-20241022`).
 
 Run the HTTP API (from this `engine/` directory):
 

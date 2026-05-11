@@ -16,7 +16,7 @@ from realm.actions import claim_plot, start_production_on_plot, survey_plot
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.ledger import party_cash_account
-from realm.llm_haiku import run_haiku_tool_session
+from realm.llm_haiku import run_haiku_tool_session, session_cap_micro_usd
 from realm.markets import market_buy, place_buy_order, place_sell_order
 from realm.materials import MATERIALS
 from realm.movement import dispatch_shipment
@@ -90,6 +90,11 @@ def build_observation_json(world: World, party: PartyId) -> str:
             "Use only plot ids that exist in the world grid (p-x-y). "
             "Materials must be from the catalog keys in your inventory or common market ids."
         ),
+        "your_recent_messages_to_player": [
+            row
+            for row in world.npc_messages_to_player[-14:]
+            if row.get("from_party") == str(party)
+        ],
     }
     return json.dumps(payload, indent=2)
 
@@ -98,6 +103,33 @@ def execute_llm_tool(world: World, party: PartyId, name: str, inp: dict[str, Any
     """Dispatch one tool; always returns a JSON-serializable dict."""
     if name == "sim_noop":
         return {"ok": True, "action": "noop"}
+
+    if name == "sim_message_player":
+        raw = inp.get("message")
+        text = str(raw).strip() if raw is not None else ""
+        if not text:
+            return {"ok": False, "reason": "empty message"}
+        if len(text) > 420:
+            text = text[:420]
+        blob = world.llm_agents.get(str(party))
+        display = str(blob.get("display_name") or party) if blob else str(party)
+        row = {
+            "tick": world.tick,
+            "from_party": str(party),
+            "display_name": display,
+            "text": text,
+        }
+        world.npc_messages_to_player.append(row)
+        if len(world.npc_messages_to_player) > 96:
+            world.npc_messages_to_player = world.npc_messages_to_player[-96:]
+        log_event(
+            world,
+            "npc_message",
+            f"{display}: {text}",
+            party=str(party),
+            from_party=str(party),
+        )
+        return {"ok": True, "delivered": True, "length": len(text)}
 
     if name == "sim_place_buy_order":
         mid = _material_id(inp.get("material"))
@@ -162,6 +194,18 @@ def plan_llm_party_once(world: World, party: PartyId) -> dict[str, Any]:
     if blob is None:
         return {"ok": False, "reason": "not an llm party"}
 
+    cap = session_cap_micro_usd()
+    if cap > 0 and world.llm_session_cost_micro_usd >= cap:
+        log_event(
+            world,
+            "llm_cap",
+            "Tier-3 session spend cap reached — skipping LLM calls until lower spend or higher cap.",
+            party=key,
+            spend_micro_usd=world.llm_session_cost_micro_usd,
+            cap_micro_usd=cap,
+        )
+        return {"ok": False, "reason": "session_cap_reached"}
+
     system = str(blob.get("system_prompt", "You are a trading agent."))
     user = (
         "Current observation JSON:\n"
@@ -173,9 +217,13 @@ def plan_llm_party_once(world: World, party: PartyId) -> dict[str, Any]:
     def on_tool(n: str, data: dict[str, Any]) -> dict[str, Any]:
         return execute_llm_tool(world, party, n, data)
 
-    trace, summary = run_haiku_tool_session(system=system, user_message=user, on_tool=on_tool)
+    trace, summary, usage = run_haiku_tool_session(system=system, user_message=user, on_tool=on_tool)
     if trace == [{"event": "skipped", "reason": "no_anthropic_client"}]:
         return {"ok": False, "reason": "no_anthropic_client", "trace": trace}
+
+    world.llm_session_input_tokens += int(usage.get("input_tokens", 0))
+    world.llm_session_output_tokens += int(usage.get("output_tokens", 0))
+    world.llm_session_cost_micro_usd += int(usage.get("cost_micro_usd", 0))
 
     lines = [f"tick {world.tick}:"]
     for row in trace:
@@ -191,8 +239,9 @@ def plan_llm_party_once(world: World, party: PartyId) -> dict[str, Any]:
         f"{party} LLM plan ({len(trace)} trace rows)",
         party=str(party),
         trace_rows=len(trace),
+        usage=usage,
     )
-    return {"ok": True, "party": key, "trace": trace, "summary": summary}
+    return {"ok": True, "party": key, "trace": trace, "summary": summary, "usage": usage}
 
 
 def _append_memory(blob: dict[str, Any], line: str) -> None:

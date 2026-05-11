@@ -212,3 +212,5 @@ def test_llm_status_lists_margaux() -> None:
     assert "llm_margaux" in parties
     assert "client_ready" in body
     assert "model" in body
+    assert "session_cap_micro_usd" in body
+    assert "session_spend_micro_usd" in body

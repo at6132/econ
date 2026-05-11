@@ -12,7 +12,7 @@ from realm.tick import advance_tick
 from realm.world import bootstrap_by_scenario
 
 
-SCENARIOS = ("frontier", "cartel", "bootstrapper", "speculator")
+SCENARIOS = ("frontier", "cartel", "bootstrapper", "speculator", "millrace", "archive")
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
@@ -37,7 +37,10 @@ def test_dump_load_roundtrip_after_ticks_and_building(scenario: str) -> None:
     assert w2.ledger.total_cents() == ledger_total
     assert w2.inventory.snapshot() == inv_snapshot
     assert w2.llm_agents == w.llm_agents
-    assert PartyId("llm_margaux") in w2.parties
+    assert w2.npc_messages_to_player == w.npc_messages_to_player
+    assert w2.llm_session_cost_micro_usd == w.llm_session_cost_micro_usd
+    tier3_party = next(iter(w.llm_agents.keys()))
+    assert PartyId(tier3_party) in w2.parties
     assert w2.plots[pid].owner == PartyId("player")
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings

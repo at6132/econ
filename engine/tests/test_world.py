@@ -15,7 +15,7 @@ def test_frontier_bootstrap_money_total() -> None:
     assert w.ledger.balance(lumber_buyer) == 50_000
     assert w.ledger.balance(party_cash_account(PartyId("t1_electricity_buyer"))) == 30_000
     tier2_cash = 42_000 + 55_000 + 35_000 + 38_000 + 32_000
-    margaux_cash = 85_000
+    tier3_cash = 88_000
     assert w.ledger.balance(system_reserve_account()) == (
         100_000_000_000
         - 1_000_000
@@ -23,7 +23,7 @@ def test_frontier_bootstrap_money_total() -> None:
         - 50_000
         - 30_000
         - tier2_cash
-        - margaux_cash
+        - tier3_cash
     )
 
 
@@ -37,7 +37,7 @@ def test_llm_margaux_seeded_in_bootstrap() -> None:
     w = bootstrap_frontier(seed=1, grid_width=3, grid_height=2)
     assert PartyId("llm_margaux") in w.parties
     assert "llm_margaux" in w.llm_agents
-    assert w.llm_agents["llm_margaux"].get("display_name") == "Margaux"
+    assert w.llm_agents["llm_margaux"].get("display_name") == "Margaux Chen"
 
 
 def test_world_public_hides_subsurface_until_surveyed() -> None:

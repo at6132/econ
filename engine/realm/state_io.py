@@ -1,6 +1,6 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``3`` (``1`` / ``2`` still load). Nested dict/list values are deep-copied on dump
+Snapshot ``version`` is ``4`` (older rows still load). Nested dict/list values are deep-copied on dump
 so JSON round-trips do not share mutable subgraphs with the live ``World``.
 
 ``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 3
+SNAPSHOT_VERSION = 4
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -140,12 +140,16 @@ def dump_world(world: World) -> dict[str, Any]:
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "next_building_instance_seq": world.next_building_instance_seq,
         "llm_agents": copy.deepcopy(dict(world.llm_agents)),
+        "npc_messages_to_player": copy.deepcopy(list(world.npc_messages_to_player)),
+        "llm_session_cost_micro_usd": world.llm_session_cost_micro_usd,
+        "llm_session_input_tokens": world.llm_session_input_tokens,
+        "llm_session_output_tokens": world.llm_session_output_tokens,
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3):
+    if ver not in (1, 2, 3, 4):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -272,6 +276,12 @@ def load_world(d: dict[str, Any]) -> World:
         market_intel_expires_tick=int(d.get("market_intel_expires_tick", 0)),
         next_building_instance_seq=next_bseq,
         llm_agents=copy.deepcopy(dict(d.get("llm_agents", {}))),
+        npc_messages_to_player=[
+            copy.deepcopy(x) for x in d.get("npc_messages_to_player", d.get("npc_messages", []))
+        ],
+        llm_session_cost_micro_usd=int(d.get("llm_session_cost_micro_usd", 0)),
+        llm_session_input_tokens=int(d.get("llm_session_input_tokens", 0)),
+        llm_session_output_tokens=int(d.get("llm_session_output_tokens", 0)),
     )
     return world
 

@@ -88,7 +88,13 @@ class World:
     next_building_instance_seq: int = 0
     """Monotonic id generator for ``plot_buildings[].instance_id``."""
     llm_agents: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """Tier-3 LLM-controlled parties: party id str → ``display_name``, ``system_prompt``, ``memory_summary``, ``last_plan_tick``."""
+    """Tier-3 LLM-controlled parties: party id str → persona fields + ``memory_summary``, ``last_plan_tick``."""
+    npc_messages_to_player: list[dict[str, Any]] = field(default_factory=list)
+    """Short NPC→human lines (tick, from_party, display_name, text); append-only, trimmed in code."""
+    llm_session_cost_micro_usd: int = 0
+    """Cumulative estimated API spend for this save/session (micro-dollars; 1 = $1e-6)."""
+    llm_session_input_tokens: int = 0
+    llm_session_output_tokens: int = 0
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -119,35 +125,37 @@ def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
     return plots
 
 
-def _seed_tier3_llm_margaux(world: World, inv: Inventory) -> None:
-    """One named Haiku-driven rival (doc 06) — acts only when ``ANTHROPIC_API_KEY`` + ``anthropic`` are available."""
-    margaux = PartyId("llm_margaux")
-    world.parties.add(margaux)
-    world.reputation[str(margaux)] = {"honored": 0, "breached": 0}
-    cash_acct = party_cash_account(margaux)
+def _seed_tier3_character(world: World, inv: Inventory, scenario_id: str) -> None:
+    """Seed the scenario's named Tier-3 rival from ``realm.llm_roster``."""
+    from realm.llm_roster import opening_memory, persona_for_scenario
+
+    try:
+        persona = persona_for_scenario(scenario_id)
+    except KeyError:
+        return
+    pid = PartyId(persona.party_id)
+    world.parties.add(pid)
+    world.reputation[str(pid)] = {"honored": 0, "breached": 0}
+    cash_acct = party_cash_account(pid)
     world.ledger.ensure_account(cash_acct)
     tr = world.ledger.transfer(
         debit=system_reserve_account(),
         credit=cash_acct,
-        amount_cents=85_000,
+        amount_cents=persona.starting_cash_cents,
     )
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
-    for mid, qty in ((MaterialId("timber"), 4), (MaterialId("grain"), 3), (MaterialId("clay"), 2)):
-        ad = inv.add(margaux, mid, qty)
+    for mid_s, qty in persona.starter_inventory:
+        mid = MaterialId(mid_s)
+        ad = inv.add(pid, mid, qty)
         if isinstance(ad, MatterErr):
             raise ValueError(ad.reason)
-    world.llm_agents[str(margaux)] = {
-        "display_name": "Margaux",
-        "system_prompt": (
-            "You are Margaux, a methodical industrialist in an economic simulation. "
-            "You compete on markets and plots using ONLY the provided tools — never invent "
-            "plot ids or materials. Prefer vertical integration: secure inputs, add value, "
-            "sell outputs. You speak briefly in analysis, but your tools are what change the world. "
-            "Respect conservation: you cannot spend cash or materials you do not have."
-        ),
-        "memory_summary": "Arrived in the Frontier with seed capital and small stock.",
+    world.llm_agents[str(pid)] = {
+        "display_name": persona.display_name,
+        "system_prompt": persona.system_prompt,
+        "memory_summary": opening_memory(scenario_id, persona.display_name),
         "last_plan_tick": -10**9,
+        "scenario_spawn": scenario_id,
     }
 
 
@@ -384,13 +392,16 @@ def bootstrap_frontier(
     if scenario_id == "cartel":
         _seed_cartel_grain_overlay(world, inv, vendor, grain_vendor_ask_id)
     _seed_tier2_agents(world, inv, timber_merch, clay_v, human)
-    _seed_tier3_llm_margaux(world, inv)
+    _seed_tier3_character(world, inv, scenario_id)
     from realm.market_history import record_market_snapshot
+
+    if scenario_id == "archive":
+        world.market_intel_expires_tick = max(world.market_intel_expires_tick, 280)
 
     log_event(
         world,
         "world",
-        f"Frontier ready: {n_plots} plots, seeded commodity books, six tier-1 agent loops.",
+        f"{scenario_id}: {n_plots} plots, seeded markets, tier-1 loops; Tier-3 {next(iter(world.llm_agents.keys()), 'none')}.",
     )
     record_market_snapshot(world)
     return world
@@ -406,7 +417,7 @@ def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
             seed=seed,
             grid_width=32,
             grid_height=24,
-            starting_cash_cents=500_000,
+            starting_cash_cents=485_000,
             scenario_id="bootstrapper",
         )
     if sid == "speculator":
@@ -414,8 +425,24 @@ def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
             seed=seed,
             grid_width=40,
             grid_height=30,
-            starting_cash_cents=2_000_000,
+            starting_cash_cents=2_050_000,
             scenario_id="speculator",
+        )
+    if sid == "millrace":
+        return bootstrap_frontier(
+            seed=seed,
+            grid_width=42,
+            grid_height=28,
+            starting_cash_cents=975_000,
+            scenario_id="millrace",
+        )
+    if sid == "archive":
+        return bootstrap_frontier(
+            seed=seed,
+            grid_width=48,
+            grid_height=36,
+            starting_cash_cents=1_080_000,
+            scenario_id="archive",
         )
     raise ValueError(f"unknown scenario: {scenario!r}")
 
@@ -511,4 +538,8 @@ def world_public_dict(world: World) -> dict:
             }
             for pid, blob in sorted(world.llm_agents.items(), key=lambda x: x[0])
         ],
+        "npc_messages": list(world.npc_messages_to_player[-48:]),
+        "llm_session_cost_micro_usd": world.llm_session_cost_micro_usd,
+        "llm_session_input_tokens": world.llm_session_input_tokens,
+        "llm_session_output_tokens": world.llm_session_output_tokens,
     }

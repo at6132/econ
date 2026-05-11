@@ -93,11 +93,18 @@ def post_tick() -> dict:
 
 @app.get("/llm/status")
 def get_llm_status() -> dict:
-    from realm.llm_haiku import default_model, make_client
+    from realm.llm_haiku import default_model, make_client, session_cap_micro_usd
 
+    cap = session_cap_micro_usd()
+    spend = _world.llm_session_cost_micro_usd
     return {
         "client_ready": make_client() is not None,
         "model": default_model(),
+        "session_cap_micro_usd": cap,
+        "session_spend_micro_usd": spend,
+        "session_remaining_micro_usd": max(0, cap - spend) if cap > 0 else None,
+        "session_input_tokens": _world.llm_session_input_tokens,
+        "session_output_tokens": _world.llm_session_output_tokens,
         "agents": [
             {
                 "party": k,
@@ -241,7 +248,7 @@ def dev_reset(
     seed: Annotated[int, Query()] = 42,
     scenario: Annotated[str, Query()] = "frontier",
 ) -> dict:
-    """Recreate world (dev). ``scenario`` ∈ frontier, bootstrapper, speculator, cartel."""
+    """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive."""
     global _world
     try:
         _world = bootstrap_by_scenario(seed=seed, scenario=scenario)

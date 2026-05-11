@@ -12,9 +12,11 @@ from realm.api import app
     "scenario,expected_plots,expected_player_cents,expect_cartel_cell",
     [
         ("frontier", 48 * 36, 1_000_000, False),
-        ("bootstrapper", 32 * 24, 500_000, False),
-        ("speculator", 40 * 30, 2_000_000, False),
+        ("bootstrapper", 32 * 24, 485_000, False),
+        ("speculator", 40 * 30, 2_050_000, False),
         ("cartel", 48 * 36, 1_000_000, True),
+        ("millrace", 42 * 28, 975_000, False),
+        ("archive", 48 * 36, 1_080_000, False),
     ],
 )
 def test_dev_reset_applies_scenario_params(
