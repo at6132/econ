@@ -46,3 +46,30 @@ export function ownerTintPixi(owner: string | null): { color: number; alpha: num
   const color = (r << 16) | (g << 8) | b;
   return { color, alpha: 0.26 };
 }
+
+/** Brighter hue-matched color for claim labels and borders (same seed as `ownerTint`). */
+export function ownerAccentColor(owner: string): string {
+  const h = hash32(0xfeed, owner);
+  const hue = h % 360;
+  return `hsl(${hue}, 72%, 58%)`;
+}
+
+export function ownerAccentPixi(owner: string): number {
+  const h = hash32(0xfeed, owner);
+  const hue = (h % 360) / 360;
+  const { r, g, b } = hslToRgbByte(hue, 0.72, 0.58);
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Short monogram for map claim chips (every party, including NPCs). */
+export function partyMapBadge(owner: string): string {
+  if (owner === "player") return "YOU";
+  const s = owner.trim();
+  if (s.length <= 4) return s.toUpperCase();
+  const parts = s.split(/[-_/]+/).filter(Boolean);
+  const tail = parts.length > 1 ? parts[parts.length - 1]! : s;
+  if (tail.length >= 2 && tail.length <= 5) return tail.toUpperCase();
+  const alnum = s.replace(/[^a-z0-9]/gi, "");
+  if (alnum.length >= 4) return alnum.slice(-4).toUpperCase();
+  return s.slice(0, 4).toUpperCase();
+}

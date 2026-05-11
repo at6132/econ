@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 
-import { ownerTint } from "./mapHash";
+import { ownerAccentColor, ownerTint, partyMapBadge } from "./mapHash";
 import type { OrganicMesh } from "./mapOrganicMesh";
 
 type PlotDto = {
@@ -36,6 +36,8 @@ type Props = {
   buildsByPlot: Map<string, number>;
   /** Plot tile size in px — scales build / anchor glyphs for large “street level” maps. */
   cellPx: number;
+  /** Count of active production runs per plot (any party). */
+  productionByPlot: Map<string, number>;
   busy: boolean;
   mapNavSuppress: React.MutableRefObject<boolean>;
   onPlotClick: (p: PlotDto) => void;
@@ -53,6 +55,7 @@ export function RealmMapMeshSvg({
   selectedPlotId,
   buildsByPlot,
   cellPx,
+  productionByPlot,
   busy,
   mapNavSuppress,
   onPlotClick,
@@ -64,6 +67,10 @@ export function RealmMapMeshSvg({
   const buildStrokePx = Math.max(3, Math.round(cellPx * 0.09));
   const anchorRadius = Math.max(5, Math.round(cellPx * 0.11));
   const anchorCaptionPx = Math.max(10, Math.round(cellPx * 0.18));
+  const claimFs = Math.max(9, Math.round(cellPx * 0.21));
+  const claimStroke = Math.max(2, Math.round(cellPx * 0.055));
+  const prodFs = Math.max(8, Math.round(cellPx * 0.2));
+  const prodStroke = Math.max(2, Math.round(cellPx * 0.05));
   const anchorCaptionDy = Math.max(12, Math.round(cellPx * 0.36));
   const ordered = [...plots].sort((a, b) => {
     const as = a.id === selectedPlotId ? 1 : 0;
@@ -132,12 +139,26 @@ export function RealmMapMeshSvg({
           const cls = [
             "realm-map-region",
             mine ? "realm-map-region--mine" : "",
+            p.owner && !mine ? "realm-map-region--foreign" : "",
             p.surveyed ? "realm-map-region--surveyed" : "",
             isSelected ? "realm-map-region--selected" : "",
           ]
             .filter(Boolean)
             .join(" ");
           const groupStyle: CSSProperties | undefined = p.owner ? { ["--owner-tint" as string]: tint } : undefined;
+          const nProd = productionByPlot.get(p.id) ?? 0;
+          const pathStroke: CSSProperties =
+            p.owner && !mine && !isSelected
+              ? {
+                  stroke: ownerAccentColor(p.owner),
+                  strokeWidth: Math.max(1.4, cellPx * 0.042),
+                  strokeOpacity: 0.58,
+                }
+              : {};
+          const buildY = nBuild > 0 ? c.y + (p.owner ? cellPx * 0.1 : 0) : c.y;
+          const claimY = p.owner ? c.y - (nBuild > 0 ? cellPx * 0.34 : cellPx * 0.22) : c.y;
+          const prodY =
+            nProd > 0 ? c.y + (nBuild > 0 ? cellPx * 0.42 : p.owner ? cellPx * 0.3 : cellPx * 0.28) : c.y;
           return (
             <g key={p.id} className="realm-map-region-group" style={groupStyle}>
               <path
@@ -145,6 +166,7 @@ export function RealmMapMeshSvg({
                 d={d}
                 data-owner={p.owner ?? ""}
                 fill={terrainFill(p.terrain)}
+                style={pathStroke}
                 focusable={false}
                 onClick={() => {
                   if (busy) return;
@@ -160,17 +182,47 @@ export function RealmMapMeshSvg({
                 </title>
               </path>
               {p.owner ? <path className="realm-map-region__tint" d={d} fill="var(--owner-tint, transparent)" aria-hidden /> : null}
+              {p.owner ? (
+                <text
+                  className="realm-map-region__claim-badge"
+                  x={c.x}
+                  y={claimY}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  aria-hidden
+                  style={{
+                    fontSize: claimFs,
+                    strokeWidth: claimStroke,
+                    fill: ownerAccentColor(p.owner),
+                  }}
+                >
+                  {partyMapBadge(p.owner)}
+                </text>
+              ) : null}
               {nBuild > 0 ? (
                 <text
                   className="realm-map-region__build"
                   x={c.x}
-                  y={c.y}
+                  y={buildY}
                   textAnchor="middle"
                   dominantBaseline="central"
                   aria-hidden
                   style={{ fontSize: buildFontPx, strokeWidth: buildStrokePx }}
                 >
                   {nBuild > 1 ? `▣${nBuild}` : "▣"}
+                </text>
+              ) : null}
+              {nProd > 0 ? (
+                <text
+                  className="realm-map-region__prod-badge"
+                  x={c.x}
+                  y={prodY}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  aria-hidden
+                  style={{ fontSize: prodFs, strokeWidth: prodStroke }}
+                >
+                  {nProd > 1 ? `\u2699${nProd}` : "\u2699"}
                 </text>
               ) : null}
             </g>

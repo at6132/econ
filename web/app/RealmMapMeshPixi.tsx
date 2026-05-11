@@ -3,7 +3,7 @@
 import type { Application } from "pixi.js";
 import { useEffect, useRef } from "react";
 
-import { ownerTintPixi } from "./mapHash";
+import { ownerAccentPixi, ownerTintPixi, partyMapBadge } from "./mapHash";
 import type { OrganicMesh } from "./mapOrganicMesh";
 
 type PlotDto = {
@@ -56,6 +56,8 @@ type Props = {
   buildsByPlot: Map<string, number>;
   /** Plot tile size in px — scales build / anchor labels for large maps. */
   cellPx: number;
+  /** Active production runs per plot (any party). */
+  productionByPlot: Map<string, number>;
   busy: boolean;
   mapNavSuppress: React.MutableRefObject<boolean>;
   onPlotClick: (p: PlotDto) => void;
@@ -111,6 +113,7 @@ export function RealmMapMeshPixi(props: Props) {
           selectedPlotId,
           buildsByPlot,
           cellPx,
+          productionByPlot,
           busy,
           mapStyle,
           mapAnchor,
@@ -140,29 +143,29 @@ export function RealmMapMeshPixi(props: Props) {
 
           const isSel = p.id === selectedPlotId;
           const mine = p.owner === "player";
+          const foreign = Boolean(p.owner && !mine);
           let strokeW = 1;
           let strokeCol = 0x000000;
           let strokeAlpha = 0.38;
 
-          if (mapStyle === "political") {
-            if (p.owner) {
-              strokeW = 1.2;
-              strokeAlpha = 0.55;
-            }
-            if (mine && !isSel) {
-              strokeCol = 0xffd84a;
-              strokeAlpha = 0.55;
-              strokeW = 1.5;
-            }
-          } else if (mine && !isSel) {
-            strokeCol = 0x6ee7ff;
-            strokeAlpha = 0.5;
-            strokeW = 1.5;
-          }
           if (isSel) {
             strokeCol = 0xffd84a;
             strokeAlpha = 1;
             strokeW = 3.5;
+          } else if (mine) {
+            if (mapStyle === "political") {
+              strokeCol = 0xffd84a;
+              strokeAlpha = 0.55;
+              strokeW = 1.5;
+            } else {
+              strokeCol = 0x6ee7ff;
+              strokeAlpha = 0.5;
+              strokeW = 1.5;
+            }
+          } else if (foreign) {
+            strokeCol = ownerAccentPixi(p.owner!);
+            strokeW = Math.max(1.25, cellPx * 0.045);
+            strokeAlpha = mapStyle === "political" ? 0.68 : 0.5;
           }
 
           g.poly(flat, true).stroke({ width: strokeW, color: strokeCol, alpha: strokeAlpha, join: "round" });
@@ -195,6 +198,33 @@ export function RealmMapMeshPixi(props: Props) {
           stroke: { color: 0x000000, width: buildStrokeW },
         });
 
+        const claimFs = Math.max(9, Math.round(cellPx * 0.21));
+        const claimStrokeW = Math.max(2, Math.round(cellPx * 0.055));
+        const prodFs = Math.max(8, Math.round(cellPx * 0.2));
+        const prodStrokeW = Math.max(2, Math.round(cellPx * 0.05));
+
+        for (const p of ordered) {
+          if (!p.owner) continue;
+          const c = mesh.plotCentroid(p.x, p.y);
+          const nBuild = buildsByPlot.get(p.id) ?? 0;
+          const claimY = c.y - (nBuild > 0 ? cellPx * 0.34 : cellPx * 0.22);
+          const label = partyMapBadge(p.owner);
+          const t = new Text({
+            text: label,
+            style: new TextStyle({
+              fontFamily: "VT323, ui-monospace, monospace",
+              fontSize: claimFs,
+              fill: ownerAccentPixi(p.owner),
+              stroke: { color: 0x000000, width: claimStrokeW },
+            }),
+          });
+          t.anchor.set(0.5, 0.5);
+          t.x = c.x;
+          t.y = claimY;
+          t.eventMode = "none";
+          root.addChild(t);
+        }
+
         for (const p of ordered) {
           const nBuild = buildsByPlot.get(p.id) ?? 0;
           if (nBuild < 1) continue;
@@ -203,7 +233,30 @@ export function RealmMapMeshPixi(props: Props) {
           const t = new Text({ text: label, style: buildStyle });
           t.anchor.set(0.5, 0.5);
           t.x = c.x;
-          t.y = c.y;
+          t.y = c.y + (p.owner ? cellPx * 0.1 : 0);
+          t.eventMode = "none";
+          root.addChild(t);
+        }
+
+        for (const p of ordered) {
+          const nProd = productionByPlot.get(p.id) ?? 0;
+          if (nProd < 1) continue;
+          const c = mesh.plotCentroid(p.x, p.y);
+          const nBuild = buildsByPlot.get(p.id) ?? 0;
+          const prodY = c.y + (nBuild > 0 ? cellPx * 0.42 : p.owner ? cellPx * 0.3 : cellPx * 0.28);
+          const label = nProd > 1 ? `\u2699${nProd}` : "\u2699";
+          const t = new Text({
+            text: label,
+            style: new TextStyle({
+              fontFamily: "VT323, ui-monospace, monospace",
+              fontSize: prodFs,
+              fill: 0x7dd3fc,
+              stroke: { color: 0x000000, width: prodStrokeW },
+            }),
+          });
+          t.anchor.set(0.5, 0.5);
+          t.x = c.x;
+          t.y = prodY;
           t.eventMode = "none";
           root.addChild(t);
         }
@@ -262,6 +315,7 @@ export function RealmMapMeshPixi(props: Props) {
     props.plots,
     props.selectedPlotId,
     props.buildsByPlot,
+    props.productionByPlot,
     props.cellPx,
     props.busy,
     props.mapStyle,

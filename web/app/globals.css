@@ -496,6 +496,44 @@ body::after {
   max-width: none;
 }
 
+.realm-map-shipments-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  pointer-events: none;
+  display: block;
+  overflow: visible;
+}
+
+.realm-map-shipments-overlay__path {
+  stroke: rgba(255, 214, 120, 0.78);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.realm-map-shipments-overlay__dot {
+  fill: rgba(255, 248, 210, 0.95);
+  stroke: #000;
+  stroke-width: 1px;
+  paint-order: stroke fill;
+}
+
+.realm-map-region__claim-badge {
+  font-family: var(--realm-font);
+  font-weight: 600;
+  pointer-events: none;
+  paint-order: stroke fill;
+}
+
+.realm-map-region__prod-badge {
+  font-family: var(--realm-font);
+  pointer-events: none;
+  fill: #7dd3fc;
+  stroke: #000;
+  paint-order: stroke fill;
+}
+
 .realm-map-world-surface[data-map-style="satellite"] .realm-map-mesh-pixi {
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)) contrast(1.1) saturate(1.32) brightness(0.9);
 }

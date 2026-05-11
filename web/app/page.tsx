@@ -45,6 +45,7 @@ import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
 import { RealmMapMeshPixi } from "./RealmMapMeshPixi";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
+import { RealmMapShipmentsOverlay } from "./RealmMapShipmentsOverlay";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 import { useRealmToast } from "./realmToast";
 
@@ -662,6 +663,14 @@ export default function HomePage() {
     }
     return m;
   }, [world?.plot_buildings]);
+
+  const productionByPlot = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of world?.active_production ?? []) {
+      m.set(a.plot_id, (m.get(a.plot_id) ?? 0) + 1);
+    }
+    return m;
+  }, [world?.active_production]);
 
   const playerOwnsLand = useMemo(
     () => (world?.plots ?? []).some((p) => p.owner === "player"),
@@ -1929,6 +1938,7 @@ export default function HomePage() {
                             selectedPlotId={selectedPlotId}
                             buildsByPlot={buildsByPlot}
                             cellPx={grid.cellPx}
+                            productionByPlot={productionByPlot}
                             busy={busy}
                             mapNavSuppress={mapNavSuppress}
                             onPlotClick={onPlotClick}
@@ -1943,6 +1953,7 @@ export default function HomePage() {
                             selectedPlotId={selectedPlotId}
                             buildsByPlot={buildsByPlot}
                             cellPx={grid.cellPx}
+                            productionByPlot={productionByPlot}
                             busy={busy}
                             mapNavSuppress={mapNavSuppress}
                             onPlotClick={onPlotClick}
@@ -1952,14 +1963,20 @@ export default function HomePage() {
                             mapStyle={mapStyle}
                           />
                         )}
+                        <RealmMapShipmentsOverlay
+                          mesh={mesh}
+                          plots={world.plots}
+                          shipments={world.in_transit ?? []}
+                          cellPx={grid.cellPx}
+                        />
                       </>
                     ) : null}
                   </div>
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Large tiles (pan the world on big grids) · drag to pan · scroll wheel zoom · click a plot to select it (gold ring). Toggle <strong>SVG</strong> /{" "}
-                <strong>GL</strong> in the map toolbar. Claim and survey from the side panel. Pause the clock in the header when you want the world to hold still.
+                Claim chips (every owner), workshops ▣, production ⚙, dashed shipment arcs — pan on large grids · drag to pan · scroll zoom · click a plot to select (gold ring).
+                Toggle <strong>SVG</strong> / <strong>GL</strong> in the toolbar. Side panel: claim, survey, logistics. Pause the clock in the header to hold the world still.
               </p>
             </div>
 
