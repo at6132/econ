@@ -38,7 +38,7 @@ import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols
 import { PlotSchematicPanel } from "./PlotSchematicPanel";
 import type { SchematicRecipe } from "./plotSchematic";
 import { buildOrganicMesh } from "./mapOrganicMesh";
-import { computeStarterHintPlotIds } from "./mapStarterHints";
+import { computeStarterHintPlotIds, starterHintCap } from "./mapStarterHints";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
 import { bookMidpointCentsPerUnit } from "./marketPriceHints";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
@@ -50,6 +50,7 @@ import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 import { RealmMapShipmentsOverlay } from "./RealmMapShipmentsOverlay";
 import { computeEconomyDensity } from "./realmEconomyDensity";
+import { terrainWorkshopEmptyHint } from "./terrainRecipeHints";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 import { useRealmToast } from "./realmToast";
 
@@ -695,8 +696,18 @@ export default function HomePage() {
 
   const starterPulsePlotIds = useMemo(() => {
     if (!world?.plots.length || playerOwnsLand) return new Set<string>();
-    return computeStarterHintPlotIds(world.plots, 5);
+    return computeStarterHintPlotIds(world.plots, starterHintCap(world.plots.length));
   }, [world?.plots, playerOwnsLand]);
+
+  const marketActivitySnapshot = useMemo(() => {
+    if (!world) return { restingOrders: 0, contractRows: 0 };
+    const asks = world.market_asks ?? [];
+    const bids = world.market_bids ?? [];
+    return {
+      restingOrders: asks.length + bids.length,
+      contractRows: (world.contracts ?? []).length,
+    };
+  }, [world]);
 
   const mapAnchor = useMemo((): { cx: number; cy: number; caption: string } | null => {
     if (!mesh || !world?.plots.length) return null;
@@ -1826,6 +1837,12 @@ export default function HomePage() {
                 <span className="realm-pill">
                   Cash <strong>${playerCash}</strong>
                 </span>
+                <span className="realm-pill" title="Resting limit orders on the books (asks + bids)">
+                  Orders <strong>{marketActivitySnapshot.restingOrders}</strong>
+                </span>
+                <span className="realm-pill" title="Contract rows in this save snapshot">
+                  Contracts <strong>{marketActivitySnapshot.contractRows}</strong>
+                </span>
                 <motion.button
                   type="button"
                   className={`realm-btn realm-btn--sm ${simPaused ? "realm-btn--ghost" : "realm-btn--primary"}`}
@@ -2092,12 +2109,22 @@ export default function HomePage() {
                 >
                   {tab === "world" ? (
                     <>
+                      {world.plots.length > 400 ? (
+                        <p className="realm-help" style={{ marginBottom: 14, marginTop: 0 }}>
+                          Large map ({world.plots.length} plots): pan and zoom to scout; soft gold pulses near the origin mark reasonable early claims on dry land.
+                          {!playerOwnsLand ? " Claim there or elsewhere — terrain gates which workshops you can run." : null}
+                        </p>
+                      ) : null}
                       {world.reputation?.player ? (
                         <p className="realm-help" style={{ marginBottom: 14, marginTop: 0 }}>
                           Your reputation — honored <strong>{world.reputation.player.honored}</strong> · breached{" "}
                           <strong>{world.reputation.player.breached}</strong>
                         </p>
                       ) : null}
+                      <p className="realm-help" style={{ marginBottom: 14, marginTop: 0, fontSize: 17 }}>
+                        Market depth — resting orders <strong>{marketActivitySnapshot.restingOrders}</strong> · contract rows{" "}
+                        <strong>{marketActivitySnapshot.contractRows}</strong>
+                      </p>
                       <SectionTitle>Selected plot</SectionTitle>
                       {selectedPlot ? (
                         <>
@@ -2198,10 +2225,21 @@ export default function HomePage() {
                                 favor timber work, and <strong>water</strong> cannot host workshops in this build.
                               </p>
                               {workshopRecipesForSelectedPlot.length === 0 ? (
-                                <p className="realm-help" style={{ marginBottom: 8 }}>
-                                  After survey, recipes appear only when the matching <strong>workshop</strong> is built on this plot (see Build below). On
-                                  water, workshops are not available.
-                                </p>
+                                <>
+                                  <p className="realm-help" style={{ marginBottom: 8 }}>
+                                    After survey, runnable recipes appear here only after the matching <strong>workshop</strong> is built on this plot (see Build
+                                    below).
+                                  </p>
+                                  {selectedPlot.terrain === "water_shallow" || selectedPlot.terrain === "water_deep" ? (
+                                    <p className="realm-help" style={{ marginBottom: 8 }}>
+                                      Water tiles cannot host fixed workshops in this build — claim dry land for industry.
+                                    </p>
+                                  ) : (
+                                    <p className="realm-help" style={{ marginBottom: 8 }}>
+                                      {terrainWorkshopEmptyHint(selectedPlot.terrain)}
+                                    </p>
+                                  )}
+                                </>
                               ) : (
                                 <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
                                   {workshopRecipesForSelectedPlot.map((r) => (

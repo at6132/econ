@@ -11,8 +11,15 @@ function terrainRank(terrain: string): number {
   return 2;
 }
 
+/** Max starter pulses on the map — extra hints on very large genesis grids. */
+export function starterHintCap(plotCount: number): number {
+  if (plotCount > 1200) return 12;
+  if (plotCount > 800) return 10;
+  return 5;
+}
+
 /**
- * Pick a few unclaimed plots near the grid origin for a soft “first claim” pulse.
+ * Pick unclaimed plots near the grid origin for a soft “first claim” pulse.
  * Purely client-side; matches Frontier bootstrap (player begins with no deeds).
  */
 export function computeStarterHintPlotIds(plots: PlotRef[], maxHints: number): Set<string> {
