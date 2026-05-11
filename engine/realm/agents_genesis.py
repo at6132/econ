@@ -40,10 +40,15 @@ def tick_population_demands(world: World) -> None:
         return
     if world.tick % 6 != 0:
         return
-    for hub in POP_HUBS:
-        if hub not in world.parties:
-            continue
-        market_buy(world, hub, MaterialId("grain"), 1)
+    hub_e, hub_w = POP_HUBS
+    if hub_e in world.parties:
+        market_buy(world, hub_e, MaterialId("grain"), 2)
+    if hub_w in world.parties:
+        market_buy(world, hub_w, MaterialId("grain"), 1)
+    if world.tick % 12 == 0 and hub_e in world.parties:
+        market_buy(world, hub_e, MaterialId("electricity"), 2)
+    if world.tick % 14 == 0 and hub_w in world.parties:
+        market_buy(world, hub_w, MaterialId("coal"), 1)
 
 
 def tick_settler_agents(world: World) -> None:

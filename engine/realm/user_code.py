@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from realm.lua_runtime import lua_runtime_detail
+from realm.lua_sandbox import MAX_EVAL_BYTES
 
 MAX_SOURCE_BYTES = 256_000
 
@@ -40,6 +41,8 @@ def code_layer_public_status() -> dict[str, Any]:
         "lua_runtime": lua["available"],
         "lua": lua,
         "max_source_bytes": MAX_SOURCE_BYTES,
+        "eval_requires_env": "REALM_LUA_EVAL=1",
+        "eval_max_bytes": MAX_EVAL_BYTES,
         "docs_path": "realm_docs/07_USER_CODE_LAYER.md",
         "message": (
             "Deterministic Lua sandbox and deploy pipeline are Phase 4; "

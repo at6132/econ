@@ -145,6 +145,7 @@ def dump_world(world: World) -> dict[str, Any]:
         "llm_session_cost_micro_usd": world.llm_session_cost_micro_usd,
         "llm_session_input_tokens": world.llm_session_input_tokens,
         "llm_session_output_tokens": world.llm_session_output_tokens,
+        "deployed_lua_sources": copy.deepcopy(dict(world.deployed_lua_sources)),
     }
 
 
@@ -284,6 +285,7 @@ def load_world(d: dict[str, Any]) -> World:
         llm_session_cost_micro_usd=int(d.get("llm_session_cost_micro_usd", 0)),
         llm_session_input_tokens=int(d.get("llm_session_input_tokens", 0)),
         llm_session_output_tokens=int(d.get("llm_session_output_tokens", 0)),
+        deployed_lua_sources=copy.deepcopy(dict(d.get("deployed_lua_sources", {}))),
     )
     return world
 

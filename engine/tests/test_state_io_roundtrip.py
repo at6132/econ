@@ -56,6 +56,8 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     for _ in range(4):
         advance_tick(w)
 
+    w.deployed_lua_sources["player"] = "return 0\n"
+
     assert dump_world(w)["version"] == SNAPSHOT_VERSION
     ledger_total = w.ledger.total_cents()
     inv_snapshot = w.inventory.snapshot()
@@ -70,6 +72,7 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     assert w2.plots[pid].owner == PartyId("player")
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings
+    assert w2.deployed_lua_sources.get("player") == "return 0\n"
 
 
 def test_dump_plot_buildings_decoupled_from_live_mutations() -> None:

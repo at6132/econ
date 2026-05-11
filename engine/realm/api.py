@@ -41,6 +41,7 @@ from realm.contract_stubs import (
     repay_loan_contract,
 )
 from realm.schematic import validate_linear_recipe_chain
+from realm.lua_sandbox import eval_user_lua_chunk
 from realm.tick import advance_tick
 from realm.user_code import code_layer_public_status, validate_user_source
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
@@ -91,6 +92,34 @@ def post_code_validate(body: Annotated[dict, Body()]) -> dict:
     if not isinstance(src, str):
         raise HTTPException(status_code=400, detail="source must be a string")
     return validate_user_source(src)
+
+
+@app.post("/code/deploy")
+def post_code_deploy(body: Annotated[dict, Body()]) -> dict:
+    """Store Lua source for a party (validated size only; execution is separate / gated)."""
+    party_raw = body.get("party", "player")
+    src = body.get("source")
+    if not isinstance(party_raw, str):
+        raise HTTPException(status_code=400, detail="party must be a string")
+    if not isinstance(src, str):
+        raise HTTPException(status_code=400, detail="source must be a string")
+    vr = validate_user_source(src)
+    if not vr.get("ok"):
+        raise HTTPException(status_code=400, detail=str(vr.get("reason")))
+    pid = PartyId(party_raw)
+    _world.deployed_lua_sources[str(pid)] = src
+    return {"ok": True, "party": str(pid), **vr}
+
+
+@app.post("/code/eval")
+def post_code_eval(body: Annotated[dict, Body()]) -> dict:
+    """Run Lua chunk (``REALM_LUA_EVAL=1`` + ``lupa`` only — local dev gate)."""
+    src = body.get("source")
+    if not isinstance(src, str):
+        raise HTTPException(status_code=400, detail="source must be a string")
+    tick = int(body.get("tick", _world.tick))
+    purpose = str(body.get("purpose", "api"))
+    return eval_user_lua_chunk(src, tick=tick, purpose=purpose)
 
 
 @app.get("/world")

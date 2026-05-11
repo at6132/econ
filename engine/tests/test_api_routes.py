@@ -235,3 +235,24 @@ def test_code_validate_http() -> None:
     assert j.get("lines") == 2
     r2 = c.post("/code/validate", json={})
     assert r2.status_code == 400
+
+
+def test_code_deploy_and_world_summary() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 201})
+    r = c.post("/code/deploy", json={"party": "player", "source": "-- x\nreturn tick\n"})
+    assert r.status_code == 200
+    assert r.json().get("ok") is True
+    w = c.get("/world").json()
+    assert "deployed_lua" in w
+    assert "player" in w["deployed_lua"]
+    assert w["deployed_lua"]["player"]["chars"] > 0
+
+
+def test_code_eval_without_env_returns_reason() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 202})
+    r = c.post("/code/eval", json={"source": "return 1"})
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("ok") is False

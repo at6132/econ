@@ -136,6 +136,8 @@ class World:
     """Cumulative estimated API spend for this save/session (micro-dollars; 1 = $1e-6)."""
     llm_session_input_tokens: int = 0
     llm_session_output_tokens: int = 0
+    deployed_lua_sources: dict[str, str] = field(default_factory=dict)
+    """Party id str → last deployed Lua source (Phase 4 staging; persisted in snapshots)."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -168,24 +170,30 @@ def generate_plots(
 
 
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
-    """Cold-start grain liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
+    """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
     from realm.event_log import log_event
     from realm.markets import place_sell_order
 
     ex = PartyId("genesis_exchange")
     world.parties.add(ex)
     world.reputation[str(ex)] = {"honored": 0, "breached": 0}
-    grain_qty = 72
-    ad = inv.add(ex, MaterialId("grain"), grain_qty)
-    if isinstance(ad, MatterErr):
-        raise ValueError(ad.reason)
-    pr = place_sell_order(world, ex, MaterialId("grain"), grain_qty, 128)
-    if not pr.get("ok"):
-        raise ValueError(str(pr.get("reason")))
+    listings: list[tuple[MaterialId, int, int, str]] = [
+        (MaterialId("grain"), 72, 128, "grain"),
+        (MaterialId("timber"), 28, 96, "timber"),
+        (MaterialId("coal"), 20, 62, "coal"),
+        (MaterialId("electricity"), 36, 52, "electricity"),
+    ]
+    for mid, qty, price, label in listings:
+        ad = inv.add(ex, mid, qty)
+        if isinstance(ad, MatterErr):
+            raise ValueError(ad.reason)
+        pr = place_sell_order(world, ex, mid, qty, price)
+        if not pr.get("ok"):
+            raise ValueError(str(pr.get("reason")))
     log_event(
         world,
         "world",
-        f"genesis_exchange listed {grain_qty} grain @ 128¢ (cold-start clearing).",
+        "genesis_exchange listed grain/timber/coal/electricity (cold-start clearing).",
     )
 
 
@@ -694,4 +702,11 @@ def world_public_dict(world: World) -> dict:
         "llm_session_cost_micro_usd": world.llm_session_cost_micro_usd,
         "llm_session_input_tokens": world.llm_session_input_tokens,
         "llm_session_output_tokens": world.llm_session_output_tokens,
+        "deployed_lua": {
+            k: {
+                "chars": len(v),
+                "lines": v.count("\n") + (1 if v else 0),
+            }
+            for k, v in sorted(world.deployed_lua_sources.items(), key=lambda x: x[0])
+        },
     }

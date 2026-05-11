@@ -33,3 +33,4 @@ def test_public_status_shape() -> None:
     assert isinstance(s.get("lua_runtime"), bool)
     assert "lua" in s
     assert "max_source_bytes" in s
+    assert s.get("eval_requires_env") == "REALM_LUA_EVAL=1"
