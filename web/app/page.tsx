@@ -49,6 +49,7 @@ import { RealmMapMeshPixi } from "./RealmMapMeshPixi";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 import { RealmMapShipmentsOverlay } from "./RealmMapShipmentsOverlay";
+import { computeEconomyMood } from "./realmEconomyMood";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 import { useRealmToast } from "./realmToast";
 
@@ -820,6 +821,21 @@ export default function HomePage() {
   const playerCashCents = world?.balances_cents["cash:player"];
   const canAffordSurvey =
     typeof playerCashCents === "number" && playerCashCents >= FRONTIER_SURVEY_COST_CENTS;
+
+  const economyMood = useMemo(() => {
+    if (!world?.plots?.length) {
+      return { tone: "dormant" as const, line: "Bootstrapping frontier…" };
+    }
+    const claimed = world.plots.filter((p) => p.owner).length;
+    return computeEconomyMood({
+      tick: world.tick,
+      plotCount: world.plots.length,
+      claimedPlots: claimed,
+      partyCount: world.parties?.length ?? 0,
+      productionRuns: (world.active_production ?? []).length,
+      shipmentsInFlight: (world.in_transit ?? []).length,
+    });
+  }, [world]);
 
   const toggleSimPause = useCallback(() => {
     setSimPaused((p) => {
@@ -1779,12 +1795,15 @@ export default function HomePage() {
             <div className="realm-top-strip__hud">
               <div className="realm-brand">
                 <div className="realm-brand__title">Realm</div>
-                <div className="realm-brand__sub">Frontier · player-run economy (solo slice)</div>
+                <div className="realm-brand__sub">Frontier · solo sandpit — the economy is empty until you paint it</div>
+                <p className={`realm-economy-mood realm-economy-mood--${economyMood.tone}`} role="status" aria-live="polite">
+                  {economyMood.line}
+                </p>
               </div>
               <div className="realm-stat-row">
                 <motion.span
                   key={world.tick}
-                  className="realm-pill"
+                  className={`realm-pill${simPaused ? "" : " realm-pill--live"}`}
                   initial={{ scale: 1.04, opacity: 0.7 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 500, damping: 28 }}
@@ -1866,6 +1885,7 @@ export default function HomePage() {
                 <div className="realm-atmosphere__sky" />
                 <div className="realm-atmosphere__aurora" />
                 <div className="realm-atmosphere__stars" />
+                <div className="realm-atmosphere__drift" />
               </div>
               <div
                 ref={mapViewportRef}
