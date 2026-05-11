@@ -17,6 +17,9 @@ dependencies = [
 llm = [
     "anthropic>=0.42.0",
 ]
+lua = [
+    "lupa>=2.2",
+]
 dev = [
     "pytest>=8.0.0",
     "mypy>=1.11.0",

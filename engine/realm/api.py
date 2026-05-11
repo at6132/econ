@@ -42,7 +42,7 @@ from realm.contract_stubs import (
 )
 from realm.schematic import validate_linear_recipe_chain
 from realm.tick import advance_tick
-from realm.user_code import code_layer_public_status
+from realm.user_code import code_layer_public_status, validate_user_source
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
@@ -80,6 +80,17 @@ def health() -> dict[str, str]:
 def get_code_status() -> dict:
     """User-code / Lua platform layer (Phase 4) — capability advertisement until sandbox ships."""
     return code_layer_public_status()
+
+
+@app.post("/code/validate")
+def post_code_validate(body: Annotated[dict, Body()]) -> dict:
+    """Static validation for future Lua deploy (size / shape only — does not execute)."""
+    src = body.get("source")
+    if src is None:
+        raise HTTPException(status_code=400, detail="missing source")
+    if not isinstance(src, str):
+        raise HTTPException(status_code=400, detail="source must be a string")
+    return validate_user_source(src)
 
 
 @app.get("/world")

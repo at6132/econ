@@ -24,7 +24,18 @@ def main() -> int:
     p.add_argument("--party", default="llm_margaux")
     p.add_argument("--load", type=Path, default=None, help="SQLite snapshot to load first")
     p.add_argument("--save", type=Path, default=None, help="SQLite path to write after step")
+    p.add_argument(
+        "--code-status",
+        action="store_true",
+        help="print JSON from code_layer_public_status (Lua optional extra) and exit",
+    )
     args = p.parse_args()
+
+    if args.code_status:
+        from realm.user_code import code_layer_public_status
+
+        print(json.dumps(code_layer_public_status(), indent=2))
+        return 0
 
     from realm.agents_tier3 import plan_llm_party_once
     from realm.ids import PartyId

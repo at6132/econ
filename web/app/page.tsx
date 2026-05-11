@@ -1983,6 +1983,12 @@ export default function HomePage() {
                 >
                   {tab === "world" ? (
                     <>
+                      {world.reputation?.player ? (
+                        <p className="realm-help" style={{ marginBottom: 14, marginTop: 0 }}>
+                          Your reputation — honored <strong>{world.reputation.player.honored}</strong> · breached{" "}
+                          <strong>{world.reputation.player.breached}</strong>
+                        </p>
+                      ) : null}
                       <SectionTitle>Selected plot</SectionTitle>
                       {selectedPlot ? (
                         <>

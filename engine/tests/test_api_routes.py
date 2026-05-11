@@ -222,4 +222,16 @@ def test_code_status_stub() -> None:
     assert r.status_code == 200
     j = r.json()
     assert j.get("phase") == "stub"
-    assert j.get("lua_runtime") is False
+    assert isinstance(j.get("lua_runtime"), bool)
+    assert "lua" in j
+
+
+def test_code_validate_http() -> None:
+    c = TestClient(app)
+    r = c.post("/code/validate", json={"source": "print('x')\n"})
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("ok") is True
+    assert j.get("lines") == 2
+    r2 = c.post("/code/validate", json={})
+    assert r2.status_code == 400
