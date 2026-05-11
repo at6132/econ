@@ -631,7 +631,7 @@ export default function HomePage() {
   const mesh = useMemo(() => {
     if (!world || grid.w === 0) return null;
     return buildOrganicMesh(world.seed, grid.w, grid.h, MAP_PAD, grid.cellPx);
-  }, [world?.seed, grid.w, grid.h, grid.cellPx]);
+  }, [world?.seed, grid.w, grid.h, grid.cellPx]); // eslint-disable-line react-hooks/exhaustive-deps -- mesh is pure in seed+grid; `world` reference churns each /world poll
 
   const gridContentPx = useMemo(() => {
     if (!mesh) return { w: 0, h: 0 };
@@ -652,7 +652,7 @@ export default function HomePage() {
     setMapZoom(z);
     setPan(next);
     didInitPan.current = true;
-  }, [world?.seed, grid.w, grid.h, grid.cellPx, gridContentPx.w, gridContentPx.h]);
+  }, [world?.seed, grid.w, grid.h, grid.cellPx, gridContentPx.w, gridContentPx.h]); // eslint-disable-line react-hooks/exhaustive-deps -- init pan once per seed+layout; avoid world identity churn
 
   const queueFx = useCallback(
     (ev: Omit<MapFxEvent, "id">) => {
@@ -914,7 +914,7 @@ export default function HomePage() {
       void advanceSimTick();
     }, simIntervalMs);
     return () => window.clearInterval(id);
-  }, [world?.seed, simPaused, simIntervalMs, advanceSimTick, onboardingOpen]);
+  }, [world?.seed, simPaused, simIntervalMs, advanceSimTick, onboardingOpen]); // eslint-disable-line react-hooks/exhaustive-deps -- restart interval on new save (seed), not every world poll
 
   async function claimPlot(p: PlotDto) {
     setBusy(true);
