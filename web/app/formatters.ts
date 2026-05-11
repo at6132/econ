@@ -19,8 +19,13 @@ const PARTY_DISPLAY: Record<string, string> = {
   t1_electricity_buyer: "Power buyer",
 };
 
-export function displayParty(id: string | null | undefined): string {
+export function displayParty(
+  id: string | null | undefined,
+  partyDisplayNames?: Readonly<Record<string, string>> | null,
+): string {
   if (id == null || id === "") return "—";
+  const custom = partyDisplayNames?.[id];
+  if (custom) return custom;
   const mapped = PARTY_DISPLAY[id];
   if (mapped) return mapped;
   if (id.startsWith("t1_")) {
@@ -126,13 +131,16 @@ export function formatDeliverBy(
 }
 
 /** Best-effort prettify of engine event_log lines (party + material tokens). */
-export function prettifyChronicleMessage(raw: string): string {
+export function prettifyChronicleMessage(
+  raw: string,
+  partyDisplayNames?: Readonly<Record<string, string>> | null,
+): string {
   let s = raw;
   const lead = /^([a-z0-9_]+)(?=\s*:)/;
   const lm = lead.exec(s);
   if (lm) {
     const id = lm[1];
-    s = displayParty(id) + s.slice(id.length);
+    s = displayParty(id, partyDisplayNames) + s.slice(id.length);
   }
   s = s.replace(/(\d+)\s*[x×]\s*([a-z0-9_]+)/gi, (_, q: string, mid: string) => `${q}× ${displayMaterial(mid)}`);
   s = s.replace(/→\s*([a-z0-9_]+)/g, (_, mid: string) => `→ ${displayMaterial(mid)}`);

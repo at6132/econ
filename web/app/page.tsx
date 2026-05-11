@@ -255,6 +255,7 @@ type WorldDto = {
   stub_hires?: StubHireDto[];
   market_history?: MarketHistorySnap[];
   hire_catalog?: HireCatalogRow[];
+  party_display_names?: Record<string, string>;
 };
 
 function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
@@ -861,6 +862,8 @@ export default function HomePage() {
       shipmentsInFlight: (world.in_transit ?? []).length,
     });
   }, [world]);
+
+  const partyLabels = world?.party_display_names;
 
   const toggleSimPause = useCallback(() => {
     setSimPaused((p) => {
@@ -2130,6 +2133,24 @@ export default function HomePage() {
                         Market depth — resting orders <strong>{marketActivitySnapshot.restingOrders}</strong> · contract rows{" "}
                         <strong>{marketActivitySnapshot.contractRows}</strong>
                       </p>
+                      {world.scenario_id === "genesis" &&
+                      (world.event_log ?? []).some((e) => e.kind === "world_feed") ? (
+                        <>
+                          <SectionTitle>World feed</SectionTitle>
+                          <ul style={{ marginTop: 0, marginBottom: 16, paddingLeft: 18 }}>
+                            {(world.event_log ?? [])
+                              .filter((e) => e.kind === "world_feed")
+                              .slice(-12)
+                              .reverse()
+                              .map((e) => (
+                                <li key={`${e.tick}|${e.message}`} className="realm-help" style={{ marginBottom: 8 }}>
+                                  <span style={{ opacity: 0.55 }}>t{e.tick}</span>{" "}
+                                  {prettifyChronicleMessage(e.message, partyLabels)}
+                                </li>
+                              ))}
+                          </ul>
+                        </>
+                      ) : null}
                       <SectionTitle>Selected plot</SectionTitle>
                       {selectedPlot ? (
                         <>
@@ -2145,7 +2166,7 @@ export default function HomePage() {
                               ) : selectedPlot.owner === "player" ? (
                                 <strong>you</strong>
                               ) : (
-                                <strong>{displayParty(selectedPlot.owner)}</strong>
+                                <strong>{displayParty(selectedPlot.owner, partyLabels)}</strong>
                               )}
                             </span>
                             <span style={{ display: "block", marginTop: 4 }}>
@@ -2570,7 +2591,7 @@ export default function HomePage() {
                                 <tr key={a.order_id}>
                                   <td style={{ textAlign: "right" }}>{a.qty}</td>
                                   <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(a.price_per_unit_cents)}</td>
-                                  <td>{displayParty(a.party)}</td>
+                                  <td>{displayParty(a.party, partyLabels)}</td>
                                   <td style={{ textAlign: "right" }}>
                                     {a.party === "player" ? (
                                       <button
@@ -2612,7 +2633,7 @@ export default function HomePage() {
                                 <tr key={b.order_id}>
                                   <td style={{ textAlign: "right" }}>{b.qty}</td>
                                   <td style={{ textAlign: "right" }}>{formatUsdPerUnitFromCentsPerUnit(b.max_price_per_unit_cents)}</td>
-                                  <td>{displayParty(b.party)}</td>
+                                  <td>{displayParty(b.party, partyLabels)}</td>
                                   <td style={{ textAlign: "right" }}>
                                     {b.party === "player" ? (
                                       <button
@@ -2994,7 +3015,7 @@ export default function HomePage() {
                                 disabled={busy}
                                 onClick={() => void hireNpc(row.party, row.suggested_signing_cents)}
                               >
-                                {row.role} — {displayParty(row.party)} — {formatUsdFromCents(row.suggested_signing_cents)} bonus
+                                {row.role} — {displayParty(row.party, partyLabels)} — {formatUsdFromCents(row.suggested_signing_cents)} bonus
                               </button>
                             </li>
                           ))}
@@ -3047,7 +3068,7 @@ export default function HomePage() {
                             ) : (
                               pactCounterpartyChoices.map((p) => (
                                 <option key={p} value={p}>
-                                  {displayParty(p)}
+                                  {displayParty(p, partyLabels)}
                                 </option>
                               ))
                             )}
@@ -3119,8 +3140,8 @@ export default function HomePage() {
                               <tr key={c.id}>
                                 <td style={{ fontFamily: "var(--realm-mono)", fontSize: 12 }}>{c.id}</td>
                                 <td>{c.status}</td>
-                                <td>{displayParty(c.supplier)}</td>
-                                <td>{displayParty(c.buyer)}</td>
+                                <td>{displayParty(c.supplier, partyLabels)}</td>
+                                <td>{displayParty(c.buyer, partyLabels)}</td>
                                 <td>{c.material != null ? displayMaterial(c.material) : "—"}</td>
                                 <td style={{ textAlign: "right" }}>{c.qty ?? "—"}</td>
                                 <td style={{ textAlign: "right" }}>{formatUsdFromCents(c.total_price_cents)}</td>
@@ -3186,7 +3207,7 @@ export default function HomePage() {
                           >
                             {pactCounterpartyChoices.map((p) => (
                               <option key={p} value={p}>
-                                {displayParty(p)}
+                                {displayParty(p, partyLabels)}
                               </option>
                             ))}
                           </select>
@@ -3243,7 +3264,7 @@ export default function HomePage() {
                             <option value="player">You</option>
                             {pactCounterpartyChoices.map((p) => (
                               <option key={p} value={p}>
-                                {displayParty(p)}
+                                {displayParty(p, partyLabels)}
                               </option>
                             ))}
                           </select>
@@ -3258,7 +3279,7 @@ export default function HomePage() {
                             <option value="player">You</option>
                             {pactCounterpartyChoices.map((p) => (
                               <option key={`inv-${p}`} value={p}>
-                                {displayParty(p)}
+                                {displayParty(p, partyLabels)}
                               </option>
                             ))}
                           </select>
@@ -3312,7 +3333,7 @@ export default function HomePage() {
                             <option value="player">You</option>
                             {pactCounterpartyChoices.map((p) => (
                               <option key={`pr-${p}`} value={p}>
-                                {displayParty(p)}
+                                {displayParty(p, partyLabels)}
                               </option>
                             ))}
                           </select>
@@ -3327,7 +3348,7 @@ export default function HomePage() {
                             <option value="player">You</option>
                             {pactCounterpartyChoices.map((p) => (
                               <option key={`sub-${p}`} value={p}>
-                                {displayParty(p)}
+                                {displayParty(p, partyLabels)}
                               </option>
                             ))}
                           </select>
@@ -3471,7 +3492,7 @@ export default function HomePage() {
                           eventLogReversed.map((e, i) => (
                             <div key={i} className="realm-log-line">
                               <span style={{ opacity: 0.5 }}>t{e.tick}</span>{" "}
-                              <span style={{ opacity: 0.65 }}>[{e.kind}]</span> {prettifyChronicleMessage(e.message)}
+                              <span style={{ opacity: 0.65 }}>[{e.kind}]</span> {prettifyChronicleMessage(e.message, partyLabels)}
                             </div>
                           ))
                         )}
