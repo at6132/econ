@@ -38,7 +38,6 @@ import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols
 import { PlotSchematicPanel } from "./PlotSchematicPanel";
 import type { SchematicRecipe } from "./plotSchematic";
 import { buildOrganicMesh } from "./mapOrganicMesh";
-import { computeStarterHintPlotIds, starterHintCap } from "./mapStarterHints";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
 import { bookMidpointCentsPerUnit } from "./marketPriceHints";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
@@ -53,6 +52,12 @@ import { computeEconomyDensity } from "./realmEconomyDensity";
 import { terrainWorkshopEmptyHint } from "./terrainRecipeHints";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 import { useRealmToast } from "./realmToast";
+import {
+  useStableBuildsByPlot,
+  useStablePlotsForMap,
+  useStableProductionByPlot,
+  useStableStarterPulseIds,
+} from "./useStableMapLayers";
 
 const MAP_PAD = 4;
 /** Large worlds stay legible: tiles never shrink below this (pan / scroll instead of specks). */
@@ -370,6 +375,7 @@ export default function HomePage() {
   const mapZoomRef = useRef(mapZoom);
   const didPan = useRef(false);
   const didInitPan = useRef(false);
+  const mapAnchorVisualRef = useRef<{ cx: number; cy: number; caption: string } | null>(null);
 
   panRef.current = pan;
   mapZoomRef.current = mapZoom;
@@ -604,12 +610,14 @@ export default function HomePage() {
     const ro = new ResizeObserver(() => apply());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [world]);
+  }, []);
+
+  const plotsStableForMap = useStablePlotsForMap(world?.plots);
 
   const grid = useMemo(() => {
-    if (!world?.plots.length) return { w: 0, h: 0, cellPx: MAP_MIN_CELL_PX };
-    const w = Math.max(...world.plots.map((p) => p.x)) + 1;
-    const h = Math.max(...world.plots.map((p) => p.y)) + 1;
+    if (!plotsStableForMap.length) return { w: 0, h: 0, cellPx: MAP_MIN_CELL_PX };
+    const w = Math.max(...plotsStableForMap.map((p) => p.x)) + 1;
+    const h = Math.max(...plotsStableForMap.map((p) => p.y)) + 1;
     const pad = 4;
     const innerW = Math.max(60, viewportPx.w - pad * 2);
     const innerH = Math.max(60, viewportPx.h - pad * 2);
@@ -618,12 +626,12 @@ export default function HomePage() {
     const fit = Math.min(cw, ch);
     const cellPx = Math.floor(Math.max(MAP_MIN_CELL_PX, Math.min(MAP_MAX_CELL_PX, fit)));
     return { w, h, cellPx };
-  }, [world, viewportPx]);
+  }, [plotsStableForMap, viewportPx]);
 
   const mesh = useMemo(() => {
     if (!world || grid.w === 0) return null;
     return buildOrganicMesh(world.seed, grid.w, grid.h, MAP_PAD, grid.cellPx);
-  }, [world, grid.w, grid.h, grid.cellPx]);
+  }, [world?.seed, grid.w, grid.h, grid.cellPx]);
 
   const gridContentPx = useMemo(() => {
     if (!mesh) return { w: 0, h: 0 };
@@ -644,7 +652,7 @@ export default function HomePage() {
     setMapZoom(z);
     setPan(next);
     didInitPan.current = true;
-  }, [world, grid.w, grid.h, grid.cellPx, gridContentPx]);
+  }, [world?.seed, grid.w, grid.h, grid.cellPx, gridContentPx.w, gridContentPx.h]);
 
   const queueFx = useCallback(
     (ev: Omit<MapFxEvent, "id">) => {
@@ -665,23 +673,13 @@ export default function HomePage() {
     [grid.w, mesh],
   );
 
-  const buildsByPlot = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const b of world?.plot_buildings ?? []) {
-      if (mapLogisticsMineOnly && b.party !== "player") continue;
-      m.set(b.plot_id, (m.get(b.plot_id) ?? 0) + 1);
-    }
-    return m;
-  }, [world?.plot_buildings, mapLogisticsMineOnly]);
+  const playerOwnsLand = useMemo(
+    () => plotsStableForMap.some((p) => p.owner === "player"),
+    [plotsStableForMap],
+  );
 
-  const productionByPlot = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const a of world?.active_production ?? []) {
-      if (mapLogisticsMineOnly && a.party !== "player") continue;
-      m.set(a.plot_id, (m.get(a.plot_id) ?? 0) + 1);
-    }
-    return m;
-  }, [world?.active_production, mapLogisticsMineOnly]);
+  const buildsByPlot = useStableBuildsByPlot(world?.plot_buildings, mapLogisticsMineOnly);
+  const productionByPlot = useStableProductionByPlot(world?.active_production, mapLogisticsMineOnly);
 
   const mapShipmentsOverlay = useMemo(() => {
     const raw = world?.in_transit ?? [];
@@ -689,15 +687,7 @@ export default function HomePage() {
     return raw.filter((s) => (s.party ?? "") === "player");
   }, [world?.in_transit, mapLogisticsMineOnly]);
 
-  const playerOwnsLand = useMemo(
-    () => (world?.plots ?? []).some((p) => p.owner === "player"),
-    [world?.plots],
-  );
-
-  const starterPulsePlotIds = useMemo(() => {
-    if (!world?.plots.length || playerOwnsLand) return new Set<string>();
-    return computeStarterHintPlotIds(world.plots, starterHintCap(world.plots.length));
-  }, [world?.plots, playerOwnsLand]);
+  const starterPulsePlotIds = useStableStarterPulseIds(plotsStableForMap, playerOwnsLand);
 
   const marketActivitySnapshot = useMemo(() => {
     if (!world) return { restingOrders: 0, contractRows: 0 };
@@ -710,25 +700,45 @@ export default function HomePage() {
   }, [world]);
 
   const mapAnchor = useMemo((): { cx: number; cy: number; caption: string } | null => {
-    if (!mesh || !world?.plots.length) return null;
+    if (!mesh || !plotsStableForMap.length) {
+      mapAnchorVisualRef.current = null;
+      return null;
+    }
+    let next: { cx: number; cy: number; caption: string };
     if (playerOwnsLand) {
-      const mine = world.plots.filter((p) => p.owner === "player");
+      const mine = plotsStableForMap.filter((p) => p.owner === "player");
       mine.sort((a, b) => a.x + a.y - (b.x + b.y) || a.id.localeCompare(b.id));
       const p = mine[0];
-      if (!p) return null;
+      if (!p) {
+        mapAnchorVisualRef.current = null;
+        return null;
+      }
       const c = mesh.plotCentroid(p.x, p.y);
-      return { cx: c.x, cy: c.y, caption: "You are here" };
+      next = { cx: c.x, cy: c.y, caption: "You are here" };
+    } else {
+      const origin = plotsStableForMap.find((q) => q.id === "p-0-0");
+      if (!origin) {
+        mapAnchorVisualRef.current = null;
+        return null;
+      }
+      const c = mesh.plotCentroid(origin.x, origin.y);
+      next = { cx: c.x, cy: c.y, caption: "Start here" };
     }
-    const origin = world.plots.find((q) => q.id === "p-0-0");
-    if (!origin) return null;
-    const c = mesh.plotCentroid(origin.x, origin.y);
-    return { cx: c.x, cy: c.y, caption: "Start here" };
-  }, [mesh, world?.plots, playerOwnsLand]);
+    const prev = mapAnchorVisualRef.current;
+    if (prev && prev.cx === next.cx && prev.cy === next.cy && prev.caption === next.caption) return prev;
+    mapAnchorVisualRef.current = next;
+    return next;
+  }, [mesh, plotsStableForMap, playerOwnsLand]);
 
   const mapAriaLabel = useMemo(() => {
     if (playerOwnsLand) return "Frontier map — click a plot to select it";
     return "Frontier map — Start here marks the landing corner; soft gold highlights suggest good first claims";
   }, [playerOwnsLand]);
+
+  const onPlotClick = useCallback((p: PlotDto) => {
+    setSelectedPlotId(p.id);
+    setTab("world");
+  }, []);
 
   useEffect(() => {
     if (!SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS && tab === "codex") setTab("world");
@@ -1692,11 +1702,6 @@ export default function HomePage() {
     }
   }
 
-  function onPlotClick(p: PlotDto) {
-    setSelectedPlotId(p.id);
-    setTab("world");
-  }
-
   function resetMapView() {
     const el = mapViewportRef.current;
     if (!el || grid.w === 0) return;
@@ -2029,7 +2034,7 @@ export default function HomePage() {
                         {mapRenderer === "svg" ? (
                           <RealmMapMeshSvg
                             mesh={mesh}
-                            plots={world.plots}
+                            plots={plotsStableForMap}
                             selectedPlotId={selectedPlotId}
                             buildsByPlot={buildsByPlot}
                             cellPx={grid.cellPx}
@@ -2045,7 +2050,7 @@ export default function HomePage() {
                         ) : (
                           <RealmMapMeshPixi
                             mesh={mesh}
-                            plots={world.plots}
+                            plots={plotsStableForMap}
                             selectedPlotId={selectedPlotId}
                             buildsByPlot={buildsByPlot}
                             cellPx={grid.cellPx}
@@ -2062,7 +2067,7 @@ export default function HomePage() {
                         )}
                         <RealmMapShipmentsOverlay
                           mesh={mesh}
-                          plots={world.plots}
+                          plots={plotsStableForMap}
                           shipments={mapShipmentsOverlay}
                           cellPx={grid.cellPx}
                         />

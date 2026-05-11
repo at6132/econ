@@ -1,7 +1,7 @@
 "use client";
 
 import type { Application } from "pixi.js";
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 
 import { ownerAccentPixi, ownerTintPixi, partyMapBadge } from "./mapHash";
 import type { OrganicMesh } from "./mapOrganicMesh";
@@ -68,7 +68,7 @@ type Props = {
   logisticsScope: "all" | "mine";
 };
 
-export function RealmMapMeshPixi(props: Props) {
+export const RealmMapMeshPixi = memo(function RealmMapMeshPixi(props: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -89,7 +89,7 @@ export function RealmMapMeshPixi(props: Props) {
           width: pr.mesh.contentWidth,
           height: pr.mesh.contentHeight,
           backgroundAlpha: 0,
-          antialias: true,
+          antialias: false,
           resolution: typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1,
           autoDensity: true,
         });
@@ -329,4 +329,4 @@ export function RealmMapMeshPixi(props: Props) {
   ]);
 
   return <div ref={hostRef} className="realm-map-mesh-pixi" />;
-}
+});

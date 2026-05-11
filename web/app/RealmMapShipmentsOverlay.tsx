@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { memo, useId, useMemo } from "react";
 
 import type { OrganicMesh } from "./mapOrganicMesh";
 
@@ -28,7 +28,7 @@ type Props = {
  * Non-interactive SVG layer: dashed arcs between origin and destination plots for in-transit goods.
  * Sits above terrain fills, below claim/build glyphs (see z-index in CSS).
  */
-export function RealmMapShipmentsOverlay({ mesh, plots, shipments, cellPx }: Props) {
+export const RealmMapShipmentsOverlay = memo(function RealmMapShipmentsOverlay({ mesh, plots, shipments, cellPx }: Props) {
   const filterUid = useId().replace(/:/g, "");
   const filterId = `realm-ship-glow-${filterUid}`;
   const plotGrid = useMemo(() => {
@@ -102,4 +102,4 @@ export function RealmMapShipmentsOverlay({ mesh, plots, shipments, cellPx }: Pro
       </g>
     </svg>
   );
-}
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 
 import { ownerAccentColor, ownerTint, partyMapBadge } from "./mapHash";
 import type { OrganicMesh } from "./mapOrganicMesh";
@@ -51,7 +51,7 @@ type Props = {
   logisticsScope: "all" | "mine";
 };
 
-export function RealmMapMeshSvg({
+export const RealmMapMeshSvg = memo(function RealmMapMeshSvg({
   mesh,
   plots,
   selectedPlotId,
@@ -270,4 +270,4 @@ export function RealmMapMeshSvg({
       ) : null}
     </svg>
   );
-}
+});
