@@ -231,23 +231,6 @@ body::after {
   animation: realm-twinkle 7s ease-in-out infinite;
 }
 
-.realm-atmosphere__drift {
-  position: absolute;
-  inset: -30%;
-  opacity: 0.055;
-  background: conic-gradient(from 120deg, transparent, rgba(255, 216, 74, 0.12), transparent 55%);
-  animation: realm-drift-rotate 90s linear infinite;
-}
-
-@keyframes realm-drift-rotate {
-  0% {
-    transform: rotate(0deg) scale(1);
-  }
-  100% {
-    transform: rotate(360deg) scale(1.05);
-  }
-}
-
 @keyframes realm-sky-shift {
   0% {
     transform: translate(0, 0) scale(1);
@@ -279,8 +262,7 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .realm-atmosphere__sky,
   .realm-atmosphere__aurora,
-  .realm-atmosphere__stars,
-  .realm-atmosphere__drift {
+  .realm-atmosphere__stars {
     animation: none !important;
   }
 }
@@ -896,33 +878,51 @@ body::after {
   color: var(--realm-muted);
 }
 
-.realm-economy-mood {
-  margin: 6px 0 0;
-  max-width: min(520px, 92vw);
-  padding: 0 0 0 10px;
+.realm-economy-density {
+  margin: 8px 0 0;
+  max-width: min(720px, 96vw);
+  padding: 6px 0 0 10px;
   border-left: 3px solid var(--realm-border);
-  font-size: 19px;
-  line-height: 1.3;
-  color: var(--realm-dim);
+}
+
+.realm-economy-density__facts {
+  font-family: var(--realm-mono);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  color: var(--realm-magic);
   text-shadow: 0 1px 0 #000;
 }
 
-.realm-economy-mood--dormant {
-  border-left-color: var(--realm-muted);
-  color: var(--realm-muted);
-}
-
-.realm-economy-mood--quiet {
-  border-left-color: rgba(110, 231, 255, 0.45);
-}
-
-.realm-economy-mood--warming {
-  border-left-color: var(--realm-accent-dim);
+.realm-economy-density__assessment {
+  margin-top: 4px;
+  font-size: 17px;
+  line-height: 1.35;
   color: var(--realm-dim);
 }
 
-.realm-economy-mood--alive {
+.realm-economy-density--sparse {
+  border-left-color: var(--realm-muted);
+}
+
+.realm-economy-density--sparse .realm-economy-density__assessment {
+  color: var(--realm-muted);
+}
+
+.realm-economy-density--thin {
+  border-left-color: rgba(110, 231, 255, 0.45);
+}
+
+.realm-economy-density--developing {
+  border-left-color: var(--realm-accent-dim);
+}
+
+.realm-economy-density--active {
   border-left-color: var(--realm-accent);
+}
+
+.realm-economy-density--active .realm-economy-density__assessment {
   color: var(--realm-text);
 }
 
@@ -950,33 +950,6 @@ body::after {
 .realm-pill strong {
   color: var(--realm-magic);
   font-weight: 400;
-}
-
-.realm-pill--live {
-  box-shadow:
-    2px 2px 0 #000,
-    0 0 0 1px rgba(255, 216, 74, 0.2);
-  animation: realm-pill-live-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes realm-pill-live-pulse {
-  0%,
-  100% {
-    box-shadow:
-      2px 2px 0 #000,
-      0 0 0 1px rgba(255, 216, 74, 0.15);
-  }
-  50% {
-    box-shadow:
-      2px 2px 0 #000,
-      0 0 12px rgba(110, 231, 255, 0.22);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .realm-pill--live {
-    animation: none;
-  }
 }
 
 .realm-map-frame:not(.realm-map-frame--hero) {

@@ -49,7 +49,7 @@ import { RealmMapMeshPixi } from "./RealmMapMeshPixi";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
 import { RealmMapShipmentsOverlay } from "./RealmMapShipmentsOverlay";
-import { computeEconomyMood } from "./realmEconomyMood";
+import { computeEconomyDensity } from "./realmEconomyDensity";
 import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 import { useRealmToast } from "./realmToast";
 
@@ -822,12 +822,16 @@ export default function HomePage() {
   const canAffordSurvey =
     typeof playerCashCents === "number" && playerCashCents >= FRONTIER_SURVEY_COST_CENTS;
 
-  const economyMood = useMemo(() => {
+  const economyDensity = useMemo(() => {
     if (!world?.plots?.length) {
-      return { tone: "dormant" as const, line: "Bootstrapping frontier…" };
+      return {
+        tone: "sparse" as const,
+        facts: "—",
+        assessment: "Loading authoritative world state…",
+      };
     }
     const claimed = world.plots.filter((p) => p.owner).length;
-    return computeEconomyMood({
+    return computeEconomyDensity({
       tick: world.tick,
       plotCount: world.plots.length,
       claimedPlots: claimed,
@@ -1795,21 +1799,22 @@ export default function HomePage() {
             <div className="realm-top-strip__hud">
               <div className="realm-brand">
                 <div className="realm-brand__title">Realm</div>
-                <div className="realm-brand__sub">Frontier · solo sandpit — the economy is empty until you paint it</div>
-                <p className={`realm-economy-mood realm-economy-mood--${economyMood.tone}`} role="status" aria-live="polite">
-                  {economyMood.line}
-                </p>
+                <div className="realm-brand__sub">
+                  Player-invented businesses & prices · geographically real, economically empty until agents trade · solo engine slice
+                </div>
+                <div
+                  className={`realm-economy-density realm-economy-density--${economyDensity.tone}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="realm-economy-density__facts">{economyDensity.facts}</div>
+                  <div className="realm-economy-density__assessment">{economyDensity.assessment}</div>
+                </div>
               </div>
               <div className="realm-stat-row">
-                <motion.span
-                  key={world.tick}
-                  className={`realm-pill${simPaused ? "" : " realm-pill--live"}`}
-                  initial={{ scale: 1.04, opacity: 0.7 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
-                >
+                <span key={world.tick} className="realm-pill">
                   World tick <strong>{world.tick}</strong>
-                </motion.span>
+                </span>
                 <span className="realm-pill">
                   Seed <strong>{world.seed}</strong>
                 </span>
@@ -1885,7 +1890,6 @@ export default function HomePage() {
                 <div className="realm-atmosphere__sky" />
                 <div className="realm-atmosphere__aurora" />
                 <div className="realm-atmosphere__stars" />
-                <div className="realm-atmosphere__drift" />
               </div>
               <div
                 ref={mapViewportRef}
