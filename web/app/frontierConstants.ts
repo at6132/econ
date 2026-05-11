@@ -10,7 +10,7 @@ export const FRONTIER_SIM_PAUSED_STORAGE_KEY = "realm_frontier_sim_paused_v1";
 /** 0 = slow, 1 = normal, 2 = fast (real-time ms between engine ticks) */
 export const FRONTIER_SIM_SPEED_STORAGE_KEY = "realm_frontier_sim_speed_v1";
 
-/** Last dev-reset scenario (frontier | bootstrapper | speculator | cartel | millrace | archive) */
+/** Last dev-reset scenario (frontier | bootstrapper | speculator | cartel | millrace | archive | genesis) */
 export const FRONTIER_SCENARIO_STORAGE_KEY = "realm_frontier_scenario_v1";
 
 /** Must match `engine/realm/actions.py` SURVEY_COST_CENTS */
