@@ -272,6 +272,7 @@ def bootstrap_genesis(
         if isinstance(trp, MoneyErr):
             raise ValueError(trp.reason)
     _seed_genesis_exchange(world, inv)
+    _seed_tier3_character(world, inv, "genesis")
     log_event(
         world,
         "world",

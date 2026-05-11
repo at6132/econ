@@ -17,6 +17,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         1_000_000  # player
         + 4 * 1_000_000  # settlers
         + 2 * GENESIS_POP_HUB_CASH_CENTS  # pop hubs
+        + 88_000  # Tier-3 Margaux (Genesis)
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
 

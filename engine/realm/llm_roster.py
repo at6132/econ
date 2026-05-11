@@ -26,6 +26,7 @@ def opening_memory(scenario_id: str, display_name: str) -> str:
         "speculator": f"{display_name} lands fat with capital — the tape is the terrain; plots are optional.",
         "millrace": f"{display_name} works a narrow valley grid — logistics pinch faster than the open Frontier.",
         "archive": f"{display_name} treats quotes and surveys as inventory — price history is leverage.",
+        "genesis": f"{display_name} reads a crowded frontier of settlers and posted clips — land and depth matter as much as price.",
     }
     return lines.get(s, f"{display_name} spawned in scenario {scenario_id!r}.")
 
@@ -126,6 +127,7 @@ SCENARIO_TIER3_PARTY: dict[str, str] = {
     "speculator": "llm_rico",
     "millrace": "llm_margaux",
     "archive": "llm_yuki",
+    "genesis": "llm_margaux",
 }
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.ids import PartyId
 from realm.llm_roster import SCENARIO_TIER3_PARTY
 from realm.world import bootstrap_by_scenario
 
@@ -12,6 +13,7 @@ def test_scenario_party_mapping() -> None:
     assert SCENARIO_TIER3_PARTY["bootstrapper"] == "llm_finn"
     assert SCENARIO_TIER3_PARTY["speculator"] == "llm_rico"
     assert SCENARIO_TIER3_PARTY["archive"] == "llm_yuki"
+    assert SCENARIO_TIER3_PARTY["genesis"] == "llm_margaux"
 
 
 def test_cartel_bootstraps_elira_not_margaux() -> None:
@@ -23,3 +25,9 @@ def test_cartel_bootstraps_elira_not_margaux() -> None:
 def test_archive_intel_tick_boost() -> None:
     w = bootstrap_by_scenario(seed=3, scenario="archive")
     assert w.market_intel_expires_tick >= 280
+
+
+def test_genesis_bootstraps_margaux() -> None:
+    w = bootstrap_by_scenario(seed=5, scenario="genesis")
+    assert "llm_margaux" in w.llm_agents
+    assert PartyId("llm_margaux") in w.parties
