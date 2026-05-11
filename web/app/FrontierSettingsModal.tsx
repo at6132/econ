@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-type DevScenario = "frontier" | "bootstrapper" | "speculator" | "cartel";
+type DevScenario = "frontier" | "bootstrapper" | "speculator" | "cartel" | "millrace" | "archive";
 
 type Props = {
   open: boolean;
@@ -145,6 +145,8 @@ export function FrontierSettingsModal({
                     <option value="bootstrapper">bootstrapper</option>
                     <option value="speculator">speculator</option>
                     <option value="cartel">cartel</option>
+                    <option value="millrace">millrace</option>
+                    <option value="archive">archive</option>
                   </select>
                 </label>
                 <button type="button" className="realm-btn realm-btn--ghost" disabled={busy} onClick={() => void onDevResetWorld()}>

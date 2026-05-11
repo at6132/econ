@@ -50,7 +50,7 @@ import { useRealmToast } from "./realmToast";
 
 const MAP_PAD = 4;
 
-const DEV_RESET_SCENARIOS = ["frontier", "bootstrapper", "speculator", "cartel"] as const;
+const DEV_RESET_SCENARIOS = ["frontier", "bootstrapper", "speculator", "cartel", "millrace", "archive"] as const;
 type DevResetScenarioId = (typeof DEV_RESET_SCENARIOS)[number];
 
 /** Real-time gap between engine ticks when the sim is running (solo pacing; not wall-clock canon). */
