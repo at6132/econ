@@ -65,6 +65,7 @@ type Props = {
   mapAnchor: { cx: number; cy: number; caption: string } | null;
   ariaLabel: string;
   mapStyle: MapRenderStyle;
+  logisticsScope: "all" | "mine";
 };
 
 export function RealmMapMeshPixi(props: Props) {
@@ -118,6 +119,7 @@ export function RealmMapMeshPixi(props: Props) {
           mapStyle,
           mapAnchor,
           starterPulsePlotIds,
+          logisticsScope,
         } = pr;
 
         const ordered = [...plots].sort((a, b) => {
@@ -162,7 +164,7 @@ export function RealmMapMeshPixi(props: Props) {
               strokeAlpha = 0.5;
               strokeW = 1.5;
             }
-          } else if (foreign) {
+          } else if (foreign && logisticsScope === "all") {
             strokeCol = ownerAccentPixi(p.owner!);
             strokeW = Math.max(1.25, cellPx * 0.045);
             strokeAlpha = mapStyle === "political" ? 0.68 : 0.5;
@@ -205,6 +207,7 @@ export function RealmMapMeshPixi(props: Props) {
 
         for (const p of ordered) {
           if (!p.owner) continue;
+          if (logisticsScope === "mine" && p.owner !== "player") continue;
           const c = mesh.plotCentroid(p.x, p.y);
           const nBuild = buildsByPlot.get(p.id) ?? 0;
           const claimY = c.y - (nBuild > 0 ? cellPx * 0.34 : cellPx * 0.22);
@@ -319,6 +322,7 @@ export function RealmMapMeshPixi(props: Props) {
     props.cellPx,
     props.busy,
     props.mapStyle,
+    props.logisticsScope,
     props.mapAnchor,
     props.starterPulsePlotIds,
     props.ariaLabel,

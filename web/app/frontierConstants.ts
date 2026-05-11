@@ -19,5 +19,11 @@ export const FRONTIER_SURVEY_COST_CENTS = 50_000;
 /** Map mesh renderer: `svg` (default) or WebGL `pixi` — bump to reset */
 export const FRONTIER_MAP_RENDERER_STORAGE_KEY = "realm_map_renderer_v1";
 
+/** Map legend panel open when localStorage value is "1" */
+export const FRONTIER_MAP_LEGEND_STORAGE_KEY = "realm_map_legend_open_v1";
+
+/** When "1", map overlays show only the human player's logistics (claims still visible on terrain tint). */
+export const FRONTIER_MAP_LOGISTICS_MINE_STORAGE_KEY = "realm_map_logistics_mine_v1";
+
 /** localStorage: `${prefix}${plotId}` → JSON string[] of recipe ids */
 export const PLOT_SCHEMATIC_STORAGE_PREFIX = "realm_plot_schematic_v1:";

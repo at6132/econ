@@ -19,6 +19,8 @@ import {
   previewShipFeeCents,
 } from "./formatters";
 import {
+  FRONTIER_MAP_LEGEND_STORAGE_KEY,
+  FRONTIER_MAP_LOGISTICS_MINE_STORAGE_KEY,
   FRONTIER_MAP_RENDERER_STORAGE_KEY,
   FRONTIER_MAP_STYLE_STORAGE_KEY,
   FRONTIER_ONBOARD_STORAGE_KEY,
@@ -42,6 +44,7 @@ import { bookMidpointCentsPerUnit } from "./marketPriceHints";
 import { MarketHistoryChart, type MarketHistorySnap } from "./MarketHistoryChart";
 import { OnboardingModal } from "./OnboardingModal";
 import { RealmMapFxOverlay } from "./RealmMapFxOverlay";
+import { RealmMapLegendPanel } from "./RealmMapLegendPanel";
 import { RealmMapMeshPixi } from "./RealmMapMeshPixi";
 import { RealmMapMeshSvg } from "./RealmMapMeshSvg";
 import { RealmMapParticlesCanvas } from "./RealmMapParticlesCanvas";
@@ -354,6 +357,8 @@ export default function HomePage() {
   const [mapZoom, setMapZoom] = useState(MAP_DEFAULT_ZOOM);
   const [mapStyle, setMapStyle] = useState<"terrain" | "satellite" | "political">("terrain");
   const [mapRenderer, setMapRenderer] = useState<"svg" | "pixi">("svg");
+  const [mapLegendOpen, setMapLegendOpen] = useState(false);
+  const [mapLogisticsMineOnly, setMapLogisticsMineOnly] = useState(false);
   const mapNavSuppress = useRef(false);
   const panDragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   const mapPanPointerId = useRef<number | null>(null);
@@ -392,6 +397,8 @@ export default function HomePage() {
     try {
       const r = localStorage.getItem(FRONTIER_MAP_RENDERER_STORAGE_KEY);
       if (r === "pixi" || r === "svg") setMapRenderer(r);
+      if (localStorage.getItem(FRONTIER_MAP_LEGEND_STORAGE_KEY) === "1") setMapLegendOpen(true);
+      if (localStorage.getItem(FRONTIER_MAP_LOGISTICS_MINE_STORAGE_KEY) === "1") setMapLogisticsMineOnly(true);
     } catch {
       /* ignore */
     }
@@ -659,18 +666,26 @@ export default function HomePage() {
   const buildsByPlot = useMemo(() => {
     const m = new Map<string, number>();
     for (const b of world?.plot_buildings ?? []) {
+      if (mapLogisticsMineOnly && b.party !== "player") continue;
       m.set(b.plot_id, (m.get(b.plot_id) ?? 0) + 1);
     }
     return m;
-  }, [world?.plot_buildings]);
+  }, [world?.plot_buildings, mapLogisticsMineOnly]);
 
   const productionByPlot = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of world?.active_production ?? []) {
+      if (mapLogisticsMineOnly && a.party !== "player") continue;
       m.set(a.plot_id, (m.get(a.plot_id) ?? 0) + 1);
     }
     return m;
-  }, [world?.active_production]);
+  }, [world?.active_production, mapLogisticsMineOnly]);
+
+  const mapShipmentsOverlay = useMemo(() => {
+    const raw = world?.in_transit ?? [];
+    if (!mapLogisticsMineOnly) return raw;
+    return raw.filter((s) => (s.party ?? "") === "player");
+  }, [world?.in_transit, mapLogisticsMineOnly]);
 
   const playerOwnsLand = useMemo(
     () => (world?.plots ?? []).some((p) => p.owner === "player"),
@@ -1860,6 +1875,7 @@ export default function HomePage() {
                 onPointerUp={onMapPointerUp}
                 onPointerCancel={onMapPointerUp}
               >
+                {mapLegendOpen ? <RealmMapLegendPanel mineLogisticsActive={mapLogisticsMineOnly} /> : null}
                 <div className="realm-map-toolbar" role="toolbar" aria-label="Zoom and map appearance">
                   <span className="realm-map-toolbar__label">{mapStyle}</span>
                   <button
@@ -1893,6 +1909,44 @@ export default function HomePage() {
                   </button>
                   <button type="button" className="realm-map-toolbar__btn" onClick={cycleMapStyle}>
                     Style
+                  </button>
+                  <button
+                    type="button"
+                    className={`realm-map-toolbar__btn${mapLegendOpen ? " realm-map-toolbar__btn--on" : ""}`}
+                    aria-pressed={mapLegendOpen}
+                    title="Toggle map legend"
+                    onClick={() => {
+                      setMapLegendOpen((v) => {
+                        const next = !v;
+                        try {
+                          localStorage.setItem(FRONTIER_MAP_LEGEND_STORAGE_KEY, next ? "1" : "0");
+                        } catch {
+                          /* ignore */
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    Key
+                  </button>
+                  <button
+                    type="button"
+                    className={`realm-map-toolbar__btn${mapLogisticsMineOnly ? " realm-map-toolbar__btn--on" : ""}`}
+                    aria-pressed={mapLogisticsMineOnly}
+                    title="Show only your workshops, production runs, and shipment arcs"
+                    onClick={() => {
+                      setMapLogisticsMineOnly((v) => {
+                        const next = !v;
+                        try {
+                          localStorage.setItem(FRONTIER_MAP_LOGISTICS_MINE_STORAGE_KEY, next ? "1" : "0");
+                        } catch {
+                          /* ignore */
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    Mine
                   </button>
                   <button
                     type="button"
@@ -1939,6 +1993,7 @@ export default function HomePage() {
                             buildsByPlot={buildsByPlot}
                             cellPx={grid.cellPx}
                             productionByPlot={productionByPlot}
+                            logisticsScope={mapLogisticsMineOnly ? "mine" : "all"}
                             busy={busy}
                             mapNavSuppress={mapNavSuppress}
                             onPlotClick={onPlotClick}
@@ -1954,6 +2009,7 @@ export default function HomePage() {
                             buildsByPlot={buildsByPlot}
                             cellPx={grid.cellPx}
                             productionByPlot={productionByPlot}
+                            logisticsScope={mapLogisticsMineOnly ? "mine" : "all"}
                             busy={busy}
                             mapNavSuppress={mapNavSuppress}
                             onPlotClick={onPlotClick}
@@ -1966,7 +2022,7 @@ export default function HomePage() {
                         <RealmMapShipmentsOverlay
                           mesh={mesh}
                           plots={world.plots}
-                          shipments={world.in_transit ?? []}
+                          shipments={mapShipmentsOverlay}
                           cellPx={grid.cellPx}
                         />
                       </>
@@ -1975,8 +2031,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Claim chips (every owner), workshops ▣, production ⚙, dashed shipment arcs — pan on large grids · drag to pan · scroll zoom · click a plot to select (gold ring).
-                Toggle <strong>SVG</strong> / <strong>GL</strong> in the toolbar. Side panel: claim, survey, logistics. Pause the clock in the header to hold the world still.
+                Claim chips, workshops ▣, production ⚙, dashed shipment arcs — use toolbar <strong>Key</strong> for the legend and <strong>Mine</strong> to show only your logistics overlays. Pan / zoom / click plots as before.
               </p>
             </div>
 

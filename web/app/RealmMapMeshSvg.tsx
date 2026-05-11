@@ -47,6 +47,8 @@ type Props = {
   mapAnchor: { cx: number; cy: number; caption: string } | null;
   /** Accessible name for the SVG map. */
   ariaLabel: string;
+  /** When `mine`, hide other parties’ claim chips and accent borders; parent filters production/builds/shipments. */
+  logisticsScope: "all" | "mine";
 };
 
 export function RealmMapMeshSvg({
@@ -62,6 +64,7 @@ export function RealmMapMeshSvg({
   starterPulsePlotIds,
   mapAnchor,
   ariaLabel,
+  logisticsScope,
 }: Props) {
   const buildFontPx = Math.max(12, Math.round(cellPx * 0.3));
   const buildStrokePx = Math.max(3, Math.round(cellPx * 0.09));
@@ -148,7 +151,7 @@ export function RealmMapMeshSvg({
           const groupStyle: CSSProperties | undefined = p.owner ? { ["--owner-tint" as string]: tint } : undefined;
           const nProd = productionByPlot.get(p.id) ?? 0;
           const pathStroke: CSSProperties =
-            p.owner && !mine && !isSelected
+            logisticsScope === "all" && p.owner && !mine && !isSelected
               ? {
                   stroke: ownerAccentColor(p.owner),
                   strokeWidth: Math.max(1.4, cellPx * 0.042),
@@ -182,7 +185,7 @@ export function RealmMapMeshSvg({
                 </title>
               </path>
               {p.owner ? <path className="realm-map-region__tint" d={d} fill="var(--owner-tint, transparent)" aria-hidden /> : null}
-              {p.owner ? (
+              {p.owner && (logisticsScope === "all" || mine) ? (
                 <text
                   className="realm-map-region__claim-badge"
                   x={c.x}
