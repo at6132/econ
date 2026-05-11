@@ -15,6 +15,46 @@ from realm.biome_noise import terrain_for_cell
 from realm.rng import make_rng
 from realm.terrain import Terrain
 
+# Population-side wallets (genesis scenario) — funded from system reserve at bootstrap.
+GENESIS_POP_HUB_CASH_CENTS = 5_000_000  # $50,000 each — aggregate staple demand.
+
+
+def _subsurface_roll(rng: random.Random, terrain: Terrain, *, correlate: bool) -> SubsurfaceRoll:
+    """Terrain-correlated subsurface when ``correlate`` (stronger ore under mountains, etc.)."""
+    ir = rng.random()
+    cu = rng.random()
+    cl = rng.random()
+    co = rng.random()
+    if correlate:
+        if terrain == Terrain.MOUNTAIN:
+            ir = min(1.0, ir * 0.38 + 0.48)
+            cu = min(1.0, cu * 0.42 + 0.44)
+            co = min(1.0, co * 0.45 + 0.38)
+        elif terrain == Terrain.FOREST:
+            cl = min(1.0, cl * 0.48 + 0.34)
+        elif terrain == Terrain.PLAINS:
+            cl = min(1.0, cl * 0.52 + 0.28)
+        elif terrain == Terrain.SWAMP:
+            cl = min(1.0, cl * 0.46 + 0.36)
+            cu = min(1.0, cu * 0.48 + 0.32)
+        elif terrain == Terrain.DESERT:
+            co = min(1.0, co * 0.48 + 0.36)
+        elif terrain == Terrain.TUNDRA:
+            ir *= 0.85
+            co *= 0.85
+        elif terrain in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP):
+            damp = 0.28
+            ir *= damp
+            cu *= damp
+            cl *= damp
+            co *= damp
+    return SubsurfaceRoll(
+        iron_ore_grade=ir,
+        copper_ore_grade=cu,
+        clay_grade=cl,
+        coal_grade=co,
+    )
+
 
 @dataclass
 class ActiveProduction:
@@ -100,20 +140,21 @@ class World:
         return make_rng(self.tick, purpose)
 
 
-def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
-    """Grid of width x height plots; terrain from coherent biome fields, subsurface iid per plot."""
+def generate_plots(
+    *,
+    seed: int,
+    width: int,
+    height: int,
+    correlate_subsurface: bool = False,
+) -> dict[PlotId, Plot]:
+    """Grid of width x height plots; terrain from coherent biome fields; subsurface rolled per plot."""
     plots: dict[PlotId, Plot] = {}
     for y in range(height):
         for x in range(width):
             pid = PlotId(f"p-{x}-{y}")
             rng = make_rng(seed, f"gen:{pid}")
             terrain = terrain_for_cell(seed, x, y)
-            subsurface = SubsurfaceRoll(
-                iron_ore_grade=rng.random(),
-                copper_ore_grade=rng.random(),
-                clay_grade=rng.random(),
-                coal_grade=rng.random(),
-            )
+            subsurface = _subsurface_roll(rng, terrain, correlate=correlate_subsurface)
             plots[pid] = Plot(
                 plot_id=pid,
                 x=x,
@@ -123,6 +164,112 @@ def generate_plots(*, seed: int, width: int, height: int) -> dict[PlotId, Plot]:
                 subsurface=subsurface,
             )
     return plots
+
+
+def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
+    """Cold-start grain liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
+    from realm.event_log import log_event
+    from realm.markets import place_sell_order
+
+    ex = PartyId("genesis_exchange")
+    world.parties.add(ex)
+    world.reputation[str(ex)] = {"honored": 0, "breached": 0}
+    grain_qty = 72
+    ad = inv.add(ex, MaterialId("grain"), grain_qty)
+    if isinstance(ad, MatterErr):
+        raise ValueError(ad.reason)
+    pr = place_sell_order(world, ex, MaterialId("grain"), grain_qty, 128)
+    if not pr.get("ok"):
+        raise ValueError(str(pr.get("reason")))
+    log_event(
+        world,
+        "world",
+        f"genesis_exchange listed {grain_qty} grain @ 128¢ (cold-start clearing).",
+    )
+
+
+def bootstrap_genesis(
+    *,
+    seed: int,
+    grid_width: int = 96,
+    grid_height: int = 72,
+    settler_count: int = 50,
+    starting_cash_cents: int = 1_000_000,
+    system_reserve_cents: int = 100_000_000_000,
+) -> World:
+    """
+    Empty-world / co-founder scenario: large map, cash-only player + algorithmic settlers,
+    population demand wallets, neutral exchange listing (no Tier-1 / Tier-2 NPC bootstrap).
+    """
+    from realm.event_log import log_event
+    from realm.market_history import record_market_snapshot
+
+    human = PartyId("player")
+    plots = generate_plots(
+        seed=seed,
+        width=grid_width,
+        height=grid_height,
+        correlate_subsurface=True,
+    )
+    n_plots = len(plots)
+    ledger = Ledger()
+    inv = Inventory()
+    world = World(
+        seed=seed,
+        tick=0,
+        plots=plots,
+        ledger=ledger,
+        inventory=inv,
+        parties={human},
+        scenario_id="genesis",
+    )
+    res = world.ledger.seed_system_reserve(system_reserve_cents)
+    if isinstance(res, MoneyErr):
+        raise ValueError(res.reason)
+    pcash = party_cash_account(human)
+    world.ledger.ensure_account(pcash)
+    tr = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=pcash,
+        amount_cents=starting_cash_cents,
+    )
+    if isinstance(tr, MoneyErr):
+        raise ValueError(tr.reason)
+    world.reputation[str(human)] = {"honored": 0, "breached": 0}
+    for i in range(1, settler_count + 1):
+        sid = PartyId(f"settler_{i:03d}")
+        world.parties.add(sid)
+        world.reputation[str(sid)] = {"honored": 0, "breached": 0}
+        acct = party_cash_account(sid)
+        world.ledger.ensure_account(acct)
+        trs = world.ledger.transfer(
+            debit=system_reserve_account(),
+            credit=acct,
+            amount_cents=starting_cash_cents,
+        )
+        if isinstance(trs, MoneyErr):
+            raise ValueError(trs.reason)
+    for name in ("pop_hub_e", "pop_hub_w"):
+        ph = PartyId(name)
+        world.parties.add(ph)
+        world.reputation[str(ph)] = {"honored": 0, "breached": 0}
+        acct = party_cash_account(ph)
+        world.ledger.ensure_account(acct)
+        trp = world.ledger.transfer(
+            debit=system_reserve_account(),
+            credit=acct,
+            amount_cents=GENESIS_POP_HUB_CASH_CENTS,
+        )
+        if isinstance(trp, MoneyErr):
+            raise ValueError(trp.reason)
+    _seed_genesis_exchange(world, inv)
+    log_event(
+        world,
+        "world",
+        f"genesis: {n_plots} plots, {settler_count} settlers, terrain-correlated subsurface, cold-start exchange.",
+    )
+    record_market_snapshot(world)
+    return world
 
 
 def _seed_tier3_character(world: World, inv: Inventory, scenario_id: str) -> None:
@@ -444,6 +591,8 @@ def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
             starting_cash_cents=1_080_000,
             scenario_id="archive",
         )
+    if sid == "genesis":
+        return bootstrap_genesis(seed=seed)
     raise ValueError(f"unknown scenario: {scenario!r}")
 
 

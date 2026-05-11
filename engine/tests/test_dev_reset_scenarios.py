@@ -17,6 +17,7 @@ from realm.api import app
         ("cartel", 48 * 36, 1_000_000, True),
         ("millrace", 42 * 28, 975_000, False),
         ("archive", 48 * 36, 1_080_000, False),
+        ("genesis", 96 * 72, 1_000_000, False),
     ],
 )
 def test_dev_reset_applies_scenario_params(
@@ -41,6 +42,8 @@ def test_dev_reset_applies_scenario_params(
     assert body["balances_cents"]["cash:player"] == expected_player_cents
     grain_parties = {row["party"] for row in body["market_asks"] if row["material"] == "grain"}
     assert ("cartel_grain_cell" in grain_parties) == expect_cartel_cell
+    if scenario == "genesis":
+        assert "genesis_exchange" in grain_parties
 
 
 def test_dev_reset_unknown_scenario_returns_400() -> None:

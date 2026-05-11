@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from realm.agents_genesis import tick_genesis_agents
 from realm.agents_tier1 import tick_tier1_agents
 from realm.agents_tier2 import tick_tier2_agents
 from realm.agents_tier3 import tick_tier3_llm_agents
@@ -23,8 +24,11 @@ def advance_tick(world: World) -> None:
     tick_production(world)
     tick_material_spoilage(world)
     tick_stub_employment(world)
-    tick_tier1_agents(world)
-    tick_tier2_agents(world)
+    if world.scenario_id == "genesis":
+        tick_genesis_agents(world)
+    else:
+        tick_tier1_agents(world)
+        tick_tier2_agents(world)
     tick_tier3_llm_agents(world)
     world.tick += 1
     tick_supply_contract_breaches(world)

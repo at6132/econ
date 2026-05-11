@@ -248,7 +248,7 @@ def dev_reset(
     seed: Annotated[int, Query()] = 42,
     scenario: Annotated[str, Query()] = "frontier",
 ) -> dict:
-    """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive."""
+    """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive, genesis."""
     global _world
     try:
         _world = bootstrap_by_scenario(seed=seed, scenario=scenario)

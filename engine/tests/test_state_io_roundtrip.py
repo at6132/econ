@@ -9,7 +9,7 @@ from realm.buildings import build_on_plot
 from realm.ids import PartyId, PlotId
 from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.tick import advance_tick
-from realm.world import bootstrap_by_scenario
+from realm.world import bootstrap_by_scenario, bootstrap_genesis
 
 
 SCENARIOS = ("frontier", "cartel", "bootstrapper", "speculator", "millrace", "archive")
@@ -39,8 +39,34 @@ def test_dump_load_roundtrip_after_ticks_and_building(scenario: str) -> None:
     assert w2.llm_agents == w.llm_agents
     assert w2.npc_messages_to_player == w.npc_messages_to_player
     assert w2.llm_session_cost_micro_usd == w.llm_session_cost_micro_usd
-    tier3_party = next(iter(w.llm_agents.keys()))
-    assert PartyId(tier3_party) in w2.parties
+    if w.llm_agents:
+        tier3_party = next(iter(w.llm_agents.keys()))
+        assert PartyId(tier3_party) in w2.parties
+    assert w2.plots[pid].owner == PartyId("player")
+    assert len(w2.plot_buildings) == len(w.plot_buildings)
+    assert w2.plot_buildings == w.plot_buildings
+
+
+def test_dump_load_roundtrip_genesis_small_grid() -> None:
+    """Genesis defaults to a large map — use a compact bootstrap for CI-friendly persistence checks."""
+    w = bootstrap_genesis(seed=101, grid_width=14, grid_height=12, settler_count=6)
+    pid = PlotId("p-0-0")
+    assert claim_plot(w, PartyId("player"), pid)["ok"] is True
+    assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
+    for _ in range(4):
+        advance_tick(w)
+
+    assert dump_world(w)["version"] == SNAPSHOT_VERSION
+    ledger_total = w.ledger.total_cents()
+    inv_snapshot = w.inventory.snapshot()
+    w2 = loads_json(dumps_json(w))
+
+    assert w2.tick == w.tick
+    assert w2.scenario_id == "genesis"
+    assert w2.seed == w.seed
+    assert w2.ledger.total_cents() == ledger_total
+    assert w2.inventory.snapshot() == inv_snapshot
+    assert w2.llm_agents == {}
     assert w2.plots[pid].owner == PartyId("player")
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings
