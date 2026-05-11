@@ -107,10 +107,12 @@ type ActiveProductionDto = {
 };
 
 type InTransitDto = {
-  id: string;
-  party: string;
+  id?: string;
+  shipment_id?: string;
+  party?: string;
   material: string;
   qty: number;
+  from_plot_id?: string | null;
   dest_plot_id: string;
   arrive_tick: number;
 };
@@ -292,6 +294,7 @@ export default function HomePage() {
   const [shipTo, setShipTo] = useState("p-1-0");
   const [shipMaterial, setShipMaterial] = useState("timber");
   const [shipQty, setShipQty] = useState("1");
+  const [codeLayerStatusJson, setCodeLayerStatusJson] = useState<string | null>(null);
   const [bazaarSymbol, setBazaarSymbol] = useState("timber");
   const [bazaarActiveId, setBazaarActiveId] = useState("timber");
   const [sellQty, setSellQty] = useState("1");
@@ -447,6 +450,24 @@ export default function HomePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (tab !== "logistics") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/engine/code/status");
+        if (!r.ok || cancelled) return;
+        const j: unknown = await r.json();
+        if (!cancelled) setCodeLayerStatusJson(JSON.stringify(j, null, 2));
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab]);
 
   useEffect(() => {
     if (!world?.event_log) return;
@@ -2182,7 +2203,14 @@ export default function HomePage() {
                             const rn = world.recipes?.find((r) => r.id === a.recipe_id)?.display_name ?? a.recipe_id;
                             return (
                               <li key={a.run_id}>
-                                {a.plot_id} · {rn} · {formatRelativeTicksFromNow(a.ticks_remaining, msPerSimTick)} left
+                                <strong>{a.party}</strong> · {a.plot_id} · {rn}{" "}
+                                <span style={{ opacity: 0.85 }} title={a.recipe_id}>
+                                  ({a.recipe_id})
+                                </span>
+                                {" · "}
+                                <span style={{ fontFamily: "var(--realm-mono)", fontSize: 12 }}>{a.run_id}</span>
+                                {" · "}
+                                {formatRelativeTicksFromNow(a.ticks_remaining, msPerSimTick)} left ({a.ticks_remaining} ticks)
                               </li>
                             );
                           })}
@@ -2650,12 +2678,20 @@ export default function HomePage() {
                         </p>
                       ) : (
                         <ul className="realm-help" style={{ paddingLeft: 18, margin: 0 }}>
-                          {(world.in_transit ?? []).map((s) => (
-                            <li key={s.id}>
-                              {formatQtyTimesMaterial(s.qty, s.material)} → {s.dest_plot_id} · arrive{" "}
-                              {formatDeliverBy(world.tick, s.arrive_tick, msPerSimTick)}
-                            </li>
-                          ))}
+                          {(world.in_transit ?? []).map((s) => {
+                            const sid = s.shipment_id ?? s.id ?? "ship";
+                            const etaTicks = Math.max(0, s.arrive_tick - world.tick);
+                            const route =
+                              s.from_plot_id != null && s.from_plot_id !== ""
+                                ? `${s.from_plot_id} → ${s.dest_plot_id}`
+                                : s.dest_plot_id;
+                            return (
+                              <li key={sid}>
+                                <strong>{s.party ?? "?"}</strong> · {formatQtyTimesMaterial(s.qty, s.material)} · {route} · arrive{" "}
+                                {formatDeliverBy(world.tick, s.arrive_tick, msPerSimTick)} ({etaTicks} ticks)
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                       <SectionTitle>Ship goods</SectionTitle>
@@ -2738,6 +2774,26 @@ export default function HomePage() {
                           Pick two different owned plots to see fee and arrival time.
                         </p>
                       )}
+                      <SectionTitle>User code layer</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 8 }}>
+                        Programmable services (Lua sandbox) attach in Phase 4; the engine already exposes every mutating action clients call today.
+                      </p>
+                      <pre
+                        className="realm-help"
+                        style={{
+                          margin: 0,
+                          padding: "10px 12px",
+                          background: "var(--realm-panel-2)",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          overflow: "auto",
+                          maxHeight: 220,
+                          fontFamily: "var(--realm-mono)",
+                        }}
+                      >
+                        {codeLayerStatusJson ?? "Loading /code/status…"}
+                      </pre>
                     </>
                   ) : null}
 
