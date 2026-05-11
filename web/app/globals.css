@@ -278,6 +278,12 @@ body::after {
   touch-action: none;
 }
 
+@media (min-width: 900px) {
+  .realm-map-viewport {
+    min-height: min(64vh, 920px);
+  }
+}
+
 .realm-map-viewport:active {
   cursor: grabbing;
 }
@@ -716,7 +722,7 @@ body::after {
   }
 
   .realm-map-viewport {
-    min-height: 38dvh;
+    min-height: 44dvh;
     padding-bottom: 36px;
   }
 }
@@ -795,7 +801,7 @@ body::after {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 88px);
 }
 
 .realm-panel-head {

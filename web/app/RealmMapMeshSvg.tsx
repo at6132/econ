@@ -34,6 +34,8 @@ type Props = {
   plots: PlotDto[];
   selectedPlotId: string | null;
   buildsByPlot: Map<string, number>;
+  /** Plot tile size in px — scales build / anchor glyphs for large “street level” maps. */
+  cellPx: number;
   busy: boolean;
   mapNavSuppress: React.MutableRefObject<boolean>;
   onPlotClick: (p: PlotDto) => void;
@@ -50,6 +52,7 @@ export function RealmMapMeshSvg({
   plots,
   selectedPlotId,
   buildsByPlot,
+  cellPx,
   busy,
   mapNavSuppress,
   onPlotClick,
@@ -57,6 +60,11 @@ export function RealmMapMeshSvg({
   mapAnchor,
   ariaLabel,
 }: Props) {
+  const buildFontPx = Math.max(12, Math.round(cellPx * 0.3));
+  const buildStrokePx = Math.max(3, Math.round(cellPx * 0.09));
+  const anchorRadius = Math.max(5, Math.round(cellPx * 0.11));
+  const anchorCaptionPx = Math.max(10, Math.round(cellPx * 0.18));
+  const anchorCaptionDy = Math.max(12, Math.round(cellPx * 0.36));
   const ordered = [...plots].sort((a, b) => {
     const as = a.id === selectedPlotId ? 1 : 0;
     const bs = b.id === selectedPlotId ? 1 : 0;
@@ -160,6 +168,7 @@ export function RealmMapMeshSvg({
                   textAnchor="middle"
                   dominantBaseline="central"
                   aria-hidden
+                  style={{ fontSize: buildFontPx, strokeWidth: buildStrokePx }}
                 >
                   {nBuild > 1 ? `▣${nBuild}` : "▣"}
                 </text>
@@ -183,12 +192,22 @@ export function RealmMapMeshSvg({
         : null}
       {mapAnchor ? (
         <g className="realm-map-anchor" pointerEvents="none" aria-hidden>
-          <circle className="realm-map-anchor__dot" cx={mapAnchor.cx} cy={mapAnchor.cy} r={5} />
+          <circle
+            className="realm-map-anchor__dot"
+            cx={mapAnchor.cx}
+            cy={mapAnchor.cy}
+            r={anchorRadius}
+            style={{ strokeWidth: Math.max(2, Math.round(cellPx * 0.05)) }}
+          />
           <text
             className="realm-map-anchor__caption"
             x={mapAnchor.cx}
-            y={mapAnchor.cy - 16}
+            y={mapAnchor.cy - anchorCaptionDy}
             textAnchor="middle"
+            style={{
+              fontSize: anchorCaptionPx,
+              strokeWidth: Math.max(2, Math.round(cellPx * 0.07)),
+            }}
           >
             {mapAnchor.caption}
           </text>

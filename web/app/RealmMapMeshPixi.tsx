@@ -54,6 +54,8 @@ type Props = {
   plots: PlotDto[];
   selectedPlotId: string | null;
   buildsByPlot: Map<string, number>;
+  /** Plot tile size in px — scales build / anchor labels for large maps. */
+  cellPx: number;
   busy: boolean;
   mapNavSuppress: React.MutableRefObject<boolean>;
   onPlotClick: (p: PlotDto) => void;
@@ -108,6 +110,7 @@ export function RealmMapMeshPixi(props: Props) {
           plots,
           selectedPlotId,
           buildsByPlot,
+          cellPx,
           busy,
           mapStyle,
           mapAnchor,
@@ -183,11 +186,13 @@ export function RealmMapMeshPixi(props: Props) {
           root.addChild(g);
         }
 
+        const buildFs = Math.max(12, Math.round(cellPx * 0.32));
+        const buildStrokeW = Math.max(3, Math.round(cellPx * 0.1));
         const buildStyle = new TextStyle({
           fontFamily: "VT323, ui-monospace, monospace",
-          fontSize: 11,
+          fontSize: buildFs,
           fill: 0xffd84a,
-          stroke: { color: 0x000000, width: 4 },
+          stroke: { color: 0x000000, width: buildStrokeW },
         });
 
         for (const p of ordered) {
@@ -218,22 +223,25 @@ export function RealmMapMeshPixi(props: Props) {
         if (mapAnchor) {
           const { cx, cy, caption } = mapAnchor;
           const dot = new Graphics();
-          dot.circle(cx, cy, 5).fill({ color: 0xffd84a }).stroke({ width: 2, color: 0x000000, alpha: 1 });
+          const dotR = Math.max(5, Math.round(cellPx * 0.11));
+          dot.circle(cx, cy, dotR).fill({ color: 0xffd84a }).stroke({ width: 2, color: 0x000000, alpha: 1 });
           dot.eventMode = "none";
           root.addChild(dot);
 
+          const capFs = Math.max(12, Math.round(cellPx * 0.2));
+          const capDy = Math.max(14, Math.round(cellPx * 0.38));
           const cap = new Text({
             text: caption,
             style: new TextStyle({
               fontFamily: "VT323, ui-monospace, monospace",
-              fontSize: 14,
+              fontSize: capFs,
               fill: 0xf4ead8,
-              stroke: { color: 0x000000, width: 3 },
+              stroke: { color: 0x000000, width: Math.max(2, Math.round(cellPx * 0.06)) },
             }),
           });
           cap.anchor.set(0.5, 1);
           cap.x = cx;
-          cap.y = cy - 16;
+          cap.y = cy - capDy;
           cap.eventMode = "none";
           root.addChild(cap);
         }
@@ -254,6 +262,7 @@ export function RealmMapMeshPixi(props: Props) {
     props.plots,
     props.selectedPlotId,
     props.buildsByPlot,
+    props.cellPx,
     props.busy,
     props.mapStyle,
     props.mapAnchor,

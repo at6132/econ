@@ -49,6 +49,13 @@ import { SHOW_INTERNAL_ATLAS_AND_DEV_CONTRACTS } from "./realmUiFlags";
 import { useRealmToast } from "./realmToast";
 
 const MAP_PAD = 4;
+/** Large worlds stay legible: tiles never shrink below this (pan / scroll instead of specks). */
+const MAP_MIN_CELL_PX = 42;
+const MAP_MAX_CELL_PX = 144;
+/** Default “closer” view so workshops / build markers read at a near–1:1 scale. */
+const MAP_DEFAULT_ZOOM = 1.32;
+const MAP_ZOOM_MIN = 0.22;
+const MAP_ZOOM_MAX = 6.8;
 
 const DEV_RESET_SCENARIOS = ["frontier", "bootstrapper", "speculator", "cartel", "millrace", "archive", "genesis"] as const;
 type DevResetScenarioId = (typeof DEV_RESET_SCENARIOS)[number];
@@ -343,7 +350,7 @@ export default function HomePage() {
   const sparkSeqRef = useRef(0);
   const [sparks, setSparks] = useState<{ id: number; cx: number; cy: number; hue: number }[]>([]);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [mapZoom, setMapZoom] = useState(1);
+  const [mapZoom, setMapZoom] = useState(MAP_DEFAULT_ZOOM);
   const [mapStyle, setMapStyle] = useState<"terrain" | "satellite" | "political">("terrain");
   const [mapRenderer, setMapRenderer] = useState<"svg" | "pixi">("svg");
   const mapNavSuppress = useRef(false);
@@ -423,7 +430,7 @@ export default function HomePage() {
       const z0 = mapZoomRef.current;
       const p = panRef.current;
       const factor = Math.exp(-e.deltaY * 0.0009);
-      const z1 = Math.min(2.8, Math.max(0.38, z0 * factor));
+      const z1 = Math.min(MAP_ZOOM_MAX, Math.max(MAP_ZOOM_MIN, z0 * factor));
       const wx = (cx - p.x) / z0;
       const wy = (cy - p.y) / z0;
       const nextPan = { x: cx - wx * z1, y: cy - wy * z1 };
@@ -590,7 +597,7 @@ export default function HomePage() {
   }, [world]);
 
   const grid = useMemo(() => {
-    if (!world?.plots.length) return { w: 0, h: 0, cellPx: 36 };
+    if (!world?.plots.length) return { w: 0, h: 0, cellPx: MAP_MIN_CELL_PX };
     const w = Math.max(...world.plots.map((p) => p.x)) + 1;
     const h = Math.max(...world.plots.map((p) => p.y)) + 1;
     const pad = 4;
@@ -598,7 +605,8 @@ export default function HomePage() {
     const innerH = Math.max(60, viewportPx.h - pad * 2);
     const cw = innerW / Math.max(1, w);
     const ch = innerH / Math.max(1, h);
-    const cellPx = Math.floor(Math.max(8, Math.min(56, Math.min(cw, ch))));
+    const fit = Math.min(cw, ch);
+    const cellPx = Math.floor(Math.max(MAP_MIN_CELL_PX, Math.min(MAP_MAX_CELL_PX, fit)));
     return { w, h, cellPx };
   }, [world, viewportPx]);
 
@@ -619,9 +627,11 @@ export default function HomePage() {
     const vh = el.clientHeight;
     const { w: cw, h: ch } = gridContentPx;
     if (cw < 1 || ch < 1) return;
-    const next = { x: (vw - cw) / 2, y: (vh - ch) / 2 };
+    const z = MAP_DEFAULT_ZOOM;
+    const next = { x: vw / 2 - (cw * z) / 2, y: vh / 2 - (ch * z) / 2 };
     panRef.current = next;
-    mapZoomRef.current = 1;
+    mapZoomRef.current = z;
+    setMapZoom(z);
     setPan(next);
     didInitPan.current = true;
   }, [world, grid.w, grid.h, grid.cellPx, gridContentPx]);
@@ -1638,10 +1648,11 @@ export default function HomePage() {
     const vw = el.clientWidth;
     const vh = el.clientHeight;
     const { w: nw, h: nh } = gridContentPx;
-    const next = { x: (vw - nw) / 2, y: (vh - nh) / 2 };
-    mapZoomRef.current = 1;
+    const z = MAP_DEFAULT_ZOOM;
+    const next = { x: vw / 2 - (nw * z) / 2, y: vh / 2 - (nh * z) / 2 };
+    mapZoomRef.current = z;
     panRef.current = next;
-    setMapZoom(1);
+    setMapZoom(z);
     setPan(next);
   }
 
@@ -1847,7 +1858,7 @@ export default function HomePage() {
                     className="realm-map-toolbar__btn"
                     onClick={() => {
                       setMapZoom((z) => {
-                        const z1 = Math.min(2.8, z * 1.12);
+                        const z1 = Math.min(MAP_ZOOM_MAX, z * 1.12);
                         mapZoomRef.current = z1;
                         return z1;
                       });
@@ -1860,7 +1871,7 @@ export default function HomePage() {
                     className="realm-map-toolbar__btn"
                     onClick={() => {
                       setMapZoom((z) => {
-                        const z1 = Math.max(0.38, z / 1.12);
+                        const z1 = Math.max(MAP_ZOOM_MIN, z / 1.12);
                         mapZoomRef.current = z1;
                         return z1;
                       });
@@ -1917,6 +1928,7 @@ export default function HomePage() {
                             plots={world.plots}
                             selectedPlotId={selectedPlotId}
                             buildsByPlot={buildsByPlot}
+                            cellPx={grid.cellPx}
                             busy={busy}
                             mapNavSuppress={mapNavSuppress}
                             onPlotClick={onPlotClick}
@@ -1930,6 +1942,7 @@ export default function HomePage() {
                             plots={world.plots}
                             selectedPlotId={selectedPlotId}
                             buildsByPlot={buildsByPlot}
+                            cellPx={grid.cellPx}
                             busy={busy}
                             mapNavSuppress={mapNavSuppress}
                             onPlotClick={onPlotClick}
@@ -1945,8 +1958,8 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="realm-map-footnote">
-                Drag to pan · scroll wheel zoom · click a plot to select it (gold ring). Toggle <strong>SVG</strong> / <strong>GL</strong> in the map toolbar for
-                vector vs Pixi canvas. Claim and survey from the side panel. Pause the clock in the header when you want the world to hold still.
+                Large tiles (pan the world on big grids) · drag to pan · scroll wheel zoom · click a plot to select it (gold ring). Toggle <strong>SVG</strong> /{" "}
+                <strong>GL</strong> in the map toolbar. Claim and survey from the side panel. Pause the clock in the header when you want the world to hold still.
               </p>
             </div>
 
