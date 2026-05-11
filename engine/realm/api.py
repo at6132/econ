@@ -42,6 +42,7 @@ from realm.contract_stubs import (
 )
 from realm.schematic import validate_linear_recipe_chain
 from realm.tick import advance_tick
+from realm.user_code import code_layer_public_status
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
@@ -73,6 +74,12 @@ def _save_path(path: str | None) -> Path:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/code/status")
+def get_code_status() -> dict:
+    """User-code / Lua platform layer (Phase 4) — capability advertisement until sandbox ships."""
+    return code_layer_public_status()
 
 
 @app.get("/world")

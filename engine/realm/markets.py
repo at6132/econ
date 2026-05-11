@@ -19,6 +19,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, market_escrow_account, party_cash_account
+from realm.social import bump_spot_exchange_honored
 from realm.storage_caps import try_add_inventory
 from realm.world import World
 
@@ -227,6 +228,7 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         qty=fill,
         price_per_unit_cents=unit_px,
     )
+    bump_spot_exchange_honored(world, bid.party, ask.party)
     return True
 
 
@@ -263,6 +265,7 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         qty=fill,
         price_per_unit_cents=unit_px,
     )
+    bump_spot_exchange_honored(world, bid.party, ask.party)
     return True
 
 
@@ -596,6 +599,7 @@ def market_buy(
             break
         spent += cost
         remaining -= fill
+        bump_spot_exchange_honored(world, buyer, o.party)
         if _ask_fully_done(o):
             asks.pop(idx)
         _sort_asks(asks)
@@ -681,6 +685,7 @@ def sell_into_bids(
             break
         received += payment
         remaining -= fill
+        bump_spot_exchange_honored(world, bid.party, seller)
         log_event(
             world,
             "market_sell_fill",
@@ -759,6 +764,7 @@ def _p2p_trade_execute(
         qty=qty,
         total_price_cents=total_price_cents,
     )
+    bump_spot_exchange_honored(world, buyer, seller)
     return {"ok": True, "code": "P2P_OK"}
 
 

@@ -124,6 +124,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 "qty": s.qty,
                 "dest_plot_id": str(s.dest_plot_id),
                 "arrive_tick": s.arrive_tick,
+                "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
             }
             for s in world.in_transit
         ],
@@ -203,6 +204,7 @@ def load_world(d: dict[str, Any]) -> World:
                 qty=int(row["qty"]),
                 dest_plot_id=PlotId(row["dest_plot_id"]),
                 arrive_tick=int(row["arrive_tick"]),
+                from_plot_id=PlotId(row["from_plot_id"]) if row.get("from_plot_id") else None,
             )
         )
     asks_map: dict[str, list[Any]] = {}

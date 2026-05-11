@@ -73,6 +73,7 @@ class InTransit:
     qty: int
     dest_plot_id: PlotId
     arrive_tick: int
+    from_plot_id: PlotId | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -661,9 +662,11 @@ def world_public_dict(world: World) -> dict:
         "in_transit": [
             {
                 "id": s.shipment_id,
+                "shipment_id": s.shipment_id,
                 "party": str(s.party),
                 "material": str(s.material),
                 "qty": s.qty,
+                "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
                 "dest_plot_id": str(s.dest_plot_id),
                 "arrive_tick": s.arrive_tick,
             }

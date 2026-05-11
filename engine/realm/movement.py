@@ -72,6 +72,7 @@ def dispatch_shipment(
             qty=qty,
             dest_plot_id=to_plot_id,
             arrive_tick=arrive,
+            from_plot_id=from_plot_id,
         )
     )
     log_event(

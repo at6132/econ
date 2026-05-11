@@ -21,3 +21,6 @@ def test_dispatch_fee_matches_distance_formula() -> None:
     r = dispatch_shipment(w, p, MaterialId("timber"), 1, a, b)
     assert r["ok"] is True
     assert r["fee_cents"] == expected
+    assert len(w.in_transit) == 1
+    assert w.in_transit[0].from_plot_id == a
+    assert w.in_transit[0].dest_plot_id == b

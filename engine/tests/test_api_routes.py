@@ -214,3 +214,12 @@ def test_llm_status_lists_margaux() -> None:
     assert "model" in body
     assert "session_cap_micro_usd" in body
     assert "session_spend_micro_usd" in body
+
+
+def test_code_status_stub() -> None:
+    c = TestClient(app)
+    r = c.get("/code/status")
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("phase") == "stub"
+    assert j.get("lua_runtime") is False

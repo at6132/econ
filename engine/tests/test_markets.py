@@ -7,6 +7,7 @@ from realm.ledger import market_escrow_account, party_cash_account
 from realm.markets import (
     cancel_buy_order,
     cancel_sell_order,
+    market_buy,
     p2p_trade,
     place_buy_order,
     place_sell_order,
@@ -154,3 +155,15 @@ def test_p2p_idempotency_mismatch() -> None:
     )
     assert r["ok"] is False
     assert r.get("code") == "P2P_IDEMPOTENCY_MISMATCH"
+
+
+def test_aggressive_buy_increments_honored_for_buyer_and_seller() -> None:
+    w = bootstrap_frontier(seed=88, grid_width=2, grid_height=2)
+    buyer = PartyId("t1_consumer")
+    seller = PartyId("npc_grain_vendor")
+    hb0 = w.reputation[str(buyer)]["honored"]
+    hs0 = w.reputation[str(seller)]["honored"]
+    r = market_buy(w, buyer, MaterialId("grain"), 1)
+    assert r.get("ok") is True
+    assert w.reputation[str(buyer)]["honored"] == hb0 + 1
+    assert w.reputation[str(seller)]["honored"] == hs0 + 1

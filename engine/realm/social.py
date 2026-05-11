@@ -264,3 +264,10 @@ def tick_supply_contract_breaches(world: World) -> None:
             supplier=str(sup),
             buyer=str(c.get("buyer", "")),
         )
+
+
+def bump_spot_exchange_honored(world: World, party_a: PartyId, party_b: PartyId) -> None:
+    """Successful spot trade (order book or P2P): increment honored for both parties (Law 7)."""
+    for pid in (party_a, party_b):
+        r = world.reputation.setdefault(str(pid), {"honored": 0, "breached": 0})
+        r["honored"] = int(r.get("honored", 0)) + 1
