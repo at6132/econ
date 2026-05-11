@@ -17,6 +17,10 @@ class Recipe:
     duration_ticks: int
     labor_cents: int  # paid to system reserve at production start (wage reserve)
     requires_building_id: str  # plot must have this building_id (effective) to run recipe
+    # Optional extraction gates: surveyed plot subsurface field must be >= min (0..1 rolls).
+    requires_subsurface: tuple[tuple[str, float], ...] = ()
+    # If set, scales that output material quantity by subsurface grade (field must match a gate).
+    scaled_output: tuple[str, MaterialId] | None = None
 
 
 RECIPES: Final[Mapping[str, Recipe]] = {
@@ -227,21 +231,88 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         labor_cents=6_00,
         requires_building_id="wood_shop",
     ),
+    # Extraction / primary sector — subsurface grades matter once surveyed (Genesis + Frontier).
+    "mine_iron_ore": Recipe(
+        recipe_id="mine_iron_ore",
+        display_name="Mine iron ore (power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("iron_ore"): 1},
+        duration_ticks=3,
+        labor_cents=6_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("iron_ore_grade", 0.3),),
+        scaled_output=("iron_ore_grade", MaterialId("iron_ore")),
+    ),
+    "mine_copper_ore": Recipe(
+        recipe_id="mine_copper_ore",
+        display_name="Mine copper ore (power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("copper_ore"): 1},
+        duration_ticks=3,
+        labor_cents=6_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("copper_ore_grade", 0.3),),
+        scaled_output=("copper_ore_grade", MaterialId("copper_ore")),
+    ),
+    "mine_coal": Recipe(
+        recipe_id="mine_coal",
+        display_name="Mine coal (power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("coal"): 1},
+        duration_ticks=3,
+        labor_cents=5_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("coal_grade", 0.3),),
+        scaled_output=("coal_grade", MaterialId("coal")),
+    ),
+    "dig_clay": Recipe(
+        recipe_id="dig_clay",
+        display_name="Dig clay (power + labor)",
+        inputs={MaterialId("electricity"): 1},
+        outputs={MaterialId("clay"): 2},
+        duration_ticks=2,
+        labor_cents=4_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("clay_grade", 0.3),),
+        scaled_output=("clay_grade", MaterialId("clay")),
+    ),
+    "chop_timber": Recipe(
+        recipe_id="chop_timber",
+        display_name="Chop timber (labor + power)",
+        inputs={MaterialId("electricity"): 1},
+        outputs={MaterialId("timber"): 2},
+        duration_ticks=2,
+        labor_cents=3_00,
+        requires_building_id="timber_yard",
+    ),
+    "grow_grain": Recipe(
+        recipe_id="grow_grain",
+        display_name="Grow grain (irrigated row — power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("grain"): 3},
+        duration_ticks=5,
+        labor_cents=4_00,
+        requires_building_id="grain_row",
+    ),
 }
 
 
 def recipe_public_list() -> list[dict]:
     out: list[dict] = []
     for r in RECIPES.values():
-        out.append(
-            {
-                "id": r.recipe_id,
-                "display_name": r.display_name,
-                "inputs": {str(k): v for k, v in r.inputs.items()},
-                "outputs": {str(k): v for k, v in r.outputs.items()},
-                "duration_ticks": r.duration_ticks,
-                "labor_cents": r.labor_cents,
-                "requires_building_id": r.requires_building_id,
-            }
-        )
+        row: dict = {
+            "id": r.recipe_id,
+            "display_name": r.display_name,
+            "inputs": {str(k): v for k, v in r.inputs.items()},
+            "outputs": {str(k): v for k, v in r.outputs.items()},
+            "duration_ticks": r.duration_ticks,
+            "labor_cents": r.labor_cents,
+            "requires_building_id": r.requires_building_id,
+        }
+        if r.requires_subsurface:
+            row["requires_subsurface"] = [{"field": f, "min": m} for f, m in r.requires_subsurface]
+        if r.scaled_output is not None:
+            fld, mid = r.scaled_output
+            row["scaled_output"] = {"field": fld, "material": str(mid)}
+        out.append(row)
     return out

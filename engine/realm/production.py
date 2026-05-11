@@ -8,7 +8,7 @@ from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.recipe_workshops import plot_has_workshop_for_recipe
-from realm.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
+from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
 from realm.world import ActiveProduction, World
@@ -19,6 +19,41 @@ EMPLOYMENT_LABOR_TO_WORKERS_BPS = 4000  # 40%
 # Recipe labor multiplier when producing on a plot with workshop / logistics buildings.
 TOOL_CACHE_LABOR_BPS = 9000  # −10% cash labor vs recipe
 WATCH_HUT_LABOR_BPS = 9700  # −3%
+
+
+def _min_grade_for_field(recipe, field: str) -> float:
+    for f, mn in recipe.requires_subsurface:
+        if f == field:
+            return float(mn)
+    return 0.3
+
+
+def scale_extraction_output_qty(base: int, grade: float, min_grade: float) -> int:
+    """Higher subsurface grade → more units (deterministic; same plot → same scale)."""
+    if base <= 0:
+        return 0
+    g = max(0.0, min(1.0, float(grade)))
+    mn = max(1e-9, float(min_grade))
+    if g < mn:
+        return base
+    span = max(1e-9, 1.0 - mn)
+    t = min(1.0, max(0.0, (g - mn) / span))
+    extra = int(round(base * 2 * t))
+    return max(base, min(base * 4, base + extra))
+
+
+def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe) -> dict[MaterialId, int]:
+    plot = world.plots.get(run.plot_id)
+    out = {k: int(v) for k, v in recipe.outputs.items()}
+    if recipe.scaled_output is None or plot is None:
+        return out
+    field, mid = recipe.scaled_output
+    if mid not in out:
+        return out
+    grade = float(getattr(plot.subsurface, field, 0.0))
+    mn = _min_grade_for_field(recipe, field)
+    out[mid] = scale_extraction_output_qty(out[mid], grade, mn)
+    return out
 
 
 def _plot_owned_by(world: World, party: PartyId, plot_id: PlotId) -> bool:
@@ -132,6 +167,8 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     if not plot_has_workshop_for_recipe(world, party, plot_id, recipe_id):
         req = recipe.requires_building_id
         return {"ok": False, "reason": f"missing workshop: {req}"}
+    if not subsurface_allows_recipe(plot, recipe):
+        return {"ok": False, "reason": "subsurface below threshold for this recipe"}
     labor_bps = _labor_bps_for_plot(world, party, plot_id)
     labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)
@@ -184,7 +221,8 @@ def tick_production(world: World) -> None:
         recipe = RECIPES.get(run.recipe_id)
         if recipe is None:
             continue
-        out_total = sum(recipe.outputs.values())
+        eff_out = effective_outputs_for_completion(world, run, recipe)
+        out_total = sum(eff_out.values())
         if party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(world, run.party):
             run.ticks_remaining = 1
             still.append(run)
@@ -200,7 +238,7 @@ def tick_production(world: World) -> None:
             continue
         staged: list[tuple[MaterialId, int]] = []
         blocked = False
-        for mid, qty in recipe.outputs.items():
+        for mid, qty in eff_out.items():
             ad = try_add_inventory(world, run.party, mid, qty)
             if isinstance(ad, MatterErr):
                 blocked = True

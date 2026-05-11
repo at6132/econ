@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import Final
 
-from realm.recipes import RECIPES
+from realm.recipes import RECIPES, Recipe
 from realm.terrain import Terrain
+from realm.world import Plot
 
 T = Terrain
 
@@ -36,6 +37,12 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "pottery_kiln": frozenset({T.PLAINS, T.SWAMP, T.DESERT}),
     "mill_flour": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA}),
     "bake_bread": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA}),
+    "mine_iron_ore": frozenset({T.MOUNTAIN}),
+    "mine_copper_ore": frozenset({T.MOUNTAIN}),
+    "mine_coal": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.FOREST}),
+    "dig_clay": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA}),
+    "chop_timber": frozenset({T.FOREST, T.PLAINS}),
+    "grow_grain": frozenset({T.PLAINS}),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})
@@ -44,6 +51,18 @@ _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})
 def terrain_allows_workshop(terrain: Terrain) -> bool:
     """False on deep/shallow water (no fixed structures in this slice)."""
     return terrain not in _WATER
+
+
+def subsurface_allows_recipe(plot: Plot, recipe: Recipe) -> bool:
+    """Surveyed plot subsurface must meet recipe gates (extraction recipes)."""
+    if not recipe.requires_subsurface:
+        return True
+    if not plot.surveyed:
+        return False
+    for field, mn in recipe.requires_subsurface:
+        if float(getattr(plot.subsurface, field, 0.0)) < float(mn):
+            return False
+    return True
 
 
 def recipe_allowed_on_terrain(terrain: Terrain, recipe_id: str) -> bool:

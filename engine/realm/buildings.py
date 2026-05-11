@@ -79,6 +79,30 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"grain": 6, "lumber": 2, "brick": 2},
         "turnkey_total_cents": 96_000,
     },
+    "strip_mine": {
+        "kind": "contracted",
+        "label": "Strip mine & clay pit (ore, coal, clay extraction)",
+        "self_shell_cents": 62_000,
+        "self_contractor_fee_cents": 28_000,
+        "self_materials": {"timber": 8, "brick": 4, "coal": 3},
+        "turnkey_total_cents": 142_000,
+    },
+    "timber_yard": {
+        "kind": "contracted",
+        "label": "Timber yard (fell & skid)",
+        "self_shell_cents": 28_000,
+        "self_contractor_fee_cents": 11_000,
+        "self_materials": {"timber": 4, "lumber": 2},
+        "turnkey_total_cents": 68_000,
+    },
+    "grain_row": {
+        "kind": "contracted",
+        "label": "Irrigated grain row",
+        "self_shell_cents": 32_000,
+        "self_contractor_fee_cents": 12_000,
+        "self_materials": {"grain": 4, "lumber": 3, "brick": 2},
+        "turnkey_total_cents": 78_000,
+    },
 }
 
 
