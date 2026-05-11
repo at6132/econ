@@ -70,6 +70,8 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     assert w2.inventory.snapshot() == inv_snapshot
     assert w2.llm_agents == w.llm_agents
     assert "llm_margaux" in w2.llm_agents
+    assert w.party_display_names.get("settler_001")
+    assert w2.party_display_names == w.party_display_names
     assert w2.plots[pid].owner == PartyId("player")
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings

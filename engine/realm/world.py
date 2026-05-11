@@ -138,6 +138,8 @@ class World:
     llm_session_output_tokens: int = 0
     deployed_lua_sources: dict[str, str] = field(default_factory=dict)
     """Party id str → last deployed Lua source (Phase 4 staging; persisted in snapshots)."""
+    party_display_names: dict[str, str] = field(default_factory=dict)
+    """Optional UI labels keyed by party id str (e.g. Genesis settler personas)."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -271,6 +273,9 @@ def bootstrap_genesis(
         )
         if isinstance(trp, MoneyErr):
             raise ValueError(trp.reason)
+    from realm.genesis_settler_names import assign_settler_display_names
+
+    assign_settler_display_names(world, seed=seed)
     _seed_genesis_exchange(world, inv)
     _seed_tier3_character(world, inv, "genesis")
     log_event(
@@ -700,6 +705,7 @@ def world_public_dict(world: World) -> dict:
             for pid, blob in sorted(world.llm_agents.items(), key=lambda x: x[0])
         ],
         "npc_messages": list(world.npc_messages_to_player[-48:]),
+        "party_display_names": dict(world.party_display_names),
         "llm_session_cost_micro_usd": world.llm_session_cost_micro_usd,
         "llm_session_input_tokens": world.llm_session_input_tokens,
         "llm_session_output_tokens": world.llm_session_output_tokens,

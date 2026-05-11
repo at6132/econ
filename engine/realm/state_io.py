@@ -1,6 +1,6 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``4`` (older rows still load). Nested dict/list values are deep-copied on dump
+Snapshot ``version`` is ``5`` (older rows still load). Nested dict/list values are deep-copied on dump
 so JSON round-trips do not share mutable subgraphs with the live ``World``.
 
 ``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 4
+SNAPSHOT_VERSION = 5
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -146,12 +146,13 @@ def dump_world(world: World) -> dict[str, Any]:
         "llm_session_input_tokens": world.llm_session_input_tokens,
         "llm_session_output_tokens": world.llm_session_output_tokens,
         "deployed_lua_sources": copy.deepcopy(dict(world.deployed_lua_sources)),
+        "party_display_names": copy.deepcopy(dict(world.party_display_names)),
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4):
+    if ver not in (1, 2, 3, 4, 5):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -286,6 +287,7 @@ def load_world(d: dict[str, Any]) -> World:
         llm_session_input_tokens=int(d.get("llm_session_input_tokens", 0)),
         llm_session_output_tokens=int(d.get("llm_session_output_tokens", 0)),
         deployed_lua_sources=copy.deepcopy(dict(d.get("deployed_lua_sources", {}))),
+        party_display_names=copy.deepcopy(dict(d.get("party_display_names", {}))),
     )
     return world
 

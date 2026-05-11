@@ -6,9 +6,15 @@ No Tier-1 timer NPCs; ``advance_tick`` skips ``tick_tier1/tier2`` when ``scenari
 from __future__ import annotations
 
 from realm.actions import SURVEY_COST_CENTS, claim_plot, survey_plot
+from realm.genesis_digest import tick_genesis_world_feed
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.ledger import party_cash_account
-from realm.markets import market_buy, place_sell_order
+from realm.markets import (
+    cancel_party_bids_for_material,
+    market_buy,
+    place_buy_order,
+    place_sell_order,
+)
 from realm.world import World
 
 POP_HUBS: tuple[PartyId, ...] = (PartyId("pop_hub_e"), PartyId("pop_hub_w"))
@@ -35,20 +41,37 @@ def _first_owned_plot(world: World, party: PartyId) -> PlotId | None:
     return None
 
 
+def _jitter_price_cents(world: World, party: PartyId, purpose: str, base: int) -> int:
+    r = world.rng(f"gen:jitter:{purpose}:{party}")
+    m = 1.0 + (r.randint(-50, 50) / 1000.0)
+    return max(4, int(round(base * m)))
+
+
 def tick_population_demands(world: World) -> None:
     if world.scenario_id != "genesis":
         return
-    if world.tick % 6 != 0:
-        return
+    tg = world.tick
     hub_e, hub_w = POP_HUBS
-    if hub_e in world.parties:
+    if hub_e in world.parties and tg % 6 == 0:
         market_buy(world, hub_e, MaterialId("grain"), 2)
-    if hub_w in world.parties:
+    if hub_w in world.parties and tg % 7 == 0:
         market_buy(world, hub_w, MaterialId("grain"), 1)
-    if world.tick % 12 == 0 and hub_e in world.parties:
+    if hub_e in world.parties and tg % 11 == 0:
+        cancel_party_bids_for_material(world, hub_e, MaterialId("grain"))
+        lim = 95 + world.rng("pop:hub_e:grain").randint(0, 24)
+        place_buy_order(world, hub_e, MaterialId("grain"), 2, lim)
+    if hub_w in world.parties and tg % 13 == 0:
+        cancel_party_bids_for_material(world, hub_w, MaterialId("grain"))
+        lim = 92 + world.rng("pop:hub_w:grain").randint(0, 20)
+        place_buy_order(world, hub_w, MaterialId("grain"), 1, lim)
+    if tg % 12 == 0 and hub_e in world.parties:
         market_buy(world, hub_e, MaterialId("electricity"), 2)
-    if world.tick % 14 == 0 and hub_w in world.parties:
+    if tg % 14 == 0 and hub_w in world.parties:
         market_buy(world, hub_w, MaterialId("coal"), 1)
+    if hub_e in world.parties and tg % 17 == 0:
+        cancel_party_bids_for_material(world, hub_e, MaterialId("electricity"))
+        lim = 32 + world.rng("pop:hub_e:ele").randint(0, 14)
+        place_buy_order(world, hub_e, MaterialId("electricity"), 2, lim)
 
 
 def tick_settler_agents(world: World) -> None:
@@ -70,8 +93,7 @@ def tick_settler_agents(world: World) -> None:
             idx = int(suf)
         except ValueError:
             idx = 0
-        # Stagger survey / market / listings so not all 50 fire the same tick (claims stay greedy).
-        if (world.tick + idx) % 3 != 0:
+        if (world.tick + idx) % 2 != 0:
             continue
         plot = world.plots[owned]
         if not plot.surveyed:
@@ -81,11 +103,28 @@ def tick_settler_agents(world: World) -> None:
             continue
         if world.inventory.qty(party, MaterialId("grain")) == 0:
             market_buy(world, party, MaterialId("grain"), 1)
-        if world.tick % 13 == idx % 13:
-            if world.inventory.qty(party, MaterialId("timber")) >= 2:
-                place_sell_order(world, party, MaterialId("timber"), 2, 82)
+        r = world.rng(f"gen:settler_list:{party}")
+        if r.random() < 0.55:
+            qtim = world.inventory.qty(party, MaterialId("timber"))
+            if qtim >= 1:
+                q = 2 if qtim >= 2 and r.random() < 0.45 else 1
+                px = _jitter_price_cents(world, party, "timber", 82)
+                place_sell_order(world, party, MaterialId("timber"), min(q, qtim), px)
+        if r.random() < 0.38:
+            qco = world.inventory.qty(party, MaterialId("coal"))
+            if qco >= 1:
+                q = 2 if qco >= 2 and r.random() < 0.4 else 1
+                px = _jitter_price_cents(world, party, "coal", 38)
+                place_sell_order(world, party, MaterialId("coal"), min(q, qco), px)
+        if r.random() < 0.36:
+            qgr = world.inventory.qty(party, MaterialId("grain"))
+            if qgr >= 2:
+                q = 2 if qgr >= 3 and r.random() < 0.5 else 2
+                px = _jitter_price_cents(world, party, "grain", 118)
+                place_sell_order(world, party, MaterialId("grain"), min(q, qgr), px)
 
 
 def tick_genesis_agents(world: World) -> None:
     tick_population_demands(world)
     tick_settler_agents(world)
+    tick_genesis_world_feed(world)
