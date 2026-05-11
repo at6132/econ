@@ -60,6 +60,14 @@ def tick_settler_agents(world: World) -> None:
                     claim_plot(world, party, pid)
                     break
             continue
+        suf = str(party).removeprefix("settler_")
+        try:
+            idx = int(suf)
+        except ValueError:
+            idx = 0
+        # Stagger survey / market / listings so not all 50 fire the same tick (claims stay greedy).
+        if (world.tick + idx) % 3 != 0:
+            continue
         plot = world.plots[owned]
         if not plot.surveyed:
             cash = world.ledger.balance(party_cash_account(party))
@@ -68,11 +76,6 @@ def tick_settler_agents(world: World) -> None:
             continue
         if world.inventory.qty(party, MaterialId("grain")) == 0:
             market_buy(world, party, MaterialId("grain"), 1)
-        suf = str(party).removeprefix("settler_")
-        try:
-            idx = int(suf)
-        except ValueError:
-            idx = 0
         if world.tick % 13 == idx % 13:
             if world.inventory.qty(party, MaterialId("timber")) >= 2:
                 place_sell_order(world, party, MaterialId("timber"), 2, 82)
