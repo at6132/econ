@@ -30,17 +30,27 @@ def _has_pending_supply(
     return False
 
 
+def _player_units_visible(world: World, material: MaterialId) -> int:
+    """On-hand + resting sell orders (listed material is not in inventory)."""
+    inv = world.inventory.qty(_PLAYER, material)
+    listed = 0
+    for o in world.market_asks_by_material.get(str(material), []):
+        if o.party == _PLAYER:
+            listed += int(o.qty) + int(o.iceberg_hidden_qty)
+    return inv + listed
+
+
 def tick_genesis_pop_hub_contracts(world: World) -> None:
     if world.scenario_id != "genesis":
         return
-    if world.tick < 24 or world.tick % 32 != 4:
+    if world.tick < 18 or world.tick % 24 != 2:
         return
     if _POP_HUB_E in world.parties and not _has_pending_supply(
         world, supplier=_PLAYER, buyer=_POP_HUB_E, material=MaterialId("coal")
     ):
-        qc = world.inventory.qty(_PLAYER, MaterialId("coal"))
-        if qc >= 4:
-            qty = min(16, max(4, qc))
+        qc = _player_units_visible(world, MaterialId("coal"))
+        if qc >= 3:
+            qty = min(18, max(3, qc // 2))
             unit = 68
             r = propose_supply_contract(
                 world, _PLAYER, _POP_HUB_E, MaterialId("coal"), qty, qty * unit, 44
@@ -54,9 +64,9 @@ def tick_genesis_pop_hub_contracts(world: World) -> None:
     if _POP_HUB_W in world.parties and not _has_pending_supply(
         world, supplier=_PLAYER, buyer=_POP_HUB_W, material=MaterialId("grain")
     ):
-        qg = world.inventory.qty(_PLAYER, MaterialId("grain"))
-        if qg >= 5:
-            qty = min(18, max(5, qg))
+        qg = _player_units_visible(world, MaterialId("grain"))
+        if qg >= 4:
+            qty = min(20, max(4, qg // 2))
             unit = 122
             r = propose_supply_contract(
                 world, _PLAYER, _POP_HUB_W, MaterialId("grain"), qty, qty * unit, 56

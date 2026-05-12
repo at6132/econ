@@ -184,7 +184,7 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     listings: list[tuple[MaterialId, int, int, int]] = [
         (MaterialId("grain"), 80_000, 120, 128),
         (MaterialId("timber"), 50_000, 80, 96),
-        (MaterialId("coal"), 120_000, 140, 62),
+        (MaterialId("coal"), 500_000, 140, 62),
         (MaterialId("electricity"), 100_000, 100, 52),
     ]
     for mid, total_add, list_qty, price in listings:
@@ -206,7 +206,7 @@ def bootstrap_genesis(
     seed: int,
     grid_width: int = 96,
     grid_height: int = 72,
-    settler_count: int = 50,
+    settler_count: int = 250,
     starting_cash_cents: int = 1_000_000,
     system_reserve_cents: int = 100_000_000_000,
 ) -> World:

@@ -92,6 +92,35 @@ def test_genesis_coal_asks_return_after_heavy_ticks() -> None:
     assert px is not None
 
 
+def test_genesis_world_feed_emits_by_tick_16() -> None:
+    w = bootstrap_genesis(seed=909, grid_width=6, grid_height=5, settler_count=2)
+    for _ in range(17):
+        advance_tick(w)
+    assert any(e.get("kind") == "world_feed" for e in w.event_log)
+
+
+def test_genesis_supply_contract_triggers_with_listed_coal() -> None:
+    from realm.inventory import MatterErr
+    from realm.markets import place_sell_order
+
+    w = bootstrap_genesis(seed=414, grid_width=8, grid_height=6, settler_count=2)
+    p = PartyId("player")
+    coal = MaterialId("coal")
+    ad = w.inventory.add(p, coal, 20)
+    assert not isinstance(ad, MatterErr)
+    assert place_sell_order(w, p, coal, 12, 58)["ok"] is True
+    for _ in range(35):
+        advance_tick(w)
+    proposed = [
+        c
+        for c in w.contracts
+        if c.get("kind") == "supply"
+        and c.get("status") == "proposed"
+        and str(c.get("supplier")) == "player"
+    ]
+    assert len(proposed) >= 1
+
+
 def test_genesis_settlers_build_secondary_workshops() -> None:
     w = bootstrap_genesis(seed=17, grid_width=24, grid_height=20, settler_count=35)
     for _ in range(220):

@@ -442,6 +442,36 @@ def _active_run(world: World, party: PartyId, plot_id: PlotId) -> ActiveProducti
     return None
 
 
+_STOCKPILE_MATS: tuple[str, ...] = (
+    "rope",
+    "slag",
+    "brick",
+    "charcoal",
+    "pottery",
+    "lumber",
+    "flour",
+    "bread",
+    "sand",
+    "stone",
+    "clay",
+    "iron_ore",
+    "copper_ore",
+    "glass",
+    "mortar",
+)
+
+
+def _liquidate_settler_stockpiles(world: World, party: PartyId) -> None:
+    """Push chronic surpluses into bids + relist so cash recycles (integration with the book)."""
+    if not str(party).startswith("settler_"):
+        return
+    for mid_s in _STOCKPILE_MATS:
+        mid = MaterialId(mid_s)
+        q = world.inventory.qty(party, mid)
+        if q >= 20:
+            _settler_sell_material(world, party, mid, min(q - 3, 40))
+
+
 def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_units: int) -> None:
     if max_units <= 0:
         return
@@ -481,14 +511,16 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
     rng_sec = world.rng(f"gen:secondary:{party}:{world.tick}")
     _maybe_build_secondary_workshop(world, party, owned, plot, rng=rng_sec)
 
+    _liquidate_settler_stockpiles(world, party)
+
     if plot_has_active_production(world, owned):
         run = _active_run(world, party, owned)
         recipe = RECIPES.get(run.recipe_id) if run else None
         if recipe:
             for out_m in recipe.outputs:
                 hq = world.inventory.qty(party, out_m)
-                if hq >= 3:
-                    _settler_sell_material(world, party, out_m, min(hq - 1, 28))
+                if hq >= 2:
+                    _settler_sell_material(world, party, out_m, min(hq - 1, 30))
         return
 
     chosen_rid = _pick_recipe_to_start(world, party, plot, owned)

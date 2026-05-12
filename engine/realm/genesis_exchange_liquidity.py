@@ -10,10 +10,10 @@ _GENESIS_EXCHANGE = PartyId("genesis_exchange")
 
 # Target visible depth per material (genesis_exchange clips only; avoids one mega-order).
 _STAPLE_TARGETS: tuple[tuple[MaterialId, int, int], ...] = (
-    (MaterialId("coal"), 62, 72),
-    (MaterialId("electricity"), 52, 80),
-    (MaterialId("grain"), 128, 64),
-    (MaterialId("timber"), 96, 48),
+    (MaterialId("coal"), 62, 48),
+    (MaterialId("electricity"), 52, 56),
+    (MaterialId("grain"), 128, 48),
+    (MaterialId("timber"), 96, 36),
 )
 
 

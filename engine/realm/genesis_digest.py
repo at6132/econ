@@ -39,10 +39,10 @@ def _player_strip_mines(world: World) -> int:
 
 
 def tick_genesis_world_feed(world: World) -> None:
-    """Every ~16 ticks emit digest lines; prefer deltas since last snapshot over static state."""
+    """Every ~16 ticks emit digest lines; prefer deltas; always emit a pulse so the feed never goes silent."""
     if world.scenario_id != "genesis":
         return
-    if world.tick < 12 or world.tick % 16 != 0:
+    if world.tick < 1 or world.tick % 16 != 0:
         return
     gst = _genesis_st(world)
     prev: dict[str, Any] = dict(gst.get("digest_prev", {}) or {})
@@ -73,7 +73,7 @@ def tick_genesis_world_feed(world: World) -> None:
             f"Since last digest: strip-mine count {'+' if d_mines > 0 else ''}{d_mines} "
             f"(now {total_mines}: {sm} settler, {pm} yours; {ty} timber-yards, {gr} grain-rows among settlers)."
         )
-    elif world.tick >= 28:
+    elif world.tick >= 16:
         headlines.append(
             f"Tick {world.tick}: settler workshop mix steady — {total_mines} strip-mines, "
             f"{ty} timber yards, {gr} grain rows (settler-only)."
@@ -119,6 +119,14 @@ def tick_genesis_world_feed(world: World) -> None:
     if pqcoal != prev_pc and world.tick >= 20:
         headlines.append(f"Your on-hand coal moved {prev_pc} → {pqcoal} u (inventory, not counting open sell clips).")
 
+    if not headlines:
+        nasks = sum(len(v) for v in world.market_asks_by_material.values())
+        nbids = sum(len(v) for v in world.market_bids_by_material.values())
+        headlines.append(
+            f"Genesis pulse t{world.tick}: {nasks} ask rows, {nbids} bid rows; "
+            f"coal best ask {coal_ask if coal_ask is not None else '—'}¢."
+        )
+
     gst["digest_prev"] = {
         "total_mines": total_mines,
         "coal_ask": coal_ask,
@@ -131,8 +139,6 @@ def tick_genesis_world_feed(world: World) -> None:
         "tick": world.tick,
     }
 
-    if not headlines:
-        return
     rng = world.rng(f"gen:digest_pick:{world.tick}")
     k = min(3, len(headlines))
     picks = rng.sample(range(len(headlines)), k=k) if len(headlines) > 3 else list(range(len(headlines)))

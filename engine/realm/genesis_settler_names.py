@@ -32,8 +32,35 @@ _EPITHET = (
     "the Drover",
 )
 
-NAMES: tuple[str, ...] = tuple(f"{a} {b}" for a in _FIRST for b in _EPITHET)
-assert len(NAMES) == 100
+_EXTRA_FIRST = (
+    "Rafael",
+    "Ines",
+    "Tariq",
+    "Nadia",
+    "Chen",
+    "Bruno",
+    "Elena",
+    "Viktor",
+    "Amara",
+    "Leo",
+)
+_EXTRA_EPITHET = (
+    "the Brewer",
+    "the Chandler",
+    "the Factor",
+    "the Porter",
+    "the Sawyer",
+    "the Founder",
+    "the Clerk",
+    "the Ranger",
+    "the Dyer",
+    "the Smith's Mate",
+)
+
+NAMES: tuple[str, ...] = tuple(f"{a} {b}" for a in _FIRST for b in _EPITHET) + tuple(
+    f"{a} {b}" for a in _EXTRA_FIRST for b in _EXTRA_EPITHET
+)
+assert len(NAMES) == 200
 
 
 def assign_settler_display_names(world: World, *, seed: int) -> None:

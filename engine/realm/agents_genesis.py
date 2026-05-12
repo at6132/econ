@@ -43,27 +43,41 @@ def _genesis_pop_hub_topup(world: World) -> None:
 
 def tick_population_demands(world: World) -> None:
     """
-    Population hubs are **takers**: every tick they ``market_buy`` staples at the best ask.
+    Population hubs are **takers**: each tick they ``market_buy`` a basket of staples and
+    mid-chain goods so producer asks clear (``market_buy`` walks price levels and skips
+    counterparty rep gates that block the cheapest clip).
 
-    ``market_buy`` only logs ``market_buy`` events when fills occur — with an empty book it
-    returns ``ok: false`` silently; ``tick_genesis_exchange_quoting`` runs first to keep asks up.
+    ``tick_genesis_exchange_quoting`` runs **after** this + settlers so the book ends each
+    tick with visible exchange clips for the next tick.
     """
     if world.scenario_id != "genesis":
         return
+    basket: tuple[tuple[MaterialId, int], ...] = (
+        (MaterialId("coal"), 40),
+        (MaterialId("grain"), 36),
+        (MaterialId("electricity"), 40),
+        (MaterialId("timber"), 28),
+        (MaterialId("lumber"), 22),
+        (MaterialId("brick"), 16),
+        (MaterialId("rope"), 18),
+        (MaterialId("flour"), 14),
+        (MaterialId("iron_ingot"), 8),
+        (MaterialId("copper_ingot"), 8),
+        (MaterialId("bread"), 12),
+        (MaterialId("charcoal"), 14),
+    )
     for hub in POP_HUBS:
         if hub not in world.parties:
             continue
-        market_buy(world, hub, MaterialId("coal"), 28)
-        market_buy(world, hub, MaterialId("grain"), 24)
-        market_buy(world, hub, MaterialId("electricity"), 28)
-        market_buy(world, hub, MaterialId("timber"), 18)
+        for mid, clip in basket:
+            market_buy(world, hub, mid, clip)
 
 
 def tick_genesis_agents(world: World) -> None:
-    tick_genesis_exchange_quoting(world)
     _genesis_pop_hub_topup(world)
     tick_population_demands(world)
     tick_settler_business(world)
     tick_genesis_margaux_scripts(world)
     tick_genesis_pop_hub_contracts(world)
+    tick_genesis_exchange_quoting(world)
     tick_genesis_world_feed(world)
