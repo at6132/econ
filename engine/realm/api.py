@@ -51,7 +51,7 @@ from realm.schematic import validate_linear_recipe_chain
 from realm.lua_sandbox import eval_user_lua_chunk
 from realm.tick import advance_tick
 from realm.user_code import code_layer_public_status, validate_user_source
-from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_public_dict
+from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_compact_dict, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
 app.add_middleware(
@@ -130,7 +130,10 @@ def post_code_eval(body: Annotated[dict, Body()]) -> dict:
 
 
 @app.get("/world")
-def get_world() -> dict:
+def get_world(compact: Annotated[int, Query()] = 0) -> dict:
+    """Full ``plots`` grid by default; ``compact=1`` returns player-focused summary (dev / long runs)."""
+    if compact:
+        return world_compact_dict(_world)
     return world_public_dict(_world)
 
 
@@ -150,7 +153,10 @@ _TICK_BATCH_MAX = 21_600  # 15 game-days cap (dev / automation guardrail)
 
 
 @app.post("/tick/batch")
-def post_tick_batch(count: Annotated[int, Query()] = 1) -> dict:
+def post_tick_batch(
+    count: Annotated[int, Query()] = 1,
+    summary: Annotated[int, Query()] = 0,
+) -> dict:
     """Advance ``count`` ticks in-process (single request). For long runs, prefer this over ``/tick`` spam."""
     if count < 1:
         raise HTTPException(status_code=400, detail="count must be >= 1")
@@ -162,7 +168,10 @@ def post_tick_batch(count: Annotated[int, Query()] = 1) -> dict:
     t0 = _world.tick
     for _ in range(count):
         advance_tick(_world)
-    return {"ok": True, "tick": _world.tick, "advanced": count, "tick_start": t0}
+    out: dict = {"ok": True, "tick": _world.tick, "advanced": count, "tick_start": t0}
+    if summary:
+        out["world_compact"] = world_compact_dict(_world)
+    return out
 
 
 @app.get("/llm/status")

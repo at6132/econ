@@ -47,3 +47,16 @@ def test_world_public_hides_subsurface_until_surveyed() -> None:
     pub = world_public_dict(w)
     p0 = next(x for x in pub["plots"] if x["id"] == "p-0-0")
     assert "subsurface" not in p0
+
+
+def test_world_compact_omits_full_plot_grid() -> None:
+    from realm.world import world_compact_dict, world_public_dict
+
+    w = bootstrap_frontier(seed=3, grid_width=5, grid_height=4)
+    compact = world_compact_dict(w)
+    assert compact.get("compact") is True
+    assert "plots" not in compact
+    assert compact["plot_counts"]["total"] == 5 * 4
+    assert isinstance(compact.get("claim_hint_any_plot_id"), str)
+    full = world_public_dict(w)
+    assert len(full["plots"]) == compact["plot_counts"]["total"]

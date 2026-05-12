@@ -765,3 +765,123 @@ def world_public_dict(world: World) -> dict:
             for k, v in sorted(world.deployed_lua_sources.items(), key=lambda x: x[0])
         },
     }
+
+
+def world_compact_dict(world: World) -> dict[str, Any]:
+    """Small JSON snapshot for dev/automation: player + aggregates, no full ``plots`` grid."""
+    from realm.recipe_workshops import recipe_ids_on_plot_for_owner
+    from realm.time_scale import TICKS_PER_GAME_DAY
+
+    player = PartyId("player")
+    balances = {str(k): v for k, v in world.ledger.snapshot().items()}
+    player_acct = str(party_cash_account(player))
+    bal_sample: dict[str, int] = {player_acct: balances.get(player_acct, 0)}
+    for acct, cents in sorted(
+        ((k, v) for k, v in balances.items() if k != player_acct),
+        key=lambda kv: -abs(kv[1]),
+    )[:24]:
+        bal_sample[acct] = cents
+
+    inv_player = world.inventory.stock.get(player, {})
+    inv_top = [
+        {"material": str(m), "qty": q}
+        for m, q in sorted(inv_player.items(), key=lambda x: -x[1])[:28]
+    ]
+
+    player_plot_entries: list[dict[str, Any]] = []
+    for pid, pl in world.plots.items():
+        if pl.owner != player:
+            continue
+        player_plot_entries.append(
+            {
+                "id": str(pid),
+                "terrain": pl.terrain.value,
+                "surveyed": pl.surveyed,
+                "recipe_ids": recipe_ids_on_plot_for_owner(world, pl),
+            }
+        )
+    player_plot_entries.sort(key=lambda x: x["id"])
+
+    hint_mountain: str | None = None
+    hint_any: str | None = None
+    for pl in world.plots.values():
+        if pl.owner is not None:
+            continue
+        pid_s = str(pl.plot_id)
+        if hint_any is None:
+            hint_any = pid_s
+        if pl.terrain == Terrain.MOUNTAIN and hint_mountain is None:
+            hint_mountain = pid_s
+
+    settler_n = sum(1 for p in world.parties if str(p).startswith("settler_"))
+    ask_mats = len(world.market_asks_by_material)
+    ask_lots = sum(len(v) for v in world.market_asks_by_material.values())
+
+    def _trim_event(row: dict[str, Any]) -> dict[str, Any]:
+        out = dict(row)
+        msg = out.get("message")
+        if isinstance(msg, str) and len(msg) > 220:
+            out["message"] = msg[:220] + "…"
+        return out
+
+    scen = world.scenario_state
+    scen_preview: dict[str, Any] = {}
+    if isinstance(scen, dict):
+        for k in sorted(scen.keys())[:14]:
+            v = scen[k]
+            if isinstance(v, (int, float, bool)) or v is None:
+                scen_preview[k] = v
+            else:
+                s = str(v)
+                scen_preview[k] = s if len(s) <= 100 else s[:100] + "…"
+
+    return {
+        "compact": True,
+        "seed": world.seed,
+        "tick": world.tick,
+        "ticks_per_game_day": TICKS_PER_GAME_DAY,
+        "scenario_id": world.scenario_id,
+        "plot_counts": {
+            "total": len(world.plots),
+            "claimed": sum(1 for pl in world.plots.values() if pl.owner is not None),
+            "player_owned": len(player_plot_entries),
+        },
+        "claim_hint_mountain_plot_id": hint_mountain,
+        "claim_hint_any_plot_id": hint_any,
+        "settler_party_count": settler_n,
+        "party_count": len(world.parties),
+        "balances_sample_cents": bal_sample,
+        "player": {
+            "balance_cents": balances.get(player_acct, 0),
+            "inventory_top": inv_top,
+            "plots": player_plot_entries,
+            "buildings": [b for b in world.plot_buildings if b.get("party") == str(player)],
+        },
+        "active_production": [
+            {
+                "run_id": a.run_id,
+                "party": str(a.party),
+                "plot_id": str(a.plot_id),
+                "recipe_id": a.recipe_id,
+                "ticks_remaining": a.ticks_remaining,
+            }
+            for a in world.active_production
+            if a.party == player
+        ][:24],
+        "in_transit": [
+            {
+                "shipment_id": s.shipment_id,
+                "party": str(s.party),
+                "material": str(s.material),
+                "qty": s.qty,
+                "dest_plot_id": str(s.dest_plot_id),
+                "arrive_tick": s.arrive_tick,
+            }
+            for s in world.in_transit
+            if s.party == player
+        ][:16],
+        "market_asks_summary": {"materials_with_asks": ask_mats, "total_lots": ask_lots},
+        "event_log_tail": [_trim_event(e) for e in world.event_log[-36:]],
+        "npc_messages_tail": list(world.npc_messages_to_player[-12:]),
+        "scenario_state_preview": scen_preview,
+    }

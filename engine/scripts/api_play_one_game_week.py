@@ -88,25 +88,15 @@ def main() -> int:
         return 1
     print("reset:", body)
 
-    print("/world (large on Genesis maps; may take a bit)…", flush=True)
-    code, w = _req(base, "GET", "/world")
+    print("GET /world?compact=1 (plot hints + small payload)…", flush=True)
+    code, w = _req(base, "GET", "/world", query={"compact": 1})
     if code != 200 or not isinstance(w, dict):
-        print(f"/world failed: {code}", file=sys.stderr)
+        print(f"/world?compact=1 failed: {code}", file=sys.stderr)
         return 1
 
-    plots = w.get("plots") or []
-    pick: str | None = None
-    for pl in plots:
-        if pl.get("terrain") == "mountain" and not pl.get("owner"):
-            pick = str(pl["id"])
-            break
+    pick: str | None = w.get("claim_hint_mountain_plot_id") or w.get("claim_hint_any_plot_id")
     if pick is None:
-        for pl in plots:
-            if not pl.get("owner"):
-                pick = str(pl["id"])
-                break
-    if pick is None:
-        print("no unowned plot found", file=sys.stderr)
+        print("no claim hint in compact world", file=sys.stderr)
         return 1
     print("claim plot", pick)
 
@@ -139,8 +129,12 @@ def main() -> int:
         return 1
     print("construction batch:", body)
 
-    code, w = _req(base, "GET", "/world")
-    plot = next((x for x in (w or {}).get("plots", []) if x.get("id") == pick), None)
+    code, w = _req(base, "GET", "/world", query={"compact": 1})
+    if code != 200 or not isinstance(w, dict):
+        print(f"/world?compact=1 after build failed: {code}", file=sys.stderr)
+        return 1
+    player_plots = (w.get("player") or {}).get("plots") or []
+    plot = next((x for x in player_plots if x.get("id") == pick), None)
     rids = (plot or {}).get("recipe_ids") or []
     if "mine_coal" in rids:
         code, b2 = _req(
@@ -174,13 +168,16 @@ def main() -> int:
         return 1
     print("week batch:", body)
 
-    code, w = _req(base, "GET", "/world")
+    code, w = _req(base, "GET", "/world", query={"compact": 1})
     if isinstance(w, dict):
         tick = w.get("tick")
-        inv = (w.get("inventory") or {}).get("player") or {}
-        coal = inv.get("coal", 0)
-        cash = (w.get("balances_cents") or {}).get("player", 0)
+        inv_top = (w.get("player") or {}).get("inventory_top") or []
+        coal = next((x.get("qty", 0) for x in inv_top if x.get("material") == "coal"), 0)
+        cash = (w.get("player") or {}).get("balance_cents", 0)
         print(f"end tick={tick} player coal={coal} player_cash_cents={cash}")
+        print("compact tail (event_log_tail last 5):", flush=True)
+        for ev in (w.get("event_log_tail") or [])[-5:]:
+            print(" ", ev.get("tick"), ev.get("kind"), (ev.get("message") or "")[:100], flush=True)
     return 0
 
 

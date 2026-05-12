@@ -98,6 +98,30 @@ def test_tick_batch_400_when_count_over_cap() -> None:
     assert r.status_code == 400
 
 
+def test_get_world_compact_shape() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 203})
+    r = c.get("/world", params={"compact": 1})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("compact") is True
+    assert "plots" not in body
+    assert "player" in body
+    assert "event_log_tail" in body
+
+
+def test_tick_batch_includes_compact_summary_when_requested() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 204})
+    r = c.post("/tick/batch", params={"count": 3, "summary": 1})
+    assert r.status_code == 200
+    b = r.json()
+    assert b.get("ok") is True
+    wc = b.get("world_compact")
+    assert isinstance(wc, dict)
+    assert wc.get("compact") is True
+
+
 def test_p2p_trade_via_http() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"seed": 57})
