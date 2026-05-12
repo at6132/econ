@@ -14,7 +14,7 @@ from realm.markets import (
     sell_into_bids,
 )
 from realm.production import plot_has_active_production
-from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe
+from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units
 from realm.world import World
@@ -194,6 +194,7 @@ def tick_settler_business(world: World) -> None:
     if world.scenario_id != "genesis":
         return
     scan = _plots_manhattan_order(world)
+    dry_scan = [pid for pid in scan if terrain_allows_workshop(world.plots[pid].terrain)]
     settlers = sorted((p for p in world.parties if str(p).startswith("settler_")), key=str)
     for party in settlers:
-        _tick_one_settler(world, party, scan)
+        _tick_one_settler(world, party, dry_scan)
