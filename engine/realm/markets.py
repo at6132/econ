@@ -564,7 +564,10 @@ def market_buy(
     min_seller_honored: int = 0,
 ) -> dict:
     """
-    Aggressive buy: walk lowest-priced asks; pay sellers from buyer cash; deliver goods.
+    Aggressive buy: walk asks in ascending price order; pay sellers from buyer cash; deliver goods.
+
+    Skips asks whose ``min_counterparty_honored`` the buyer cannot satisfy, then continues to
+    higher-priced fillable clips (so rep-gated cheap listings do not block the whole book).
     """
     if max_qty <= 0:
         return {"ok": False, "reason": "max_qty must be positive"}
@@ -577,11 +580,8 @@ def market_buy(
         asks = _asks(world, material)
         if not asks:
             break
-        best_px = asks[0].price_per_unit_cents
         idx = None
         for j, o in enumerate(asks):
-            if o.price_per_unit_cents != best_px:
-                break
             if (
                 _honored_count(world, o.party) >= min_seller_honored
                 and _honored_count(world, buyer) >= o.min_counterparty_honored
@@ -646,7 +646,10 @@ def sell_into_bids(
     min_buyer_honored: int = 0,
 ) -> dict:
     """
-    Aggressive sell: walk highest bids; receive payment from bid escrow; deliver from seller inventory.
+    Aggressive sell: walk bids in descending price order; receive payment from bid escrow.
+
+    Skips bids whose ``min_counterparty_honored`` the seller cannot satisfy, then continues to
+    lower-priced fillable clips.
     """
     if max_qty <= 0:
         return {"ok": False, "reason": "max_qty must be positive"}
@@ -660,11 +663,8 @@ def sell_into_bids(
         bids = _bids(world, material)
         if not bids:
             break
-        best_px = bids[0].max_price_per_unit_cents
         idx = None
         for j, b in enumerate(bids):
-            if b.max_price_per_unit_cents != best_px:
-                break
             if (
                 _honored_count(world, b.party) >= min_buyer_honored
                 and _honored_count(world, seller) >= b.min_counterparty_honored

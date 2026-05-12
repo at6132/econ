@@ -46,3 +46,30 @@ def test_aggressive_buy_respects_min_seller_honored() -> None:
     assert place_sell_order(w, PartyId("player"), MaterialId("grain"), 1, 5)["ok"] is True
     r = market_buy(w, PartyId("t1_consumer"), MaterialId("grain"), 1, min_seller_honored=999)
     assert r["ok"] is False
+
+
+def test_market_buy_skips_rep_blocked_cheapest_ask() -> None:
+    """Cheapest ask can require rep the buyer lacks; walker must still lift higher-priced asks."""
+    from realm.inventory import MatterErr
+    from realm.markets import cancel_sell_order
+    from realm.world import bootstrap_genesis
+
+    w = bootstrap_genesis(seed=808, grid_width=4, grid_height=4, settler_count=0)
+    p = PartyId("player")
+    ex = PartyId("genesis_exchange")
+    hub = PartyId("pop_hub_e")
+    mid = MaterialId("coal")
+    key = str(mid)
+    for o in list(w.market_asks_by_material.get(key, [])):
+        cancel_sell_order(w, o.party, o.order_id)
+    ad = w.inventory.add(p, mid, 30)
+    assert not isinstance(ad, MatterErr)
+    assert place_sell_order(w, p, mid, 10, 50, min_counterparty_honored=5)["ok"] is True
+    ad2 = w.inventory.add(ex, mid, 40)
+    assert not isinstance(ad2, MatterErr)
+    assert place_sell_order(w, ex, mid, 12, 72)["ok"] is True
+    assert w.reputation[str(hub)].get("honored", 0) == 0
+    r = market_buy(w, hub, mid, 4)
+    assert r.get("ok") is True
+    assert int(r.get("filled", 0)) == 4
+    assert w.inventory.qty(hub, mid) >= 4
