@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
 from realm.event_log import log_event
+from realm.ids import MaterialId, PartyId
 from realm.social import propose_supply_contract
 from realm.world import World
 
