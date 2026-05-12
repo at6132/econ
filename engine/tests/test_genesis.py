@@ -160,17 +160,32 @@ def test_genesis_subsurface_correlation_mountains_richer_in_iron() -> None:
     assert sum(ir_mountain) / len(ir_mountain) > sum(ir_other) / len(ir_other)
 
 
-def test_genesis_stagger_reduces_initial_settler_count() -> None:
-    from realm.genesis_settler_cycle import initial_settler_batch_size
-
+def test_genesis_full_initial_settler_cohort_no_partial_bootstrap() -> None:
+    """All requested settlers exist at t=0 (no random partial first wave)."""
     w = bootstrap_genesis(seed=100, grid_width=20, grid_height=16, settler_count=120)
-    initial, cyc = initial_settler_batch_size(seed=100, settler_count=120)
-    assert cyc is True
     n_settlers = sum(1 for p in w.parties if str(p).startswith("settler_"))
-    assert n_settlers == initial
-    assert n_settlers < 120
+    assert n_settlers == 120
     gst = w.scenario_state.get("genesis", {})
     assert gst.get("settler_cap") == 120
+    assert gst.get("settler_cycle_enabled") is False
+
+
+def test_genesis_default_250_start_with_spawn_headroom() -> None:
+    from realm.genesis_settler_cycle import GENESIS_DEFAULT_MAX_SETTLERS, GENESIS_DEFAULT_START_SETTLERS
+
+    w = bootstrap_genesis(seed=101)
+    n = sum(1 for p in w.parties if str(p).startswith("settler_"))
+    assert n == GENESIS_DEFAULT_START_SETTLERS
+    gst = w.scenario_state.get("genesis", {})
+    assert gst.get("settler_cap") == GENESIS_DEFAULT_MAX_SETTLERS
+    assert gst.get("settler_cycle_enabled") is True
+
+
+def test_genesis_explicit_spawn_cap_enables_arrivals() -> None:
+    w = bootstrap_genesis(seed=102, grid_width=12, grid_height=10, settler_count=8, settler_spawn_cap=20)
+    assert sum(1 for p in w.parties if str(p).startswith("settler_")) == 8
+    gst = w.scenario_state.get("genesis", {})
+    assert gst.get("settler_cap") == 20
     assert gst.get("settler_cycle_enabled") is True
 
 

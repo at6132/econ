@@ -1,4 +1,4 @@
-"""Genesis settler demographics — staggered random spawns, bankruptcy/retirement, respawns (matter conserved)."""
+"""Genesis settler demographics — full initial cohort at boot, random arrivals up to cap, bankruptcy (matter conserved)."""
 
 from __future__ import annotations
 
@@ -9,14 +9,13 @@ from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.markets import cancel_all_party_resting_orders
 from realm.plot_logistics import remove_plot_output
-from realm.rng import make_rng
 from realm.time_scale import legacy_scaled
 from realm.world import World
 
-# When ``settler_count`` exceeds this, only a random initial batch is funded at bootstrap; the rest trickle in.
-SETTLER_STAGGER_THRESHOLD = 60
-SETTLER_INITIAL_BATCH_MIN = 18
-SETTLER_INITIAL_BATCH_MAX = 52
+# Default Genesis solo map: always fund this many settlers at t=0 (no random partial bootstrap).
+GENESIS_DEFAULT_START_SETTLERS = 250
+# After the initial cohort, ``tick_genesis_settler_lifecycle`` may spawn more until this cap (deterministic RNG).
+GENESIS_DEFAULT_MAX_SETTLERS = 500
 
 BANKRUPT_CASH_CENTS = 12_000  # $120 — sustained distress
 BANKRUPT_STREAK_TICKS = legacy_scaled(10)
@@ -201,18 +200,25 @@ def tick_genesis_settler_lifecycle(world: World) -> None:
     _tick_spawns(world)
 
 
-def initial_settler_batch_size(*, seed: int, settler_count: int) -> tuple[int, bool]:
+def genesis_settler_population_plan(
+    *, settler_count: int, settler_spawn_cap: int | None = None
+) -> tuple[int, int, bool]:
     """
-    Returns (initial_funded_settlers, cycle_enabled).
+    Returns ``(initial_funded_settlers, settler_cap, cycle_enabled)``.
 
-    Small worlds fund everyone at once; large worlds use a random initial batch and trickle the rest in.
+    **Always** funds every ``settler_count`` settler at bootstrap (no random partial first wave).
+    When ``settler_cap`` is greater than ``settler_count``, random spawns over time fill toward the cap.
     """
-    if settler_count <= 0:
-        return 0, False
-    if settler_count <= SETTLER_STAGGER_THRESHOLD:
-        return settler_count, False
-    rng = make_rng(0, f"genesis_boot_settler_batch:{seed}:{settler_count}")
-    lo = min(SETTLER_INITIAL_BATCH_MIN, settler_count)
-    hi = min(SETTLER_INITIAL_BATCH_MAX, settler_count)
-    initial = rng.randint(lo, hi) if lo <= hi else settler_count
-    return initial, True
+    if settler_count < 0:
+        raise ValueError("settler_count must be non-negative")
+    initial = settler_count
+    if settler_spawn_cap is not None:
+        if settler_spawn_cap < initial:
+            raise ValueError("settler_spawn_cap must be >= settler_count")
+        cap = settler_spawn_cap
+    elif initial == GENESIS_DEFAULT_START_SETTLERS:
+        cap = GENESIS_DEFAULT_MAX_SETTLERS
+    else:
+        cap = initial
+    cycle_enabled = cap > initial
+    return initial, cap, cycle_enabled

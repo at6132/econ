@@ -223,12 +223,18 @@ def bootstrap_genesis(
     grid_width: int = 96,
     grid_height: int = 72,
     settler_count: int = 250,
+    settler_spawn_cap: int | None = None,
     starting_cash_cents: int = 1_000_000,
     system_reserve_cents: int = 100_000_000_000,
 ) -> World:
     """
     Empty-world / co-founder scenario: large map, cash-only player + algorithmic settlers,
     population demand wallets, neutral exchange listing (no Tier-1 / Tier-2 NPC bootstrap).
+
+    Settlers: **all** ``settler_count`` parties are funded at tick 0 (no random partial wave).
+    Optional ``settler_spawn_cap`` (≥ ``settler_count``) sets ``settler_cap``; when omitted and
+    ``settler_count`` is the default 250, cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (500) so random
+    arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
     """
     from realm.event_log import log_event
     from realm.market_history import record_market_snapshot
@@ -265,9 +271,12 @@ def bootstrap_genesis(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
-    from realm.genesis_settler_cycle import initial_settler_batch_size
+    from realm.genesis_settler_cycle import genesis_settler_population_plan
 
-    initial_n, cycle_enabled = initial_settler_batch_size(seed=seed, settler_count=settler_count)
+    initial_n, settler_cap, cycle_enabled = genesis_settler_population_plan(
+        settler_count=settler_count,
+        settler_spawn_cap=settler_spawn_cap,
+    )
     for i in range(1, initial_n + 1):
         sid = PartyId(f"settler_{i:03d}")
         world.parties.add(sid)
@@ -283,7 +292,7 @@ def bootstrap_genesis(
             raise ValueError(trs.reason)
     gst = world.scenario_state.setdefault("genesis", {})
     gst["settler_cycle_enabled"] = cycle_enabled
-    gst["settler_cap"] = settler_count
+    gst["settler_cap"] = settler_cap
     gst["next_settler_seq"] = initial_n + 1
     gst["starting_settler_cents"] = starting_cash_cents
     gst["broke_ticks"] = {}
@@ -308,8 +317,8 @@ def bootstrap_genesis(
     log_event(
         world,
         "world",
-        f"genesis: {n_plots} plots, {initial_n}/{settler_count} settlers at boot"
-        + (" (staggered arrivals)" if cycle_enabled else "")
+        f"genesis: {n_plots} plots, {initial_n} settlers at boot (cap {settler_cap})"
+        + ("; random arrivals enabled" if cycle_enabled else "")
         + ", terrain-correlated subsurface, cold-start exchange.",
     )
     record_market_snapshot(world)
