@@ -16,6 +16,11 @@ from realm.markets import (
     place_sell_order,
     sell_into_bids,
 )
+from realm.plot_logistics import (
+    ensure_inventory_from_stash,
+    party_material_held,
+    party_material_on_plot,
+)
 from realm.production import plot_has_active_production
 from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
@@ -365,7 +370,7 @@ def _stock_room(world: World, party: PartyId) -> int:
     return cap - party_inventory_unit_total(world, party)
 
 
-def _ensure_recipe_inputs(world: World, party: PartyId, recipe_id: str) -> None:
+def _ensure_recipe_inputs(world: World, party: PartyId, recipe_id: str, *, staging_plot_id: PlotId) -> None:
     recipe = RECIPES.get(recipe_id)
     if recipe is None:
         return
@@ -373,7 +378,7 @@ def _ensure_recipe_inputs(world: World, party: PartyId, recipe_id: str) -> None:
     if room < 4:
         return
     for mid, need in recipe.inputs.items():
-        have = world.inventory.qty(party, mid)
+        have = party_material_on_plot(world, party, staging_plot_id, mid)
         if have >= need:
             continue
         deficit = need - have
@@ -381,11 +386,11 @@ def _ensure_recipe_inputs(world: World, party: PartyId, recipe_id: str) -> None:
         market_buy(world, party, mid, clip)
 
 
-def _recipe_inputs_satisfied(world: World, party: PartyId, recipe_id: str) -> bool:
+def _recipe_inputs_satisfied(world: World, party: PartyId, recipe_id: str, plot_id: PlotId) -> bool:
     rec = RECIPES.get(recipe_id)
     if rec is None:
         return False
-    return all(world.inventory.qty(party, m) >= q for m, q in rec.inputs.items())
+    return all(party_material_on_plot(world, party, plot_id, m) >= q for m, q in rec.inputs.items())
 
 
 def _recipe_rank_score(
@@ -403,7 +408,7 @@ def _recipe_rank_score(
     prim = recipe_id in _PRIMARY_RECIPES
     miss = 0
     for m, q in rec.inputs.items():
-        short = world.inventory.qty(party, m) - q
+        short = party_material_on_plot(world, party, plot_id, m) - q
         if short < 0:
             miss -= short
     labor_ok = 1.0 if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents else -50.0
@@ -425,8 +430,8 @@ def _pick_recipe_to_start(world: World, party: PartyId, plot, plot_id: PlotId) -
         key=lambda rid: -_recipe_rank_score(world, party, plot_id, rid, rng=rng),
     )
     for rid in ranked[:14]:
-        _ensure_recipe_inputs(world, party, rid)
-        if not _recipe_inputs_satisfied(world, party, rid):
+        _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
+        if not _recipe_inputs_satisfied(world, party, rid, plot_id):
             continue
         rec = RECIPES[rid]
         if world.ledger.balance(party_cash_account(party)) < rec.labor_cents:
@@ -467,7 +472,7 @@ def _liquidate_settler_stockpiles(world: World, party: PartyId) -> None:
         return
     for mid_s in _STOCKPILE_MATS:
         mid = MaterialId(mid_s)
-        q = world.inventory.qty(party, mid)
+        q = party_material_held(world, party, mid)
         if q >= 20:
             _settler_sell_material(world, party, mid, min(q - 3, 40))
 
@@ -475,6 +480,10 @@ def _liquidate_settler_stockpiles(world: World, party: PartyId) -> None:
 def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_units: int) -> None:
     if max_units <= 0:
         return
+    total = party_material_held(world, party, mid)
+    if total <= 0:
+        return
+    ensure_inventory_from_stash(world, party, mid, min(max_units, total))
     sell_into_bids(world, party, mid, max_units)
     q = world.inventory.qty(party, mid)
     if q <= 0:
@@ -518,7 +527,7 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
         recipe = RECIPES.get(run.recipe_id) if run else None
         if recipe:
             for out_m in recipe.outputs:
-                hq = world.inventory.qty(party, out_m)
+                hq = party_material_held(world, party, out_m)
                 if hq >= 2:
                     _settler_sell_material(world, party, out_m, min(hq - 1, 30))
         return
@@ -526,13 +535,13 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
     chosen_rid = _pick_recipe_to_start(world, party, plot, owned)
     if not chosen_rid:
         return
-    _ensure_recipe_inputs(world, party, chosen_rid)
+    _ensure_recipe_inputs(world, party, chosen_rid, staging_plot_id=owned)
     start_production_on_plot(world, party, owned, chosen_rid)
 
     recipe = RECIPES.get(chosen_rid)
     if recipe:
         for out_m in recipe.outputs:
-            hq = world.inventory.qty(party, out_m)
+            hq = party_material_held(world, party, out_m)
             if hq >= 2:
                 _settler_sell_material(world, party, out_m, min(hq, 24))
 

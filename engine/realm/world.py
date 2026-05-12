@@ -645,7 +645,7 @@ def world_public_dict(world: World) -> dict:
                 "coal_grade": p.subsurface.coal_grade,
             }
             entry["recipe_ids"] = recipe_ids_on_plot_for_owner(world, p)
-        if world.use_plot_output_logistics and p.owner == PartyId("player"):
+        if world.use_plot_output_logistics and p.owner is not None:
             entry["output_stock"] = dict(world.plot_output_stock.get(str(p.plot_id), {}))
         plots_out.append(entry)
     balances = {str(k): v for k, v in world.ledger.snapshot().items()}

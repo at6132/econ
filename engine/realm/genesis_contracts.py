@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
+from realm.plot_logistics import party_material_held
 from realm.social import propose_supply_contract
 from realm.world import World
 
@@ -31,13 +32,13 @@ def _has_pending_supply(
 
 
 def _player_units_visible(world: World, material: MaterialId) -> int:
-    """On-hand + resting sell orders (listed material is not in inventory)."""
-    inv = world.inventory.qty(_PLAYER, material)
+    """On-hand (inventory + staged on owned plots) + resting sell orders."""
+    held = party_material_held(world, _PLAYER, material)
     listed = 0
     for o in world.market_asks_by_material.get(str(material), []):
         if o.party == _PLAYER:
             listed += int(o.qty) + int(o.iceberg_hidden_qty)
-    return inv + listed
+    return held + listed
 
 
 def tick_genesis_pop_hub_contracts(world: World) -> None:

@@ -7,6 +7,7 @@ from typing import Any
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.markets import best_resting_ask_cents
+from realm.plot_logistics import party_material_held
 from realm.world import World
 
 _PLAYER = PartyId("player")
@@ -114,10 +115,13 @@ def tick_genesis_world_feed(world: World) -> None:
         if q != pq:
             headlines.append(f"{hlabel} {mid} stock {pq} → {q} u.")
 
-    pqcoal = world.inventory.qty(_PLAYER, MaterialId("coal"))
+    pqcoal = party_material_held(world, _PLAYER, MaterialId("coal"))
     prev_pc = int(prev.get("player_coal", pqcoal))
     if pqcoal != prev_pc and world.tick >= 20:
-        headlines.append(f"Your on-hand coal moved {prev_pc} → {pqcoal} u (inventory, not counting open sell clips).")
+        headlines.append(
+            f"Your coal (inventory + staged at your plots) moved {prev_pc} → {pqcoal} u "
+            "(not counting open sell clips)."
+        )
 
     if not headlines:
         nasks = sum(len(v) for v in world.market_asks_by_material.values())

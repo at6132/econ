@@ -6,6 +6,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, contract_escrow_account, party_cash_account
+from realm.plot_logistics import ensure_inventory_from_stash, plot_logistics_enabled
 from realm.storage_caps import try_add_inventory
 from realm.world import World
 
@@ -179,6 +180,8 @@ def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -
         mat = MaterialId(c["material"])
         qty = int(c["qty"])
         price = int(c["total_price_cents"])
+        if plot_logistics_enabled(world):
+            ensure_inventory_from_stash(world, supplier, mat, qty)
         if world.inventory.qty(supplier, mat) < qty:
             return {"ok": False, "reason": "insufficient material to fulfill"}
         bc = party_cash_account(buyer)

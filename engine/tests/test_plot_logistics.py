@@ -9,6 +9,7 @@ from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.movement import dispatch_shipment
 from realm.plot_logistics import plot_output_qty, try_add_plot_output
+from realm.recipe_sites import terrain_allows_workshop
 from realm.tick import advance_tick
 from realm.world import bootstrap_genesis
 
@@ -57,3 +58,22 @@ def test_dispatch_draws_from_plot_stash_delivers_to_dest_stash() -> None:
         advance_tick(w)
     else:
         pytest.fail("shipment did not arrive at destination plot stash")
+
+
+def test_settler_can_harvest_staged_goods() -> None:
+    w = bootstrap_genesis(seed=29, grid_width=16, grid_height=12, settler_count=2)
+    sid = PartyId("settler_001")
+    spid = next(
+        (
+            pl.plot_id
+            for pl in w.plots.values()
+            if pl.owner is None and terrain_allows_workshop(pl.terrain)
+        ),
+        None,
+    )
+    assert spid is not None
+    assert claim_plot(w, sid, spid)["ok"] is True
+    assert not isinstance(try_add_plot_output(w, spid, sid, MaterialId("grain"), 7), MatterErr)
+    assert harvest_plot_output_stock(w, sid, spid, "grain", 4)["ok"] is True
+    assert plot_output_qty(w, spid, MaterialId("grain")) == 3
+    assert w.inventory.qty(sid, MaterialId("grain")) == 4

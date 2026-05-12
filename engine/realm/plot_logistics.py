@@ -1,4 +1,4 @@
-"""Plot-local output stock (Genesis player): outputs and inbound shipments land on the plot until harvested."""
+"""Plot-local output stock: when enabled (Genesis), outputs and inbound shipments stage on plots until harvested."""
 
 from __future__ import annotations
 
@@ -12,9 +12,33 @@ from realm.world import World
 PLOT_OUTPUT_STORAGE_CAP_UNITS = 50_000
 
 
+def plot_logistics_enabled(world: World) -> bool:
+    """All parties use the same staging rules when the scenario enables plot logistics."""
+    return bool(world.use_plot_output_logistics)
+
+
 def uses_plot_logistics(world: World, party: PartyId) -> bool:
-    """Solo human Genesis: production outputs and deliveries stage on owned plots."""
-    return bool(world.use_plot_output_logistics) and party == PartyId("player")
+    """Same as ``plot_logistics_enabled``; ``party`` is kept for call-site readability."""
+    return plot_logistics_enabled(world)
+
+
+def party_material_on_plot(world: World, party: PartyId, plot_id: PlotId, material: MaterialId) -> int:
+    """Inventory plus staged output on one plot (recipe inputs draw from both)."""
+    q = world.inventory.qty(party, material)
+    if not plot_logistics_enabled(world):
+        return q
+    return q + plot_output_qty(world, plot_id, material)
+
+
+def party_material_held(world: World, party: PartyId, material: MaterialId) -> int:
+    """Inventory plus staged goods on all owned plots."""
+    t = world.inventory.qty(party, material)
+    if not plot_logistics_enabled(world):
+        return t
+    for pl in world.plots.values():
+        if pl.owner == party:
+            t += plot_output_qty(world, pl.plot_id, material)
+    return t
 
 
 def _plot_owned_by(world: World, party: PartyId, plot_id: PlotId) -> bool:
@@ -83,7 +107,7 @@ def harvest_plot_output_to_party(
     """Move staged units from plot stock into party inventory (subject to party storage cap)."""
     if qty <= 0:
         return {"ok": False, "reason": "quantity must be positive"}
-    if not uses_plot_logistics(world, party):
+    if not plot_logistics_enabled(world):
         return {"ok": False, "reason": "plot logistics not enabled"}
     if not _plot_owned_by(world, party, plot_id):
         return {"ok": False, "reason": "plot not owned"}
@@ -105,3 +129,28 @@ def harvest_plot_output_to_party(
         qty=qty,
     )
     return {"ok": True}
+
+
+def ensure_inventory_from_stash(
+    world: World, party: PartyId, material: MaterialId, target_inv_qty: int
+) -> None:
+    """Harvest from owned plots (deterministic plot order) until inventory >= target or blocked."""
+    if not plot_logistics_enabled(world):
+        return
+    target_inv_qty = max(0, target_inv_qty)
+    while world.inventory.qty(party, material) < target_inv_qty:
+        need = target_inv_qty - world.inventory.qty(party, material)
+        moved = False
+        for pid in sorted((p.plot_id for p in world.plots.values() if p.owner == party), key=str):
+            st = plot_output_qty(world, pid, material)
+            if st <= 0:
+                continue
+            take = min(st, need)
+            r = harvest_plot_output_to_party(world, party, pid, material, take)
+            if not r.get("ok"):
+                return
+            moved = True
+            if world.inventory.qty(party, material) >= target_inv_qty:
+                return
+        if not moved:
+            return
