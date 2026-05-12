@@ -629,6 +629,7 @@ def market_buy(
     spent = 0
     buyer_cash = party_cash_account(buyer)
     seller_parties: set[str] = set()
+    first_seller_str: str | None = None
     while remaining > 0:
         asks = _asks(world, material)
         if not asks:
@@ -669,6 +670,8 @@ def market_buy(
         spent += cost
         remaining -= fill
         seller_parties.add(str(o.party))
+        if first_seller_str is None:
+            first_seller_str = str(o.party)
         bump_spot_exchange_honored(world, buyer, o.party)
         if _ask_fully_done(o):
             asks.pop(idx)
@@ -688,6 +691,7 @@ def market_buy(
         material=str(material),
         filled=filled,
         spent_cents=spent,
+        seller=first_seller_str or "",
         sellers=",".join(sorted(seller_parties)) if seller_parties else "",
     )
     return {"ok": True, "filled": filled, "spent_cents": spent}

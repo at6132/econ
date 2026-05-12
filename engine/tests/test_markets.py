@@ -167,3 +167,6 @@ def test_aggressive_buy_increments_honored_for_buyer_and_seller() -> None:
     assert r.get("ok") is True
     assert w.reputation[str(buyer)]["honored"] == hb0 + 1
     assert w.reputation[str(seller)]["honored"] == hs0 + 1
+    ev = next(e for e in reversed(w.event_log) if e.get("kind") == "market_buy")
+    assert ev.get("seller") == str(seller)
+    assert str(seller) in (ev.get("sellers") or "")
