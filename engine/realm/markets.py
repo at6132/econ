@@ -628,6 +628,7 @@ def market_buy(
     remaining = max_qty
     spent = 0
     buyer_cash = party_cash_account(buyer)
+    seller_parties: set[str] = set()
     while remaining > 0:
         asks = _asks(world, material)
         if not asks:
@@ -667,6 +668,7 @@ def market_buy(
             break
         spent += cost
         remaining -= fill
+        seller_parties.add(str(o.party))
         bump_spot_exchange_honored(world, buyer, o.party)
         if _ask_fully_done(o):
             asks.pop(idx)
@@ -682,9 +684,11 @@ def market_buy(
         "market_buy",
         f"{buyer} bought {filled}×{material} for ${spent / 100:.2f}",
         buyer=str(buyer),
+        party=str(buyer),
         material=str(material),
         filled=filled,
         spent_cents=spent,
+        sellers=",".join(sorted(seller_parties)) if seller_parties else "",
     )
     return {"ok": True, "filled": filled, "spent_cents": spent}
 
@@ -764,6 +768,7 @@ def sell_into_bids(
             "market_sell_fill",
             f"{seller} sold {fill}×{material} into book @ {unit_px}¢",
             seller=str(seller),
+            party=str(seller),
             buyer=str(bid.party),
             material=str(material),
             qty=fill,

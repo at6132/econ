@@ -11,6 +11,9 @@ from realm.plot_logistics import party_material_held
 from realm.time_scale import legacy_scaled
 from realm.world import World
 
+# One digest per in-game hour at 1440 ticks/day (was incorrectly scaled to ~16 game-hours).
+GENESIS_DIGEST_INTERVAL_TICKS = 60
+
 _PLAYER = PartyId("player")
 _HUB_E = PartyId("pop_hub_e")
 _HUB_W = PartyId("pop_hub_w")
@@ -22,6 +25,10 @@ def _genesis_st(world: World) -> dict[str, Any]:
         world.scenario_state["genesis"] = {}
         st = world.scenario_state["genesis"]
     return st
+
+
+def _settler_party_count(world: World) -> int:
+    return sum(1 for p in world.parties if str(p).startswith("settler_"))
 
 
 def _settler_strip_mines(world: World) -> int:
@@ -44,7 +51,7 @@ def tick_genesis_world_feed(world: World) -> None:
     """Emit digest lines on a fixed cadence (in-game minutes); prefer deltas; pulse if quiet."""
     if world.scenario_id != "genesis":
         return
-    interval = legacy_scaled(16)
+    interval = GENESIS_DIGEST_INTERVAL_TICKS
     if world.tick < 1 or world.tick % interval != 0:
         return
     gst = _genesis_st(world)
@@ -69,6 +76,14 @@ def tick_genesis_world_feed(world: World) -> None:
     elec_ask = best_resting_ask_cents(world, MaterialId("electricity"))
 
     headlines: list[str] = []
+
+    n_settlers = _settler_party_count(world)
+    prev_pop = int(prev.get("settler_count", n_settlers))
+    if n_settlers != prev_pop:
+        headlines.append(
+            f"Frontier headcount: {prev_pop} → {n_settlers} settler parties "
+            f"(spawns and exits net)."
+        )
 
     d_mines = total_mines - int(prev.get("total_mines", 0))
     if d_mines != 0:
@@ -134,6 +149,7 @@ def tick_genesis_world_feed(world: World) -> None:
         )
 
     gst["digest_prev"] = {
+        "settler_count": n_settlers,
         "total_mines": total_mines,
         "coal_ask": coal_ask,
         "grain_ask": grain_ask,

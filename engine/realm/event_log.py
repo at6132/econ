@@ -6,7 +6,7 @@ from typing import Any
 
 from realm.world import World
 
-_MAX_EVENTS = 200
+_MAX_EVENTS = 500
 
 
 def log_event(world: World, kind: str, message: str, **fields: Any) -> None:

@@ -529,8 +529,9 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
         if recipe:
             for out_m in recipe.outputs:
                 hq = party_material_held(world, party, out_m)
-                if hq >= 2:
-                    _settler_sell_material(world, party, out_m, min(hq - 1, 30))
+                # Single-unit batches (e.g. mine_coal → 1 coal) never reach hq≥2; list ≥1 so the book fills.
+                if hq >= 1:
+                    _settler_sell_material(world, party, out_m, min(hq, 30))
         return
 
     chosen_rid = _pick_recipe_to_start(world, party, plot, owned)
@@ -543,7 +544,7 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
     if recipe:
         for out_m in recipe.outputs:
             hq = party_material_held(world, party, out_m)
-            if hq >= 2:
+            if hq >= 1:
                 _settler_sell_material(world, party, out_m, min(hq, 24))
 
 
