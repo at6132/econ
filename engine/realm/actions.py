@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Literal, TypedDict, Union
 
 from realm.event_log import log_event
-from realm.ids import PartyId, PlotId
+from realm.ids import MaterialId, PartyId, PlotId
+from realm.plot_logistics import harvest_plot_output_to_party
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.production import start_production
 from realm.world import Plot, World
@@ -189,6 +190,15 @@ def tick_stub_employment(world: World) -> None:
                     wage_cents=wage,
                 )
         h["next_wage_tick"] = nxt + interval
+
+
+def harvest_plot_output_stock(
+    world: World, party: PartyId, plot_id: PlotId, material: str, qty: int
+) -> ActionResult:
+    r = harvest_plot_output_to_party(world, party, plot_id, MaterialId(material), qty)
+    if r.get("ok"):
+        return ActionOk(ok=True)
+    return ActionErr(ok=False, reason=str(r.get("reason", "error")))
 
 
 def plot_by_id(world: World, plot_id: PlotId) -> Plot | None:

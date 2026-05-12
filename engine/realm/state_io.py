@@ -1,6 +1,6 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``5`` (older rows still load). Nested dict/list values are deep-copied on dump
+Snapshot ``version`` is ``6`` (older rows still load). Nested dict/list values are deep-copied on dump
 so JSON round-trips do not share mutable subgraphs with the live ``World``.
 
 ``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 5
+SNAPSHOT_VERSION = 6
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -148,12 +148,14 @@ def dump_world(world: World) -> dict[str, Any]:
         "deployed_lua_sources": copy.deepcopy(dict(world.deployed_lua_sources)),
         "party_display_names": copy.deepcopy(dict(world.party_display_names)),
         "scenario_state": copy.deepcopy(dict(world.scenario_state)),
+        "use_plot_output_logistics": world.use_plot_output_logistics,
+        "plot_output_stock": copy.deepcopy(dict(world.plot_output_stock)),
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5):
+    if ver not in (1, 2, 3, 4, 5, 6):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -255,6 +257,13 @@ def load_world(d: dict[str, Any]) -> World:
             assign_counter += 1
             row["instance_id"] = f"b{assign_counter:06d}"
     next_bseq = max(saved_bseq, _max_building_instance_seq_from_rows(plot_buildings_m), assign_counter)
+    plot_stock: dict[str, dict[str, int]] = {}
+    raw_stock = d.get("plot_output_stock") or {}
+    for pk, inner in raw_stock.items():
+        if not isinstance(inner, dict):
+            continue
+        plot_stock[str(pk)] = {str(m): int(q) for m, q in inner.items()}
+    use_plot_logistics = bool(d.get("use_plot_output_logistics", False))
     world = World(
         seed=seed,
         tick=int(d["tick"]),
@@ -290,6 +299,8 @@ def load_world(d: dict[str, Any]) -> World:
         deployed_lua_sources=copy.deepcopy(dict(d.get("deployed_lua_sources", {}))),
         party_display_names=copy.deepcopy(dict(d.get("party_display_names", {}))),
         scenario_state=copy.deepcopy(dict(d.get("scenario_state", {}))),
+        use_plot_output_logistics=use_plot_logistics,
+        plot_output_stock=plot_stock,
     )
     return world
 

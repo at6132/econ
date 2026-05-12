@@ -7,7 +7,14 @@ from typing import Annotated
 
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from realm.actions import claim_plot, hire_catalog_public, hire_worker_stub, start_production_on_plot, survey_plot
+from realm.actions import (
+    claim_plot,
+    harvest_plot_output_stock,
+    hire_catalog_public,
+    hire_worker_stub,
+    start_production_on_plot,
+    survey_plot,
+)
 from realm.buildings import build_on_plot
 from realm.decay import maintain_building
 from realm.ids import MaterialId, PartyId, PlotId
@@ -323,6 +330,19 @@ def post_ship(
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
+
+
+@app.post("/plot/harvest")
+def post_plot_harvest(
+    party: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+) -> dict:
+    r = harvest_plot_output_stock(_world, PartyId(party), PlotId(plot_id), material, qty)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return {"ok": True}
 
 
 @app.post("/market/sell")

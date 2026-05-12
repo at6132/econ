@@ -142,6 +142,10 @@ class World:
     """Optional UI labels keyed by party id str (e.g. Genesis settler personas)."""
     scenario_state: dict[str, Any] = field(default_factory=dict)
     """Scenario-scoped scratch (Genesis digest deltas, scripted NPC flags). Persisted in snapshots."""
+    use_plot_output_logistics: bool = False
+    """When True, player outputs and inbound shipments stage on plot-local stock (harvest → party inventory)."""
+    plot_output_stock: dict[str, dict[str, int]] = field(default_factory=dict)
+    """Per-plot staged materials: plot id str → material id str → qty (not in party inventory yet)."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -286,6 +290,7 @@ def bootstrap_genesis(
         f"genesis: {n_plots} plots, {settler_count} settlers, terrain-correlated subsurface, cold-start exchange.",
     )
     record_market_snapshot(world)
+    world.use_plot_output_logistics = True
     return world
 
 
@@ -640,6 +645,8 @@ def world_public_dict(world: World) -> dict:
                 "coal_grade": p.subsurface.coal_grade,
             }
             entry["recipe_ids"] = recipe_ids_on_plot_for_owner(world, p)
+        if world.use_plot_output_logistics and p.owner == PartyId("player"):
+            entry["output_stock"] = dict(world.plot_output_stock.get(str(p.plot_id), {}))
         plots_out.append(entry)
     balances = {str(k): v for k, v in world.ledger.snapshot().items()}
     inv = {

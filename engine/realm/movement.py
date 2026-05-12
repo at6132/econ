@@ -11,6 +11,7 @@ from realm.geo import manhattan
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
 from realm.storage_caps import try_add_inventory
 from realm.world import InTransit, World
 
@@ -43,7 +44,9 @@ def dispatch_shipment(
         return {"ok": False, "reason": "must own both plots"}
     if from_plot_id == to_plot_id:
         return {"ok": False, "reason": "same plot"}
-    if world.inventory.qty(party, material) < qty:
+    inv_q = world.inventory.qty(party, material)
+    stash_q = plot_output_qty(world, from_plot_id, material) if uses_plot_logistics(world, party) else 0
+    if inv_q + stash_q < qty:
         return {"ok": False, "reason": "insufficient material"}
     dist = manhattan(world, from_plot_id, to_plot_id)
     fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
@@ -57,10 +60,21 @@ def dispatch_shipment(
     )
     if isinstance(pay, MoneyErr):
         return {"ok": False, "reason": pay.reason}
-    rm = world.inventory.remove(party, material, qty)
-    if isinstance(rm, MatterErr):
-        world.ledger.transfer(debit=system_reserve_account(), credit=cash, amount_cents=fee)
-        return {"ok": False, "reason": rm.reason}
+    need = qty
+    take_inv = min(need, inv_q)
+    if take_inv > 0:
+        rm = world.inventory.remove(party, material, take_inv)
+        if isinstance(rm, MatterErr):
+            world.ledger.transfer(debit=system_reserve_account(), credit=cash, amount_cents=fee)
+            return {"ok": False, "reason": rm.reason}
+    need -= take_inv
+    if need > 0:
+        r2 = remove_plot_output(world, party, from_plot_id, material, need)
+        if isinstance(r2, MatterErr):
+            if take_inv > 0:
+                world.inventory.add(party, material, take_inv)
+            world.ledger.transfer(debit=system_reserve_account(), credit=cash, amount_cents=fee)
+            return {"ok": False, "reason": r2.reason}
     arrive = world.tick + dist * TRANSIT_BUFFER_TICKS + TRANSIT_BUFFER_TICKS
     world.next_shipment_seq += 1
     sid = f"ship-{world.next_shipment_seq}"
@@ -97,7 +111,10 @@ def deliver_transit(world: World) -> None:
         if s.arrive_tick > t:
             keep.append(s)
             continue
-        ad = try_add_inventory(world, s.party, s.material, s.qty)
+        if uses_plot_logistics(world, s.party):
+            ad = try_add_plot_output(world, s.dest_plot_id, s.party, s.material, s.qty)
+        else:
+            ad = try_add_inventory(world, s.party, s.material, s.qty)
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue

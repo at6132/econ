@@ -6,7 +6,8 @@ import pytest
 
 from realm.actions import claim_plot
 from realm.buildings import build_on_plot
-from realm.ids import PartyId, PlotId
+from realm.ids import MaterialId, PartyId, PlotId
+from realm.inventory import MatterErr
 from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.tick import advance_tick
 from realm.world import bootstrap_by_scenario, bootstrap_genesis
@@ -76,9 +77,24 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings
     assert w2.deployed_lua_sources.get("player") == "return 0\n"
+    assert w2.use_plot_output_logistics is True
+    assert w.use_plot_output_logistics is True
+    from realm.plot_logistics import try_add_plot_output
+
+    pid2 = PlotId("p-1-0")
+    assert claim_plot(w, PartyId("player"), pid2)["ok"] is True
+    assert not isinstance(
+        try_add_plot_output(w, pid2, PartyId("player"), MaterialId("timber"), 11),
+        MatterErr,
+    )
+    w4 = loads_json(dumps_json(w))
+    assert w4.plot_output_stock.get(str(pid2), {}).get("timber") == 11
+    assert w4.use_plot_output_logistics is True
     w.scenario_state["persist_probe"] = {"n": w.tick}
     w3 = loads_json(dumps_json(w))
     assert w3.scenario_state.get("persist_probe", {}).get("n") == w.tick
+
+
 def test_dump_plot_buildings_decoupled_from_live_mutations() -> None:
     """Regression: ``dump_world`` must not alias live ``plot_buildings`` rows."""
     w = bootstrap_by_scenario(seed=3, scenario="frontier")

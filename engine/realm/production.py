@@ -7,6 +7,14 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.plot_logistics import (
+    PLOT_OUTPUT_STORAGE_CAP_UNITS,
+    plot_output_qty,
+    plot_output_total,
+    remove_plot_output,
+    try_add_plot_output,
+    uses_plot_logistics,
+)
 from realm.recipe_workshops import plot_has_workshop_for_recipe
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
@@ -84,6 +92,21 @@ def _labor_bps_for_plot(world: World, party: PartyId, plot_id: PlotId) -> int:
         elif bid == "watch_hut":
             bps = min(bps, WATCH_HUT_LABOR_BPS)
     return bps
+
+
+def _rollback_consumed_inputs(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    consumed_inv: dict[MaterialId, int],
+    consumed_plot: dict[MaterialId, int],
+) -> None:
+    for mid, q in consumed_inv.items():
+        world.inventory.add(party, mid, q)
+    for mid, q in consumed_plot.items():
+        rb = try_add_plot_output(world, plot_id, party, mid, q)
+        if isinstance(rb, MatterErr):
+            raise RuntimeError(f"rollback plot stash failed: {rb.reason}")
 
 
 def _distinct_employees_for_employer(world: World, employer: PartyId) -> list[PartyId]:
@@ -179,17 +202,37 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     cash = party_cash_account(party)
     if world.ledger.balance(cash) < labor_cents:
         return {"ok": False, "reason": "insufficient cash for labor"}
+    consumed_inv: dict[MaterialId, int] = {}
+    consumed_plot: dict[MaterialId, int] = {}
     for mid, qty in recipe.inputs.items():
-        if world.inventory.qty(party, mid) < qty:
+        inv_q = world.inventory.qty(party, mid)
+        if uses_plot_logistics(world, party):
+            if inv_q + plot_output_qty(world, plot_id, mid) < qty:
+                return {"ok": False, "reason": f"insufficient {mid}"}
+        elif inv_q < qty:
             return {"ok": False, "reason": f"insufficient {mid}"}
     for mid, qty in recipe.inputs.items():
-        rm = world.inventory.remove(party, mid, qty)
-        if isinstance(rm, MatterErr):
-            return {"ok": False, "reason": rm.reason}
+        need = int(qty)
+        take_inv = min(need, world.inventory.qty(party, mid))
+        if take_inv > 0:
+            rm = world.inventory.remove(party, mid, take_inv)
+            if isinstance(rm, MatterErr):
+                _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
+                return {"ok": False, "reason": rm.reason}
+            consumed_inv[mid] = consumed_inv.get(mid, 0) + take_inv
+        need -= take_inv
+        if need > 0:
+            if not uses_plot_logistics(world, party):
+                _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
+                return {"ok": False, "reason": f"insufficient {mid}"}
+            r2 = remove_plot_output(world, party, plot_id, mid, need)
+            if isinstance(r2, MatterErr):
+                _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
+                return {"ok": False, "reason": r2.reason}
+            consumed_plot[mid] = consumed_plot.get(mid, 0) + need
     labor_err = _pay_recipe_labor(world, party, labor_cents)
     if labor_err is not None:
-        for mid, qty in recipe.inputs.items():
-            world.inventory.add(party, mid, qty)
+        _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
         return {"ok": False, "reason": labor_err.reason}
     world.next_production_seq += 1
     run_id = f"run-{world.next_production_seq}"
@@ -228,7 +271,46 @@ def tick_production(world: World) -> None:
             continue
         eff_out = effective_outputs_for_completion(world, run, recipe)
         out_total = sum(eff_out.values())
-        if party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(world, run.party):
+        if uses_plot_logistics(world, run.party):
+            if plot_output_total(world, run.plot_id) + out_total > PLOT_OUTPUT_STORAGE_CAP_UNITS:
+                run.ticks_remaining = 1
+                still.append(run)
+                log_event(
+                    world,
+                    "production_stalled_storage",
+                    f"{run.party} plot stash full for {recipe.recipe_id} outputs — retry next tick",
+                    party=str(run.party),
+                    plot_id=str(run.plot_id),
+                    recipe_id=run.recipe_id,
+                    run_id=run.run_id,
+                )
+                continue
+            staged_plot: list[tuple[MaterialId, int]] = []
+            blocked_plot = False
+            for mid, qty in eff_out.items():
+                ad = try_add_plot_output(world, run.plot_id, run.party, mid, qty)
+                if isinstance(ad, MatterErr):
+                    blocked_plot = True
+                    break
+                staged_plot.append((mid, qty))
+            if blocked_plot:
+                for mid, qty in staged_plot:
+                    remove_plot_output(world, run.party, run.plot_id, mid, qty)
+                run.ticks_remaining = 1
+                still.append(run)
+                log_event(
+                    world,
+                    "production_stalled_storage",
+                    f"{run.party} plot output blocked for {recipe.recipe_id} — retry next tick",
+                    party=str(run.party),
+                    plot_id=str(run.plot_id),
+                    recipe_id=run.recipe_id,
+                    run_id=run.run_id,
+                )
+                continue
+        elif party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(
+            world, run.party
+        ):
             run.ticks_remaining = 1
             still.append(run)
             log_event(
@@ -241,29 +323,30 @@ def tick_production(world: World) -> None:
                 run_id=run.run_id,
             )
             continue
-        staged: list[tuple[MaterialId, int]] = []
-        blocked = False
-        for mid, qty in eff_out.items():
-            ad = try_add_inventory(world, run.party, mid, qty)
-            if isinstance(ad, MatterErr):
-                blocked = True
-                break
-            staged.append((mid, qty))
-        if blocked:
-            for mid, qty in staged:
-                world.inventory.remove(run.party, mid, qty)
-            run.ticks_remaining = 1
-            still.append(run)
-            log_event(
-                world,
-                "production_stalled_storage",
-                f"{run.party} output blocked for {recipe.recipe_id} — retry next tick",
-                party=str(run.party),
-                plot_id=str(run.plot_id),
-                recipe_id=run.recipe_id,
-                run_id=run.run_id,
-            )
-            continue
+        if not uses_plot_logistics(world, run.party):
+            staged: list[tuple[MaterialId, int]] = []
+            blocked = False
+            for mid, qty in eff_out.items():
+                ad = try_add_inventory(world, run.party, mid, qty)
+                if isinstance(ad, MatterErr):
+                    blocked = True
+                    break
+                staged.append((mid, qty))
+            if blocked:
+                for mid, qty in staged:
+                    world.inventory.remove(run.party, mid, qty)
+                run.ticks_remaining = 1
+                still.append(run)
+                log_event(
+                    world,
+                    "production_stalled_storage",
+                    f"{run.party} output blocked for {recipe.recipe_id} — retry next tick",
+                    party=str(run.party),
+                    plot_id=str(run.plot_id),
+                    recipe_id=run.recipe_id,
+                    run_id=run.run_id,
+                )
+                continue
         log_event(
             world,
             "production_done",
