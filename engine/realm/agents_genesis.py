@@ -47,8 +47,9 @@ def tick_population_demands(world: World) -> None:
     mid-chain goods so producer asks clear (``market_buy`` walks price levels and skips
     counterparty rep gates that block the cheapest clip).
 
-    ``tick_genesis_exchange_quoting`` runs **after** this + settlers so the book ends each
-    tick with visible exchange clips for the next tick.
+    ``tick_genesis_exchange_quoting`` runs **after** hub demand + settlers (and again mid-tick
+    after hubs) so the book stays liquid for settler input buys and ends each tick with visible
+    exchange clips for the next tick.
     """
     if world.scenario_id != "genesis":
         return
@@ -76,6 +77,7 @@ def tick_population_demands(world: World) -> None:
 def tick_genesis_agents(world: World) -> None:
     _genesis_pop_hub_topup(world)
     tick_population_demands(world)
+    tick_genesis_exchange_quoting(world)
     tick_genesis_settler_lifecycle(world)
     tick_settler_business(world)
     tick_genesis_margaux_scripts(world)

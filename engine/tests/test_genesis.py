@@ -25,6 +25,18 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
 
 
+def test_genesis_settlers_start_production_after_workshops() -> None:
+    w = bootstrap_genesis(seed=42, grid_width=12, grid_height=10, settler_count=8)
+    for _ in range(1200):
+        advance_tick(w)
+    n = sum(
+        1
+        for e in w.event_log
+        if e.get("kind") == "production_start" and str(e.get("party", "")).startswith("settler_")
+    )
+    assert n >= 1, "expected at least one settler production_start after workshops complete"
+
+
 def test_genesis_skips_tier1_npc_bootstrap() -> None:
     w = bootstrap_genesis(seed=1, grid_width=6, grid_height=4, settler_count=2)
     assert PartyId("npc_grain_vendor") not in w.parties

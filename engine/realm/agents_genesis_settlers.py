@@ -420,7 +420,14 @@ def _recipe_rank_score(
     return bonus + labor_ok - miss * 0.38 + rng.random() * 0.06
 
 
-def _pick_recipe_to_start(world: World, party: PartyId, plot, plot_id: PlotId) -> str | None:
+def _pick_recipe_to_start(
+    world: World,
+    party: PartyId,
+    plot,
+    plot_id: PlotId,
+    *,
+    prefer_recipe_id: str | None = None,
+) -> str | None:
     eligible = [
         r
         for r in recipe_ids_on_plot_for_owner(world, plot)
@@ -428,6 +435,13 @@ def _pick_recipe_to_start(world: World, party: PartyId, plot, plot_id: PlotId) -
     ]
     if not eligible:
         return None
+    if prefer_recipe_id and prefer_recipe_id in eligible:
+        rid = prefer_recipe_id
+        _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
+        if _recipe_inputs_satisfied(world, party, rid, plot_id):
+            rec = RECIPES[rid]
+            if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents:
+                return rid
     rng = world.rng(f"gen:recipe_pick:{party}:{plot.plot_id}:{world.tick}")
     ranked = sorted(
         eligible,
@@ -498,7 +512,12 @@ def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_un
 
 
 def _settler_pipeline_step(
-    world: World, party: PartyId, scan: list[PlotId], *, allow_secondary: bool
+    world: World,
+    party: PartyId,
+    scan: list[PlotId],
+    *,
+    allow_secondary: bool,
+    preferred_line: tuple[str, str] | None = None,
 ) -> bool:
     """One settler micro-step; return True if we should try another step this same tick."""
     owned = _first_owned_plot(world, party)
@@ -518,7 +537,10 @@ def _settler_pipeline_step(
             return True
         return False
 
-    line = _pick_settler_line(world, party, plot)
+    if preferred_line is not None:
+        line = preferred_line
+    else:
+        line = _pick_settler_line(world, party, plot)
     if line is None:
         return False
     _recipe_id, building_id = line
@@ -541,7 +563,9 @@ def _settler_pipeline_step(
                     _settler_sell_material(world, party, out_m, min(hq, 30))
         return False
 
-    chosen_rid = _pick_recipe_to_start(world, party, plot, owned)
+    chosen_rid = _pick_recipe_to_start(
+        world, party, plot, owned, prefer_recipe_id=_recipe_id
+    )
     if not chosen_rid:
         return False
     _ensure_recipe_inputs(world, party, chosen_rid, staging_plot_id=owned)
@@ -559,9 +583,20 @@ def _settler_pipeline_step(
 
 
 def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
+    """Lock primary business line after survey so burst steps do not re-roll a conflicting workshop."""
+    locked_line: tuple[str, str] | None = None
     for burst_i in range(SETTLER_PIPELINE_BURST):
+        owned = _first_owned_plot(world, party)
+        if owned is not None:
+            pl = world.plots[owned]
+            if pl.surveyed and locked_line is None:
+                locked_line = _pick_settler_line(world, party, pl)
         progressed = _settler_pipeline_step(
-            world, party, scan, allow_secondary=(burst_i == 0)
+            world,
+            party,
+            scan,
+            allow_secondary=(burst_i == 0),
+            preferred_line=locked_line,
         )
         if not progressed:
             break
