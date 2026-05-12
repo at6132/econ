@@ -79,6 +79,25 @@ def test_market_bid_cancel_via_http() -> None:
     assert r2.json().get("ok") is True
 
 
+def test_tick_batch_advances_world() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 202})
+    t0 = c.get("/world").json()["tick"]
+    r = c.post("/tick/batch", params={"count": 100})
+    assert r.status_code == 200
+    b = r.json()
+    assert b.get("ok") is True
+    assert b.get("advanced") == 100
+    assert b.get("tick_start") == t0
+    assert b.get("tick") == t0 + 100
+
+
+def test_tick_batch_400_when_count_over_cap() -> None:
+    c = TestClient(app)
+    r = c.post("/tick/batch", params={"count": 99_999})
+    assert r.status_code == 400
+
+
 def test_p2p_trade_via_http() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"seed": 57})

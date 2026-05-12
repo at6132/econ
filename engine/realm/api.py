@@ -145,6 +145,26 @@ def post_tick() -> dict:
     return {"ok": True, "tick": _world.tick}
 
 
+# Solo pacing: one game-week is 7 × 1440 ticks; batch avoids 10k sequential HTTP round-trips in dev.
+_TICK_BATCH_MAX = 21_600  # 15 game-days cap (dev / automation guardrail)
+
+
+@app.post("/tick/batch")
+def post_tick_batch(count: Annotated[int, Query()] = 1) -> dict:
+    """Advance ``count`` ticks in-process (single request). For long runs, prefer this over ``/tick`` spam."""
+    if count < 1:
+        raise HTTPException(status_code=400, detail="count must be >= 1")
+    if count > _TICK_BATCH_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"count must be <= {_TICK_BATCH_MAX} (use multiple calls for longer runs)",
+        )
+    t0 = _world.tick
+    for _ in range(count):
+        advance_tick(_world)
+    return {"ok": True, "tick": _world.tick, "advanced": count, "tick_start": t0}
+
+
 @app.get("/llm/status")
 def get_llm_status() -> dict:
     from realm.llm_haiku import default_model, make_client, session_cap_micro_usd
