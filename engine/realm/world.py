@@ -312,13 +312,16 @@ def _seed_tier3_character(world: World, inv: Inventory, scenario_id: str) -> Non
         ad = inv.add(pid, mid, qty)
         if isinstance(ad, MatterErr):
             raise ValueError(ad.reason)
-    world.llm_agents[str(pid)] = {
+    blob: dict[str, object] = {
         "display_name": persona.display_name,
         "system_prompt": persona.system_prompt,
         "memory_summary": opening_memory(scenario_id, persona.display_name),
         "last_plan_tick": -10**9,
         "scenario_spawn": scenario_id,
     }
+    if scenario_id == "genesis":
+        blob["genesis_opener_sent"] = False
+    world.llm_agents[str(pid)] = blob
 
 
 def _seed_tier2_agents(

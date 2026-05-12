@@ -65,6 +65,11 @@ def _active_on_plot(world: World, plot_id: PlotId) -> bool:
     return any(a.plot_id == plot_id for a in world.active_production)
 
 
+def plot_has_active_production(world: World, plot_id: PlotId) -> bool:
+    """True if any in-flight batch is running on this plot."""
+    return _active_on_plot(world, plot_id)
+
+
 def _labor_bps_for_plot(world: World, party: PartyId, plot_id: PlotId) -> int:
     """Lowest (best for player) labor BPS among buildings on this plot."""
     bps = 10_000

@@ -71,6 +71,22 @@ def _sort_bids(lst: list[BidOrder]) -> None:
     lst.sort(key=lambda o: (-o.max_price_per_unit_cents, o.order_id))
 
 
+def best_resting_ask_cents(world: World, material: MaterialId) -> int | None:
+    """Lowest limit sell price on the book, or None if no asks."""
+    asks = _asks(world, material)
+    if not asks:
+        return None
+    return int(asks[0].price_per_unit_cents)
+
+
+def best_resting_bid_cents(world: World, material: MaterialId) -> int | None:
+    """Highest limit buy price on the book, or None if no bids."""
+    bids = _bids(world, material)
+    if not bids:
+        return None
+    return int(bids[0].max_price_per_unit_cents)
+
+
 def _clean_empty_book(world: World, material: MaterialId) -> None:
     k = str(material)
     if k in world.market_asks_by_material and not world.market_asks_by_material[k]:
