@@ -233,7 +233,7 @@ def bootstrap_genesis(
 
     Settlers: **all** ``settler_count`` parties are funded at tick 0 (no random partial wave).
     Optional ``settler_spawn_cap`` (≥ ``settler_count``) sets ``settler_cap``; when omitted and
-    ``settler_count`` is the default 250, cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (500) so random
+    ``settler_count`` is the default 250, cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (1000) so random
     arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
     """
     from realm.event_log import log_event

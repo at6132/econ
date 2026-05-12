@@ -15,7 +15,7 @@ from realm.world import World
 # Default Genesis solo map: always fund this many settlers at t=0 (no random partial bootstrap).
 GENESIS_DEFAULT_START_SETTLERS = 250
 # After the initial cohort, ``tick_genesis_settler_lifecycle`` may spawn more until this cap (deterministic RNG).
-GENESIS_DEFAULT_MAX_SETTLERS = 500
+GENESIS_DEFAULT_MAX_SETTLERS = 1000
 
 BANKRUPT_CASH_CENTS = 12_000  # $120 — sustained distress
 BANKRUPT_STREAK_TICKS = legacy_scaled(10)
