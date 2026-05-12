@@ -17,6 +17,7 @@ from realm.production import plot_has_active_production
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units
+from realm.terrain import Terrain
 from realm.world import World
 
 _TURNKEY_CENTS: dict[str, int] = {
@@ -59,10 +60,61 @@ def _first_owned_plot(world: World, party: PartyId) -> PlotId | None:
     return None
 
 
-def _pick_settler_line(world: World, plot) -> tuple[str, str] | None:
-    """Return (recipe_id, building_id) for this surveyed plot, or None."""
-    rng = world.rng(f"gen:settler_line:{plot.plot_id}")
-    candidates: list[tuple[float, str]] = []
+def _party_salience_jitter(party: PartyId) -> float:
+    """Deterministic micro-jitter per party (no Python ``hash`` — not stable across processes)."""
+    s = str(party)
+    acc = 0
+    for i, ch in enumerate(s[-10:]):
+        acc += (i + 3) * ord(ch)
+    return (acc % 7919) / 791_900.0
+
+
+def _settler_workshop_counts(world: World) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for b in world.plot_buildings:
+        par = str(b.get("party", ""))
+        if not par.startswith("settler_"):
+            continue
+        bid = str(b.get("building_id", ""))
+        if bid:
+            out[bid] = out.get(bid, 0) + 1
+    return out
+
+
+def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | None:
+    """Weighted line choice — avoids global herd on ``mine_coal`` when subsurface is similar."""
+    rng = world.rng(f"gen:settler_line2:{party}:{plot.plot_id}")
+    counts = _settler_workshop_counts(world)
+    n_strip = int(counts.get("strip_mine", 0))
+    n_yard = int(counts.get("timber_yard", 0))
+    n_row = int(counts.get("grain_row", 0))
+    sal = _party_salience_jitter(party)
+
+    # Terrain pivots: plains/forest can carry food & fiber when strip-mines crowd the ledger.
+    if plot.terrain == Terrain.PLAINS and n_strip >= 9:
+        p_gr = min(0.86, 0.26 + (n_strip - 9) * 0.03)
+        if recipe_allowed_on_terrain(plot.terrain, "grow_grain") and rng.random() < p_gr:
+            return ("grow_grain", "grain_row")
+    if plot.terrain == Terrain.FOREST and n_strip >= 8:
+        p_ch = min(0.86, 0.24 + (n_strip - 8) * 0.03)
+        if recipe_allowed_on_terrain(plot.terrain, "chop_timber") and rng.random() < p_ch:
+            return ("chop_timber", "timber_yard")
+
+    # Late claimers see a crowded strip-mine field — push primary-sector diversity.
+    if n_strip >= 8:
+        p_divert = min(0.92, 0.14 + (n_strip - 8) * 0.026)
+        early: list[tuple[str, str, float]] = []
+        if recipe_allowed_on_terrain(plot.terrain, "chop_timber"):
+            early.append(("chop_timber", "timber_yard", 0.62 + sal))
+        if recipe_allowed_on_terrain(plot.terrain, "grow_grain"):
+            early.append(("grow_grain", "grain_row", 0.58 + sal))
+        if early and rng.random() < p_divert:
+            wts = [x[2] for x in early]
+            pick = rng.choices(early, weights=wts, k=1)[0]
+            return (pick[0], pick[1])
+
+    opts: list[tuple[str, str, float]] = []
+
     for rid, fld in (
         ("mine_coal", "coal_grade"),
         ("mine_iron_ore", "iron_ore_grade"),
@@ -77,17 +129,39 @@ def _pick_settler_line(world: World, plot) -> tuple[str, str] | None:
         if not subsurface_allows_recipe(plot, recipe):
             continue
         g = float(getattr(plot.subsurface, fld, 0.0))
-        candidates.append((g + rng.random() * 1e-6, rid))
-    if candidates:
-        candidates.sort(key=lambda t: -t[0])
-        return (candidates[0][1], "strip_mine")
+        w = g + sal
+        if rid == "mine_coal":
+            w -= min(1.05, n_strip * 0.024)
+        if w > 0.035:
+            opts.append((rid, "strip_mine", w))
+
     if recipe_allowed_on_terrain(plot.terrain, "mine_stone"):
-        return ("mine_stone", "strip_mine")
+        w = 0.34 + sal - min(0.28, n_strip * 0.005)
+        opts.append(("mine_stone", "strip_mine", max(0.06, w)))
+
     if recipe_allowed_on_terrain(plot.terrain, "chop_timber"):
-        return ("chop_timber", "timber_yard")
+        w = 0.42 + sal + 0.08 * max(0.0, (n_yard + 6) - n_strip * 0.22)
+        opts.append(("chop_timber", "timber_yard", w))
+
     if recipe_allowed_on_terrain(plot.terrain, "grow_grain"):
-        return ("grow_grain", "grain_row")
-    return None
+        w = 0.38 + sal + 0.07 * max(0.0, (n_row + 4) - n_strip * 0.2)
+        opts.append(("grow_grain", "grain_row", w))
+
+    strip_non_coal = [(a, b, c) for a, b, c in opts if b == "strip_mine" and a != "mine_coal"]
+    if n_strip >= 10 and strip_non_coal:
+        p_nc = min(0.88, 0.2 + (n_strip - 10) * 0.026)
+        if rng.random() < p_nc:
+            wts_nc = [max(0.02, t[2]) for t in strip_non_coal]
+            pick_nc = rng.choices(strip_non_coal, weights=wts_nc, k=1)[0]
+            return (pick_nc[0], pick_nc[1])
+
+    if not opts:
+        return None
+    opts.sort(key=lambda t: -t[2])
+    top = opts[: min(6, len(opts))]
+    weights = [max(0.02, t[2]) for t in top]
+    pick = rng.choices(top, weights=weights, k=1)[0]
+    return (pick[0], pick[1])
 
 
 def _list_price_cents(world: World, material: MaterialId) -> int:
@@ -163,7 +237,7 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
             survey_plot(world, party, owned)
         return
 
-    line = _pick_settler_line(world, plot)
+    line = _pick_settler_line(world, party, plot)
     if line is None:
         return
     recipe_id, building_id = line

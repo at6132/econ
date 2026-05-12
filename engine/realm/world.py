@@ -140,6 +140,8 @@ class World:
     """Party id str → last deployed Lua source (Phase 4 staging; persisted in snapshots)."""
     party_display_names: dict[str, str] = field(default_factory=dict)
     """Optional UI labels keyed by party id str (e.g. Genesis settler personas)."""
+    scenario_state: dict[str, Any] = field(default_factory=dict)
+    """Scenario-scoped scratch (Genesis digest deltas, scripted NPC flags). Persisted in snapshots."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -179,17 +181,17 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     ex = PartyId("genesis_exchange")
     world.parties.add(ex)
     world.reputation[str(ex)] = {"honored": 0, "breached": 0}
-    listings: list[tuple[MaterialId, int, int, str]] = [
-        (MaterialId("grain"), 72, 128, "grain"),
-        (MaterialId("timber"), 28, 96, "timber"),
-        (MaterialId("coal"), 20, 62, "coal"),
-        (MaterialId("electricity"), 36, 52, "electricity"),
+    listings: list[tuple[MaterialId, int, int, int]] = [
+        (MaterialId("grain"), 80_000, 120, 128),
+        (MaterialId("timber"), 50_000, 80, 96),
+        (MaterialId("coal"), 120_000, 140, 62),
+        (MaterialId("electricity"), 100_000, 100, 52),
     ]
-    for mid, qty, price, label in listings:
-        ad = inv.add(ex, mid, qty)
+    for mid, total_add, list_qty, price in listings:
+        ad = inv.add(ex, mid, total_add)
         if isinstance(ad, MatterErr):
             raise ValueError(ad.reason)
-        pr = place_sell_order(world, ex, mid, qty, price)
+        pr = place_sell_order(world, ex, mid, list_qty, price)
         if not pr.get("ok"):
             raise ValueError(str(pr.get("reason")))
     log_event(
