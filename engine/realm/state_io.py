@@ -1,6 +1,6 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``6`` (older rows still load). Nested dict/list values are deep-copied on dump
+Snapshot ``version`` is ``7`` (older rows still load). Nested dict/list values are deep-copied on dump
 so JSON round-trips do not share mutable subgraphs with the live ``World``.
 
 ``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 6
+SNAPSHOT_VERSION = 7
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -150,12 +150,13 @@ def dump_world(world: World) -> dict[str, Any]:
         "scenario_state": copy.deepcopy(dict(world.scenario_state)),
         "use_plot_output_logistics": world.use_plot_output_logistics,
         "plot_output_stock": copy.deepcopy(dict(world.plot_output_stock)),
+        "market_seller_registered": sorted(world.market_seller_registered),
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6):
+    if ver not in (1, 2, 3, 4, 5, 6, 7):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -264,6 +265,8 @@ def load_world(d: dict[str, Any]) -> World:
             continue
         plot_stock[str(pk)] = {str(m): int(q) for m, q in inner.items()}
     use_plot_logistics = bool(d.get("use_plot_output_logistics", False))
+    reg_keys = d.get("market_seller_registered") or []
+    seller_reg: set[str] = {str(x) for x in reg_keys} if isinstance(reg_keys, list) else set()
     world = World(
         seed=seed,
         tick=int(d["tick"]),
@@ -301,6 +304,7 @@ def load_world(d: dict[str, Any]) -> World:
         scenario_state=copy.deepcopy(dict(d.get("scenario_state", {}))),
         use_plot_output_logistics=use_plot_logistics,
         plot_output_stock=plot_stock,
+        market_seller_registered=seller_reg,
     )
     return world
 

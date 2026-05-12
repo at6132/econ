@@ -146,6 +146,8 @@ class World:
     """When True, player outputs and inbound shipments stage on plot-local stock (harvest → party inventory)."""
     plot_output_stock: dict[str, dict[str, int]] = field(default_factory=dict)
     """Per-plot staged materials: plot id str → material id str → qty (not in party inventory yet)."""
+    market_seller_registered: set[str] = field(default_factory=set)
+    """Genesis: composite keys ``party|material`` after one-time clearinghouse seller registration fee is paid."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -180,11 +182,21 @@ def generate_plots(
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
     from realm.event_log import log_event
+    from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
     from realm.markets import place_sell_order
 
     ex = PartyId("genesis_exchange")
     world.parties.add(ex)
     world.reputation[str(ex)] = {"honored": 0, "breached": 0}
+    ex_cash = party_cash_account(ex)
+    world.ledger.ensure_account(ex_cash)
+    trx = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=ex_cash,
+        amount_cents=25_000_000,
+    )
+    if isinstance(trx, MoneyErr):
+        raise ValueError(trx.reason)
     listings: list[tuple[MaterialId, int, int, int]] = [
         (MaterialId("grain"), 80_000, 120, 128),
         (MaterialId("timber"), 50_000, 80, 96),

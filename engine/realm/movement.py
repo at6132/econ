@@ -19,6 +19,18 @@ BASE_SHIP_FEE_CENTS = 100
 PER_TILE_SHIP_CENTS = 50
 TRANSIT_BUFFER_TICKS = 1  # minimum extra ticks after distance
 
+# Unloading / receiving (dock handling): paid when goods are accepted at destination; all parties alike.
+RECEIVING_FEE_BASE_CENTS = 25
+RECEIVING_FEE_EXTRA_PER_CHUNK_CENTS = 1
+RECEIVING_FEE_CHUNK_UNITS = 20  # +1¢ per this many units after the first
+
+
+def receiving_fee_cents(qty: int) -> int:
+    """Deterministic handling fee for a delivered shipment size."""
+    if qty <= 0:
+        return 0
+    return RECEIVING_FEE_BASE_CENTS + max(0, qty - 1) // RECEIVING_FEE_CHUNK_UNITS * RECEIVING_FEE_EXTRA_PER_CHUNK_CENTS
+
 
 def _plot_owned(world: World, party: PartyId, plot_id: PlotId) -> bool:
     p = world.plots.get(plot_id)
@@ -111,6 +123,19 @@ def deliver_transit(world: World) -> None:
         if s.arrive_tick > t:
             keep.append(s)
             continue
+        recv_fee = receiving_fee_cents(s.qty)
+        cash = party_cash_account(s.party)
+        if recv_fee > 0 and world.ledger.balance(cash) < recv_fee:
+            keep.append(s)
+            log_event(
+                world,
+                "ship_deliver_blocked",
+                f"{s.party} could not pay receiving fee {recv_fee}¢ for {s.shipment_id} — shipment held",
+                party=str(s.party),
+                shipment_id=s.shipment_id,
+                receiving_fee_cents=recv_fee,
+            )
+            continue
         if uses_plot_logistics(world, s.party):
             ad = try_add_plot_output(world, s.dest_plot_id, s.party, s.material, s.qty)
         else:
@@ -118,14 +143,30 @@ def deliver_transit(world: World) -> None:
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue
+        if recv_fee > 0:
+            pay_recv = world.ledger.transfer(
+                debit=cash,
+                credit=system_reserve_account(),
+                amount_cents=recv_fee,
+            )
+            if isinstance(pay_recv, MoneyErr):
+                if uses_plot_logistics(world, s.party):
+                    rb = remove_plot_output(world, s.party, s.dest_plot_id, s.material, s.qty)
+                    assert not isinstance(rb, MatterErr)
+                else:
+                    rb2 = world.inventory.remove(s.party, s.material, s.qty)
+                    assert not isinstance(rb2, MatterErr)
+                keep.append(s)
+                continue
         log_event(
             world,
             "ship_deliver",
-            f"Delivered {s.qty}×{s.material} to {s.party} at {s.dest_plot_id}",
+            f"Delivered {s.qty}×{s.material} to {s.party} at {s.dest_plot_id} (receiving {recv_fee}¢)",
             party=str(s.party),
             material=str(s.material),
             qty=s.qty,
             dest_plot_id=str(s.dest_plot_id),
             shipment_id=s.shipment_id,
+            receiving_fee_cents=recv_fee,
         )
     world.in_transit = keep

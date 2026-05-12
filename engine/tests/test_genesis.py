@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from realm.ids import MaterialId, PartyId
+from realm.markets import MARKET_SELLER_REGISTRATION_CENTS
 from realm.ledger import party_cash_account, system_reserve_account
 from realm.tick import advance_tick
 from realm.world import GENESIS_POP_HUB_CASH_CENTS, bootstrap_genesis
@@ -18,6 +19,8 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + 4 * 1_000_000  # settlers
         + 2 * GENESIS_POP_HUB_CASH_CENTS  # pop hubs
         + 88_000  # Tier-3 Margaux (Genesis)
+        + 25_000_000  # genesis_exchange operating cash (from reserve)
+        - 4 * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse registration fees (exchange → reserve)
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
 

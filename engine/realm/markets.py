@@ -18,10 +18,50 @@ from dataclasses import dataclass
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
-from realm.ledger import MoneyErr, market_escrow_account, party_cash_account
+from realm.ledger import MoneyErr, market_escrow_account, party_cash_account, system_reserve_account
 from realm.social import bump_spot_exchange_honored
 from realm.storage_caps import try_add_inventory
 from realm.world import World
+
+# Genesis clearinghouse: one-time seller registration per party+material before first resting ask.
+MARKET_SELLER_REGISTRATION_CENTS = 2_000
+
+
+def _market_seller_registration_key(party: PartyId, material: MaterialId) -> str:
+    return f"{party}|{str(material)}"
+
+
+def ensure_market_seller_registration(world: World, party: PartyId, material: MaterialId) -> dict:
+    """
+    In Genesis, first time a party lists a material on the exchange book they pay a registration fee.
+
+    Returns {ok: True} | {ok: False, reason}.
+    """
+    if world.scenario_id != "genesis":
+        return {"ok": True}
+    key = _market_seller_registration_key(party, material)
+    if key in world.market_seller_registered:
+        return {"ok": True}
+    cash = party_cash_account(party)
+    if world.ledger.balance(cash) < MARKET_SELLER_REGISTRATION_CENTS:
+        return {"ok": False, "reason": "insufficient cash for exchange seller registration"}
+    tr = world.ledger.transfer(
+        debit=cash,
+        credit=system_reserve_account(),
+        amount_cents=MARKET_SELLER_REGISTRATION_CENTS,
+    )
+    if isinstance(tr, MoneyErr):
+        return {"ok": False, "reason": tr.reason}
+    world.market_seller_registered.add(key)
+    log_event(
+        world,
+        "market_seller_register",
+        f"{party} registered as seller of {material} on the exchange clearinghouse",
+        party=str(party),
+        material=str(material),
+        fee_cents=MARKET_SELLER_REGISTRATION_CENTS,
+    )
+    return {"ok": True}
 
 
 @dataclass
@@ -360,6 +400,13 @@ def place_sell_order(
         return {"ok": False, "reason": "invalid qty or price"}
     if min_counterparty_honored < 0:
         return {"ok": False, "reason": "min_counterparty_honored must be non-negative"}
+    if iceberg_display_qty is not None and (
+        iceberg_display_qty < 1 or iceberg_display_qty >= qty
+    ):
+        return {"ok": False, "reason": "iceberg_display_qty must be >= 1 and < qty"}
+    reg = ensure_market_seller_registration(world, party, material)
+    if not reg.get("ok"):
+        return dict(reg)
     if world.inventory.qty(party, material) < qty:
         return {"ok": False, "reason": "insufficient material"}
     rm = world.inventory.remove(party, material, qty)
@@ -369,9 +416,6 @@ def place_sell_order(
     ice_hid = 0
     vis = qty
     if iceberg_display_qty is not None:
-        if iceberg_display_qty < 1 or iceberg_display_qty >= qty:
-            world.inventory.add(party, material, qty)
-            return {"ok": False, "reason": "iceberg_display_qty must be >= 1 and < qty"}
         ice_peak = iceberg_display_qty
         vis = ice_peak
         ice_hid = qty - vis
@@ -655,6 +699,11 @@ def sell_into_bids(
         return {"ok": False, "reason": "max_qty must be positive"}
     if min_buyer_honored < 0:
         return {"ok": False, "reason": "min_buyer_honored must be non-negative"}
+    if world.inventory.qty(seller, material) < 1:
+        return {"ok": False, "reason": "insufficient material"}
+    reg = ensure_market_seller_registration(world, seller, material)
+    if not reg.get("ok"):
+        return dict(reg)
     remaining = max_qty
     received = 0
     seller_cash = party_cash_account(seller)

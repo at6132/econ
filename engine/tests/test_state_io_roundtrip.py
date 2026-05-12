@@ -90,6 +90,7 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     w4 = loads_json(dumps_json(w))
     assert w4.plot_output_stock.get(str(pid2), {}).get("timber") == 11
     assert w4.use_plot_output_logistics is True
+    assert w4.market_seller_registered == w.market_seller_registered
     w.scenario_state["persist_probe"] = {"n": w.tick}
     w3 = loads_json(dumps_json(w))
     assert w3.scenario_state.get("persist_probe", {}).get("n") == w.tick
