@@ -37,6 +37,28 @@ def test_genesis_many_ticks_money_conserved() -> None:
     assert w.ledger.total_cents() == total
 
 
+def test_genesis_settlers_build_workshops_over_time() -> None:
+    w = bootstrap_genesis(seed=5, grid_width=14, grid_height=10, settler_count=10)
+    for _ in range(160):
+        advance_tick(w)
+    workshops = [
+        b
+        for b in w.plot_buildings
+        if str(b.get("party", "")).startswith("settler_")
+        and b.get("building_id") in ("strip_mine", "timber_yard", "grain_row")
+    ]
+    assert len(workshops) >= 3
+
+
+def test_genesis_margaux_script_opener_by_tick_14() -> None:
+    w = bootstrap_genesis(seed=7, grid_width=8, grid_height=6, settler_count=2)
+    for _ in range(15):
+        advance_tick(w)
+    texts = [str(m.get("text", "")).lower() for m in w.npc_messages_to_player]
+    assert any("eastern exchange" in t for t in texts)
+    assert w.llm_agents.get("llm_margaux", {}).get("genesis_opener_sent") is True
+
+
 def test_genesis_subsurface_correlation_mountains_richer_in_iron() -> None:
     """Terrain-correlated rolls bias mountains toward higher iron vs the rest of the grid."""
     from realm.world import generate_plots
