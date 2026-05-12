@@ -147,6 +147,7 @@ def dump_world(world: World) -> dict[str, Any]:
         "llm_session_output_tokens": world.llm_session_output_tokens,
         "deployed_lua_sources": copy.deepcopy(dict(world.deployed_lua_sources)),
         "party_display_names": copy.deepcopy(dict(world.party_display_names)),
+        "scenario_state": copy.deepcopy(dict(world.scenario_state)),
     }
 
 
@@ -288,6 +289,7 @@ def load_world(d: dict[str, Any]) -> World:
         llm_session_output_tokens=int(d.get("llm_session_output_tokens", 0)),
         deployed_lua_sources=copy.deepcopy(dict(d.get("deployed_lua_sources", {}))),
         party_display_names=copy.deepcopy(dict(d.get("party_display_names", {}))),
+        scenario_state=copy.deepcopy(dict(d.get("scenario_state", {}))),
     )
     return world
 

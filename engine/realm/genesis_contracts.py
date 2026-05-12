@@ -33,14 +33,14 @@ def _has_pending_supply(
 def tick_genesis_pop_hub_contracts(world: World) -> None:
     if world.scenario_id != "genesis":
         return
-    if world.tick < 36 or world.tick % 52 != 8:
+    if world.tick < 24 or world.tick % 32 != 4:
         return
     if _POP_HUB_E in world.parties and not _has_pending_supply(
         world, supplier=_PLAYER, buyer=_POP_HUB_E, material=MaterialId("coal")
     ):
         qc = world.inventory.qty(_PLAYER, MaterialId("coal"))
-        if qc >= 8:
-            qty = min(14, max(8, qc // 2))
+        if qc >= 4:
+            qty = min(16, max(4, qc))
             unit = 68
             r = propose_supply_contract(
                 world, _PLAYER, _POP_HUB_E, MaterialId("coal"), qty, qty * unit, 44
@@ -55,8 +55,8 @@ def tick_genesis_pop_hub_contracts(world: World) -> None:
         world, supplier=_PLAYER, buyer=_POP_HUB_W, material=MaterialId("grain")
     ):
         qg = world.inventory.qty(_PLAYER, MaterialId("grain"))
-        if qg >= 10:
-            qty = min(16, max(10, qg // 2))
+        if qg >= 5:
+            qty = min(18, max(5, qg))
             unit = 122
             r = propose_supply_contract(
                 world, _PLAYER, _POP_HUB_W, MaterialId("grain"), qty, qty * unit, 56

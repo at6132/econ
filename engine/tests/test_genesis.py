@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.ids import PartyId
+from realm.ids import MaterialId, PartyId
 from realm.ledger import party_cash_account, system_reserve_account
 from realm.tick import advance_tick
 from realm.world import GENESIS_POP_HUB_CASH_CENTS, bootstrap_genesis
@@ -57,6 +57,39 @@ def test_genesis_margaux_script_opener_by_tick_14() -> None:
     texts = [str(m.get("text", "")).lower() for m in w.npc_messages_to_player]
     assert any("eastern exchange" in t for t in texts)
     assert w.llm_agents.get("llm_margaux", {}).get("genesis_opener_sent") is True
+
+
+def test_genesis_settler_workshop_diversity_not_all_strip_mines() -> None:
+    w = bootstrap_genesis(seed=13, grid_width=22, grid_height=18, settler_count=40)
+    for _ in range(120):
+        advance_tick(w)
+    sm = sum(
+        1
+        for b in w.plot_buildings
+        if str(b.get("party", "")).startswith("settler_") and b.get("building_id") == "strip_mine"
+    )
+    ty = sum(
+        1
+        for b in w.plot_buildings
+        if str(b.get("party", "")).startswith("settler_") and b.get("building_id") == "timber_yard"
+    )
+    gr = sum(
+        1
+        for b in w.plot_buildings
+        if str(b.get("party", "")).startswith("settler_") and b.get("building_id") == "grain_row"
+    )
+    assert sm <= 36, f"expected strip-mine herd softened vs 40 settlers, got {sm}"
+    assert ty + gr >= 10, f"expected timber yards + grain rows, ty={ty} gr={gr}"
+
+
+def test_genesis_coal_asks_return_after_heavy_ticks() -> None:
+    from realm.markets import best_resting_ask_cents
+
+    w = bootstrap_genesis(seed=9, grid_width=12, grid_height=10, settler_count=12)
+    for _ in range(220):
+        advance_tick(w)
+    px = best_resting_ask_cents(w, MaterialId("coal"))
+    assert px is not None
 
 
 def test_genesis_subsurface_correlation_mountains_richer_in_iron() -> None:

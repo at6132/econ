@@ -76,8 +76,9 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     assert len(w2.plot_buildings) == len(w.plot_buildings)
     assert w2.plot_buildings == w.plot_buildings
     assert w2.deployed_lua_sources.get("player") == "return 0\n"
-
-
+    w.scenario_state["persist_probe"] = {"n": w.tick}
+    w3 = loads_json(dumps_json(w))
+    assert w3.scenario_state.get("persist_probe", {}).get("n") == w.tick
 def test_dump_plot_buildings_decoupled_from_live_mutations() -> None:
     """Regression: ``dump_world`` must not alias live ``plot_buildings`` rows."""
     w = bootstrap_by_scenario(seed=3, scenario="frontier")
