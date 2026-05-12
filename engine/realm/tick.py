@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from realm.agents_genesis import tick_genesis_agents
+from realm.genesis_digest import tick_genesis_world_feed
 from realm.agents_tier1 import tick_tier1_agents
 from realm.agents_tier2 import tick_tier2_agents
 from realm.agents_tier3 import tick_tier3_llm_agents
@@ -31,6 +32,8 @@ def advance_tick(world: World) -> None:
         tick_tier2_agents(world)
     tick_tier3_llm_agents(world)
     world.tick += 1
+    if world.scenario_id == "genesis":
+        tick_genesis_world_feed(world)
     tick_supply_contract_breaches(world)
     tick_phase2_financial_contracts(world)
     record_market_snapshot(world)

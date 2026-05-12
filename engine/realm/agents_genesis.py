@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from realm.agents_genesis_settlers import tick_settler_business
 from realm.genesis_contracts import tick_genesis_pop_hub_contracts
-from realm.genesis_digest import tick_genesis_world_feed
 from realm.genesis_exchange_liquidity import tick_genesis_exchange_quoting
 from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
@@ -82,4 +81,3 @@ def tick_genesis_agents(world: World) -> None:
     tick_genesis_margaux_scripts(world)
     tick_genesis_pop_hub_contracts(world)
     tick_genesis_exchange_quoting(world)
-    tick_genesis_world_feed(world)

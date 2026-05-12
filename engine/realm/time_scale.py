@@ -16,8 +16,8 @@ TICKS_PER_GAME_DAY: Final[int] = 1440
 LEGACY_TICK_MULTIPLIER: Final[int] = 60
 
 # Construction: cash/materials commit immediately; structure becomes usable after this many ticks.
-BUILD_SIMPLE_TICKS: Final[int] = 120  # 2 hours — sheds, stockades
-BUILD_CONTRACTED_TICKS: Final[int] = 360  # 6 hours — workshops / contracted shells
+BUILD_SIMPLE_TICKS: Final[int] = 60  # 1 hour — sheds, stockades
+BUILD_CONTRACTED_TICKS: Final[int] = 180  # 3 hours — workshops / contracted shells
 
 # Shipping: Manhattan distance × per-tile minutes + base handling.
 TRANSIT_TICKS_PER_TILE: Final[int] = 15

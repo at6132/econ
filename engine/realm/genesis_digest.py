@@ -52,7 +52,8 @@ def tick_genesis_world_feed(world: World) -> None:
     if world.scenario_id != "genesis":
         return
     interval = GENESIS_DIGEST_INTERVAL_TICKS
-    if world.tick < 1 or world.tick % interval != 0:
+    # Runs from ``tick.advance_tick`` **after** ``world.tick += 1`` so cadence matches displayed clock.
+    if world.tick % interval != 0:
         return
     gst = _genesis_st(world)
     prev: dict[str, Any] = dict(gst.get("digest_prev", {}) or {})
@@ -78,6 +79,11 @@ def tick_genesis_world_feed(world: World) -> None:
     headlines: list[str] = []
 
     n_settlers = _settler_party_count(world)
+    if not prev:
+        headlines.append(
+            f"Genesis digest opened t{world.tick}: {n_settlers} settler parties; "
+            f"{total_mines} strip-mines (settler {sm}, player {pm})."
+        )
     prev_pop = int(prev.get("settler_count", n_settlers))
     if n_settlers != prev_pop:
         headlines.append(

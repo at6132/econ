@@ -88,6 +88,9 @@ _FALLBACK_LIST_CENTS: dict[str, int] = {
     "pottery": 90,
 }
 
+# Claim → survey → build → … can span many logical steps; chain several per tick until blocked.
+SETTLER_PIPELINE_BURST = 16
+
 
 def _plots_manhattan_order(world: World) -> list[PlotId]:
     if not world.plots:
@@ -494,32 +497,37 @@ def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_un
     place_sell_order(world, party, mid, min(q, max_units), px)
 
 
-def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
+def _settler_pipeline_step(
+    world: World, party: PartyId, scan: list[PlotId], *, allow_secondary: bool
+) -> bool:
+    """One settler micro-step; return True if we should try another step this same tick."""
     owned = _first_owned_plot(world, party)
     if owned is None:
         for pid in scan:
             plot = world.plots[pid]
             if plot.owner is None:
                 claim_plot(world, party, pid)
-                break
-        return
+                return True
+        return False
 
     plot = world.plots[owned]
     if not plot.surveyed:
         cash = world.ledger.balance(party_cash_account(party))
         if cash >= SURVEY_COST_CENTS:
             survey_plot(world, party, owned)
-        return
+            return True
+        return False
 
     line = _pick_settler_line(world, party, plot)
     if line is None:
-        return
+        return False
     _recipe_id, building_id = line
     if not _ensure_workshop(world, party, owned, building_id):
-        return
+        return False
 
-    rng_sec = world.rng(f"gen:secondary:{party}:{world.tick}")
-    _maybe_build_secondary_workshop(world, party, owned, plot, rng=rng_sec)
+    if allow_secondary:
+        rng_sec = world.rng(f"gen:secondary:{party}:{world.tick}")
+        _maybe_build_secondary_workshop(world, party, owned, plot, rng=rng_sec)
 
     _liquidate_settler_stockpiles(world, party)
 
@@ -529,16 +537,17 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
         if recipe:
             for out_m in recipe.outputs:
                 hq = party_material_held(world, party, out_m)
-                # Single-unit batches (e.g. mine_coal → 1 coal) never reach hq≥2; list ≥1 so the book fills.
                 if hq >= 1:
                     _settler_sell_material(world, party, out_m, min(hq, 30))
-        return
+        return False
 
     chosen_rid = _pick_recipe_to_start(world, party, plot, owned)
     if not chosen_rid:
-        return
+        return False
     _ensure_recipe_inputs(world, party, chosen_rid, staging_plot_id=owned)
-    start_production_on_plot(world, party, owned, chosen_rid)
+    r = start_production_on_plot(world, party, owned, chosen_rid)
+    if not r.get("ok"):
+        return False
 
     recipe = RECIPES.get(chosen_rid)
     if recipe:
@@ -546,6 +555,16 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
             hq = party_material_held(world, party, out_m)
             if hq >= 1:
                 _settler_sell_material(world, party, out_m, min(hq, 24))
+    return True
+
+
+def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
+    for burst_i in range(SETTLER_PIPELINE_BURST):
+        progressed = _settler_pipeline_step(
+            world, party, scan, allow_secondary=(burst_i == 0)
+        )
+        if not progressed:
+            break
 
 
 def tick_settler_business(world: World) -> None:
@@ -554,5 +573,8 @@ def tick_settler_business(world: World) -> None:
     scan = _plots_manhattan_order(world)
     dry_scan = [pid for pid in scan if terrain_allows_workshop(world.plots[pid].terrain)]
     settlers = sorted((p for p in world.parties if str(p).startswith("settler_")), key=str)
-    for party in settlers:
+    rng = world.rng(f"gen:settler_order:{world.tick}")
+    order = settlers.copy()
+    rng.shuffle(order)
+    for party in order:
         _tick_one_settler(world, party, dry_scan)
