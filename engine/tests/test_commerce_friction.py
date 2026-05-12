@@ -52,7 +52,7 @@ def test_delivery_deferred_when_insufficient_cash_for_receiving() -> None:
         tr = w.ledger.transfer(debit=pc, credit=system_reserve_account(), amount_cents=drain)
         assert not isinstance(tr, MoneyErr)
     assert w.ledger.balance(pc) < recv
-    for _ in range(40):
+    for _ in range(55):
         advance_tick(w)
         if any(e.get("kind") == "ship_deliver_blocked" for e in w.event_log[-8:]):
             break

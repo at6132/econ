@@ -142,19 +142,22 @@ def test_survey_http_returns_terrain_and_recipe_ids() -> None:
     c.post("/dev/reset", params={"seed": 1})
     r = c.post("/plots/p-0-0/claim", params={"party": "player"})
     assert r.status_code == 200
+    rs = c.post("/plots/p-0-0/survey", params={"party": "player"})
+    assert rs.status_code == 200
+    assert rs.json().get("terrain") == "plains"
     rb = c.post(
         "/plots/p-0-0/build",
         params={"building_id": "wood_shop", "party": "player", "build_mode": "turnkey"},
     )
     assert rb.status_code == 200
-    r2 = c.post("/plots/p-0-0/survey", params={"party": "player"})
-    assert r2.status_code == 200
-    body = r2.json()
-    assert body.get("ok") is True
-    assert body.get("terrain") == "plains"
-    assert isinstance(body.get("recipe_ids"), list)
-    assert "sawmill" in body["recipe_ids"]
-    assert len(body["recipe_ids"]) >= 3
+    for _ in range(400):
+        c.post("/tick")
+    wj = c.get("/world").json()
+    plot = next(p for p in wj["plots"] if p["id"] == "p-0-0")
+    rids = plot.get("recipe_ids") or []
+    assert isinstance(rids, list)
+    assert "sawmill" in rids
+    assert len(rids) >= 3
 
 
 def test_survey_http_conserves_ledger_total() -> None:
@@ -191,6 +194,7 @@ def test_maintain_http_conserves_ledger_total() -> None:
     rb = c.post("/plots/p-0-0/build", params={"party": "player", "building_id": "watch_hut"})
     assert rb.status_code == 200
     row = next(b for b in api._world.plot_buildings if b.get("building_id") == "watch_hut")
+    row.pop("completes_at_tick", None)
     row["condition_bps"] = 500
     total_before = api._world.ledger.total_cents()
     r = c.post(

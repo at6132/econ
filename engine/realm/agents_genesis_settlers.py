@@ -26,6 +26,7 @@ from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units
+from realm.time_scale import legacy_scaled
 from realm.terrain import Terrain
 from realm.world import ActiveProduction, World
 
@@ -192,7 +193,7 @@ def _maybe_build_secondary_workshop(
     rng: random.Random,
 ) -> None:
     """One add-on workshop per plot — chosen from regional scarcity + terrain/subsurface."""
-    if world.tick < 12:
+    if world.tick < legacy_scaled(12):
         return
     if _has_secondary_on_plot(world, party, plot_id):
         return

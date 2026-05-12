@@ -91,7 +91,7 @@ def test_shipment_delivers_and_conserves_matter() -> None:
     u0 = w.inventory.total_units()
     assert dispatch_shipment(w, PartyId("player"), MaterialId("timber"), 2, a, b)["ok"] is True
     assert w.inventory.total_units() == u0 - 2
-    for _ in range(5):
+    for _ in range(50):
         advance_tick(w)
     assert w.inventory.qty(PartyId("player"), MaterialId("timber")) == 8
 

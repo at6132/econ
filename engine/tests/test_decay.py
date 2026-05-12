@@ -40,6 +40,7 @@ def test_maintenance_fee_is_max_of_floor_and_build_cost_fraction() -> None:
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
     row = next(b for b in w.plot_buildings if b.get("building_id") == "watch_hut")
+    row.pop("completes_at_tick", None)
     base = int(row["cost_cents"])
     expected = max(1_000, base // MAINTENANCE_COST_DIVISOR)
     row["condition_bps"] = 1_000
@@ -55,6 +56,7 @@ def test_maintain_building_restores_condition_and_conserves_ledger_total() -> No
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
     row = next(b for b in w.plot_buildings if b.get("building_id") == "watch_hut")
+    row.pop("completes_at_tick", None)
     iid = str(row["instance_id"])
     row["condition_bps"] = 1_000
     total = w.ledger.total_cents()

@@ -591,7 +591,9 @@ def bootstrap_frontier(
     from realm.market_history import record_market_snapshot
 
     if scenario_id == "archive":
-        world.market_intel_expires_tick = max(world.market_intel_expires_tick, 280)
+        from realm.time_scale import legacy_scaled
+
+        world.market_intel_expires_tick = max(world.market_intel_expires_tick, legacy_scaled(280))
 
     log_event(
         world,
@@ -678,6 +680,7 @@ def world_public_dict(world: World) -> dict:
     }
     from realm.actions import hire_catalog_public
     from realm.intel import FREE_MARKET_HISTORY_TICKS
+    from realm.time_scale import TICKS_PER_GAME_DAY
 
     intel_active = world.tick < world.market_intel_expires_tick
     hist = world.market_history
@@ -689,6 +692,7 @@ def world_public_dict(world: World) -> dict:
     return {
         "seed": world.seed,
         "tick": world.tick,
+        "ticks_per_game_day": TICKS_PER_GAME_DAY,
         "scenario_id": world.scenario_id,
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "market_intel_active": intel_active,

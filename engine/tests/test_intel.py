@@ -27,15 +27,15 @@ def test_purchase_intel_transfers_fee_and_extends_expiry() -> None:
 def test_world_public_full_vs_truncated_market_history() -> None:
     w = bootstrap_frontier(seed=12, grid_width=2, grid_height=2)
     w.market_history = [
-        {"tick": i, "best_asks_cents": {"grain": 120}, "best_bids_cents": {}} for i in range(100)
+        {"tick": i, "best_asks_cents": {"grain": 120}, "best_bids_cents": {}} for i in range(300)
     ]
     w.tick = 500
     w.market_intel_expires_tick = 0
     pub_free = world_public_dict(w)
     assert pub_free["market_intel_active"] is False
-    assert len(pub_free["market_history"]) == FREE_MARKET_HISTORY_TICKS
+    assert len(pub_free["market_history"]) == 160
 
     w.market_intel_expires_tick = 600
     pub_full = world_public_dict(w)
     assert pub_full["market_intel_active"] is True
-    assert len(pub_full["market_history"]) == 100
+    assert len(pub_full["market_history"]) == 160

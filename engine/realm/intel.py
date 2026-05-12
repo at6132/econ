@@ -5,13 +5,15 @@ from __future__ import annotations
 from realm.event_log import log_event
 from realm.ids import PartyId
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.time_scale import TICKS_PER_GAME_DAY
 from realm.world import World
 
-FREE_MARKET_HISTORY_TICKS = 48
+# ~4 in-game hours of best-bid/ask snapshots at one snapshot per tick.
+FREE_MARKET_HISTORY_TICKS = 240
 
 # Without an active subscription, ``world_public_dict`` only exposes the last N snapshots.
 MARKET_INTEL_FEE_CENTS = 25_000  # $250.00
-MARKET_INTEL_EXTEND_TICKS = 500
+MARKET_INTEL_EXTEND_TICKS = 7 * TICKS_PER_GAME_DAY  # one week of in-game minutes
 
 
 def purchase_market_intel(world: World, party: PartyId) -> dict:

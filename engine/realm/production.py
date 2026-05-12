@@ -19,6 +19,7 @@ from realm.recipe_workshops import plot_has_workshop_for_recipe
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
+from realm.time_scale import building_operational
 from realm.world import ActiveProduction, World
 
 # Basis points: share of recipe labor paid out to hired workers (rest + remainder → system reserve).
@@ -83,6 +84,8 @@ def _labor_bps_for_plot(world: World, party: PartyId, plot_id: PlotId) -> int:
     bps = 10_000
     for b in world.plot_buildings:
         if b.get("party") != str(party) or b.get("plot_id") != str(plot_id):
+            continue
+        if not building_operational(b, at_tick=world.tick):
             continue
         if not building_effective_for_bonuses(b):
             continue

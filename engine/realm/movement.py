@@ -1,7 +1,8 @@
 """Goods in transit — Law 3 (time + distance).
 
 Shipping fee (integer cents): ``BASE_SHIP_FEE_CENTS + manhattan(from, to) * PER_TILE_SHIP_CENTS``.
-Paid to ``system:reserve`` on dispatch. Arrival tick uses distance × ``TRANSIT_BUFFER_TICKS`` plus buffer.
+Paid to ``system:reserve`` on dispatch. Arrival tick uses Manhattan distance × ``TRANSIT_TICKS_PER_TILE``
+(game-minutes per tile) plus ``TRANSIT_BASE_TICKS`` handling.
 """
 
 from __future__ import annotations
@@ -13,11 +14,11 @@ from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
 from realm.storage_caps import try_add_inventory
+from realm.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
 from realm.world import InTransit, World
 
 BASE_SHIP_FEE_CENTS = 100
 PER_TILE_SHIP_CENTS = 50
-TRANSIT_BUFFER_TICKS = 1  # minimum extra ticks after distance
 
 # Unloading / receiving (dock handling): paid when goods are accepted at destination; all parties alike.
 RECEIVING_FEE_BASE_CENTS = 25
@@ -87,7 +88,7 @@ def dispatch_shipment(
                 world.inventory.add(party, material, take_inv)
             world.ledger.transfer(debit=system_reserve_account(), credit=cash, amount_cents=fee)
             return {"ok": False, "reason": r2.reason}
-    arrive = world.tick + dist * TRANSIT_BUFFER_TICKS + TRANSIT_BUFFER_TICKS
+    arrive = world.tick + dist * TRANSIT_TICKS_PER_TILE + TRANSIT_BASE_TICKS
     world.next_shipment_seq += 1
     sid = f"ship-{world.next_shipment_seq}"
     world.in_transit.append(

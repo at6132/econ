@@ -8,6 +8,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.markets import best_resting_ask_cents
 from realm.plot_logistics import party_material_held
+from realm.time_scale import legacy_scaled
 from realm.world import World
 
 _PLAYER = PartyId("player")
@@ -40,10 +41,11 @@ def _player_strip_mines(world: World) -> int:
 
 
 def tick_genesis_world_feed(world: World) -> None:
-    """Every ~16 ticks emit digest lines; prefer deltas; always emit a pulse so the feed never goes silent."""
+    """Emit digest lines on a fixed cadence (in-game minutes); prefer deltas; pulse if quiet."""
     if world.scenario_id != "genesis":
         return
-    if world.tick < 1 or world.tick % 16 != 0:
+    interval = legacy_scaled(16)
+    if world.tick < 1 or world.tick % interval != 0:
         return
     gst = _genesis_st(world)
     prev: dict[str, Any] = dict(gst.get("digest_prev", {}) or {})
@@ -74,7 +76,7 @@ def tick_genesis_world_feed(world: World) -> None:
             f"Since last digest: strip-mine count {'+' if d_mines > 0 else ''}{d_mines} "
             f"(now {total_mines}: {sm} settler, {pm} yours; {ty} timber-yards, {gr} grain-rows among settlers)."
         )
-    elif world.tick >= 16:
+    elif world.tick >= interval:
         headlines.append(
             f"Tick {world.tick}: settler workshop mix steady — {total_mines} strip-mines, "
             f"{ty} timber yards, {gr} grain rows (settler-only)."
@@ -93,12 +95,12 @@ def tick_genesis_world_feed(world: World) -> None:
         elif cur is not None and old is not None and cur != old:
             headlines.append(f"{label} best ask moved {old}¢ → {cur}¢.")
 
-    if coal_ask is None and world.tick >= 40:
+    if coal_ask is None and world.tick >= legacy_scaled(40):
         streak = int(gst.get("coal_ask_empty_streak", 0)) + 1
         gst["coal_ask_empty_streak"] = streak
         if streak >= 2 and streak % 2 == 0:
             headlines.append(
-                f"Coal book still empty for {streak * 16} ticks — check exchange relists and hub lifts."
+                f"Coal book still empty for {streak * interval} ticks — check exchange relists and hub lifts."
             )
     else:
         gst["coal_ask_empty_streak"] = 0
@@ -117,7 +119,7 @@ def tick_genesis_world_feed(world: World) -> None:
 
     pqcoal = party_material_held(world, _PLAYER, MaterialId("coal"))
     prev_pc = int(prev.get("player_coal", pqcoal))
-    if pqcoal != prev_pc and world.tick >= 20:
+    if pqcoal != prev_pc and world.tick >= legacy_scaled(20):
         headlines.append(
             f"Your coal (inventory + staged at your plots) moved {prev_pc} → {pqcoal} u "
             "(not counting open sell clips)."

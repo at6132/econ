@@ -9,6 +9,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.time_scale import BUILD_CONTRACTED_TICKS, BUILD_SIMPLE_TICKS
 from realm.world import World
 
 # ``kind``:
@@ -202,6 +203,7 @@ def build_on_plot(
         return {"ok": False, "reason": pay.reason}
     world.next_building_instance_seq += 1
     instance_id = f"b{world.next_building_instance_seq:06d}"
+    completes_at = world.tick + (BUILD_SIMPLE_TICKS if kind == "simple" else BUILD_CONTRACTED_TICKS)
     world.plot_buildings.append(
         {
             "instance_id": instance_id,
@@ -212,6 +214,7 @@ def build_on_plot(
             "label": label,
             "cost_cents": total_cents,
             "build_mode": mode_out,
+            "completes_at_tick": int(completes_at),
         }
     )
     log_event(
@@ -224,4 +227,10 @@ def build_on_plot(
         cost_cents=total_cents,
         build_mode=mode_out,
     )
-    return {"ok": True, "building_id": building_id, "instance_id": instance_id, "build_mode": mode_out}
+    return {
+        "ok": True,
+        "building_id": building_id,
+        "instance_id": instance_id,
+        "build_mode": mode_out,
+        "completes_at_tick": int(completes_at),
+    }

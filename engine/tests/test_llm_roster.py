@@ -24,7 +24,7 @@ def test_cartel_bootstraps_elira_not_margaux() -> None:
 
 def test_archive_intel_tick_boost() -> None:
     w = bootstrap_by_scenario(seed=3, scenario="archive")
-    assert w.market_intel_expires_tick >= 280
+    assert w.market_intel_expires_tick >= 16_800
 
 
 def test_genesis_bootstraps_margaux() -> None:

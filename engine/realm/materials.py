@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Final, Mapping
 
 from realm.ids import MaterialId
+from realm.time_scale import legacy_scaled
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +46,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         780.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=10,
+        spoilage_interval_ticks=legacy_scaled(10),
     ),
     MaterialId("spoiled_grain"): MaterialDef(
         MaterialId("spoiled_grain"), "Spoiled grain", 780.0, "organic"
@@ -74,7 +75,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         500.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=14,
+        spoilage_interval_ticks=legacy_scaled(14),
     ),
     MaterialId("steel_ingot"): MaterialDef(
         MaterialId("steel_ingot"), "Steel ingot", 7850.0, "processed"

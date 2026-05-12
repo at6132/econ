@@ -7,6 +7,7 @@ from typing import Any
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.markets import best_resting_ask_cents
+from realm.time_scale import legacy_scaled
 from realm.world import World
 
 _MARGAUX = PartyId("llm_margaux")
@@ -76,7 +77,7 @@ def tick_genesis_margaux_scripts(world: World) -> None:
         return
     mx = _margaux_st(world)
 
-    if world.tick == 14 and not blob.get("genesis_opener_sent"):
+    if world.tick == legacy_scaled(14) and not blob.get("genesis_opener_sent"):
         _append_margaux(
             world,
             "I see you're on the board — I run the eastern exchange rolls. "
@@ -85,7 +86,7 @@ def tick_genesis_margaux_scripts(world: World) -> None:
         )
         blob["genesis_opener_sent"] = True
 
-    if world.tick == 22 and not mx.get("herd_strip_warned"):
+    if world.tick == legacy_scaled(22) and not mx.get("herd_strip_warned"):
         n = _settler_strip_mine_count(world)
         if n >= 18:
             _append_margaux(
@@ -125,8 +126,9 @@ def tick_genesis_margaux_scripts(world: World) -> None:
             )
         mx["player_workshops_seen"] = sorted(cur)
 
-    if world.tick >= 60 and world.tick % 120 == 0:
-        key = f"flat_book_{world.tick // 120}"
+    period = legacy_scaled(120)
+    if world.tick >= legacy_scaled(60) and world.tick % period == 0:
+        key = f"flat_book_{world.tick // period}"
         if not mx.get(key):
             ca = best_resting_ask_cents(world, MaterialId("coal"))
             has_strip = any(

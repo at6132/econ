@@ -52,7 +52,7 @@ def test_dispatch_draws_from_plot_stash_delivers_to_dest_stash() -> None:
     assert r["ok"] is True
     assert plot_output_qty(w, a, MaterialId("coal")) == 8
     assert w.inventory.qty(PartyId("player"), MaterialId("coal")) == 0
-    for _ in range(40):
+    for _ in range(60):
         if plot_output_qty(w, b, MaterialId("coal")) == 12:
             break
         advance_tick(w)

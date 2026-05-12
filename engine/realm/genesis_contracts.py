@@ -6,6 +6,7 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.plot_logistics import party_material_held
 from realm.social import propose_supply_contract
+from realm.time_scale import legacy_scaled
 from realm.world import World
 
 _PLAYER = PartyId("player")
@@ -44,7 +45,8 @@ def _player_units_visible(world: World, material: MaterialId) -> int:
 def tick_genesis_pop_hub_contracts(world: World) -> None:
     if world.scenario_id != "genesis":
         return
-    if world.tick < 18 or world.tick % 24 != 2:
+    period = legacy_scaled(24)
+    if world.tick < legacy_scaled(18) or world.tick % period != 2:
         return
     if _POP_HUB_E in world.parties and not _has_pending_supply(
         world, supplier=_PLAYER, buyer=_POP_HUB_E, material=MaterialId("coal")
@@ -54,7 +56,7 @@ def tick_genesis_pop_hub_contracts(world: World) -> None:
             qty = min(18, max(3, qc // 2))
             unit = 68
             r = propose_supply_contract(
-                world, _PLAYER, _POP_HUB_E, MaterialId("coal"), qty, qty * unit, 44
+                world, _PLAYER, _POP_HUB_E, MaterialId("coal"), qty, qty * unit, legacy_scaled(44)
             )
             if r.get("ok"):
                 log_event(
@@ -70,7 +72,7 @@ def tick_genesis_pop_hub_contracts(world: World) -> None:
             qty = min(20, max(4, qg // 2))
             unit = 122
             r = propose_supply_contract(
-                world, _PLAYER, _POP_HUB_W, MaterialId("grain"), qty, qty * unit, 56
+                world, _PLAYER, _POP_HUB_W, MaterialId("grain"), qty, qty * unit, legacy_scaled(56)
             )
             if r.get("ok"):
                 log_event(

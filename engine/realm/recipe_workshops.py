@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from realm.decay import building_effective_for_bonuses
 from realm.ids import PartyId, PlotId
+from realm.time_scale import building_operational
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.world import Plot, World
@@ -19,6 +20,8 @@ def plot_has_workshop_for_recipe(world: World, party: PartyId, plot_id: PlotId, 
         if b.get("party") != str(party) or b.get("plot_id") != str(plot_id):
             continue
         if b.get("building_id") != req:
+            continue
+        if not building_operational(b, at_tick=world.tick):
             continue
         if not building_effective_for_bonuses(b):
             continue

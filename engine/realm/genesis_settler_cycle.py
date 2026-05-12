@@ -10,6 +10,7 @@ from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.markets import cancel_all_party_resting_orders
 from realm.plot_logistics import remove_plot_output
 from realm.rng import make_rng
+from realm.time_scale import legacy_scaled
 from realm.world import World
 
 # When ``settler_count`` exceeds this, only a random initial batch is funded at bootstrap; the rest trickle in.
@@ -18,7 +19,7 @@ SETTLER_INITIAL_BATCH_MIN = 18
 SETTLER_INITIAL_BATCH_MAX = 52
 
 BANKRUPT_CASH_CENTS = 12_000  # $120 — sustained distress
-BANKRUPT_STREAK_TICKS = 10
+BANKRUPT_STREAK_TICKS = legacy_scaled(10)
 SPAWN_PROB_PER_TICK = 0.034  # deterministic per-tick draw; ~one arrival every ~30 ticks at cap
 
 

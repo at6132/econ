@@ -90,10 +90,11 @@ def test_service_sub_prepaid_then_expires() -> None:
     w = bootstrap_frontier(seed=66, grid_width=2, grid_height=2)
     provider, sub = PartyId("player"), PartyId("t1_consumer")
     t0 = w.ledger.total_cents()
-    pr = propose_service_sub(w, provider, sub, 400, 2)
+    pr = propose_service_sub(w, provider, sub, 400, 3)
     cid = str(pr["contract_id"])
     assert accept_service_sub(w, sub, cid)["ok"] is True
     assert w.ledger.total_cents() == t0
+    advance_tick(w)
     advance_tick(w)
     advance_tick(w)
     advance_tick(w)

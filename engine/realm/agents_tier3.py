@@ -3,7 +3,7 @@
 Uses Haiku + tools from ``realm.llm_haiku`` when ``ANTHROPIC_API_KEY`` is set; otherwise
 ``tick_tier3_llm_agents`` is a no-op so CI stays deterministic.
 
-Cooldown between planning windows: ``REALM_LLM_COOLDOWN_TICKS`` (default ``24`` ticks).
+Cooldown between planning windows: ``REALM_LLM_COOLDOWN_TICKS`` (default ``1440`` ticks ≈ one game-day).
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ from realm.world import World
 
 def _cooldown_ticks() -> int:
     try:
-        return max(1, int(os.environ.get("REALM_LLM_COOLDOWN_TICKS", "24")))
+        return max(1, int(os.environ.get("REALM_LLM_COOLDOWN_TICKS", "1440")))
     except ValueError:
-        return 24
+        return 1440
 
 
 def _coerce_int(x: Any, default: int = 0) -> int:

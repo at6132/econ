@@ -12,6 +12,31 @@ from realm.terrain import Terrain
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier
 
+
+def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
+    while True:
+        row = next(
+            (
+                b
+                for b in w.plot_buildings
+                if b.get("party") == str(party)
+                and b.get("plot_id") == str(plot_id)
+                and b.get("building_id") == building_id
+            ),
+            None,
+        )
+        assert row is not None
+        ct = row.get("completes_at_tick")
+        if ct is None or w.tick >= int(ct):
+            return
+        advance_tick(w)
+
+
+def _complete_recipe(w, recipe_id: str) -> None:
+    for _ in range(RECIPES[recipe_id].duration_ticks):
+        advance_tick(w)
+
+
 # Recipes authored so sum(inputs) == sum(outputs) in inventory units (Law 1 friendly).
 _PHASE2_UNIT_BALANCED = frozenset(
     {
@@ -56,10 +81,10 @@ def test_mill_flour_run_conserves_player_inventory_units() -> None:
     assert claim_plot(w, player, pid)["ok"] is True
     assert build_on_plot(w, player, pid, "gristmill", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
+    _advance_until_building_ready(w, player, pid, "gristmill")
     u0 = _party_unit_total(w, player)
     assert start_production(w, player, pid, "mill_flour")["ok"] is True
-    for _ in range(3):
-        advance_tick(w)
+    _complete_recipe(w, "mill_flour")
     assert _party_unit_total(w, player) == u0
 
 
@@ -71,10 +96,10 @@ def test_steel_alloy_outputs_match_inputs_units() -> None:
     assert claim_plot(w, player, pid)["ok"] is True
     assert build_on_plot(w, player, pid, "foundry", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
+    _advance_until_building_ready(w, player, pid, "foundry")
     # Bootstrap already has smelt inputs; add one more iron ingot for a steel batch.
     w.inventory.add(player, MaterialId("iron_ingot"), 1)
     u0 = _party_unit_total(w, player)
     assert start_production(w, player, pid, "steel_alloy")["ok"] is True
-    for _ in range(5):
-        advance_tick(w)
+    _complete_recipe(w, "steel_alloy")
     assert _party_unit_total(w, player) == u0
