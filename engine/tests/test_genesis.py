@@ -92,6 +92,27 @@ def test_genesis_coal_asks_return_after_heavy_ticks() -> None:
     assert px is not None
 
 
+def test_genesis_settlers_build_secondary_workshops() -> None:
+    w = bootstrap_genesis(seed=17, grid_width=24, grid_height=20, settler_count=35)
+    for _ in range(220):
+        advance_tick(w)
+    secondary = {
+        "power_shed",
+        "wood_shop",
+        "gristmill",
+        "kiln_shed",
+        "foundry",
+        "stone_works",
+    }
+    n = sum(
+        1
+        for b in w.plot_buildings
+        if str(b.get("party", "")).startswith("settler_")
+        and str(b.get("building_id", "")) in secondary
+    )
+    assert n >= 8, f"expected settlers to add processing workshops, got {n}"
+
+
 def test_genesis_subsurface_correlation_mountains_richer_in_iron() -> None:
     """Terrain-correlated rolls bias mountains toward higher iron vs the rest of the grid."""
     from realm.world import generate_plots
