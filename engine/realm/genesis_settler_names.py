@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 
+from realm.ids import PartyId
 from realm.world import World
 
 _FIRST = (
@@ -61,6 +62,18 @@ NAMES: tuple[str, ...] = tuple(f"{a} {b}" for a in _FIRST for b in _EPITHET) + t
     f"{a} {b}" for a in _EXTRA_FIRST for b in _EXTRA_EPITHET
 )
 assert len(NAMES) == 200
+
+
+def assign_display_name_for_new_settler(world: World, party: PartyId, *, seq: int) -> None:
+    """Pick a display label for a settler spawned after bootstrap (deterministic, avoids dupes when possible)."""
+    used = set(world.party_display_names.values())
+    idx = (int(world.seed) + seq * 7919 + len(world.party_display_names)) % len(NAMES)
+    for k in range(len(NAMES)):
+        cand = NAMES[(idx + k) % len(NAMES)]
+        if cand not in used:
+            world.party_display_names[str(party)] = cand
+            return
+    world.party_display_names[str(party)] = f"Arrival {seq}"
 
 
 def assign_settler_display_names(world: World, *, seed: int) -> None:

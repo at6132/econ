@@ -158,3 +158,34 @@ def test_genesis_subsurface_correlation_mountains_richer_in_iron() -> None:
     ]
     assert len(ir_mountain) > 50 and len(ir_other) > 100
     assert sum(ir_mountain) / len(ir_mountain) > sum(ir_other) / len(ir_other)
+
+
+def test_genesis_stagger_reduces_initial_settler_count() -> None:
+    from realm.genesis_settler_cycle import initial_settler_batch_size
+
+    w = bootstrap_genesis(seed=100, grid_width=20, grid_height=16, settler_count=120)
+    initial, cyc = initial_settler_batch_size(seed=100, settler_count=120)
+    assert cyc is True
+    n_settlers = sum(1 for p in w.parties if str(p).startswith("settler_"))
+    assert n_settlers == initial
+    assert n_settlers < 120
+    gst = w.scenario_state.get("genesis", {})
+    assert gst.get("settler_cap") == 120
+    assert gst.get("settler_cycle_enabled") is True
+
+
+def test_genesis_bankruptcy_retires_settler_after_streak() -> None:
+    from realm.genesis_settler_cycle import BANKRUPT_CASH_CENTS, BANKRUPT_STREAK_TICKS, tick_genesis_settler_lifecycle
+    from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+
+    w = bootstrap_genesis(seed=201, grid_width=10, grid_height=8, settler_count=4)
+    victim = PartyId("settler_001")
+    acct = party_cash_account(victim)
+    drain = max(0, w.ledger.balance(acct) - 1000)
+    tr = w.ledger.transfer(debit=acct, credit=system_reserve_account(), amount_cents=drain)
+    assert not isinstance(tr, MoneyErr)
+    assert w.ledger.balance(acct) < BANKRUPT_CASH_CENTS
+    gst = w.scenario_state.setdefault("genesis", {})
+    gst["broke_ticks"] = {str(victim): BANKRUPT_STREAK_TICKS - 1}
+    tick_genesis_settler_lifecycle(w)
+    assert victim not in w.parties

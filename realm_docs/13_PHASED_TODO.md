@@ -380,6 +380,21 @@
 
 ---
 
+## Governance & macro simulation (near-term backlog)
+
+Genesis today uses a **large system reserve** plus visible top-ups (e.g. hub wallets when low). **Global money supply, inflation/deflation, and monetary governance** are *not* simulated yet; they require a deliberate design pass so they stay compatible with **Law 1 (conservation)** and **Primitive 8 (contracts)** evolution.
+
+Planned follow-ups (no engine commitment until spec’d):
+
+- **Money supply policy** — who may inject or drain system-wide cash, under what rules, with immutable audit trails.
+- **Price-level / inflation coupling** — baskets, wage indices, and regime objectives once market history is rich enough to be meaningful.
+- **Central bank / fiscal agency** — player-run or elected; reserve interest; treasury issuance.
+- **Sovereign debt & default** — callable debt contracts; restructuring and seniority.
+
+Ship **settler bankruptcy / retirement** and **staggered spawns** first (Genesis); macro governance layers come after these loops are stable in playtests.
+
+---
+
 ## Phase 8+ — Long-term roadmap
 
 Beyond Phase 7, possible directions:

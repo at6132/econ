@@ -265,7 +265,10 @@ def bootstrap_genesis(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
-    for i in range(1, settler_count + 1):
+    from realm.genesis_settler_cycle import initial_settler_batch_size
+
+    initial_n, cycle_enabled = initial_settler_batch_size(seed=seed, settler_count=settler_count)
+    for i in range(1, initial_n + 1):
         sid = PartyId(f"settler_{i:03d}")
         world.parties.add(sid)
         world.reputation[str(sid)] = {"honored": 0, "breached": 0}
@@ -278,6 +281,12 @@ def bootstrap_genesis(
         )
         if isinstance(trs, MoneyErr):
             raise ValueError(trs.reason)
+    gst = world.scenario_state.setdefault("genesis", {})
+    gst["settler_cycle_enabled"] = cycle_enabled
+    gst["settler_cap"] = settler_count
+    gst["next_settler_seq"] = initial_n + 1
+    gst["starting_settler_cents"] = starting_cash_cents
+    gst["broke_ticks"] = {}
     for name in ("pop_hub_e", "pop_hub_w"):
         ph = PartyId(name)
         world.parties.add(ph)
@@ -299,7 +308,9 @@ def bootstrap_genesis(
     log_event(
         world,
         "world",
-        f"genesis: {n_plots} plots, {settler_count} settlers, terrain-correlated subsurface, cold-start exchange.",
+        f"genesis: {n_plots} plots, {initial_n}/{settler_count} settlers at boot"
+        + (" (staggered arrivals)" if cycle_enabled else "")
+        + ", terrain-correlated subsurface, cold-start exchange.",
     )
     record_market_snapshot(world)
     world.use_plot_output_logistics = True

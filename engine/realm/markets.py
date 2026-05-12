@@ -599,6 +599,14 @@ def cancel_party_bids_for_material(world: World, party: PartyId, material: Mater
     return n
 
 
+def cancel_all_party_resting_orders(world: World, party: PartyId) -> None:
+    """Cancel all resting asks and bids for ``party`` (e.g. bankruptcy / retirement cleanup)."""
+    for key in list(world.market_asks_by_material.keys()):
+        cancel_party_asks_for_material(world, party, MaterialId(key))
+    for key in list(world.market_bids_by_material.keys()):
+        cancel_party_bids_for_material(world, party, MaterialId(key))
+
+
 def market_buy(
     world: World,
     buyer: PartyId,
