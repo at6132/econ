@@ -151,6 +151,15 @@ def test_genesis_margaux_opener_mirrors_to_world_feed() -> None:
     assert any("Margaux" in str(e.get("message", "")) for e in msgs), "expected Margaux line on public feed"
 
 
+def test_genesis_margaux_aux_poll_runs_cleanly_over_multi_day() -> None:
+    """Auxiliary beats poll every 120 ticks; long sim should not error and may add lines beyond opener."""
+    w = bootstrap_genesis(seed=21, grid_width=10, grid_height=8, settler_count=24)
+    for _ in range(4000):
+        advance_tick(w)
+    texts = [m.get("text", "") for m in w.npc_messages_to_player if m.get("from_party") == "llm_margaux"]
+    assert len(texts) >= 1
+
+
 def test_genesis_supply_contract_triggers_with_listed_coal() -> None:
     from realm.inventory import MatterErr
     from realm.markets import place_sell_order
