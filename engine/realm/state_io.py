@@ -22,6 +22,7 @@ from realm.world import (
     ActiveProduction,
     InTransit,
     SubsurfaceRoll,
+    SurveyReport,
     World,
     generate_plots,
 )
@@ -169,6 +170,22 @@ def dump_world(world: World) -> dict[str, Any]:
             str(k): {str(kk): int(vv) for kk, vv in v.items()}
             for k, v in world.building_maintenance.items()
         },
+        "survey_reports": {
+            rid: {
+                "report_id": rep.report_id,
+                "plot_id": str(rep.plot_id),
+                "conducted_by": str(rep.conducted_by),
+                "conducted_at_tick": int(rep.conducted_at_tick),
+                "grades": dict(rep.grades),
+                "survey_type": rep.survey_type,
+                "is_deep": bool(rep.is_deep),
+            }
+            for rid, rep in world.survey_reports.items()
+        },
+        "next_report_seq": int(world.next_report_seq),
+        "intel_listings": [copy.deepcopy(row) for row in world.intel_listings],
+        "next_intel_listing_seq": int(world.next_intel_listing_seq),
+        "analytics_purchases": [copy.deepcopy(row) for row in world.analytics_purchases],
     }
 
 
@@ -355,6 +372,28 @@ def load_world(d: dict[str, Any]) -> World:
                 world.building_maintenance[str(k)] = {
                     str(kk): int(vv) for kk, vv in v.items()
                 }
+    raw_reports = d.get("survey_reports") or {}
+    if isinstance(raw_reports, dict):
+        for rid, payload in raw_reports.items():
+            if not isinstance(payload, dict):
+                continue
+            world.survey_reports[str(rid)] = SurveyReport(
+                report_id=str(payload.get("report_id", rid)),
+                plot_id=PlotId(str(payload.get("plot_id", ""))),
+                conducted_by=PartyId(str(payload.get("conducted_by", ""))),
+                conducted_at_tick=int(payload.get("conducted_at_tick", 0)),
+                grades={
+                    str(k): float(v) for k, v in (payload.get("grades") or {}).items()
+                },
+                survey_type=str(payload.get("survey_type", "standard")),
+                is_deep=bool(payload.get("is_deep", False)),
+            )
+    world.next_report_seq = int(d.get("next_report_seq", 0))
+    world.intel_listings = [copy.deepcopy(row) for row in d.get("intel_listings", []) or []]
+    world.next_intel_listing_seq = int(d.get("next_intel_listing_seq", 0))
+    world.analytics_purchases = [
+        copy.deepcopy(row) for row in d.get("analytics_purchases", []) or []
+    ]
     return world
 
 

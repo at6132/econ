@@ -136,6 +136,10 @@ def _complete_deep_survey_job(world: World, job: dict[str, Any]) -> None:
     if plot is None:
         return
     plot.deep_surveyed = True
+    from realm.actions import create_survey_report
+
+    if party_s:
+        create_survey_report(world, PartyId(party_s), plot_id, is_deep=True)
     grades = {
         "platinum_grade": plot.subsurface.platinum_grade,
         "oil_shale_grade": plot.subsurface.oil_shale_grade,

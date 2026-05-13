@@ -8,12 +8,16 @@ from typing import Annotated
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from realm.actions import (
+    buy_survey_report,
+    cancel_survey_report_listing,
     claim_plot,
     harvest_plot_output_stock,
     hire_catalog_public,
     hire_worker_stub,
+    list_survey_report,
     start_production_on_plot,
     survey_plot,
+    transfer_survey_report,
 )
 from realm.buildings import build_on_plot
 from realm.decay import maintain_building
@@ -40,13 +44,17 @@ from realm.social import (
 )
 from realm.contract_stubs import (
     accept_equity_stub,
+    accept_forward_contract,
     accept_loan_contract,
     accept_service_sub,
+    deliver_forward_contract,
     propose_equity_stub,
+    propose_forward_contract,
     propose_loan_contract,
     propose_service_sub,
     repay_loan_contract,
 )
+from realm.genesis_analytics import purchase_analytics_product
 from realm.schematic import validate_linear_recipe_chain
 from realm.lua_sandbox import eval_user_lua_chunk
 from realm.tick import advance_tick
@@ -932,6 +940,199 @@ def post_contract_honor(contract_id: str) -> dict:
     r = honor_contract_stub(_world, contract_id)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+# ─────────────────── Sprint 4 — Phase A: intelligence market ───────────────────
+
+
+@app.get("/intel/listings")
+def get_intel_listings(party: Annotated[str, Query()] = "player") -> dict:
+    """Active survey-report listings + the requesting party's owned reports."""
+    from realm.world import _intel_listings_public, _player_owned_reports_public
+
+    return {
+        "ok": True,
+        "tick": _world.tick,
+        "listings": _intel_listings_public(_world),
+        "owned_reports": _player_owned_reports_public(_world, PartyId(party)),
+    }
+
+
+@app.post("/intel/list")
+def post_intel_list(
+    party: Annotated[str, Query()],
+    report_id: Annotated[str, Query()],
+    ask_price_cents: Annotated[int, Query()],
+) -> dict:
+    r = list_survey_report(_world, PartyId(party), report_id, ask_price_cents)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/intel/cancel")
+def post_intel_cancel(
+    party: Annotated[str, Query()],
+    listing_id: Annotated[str, Query()],
+) -> dict:
+    r = cancel_survey_report_listing(_world, PartyId(party), listing_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/intel/buy")
+def post_intel_buy(
+    party: Annotated[str, Query()],
+    listing_id: Annotated[str, Query()],
+) -> dict:
+    r = buy_survey_report(_world, PartyId(party), listing_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/intel/transfer")
+def post_intel_transfer(
+    from_party: Annotated[str, Query()],
+    to_party: Annotated[str, Query()],
+    report_id: Annotated[str, Query()],
+    price_cents: Annotated[int, Query()] = 0,
+) -> dict:
+    r = transfer_survey_report(
+        _world, PartyId(from_party), PartyId(to_party), report_id, price_cents
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+# ─────────────────── Sprint 4 — Phase B: analytics products ───────────────────
+
+
+@app.post("/analytics/purchase")
+def post_analytics_purchase(body: Annotated[dict, Body()]) -> dict:
+    party_raw = body.get("party", "player")
+    product = body.get("product")
+    params = body.get("params") or {}
+    if not isinstance(product, str):
+        raise HTTPException(status_code=400, detail="missing product")
+    if not isinstance(params, dict):
+        raise HTTPException(status_code=400, detail="params must be an object")
+    r = purchase_analytics_product(
+        _world, PartyId(str(party_raw)), product, params
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.get("/analytics/history")
+def get_analytics_history(party: Annotated[str, Query()] = "player") -> dict:
+    rows = [row for row in _world.analytics_purchases if str(row.get("party", "")) == party]
+    return {"ok": True, "purchases": rows[-48:]}
+
+
+# ─────────────────── Sprint 4 — Phase C: forward contracts ───────────────────
+
+
+@app.get("/contracts/forward")
+def get_forward_contracts(party: Annotated[str, Query()] = "player") -> dict:
+    rows: list[dict] = []
+    for c in _world.contracts:
+        if str(c.get("kind", "")) != "forward_contract":
+            continue
+        if (
+            str(c.get("seller", "")) != party
+            and str(c.get("buyer", "")) != party
+            and party != "*"
+        ):
+            continue
+        rows.append(dict(c))
+    return {"ok": True, "tick": _world.tick, "forwards": rows}
+
+
+@app.post("/contracts/forward/propose")
+def post_contract_forward_propose(
+    seller: Annotated[str, Query()],
+    buyer: Annotated[str, Query()],
+    material: Annotated[str, Query()],
+    qty: Annotated[int, Query()],
+    price_per_unit_cents: Annotated[int, Query()],
+    delivery_tick: Annotated[int, Query()],
+) -> dict:
+    r = propose_forward_contract(
+        _world,
+        PartyId(seller),
+        PartyId(buyer),
+        MaterialId(material),
+        qty,
+        price_per_unit_cents,
+        delivery_tick,
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/contracts/forward/{contract_id}/accept")
+def post_contract_forward_accept(
+    contract_id: str,
+    buyer: Annotated[str, Query()],
+) -> dict:
+    r = accept_forward_contract(_world, PartyId(buyer), contract_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/contracts/forward/{contract_id}/deliver")
+def post_contract_forward_deliver(
+    contract_id: str,
+    seller: Annotated[str, Query()],
+) -> dict:
+    r = deliver_forward_contract(_world, PartyId(seller), contract_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+# ─────────────────── Sprint 4 — Phase D: price alerts ───────────────────
+
+
+@app.get("/alerts/price")
+def get_price_alerts(party: Annotated[str, Query()] = "player") -> dict:
+    alerts = list(_world.scenario_state.get("player_price_alerts") or [])
+    return {"ok": True, "alerts": alerts}
+
+
+@app.post("/alerts/price")
+def post_price_alert(body: Annotated[dict, Body()]) -> dict:
+    from realm.price_alerts import add_price_alert
+
+    material = body.get("material")
+    condition = body.get("condition")
+    threshold = body.get("threshold") or body.get("threshold_cents")
+    if not isinstance(material, str) or not material:
+        raise HTTPException(status_code=400, detail="material is required")
+    if condition not in ("below", "above"):
+        raise HTTPException(status_code=400, detail="condition must be 'below' or 'above'")
+    if not isinstance(threshold, int) or threshold <= 0:
+        raise HTTPException(status_code=400, detail="threshold must be a positive integer (cents)")
+    r = add_price_alert(_world, material, condition, threshold)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.delete("/alerts/price/{alert_id}")
+def delete_price_alert(alert_id: str) -> dict:
+    from realm.price_alerts import remove_price_alert
+
+    r = remove_price_alert(_world, alert_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return dict(r)
 
 

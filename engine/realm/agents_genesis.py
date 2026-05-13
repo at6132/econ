@@ -11,8 +11,13 @@ from realm.genesis_exchange_liquidity import tick_genesis_exchange_quoting
 from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
 from realm.genesis_pricing import hub_max_bid_cents
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
+from realm.genesis_broker import tick_survey_broker
 from realm.genesis_consolidator import tick_consolidator
 from realm.genesis_energy import tick_npc_energy
+from realm.genesis_forwards import (
+    tick_consolidator_forward_proposals,
+    tick_settler_forward_proposals,
+)
 from realm.genesis_shippers import tick_npc_shippers
 from realm.labor import tick_labor_migration, tick_labor_transport_arrivals
 from realm.settler_upgrades import tick_settler_margin_review
@@ -114,6 +119,9 @@ def tick_genesis_agents(world: World) -> None:
     tick_settler_tender_bidding(world)
     tick_tender_lifecycle(world)
     tick_consolidator(world)
+    tick_survey_broker(world)
+    tick_consolidator_forward_proposals(world)
+    tick_settler_forward_proposals(world)
     tick_labor_transport_arrivals(world)
     tick_labor_migration(world)
     tick_population_demands(world)

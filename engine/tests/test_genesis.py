@@ -26,6 +26,14 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     # Sprint 2 adds up to 3 NPC shippers when the world has coastal plots; bootstrap is a
     # no-op when none exist. Count whatever shippers actually got seeded so the assertion
     # tracks `seed_npc_shippers` without re-hardcoding map dependencies.
+    from realm.genesis_analytics import (
+        ANALYTICS_VENDOR_PARTY_ID,
+        ANALYTICS_VENDOR_STARTING_CASH_CENTS,
+    )
+    from realm.genesis_broker import (
+        SURVEY_BROKER_PARTY_ID,
+        SURVEY_BROKER_STARTING_CASH_CENTS,
+    )
     from realm.genesis_consolidator import (
         CONSOLIDATOR_PARTY_ID,
         CONSOLIDATOR_STARTING_CASH_CENTS,
@@ -35,6 +43,8 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
 
     n_shippers = sum(1 for k in w.parties if str(k).startswith("shipper_"))
     n_consolidators = 1 if CONSOLIDATOR_PARTY_ID in w.parties else 0
+    n_brokers = 1 if SURVEY_BROKER_PARTY_ID in w.parties else 0
+    n_analytics = 1 if ANALYTICS_VENDOR_PARTY_ID in w.parties else 0
     n_energy = sum(1 for k in w.parties if k in NPC_ENERGY_IDS)
     reserved_out = (
         1_000_000  # player
@@ -45,6 +55,8 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_shippers * NPC_SHIPPER_STARTING_CASH_CENTS  # Sprint 2 NPC shippers
         + n_consolidators * CONSOLIDATOR_STARTING_CASH_CENTS  # Sprint 2 consolidator
         + n_energy * NPC_ENERGY_STARTING_CASH_CENTS  # Sprint 3 NPC energy
+        + n_brokers * SURVEY_BROKER_STARTING_CASH_CENTS  # Sprint 4 survey broker
+        + n_analytics * ANALYTICS_VENDOR_STARTING_CASH_CENTS  # Sprint 4 analytics vendor
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out

@@ -200,6 +200,26 @@ class Plot:
 
 
 @dataclass
+class SurveyReport:
+    """Tradeable survey document — knowledge as an asset (Sprint 4 — Phase A).
+
+    A standard ``survey_plot`` always reveals the grades to the plot owner.
+    When the action runs, an additional ``SurveyReport`` is created and stored
+    in ``world.survey_reports``; ownership is tracked separately in
+    ``world.scenario_state["report_ownership"]`` so the report can change hands
+    independently of the plot.
+    """
+
+    report_id: str
+    plot_id: PlotId
+    conducted_by: PartyId
+    conducted_at_tick: int
+    grades: dict[str, float]
+    survey_type: str  # "standard" | "deep"
+    is_deep: bool
+
+
+@dataclass
 class World:
     """Authoritative world blob — mutate only through actions / tick pipeline."""
 
@@ -260,9 +280,47 @@ class World:
     ``{"due_at_tick": int, "missed_cycles": int, "efficiency_pct": int}``. Initialised at
     ``build_on_plot`` completion for any building with a ``maintenance_schedule`` in
     ``buildings.BUILDINGS``. Plain buildings without a schedule have no entry."""
+    survey_reports: dict[str, "SurveyReport"] = field(default_factory=dict)
+    """Sprint 4 — Phase A: every survey (standard or deep) creates a tradeable
+    ``SurveyReport`` keyed by ``report_id``. Ownership is tracked in
+    ``scenario_state["report_ownership"]`` so reports can change hands
+    independently of the plot."""
+    next_report_seq: int = 0
+    """Monotonic id generator for ``SurveyReport.report_id`` (format: ``sr-{seq}``)."""
+    intel_listings: list[dict] = field(default_factory=list)
+    """Sprint 4 — Phase A: active intelligence-market listings for survey
+    reports. Each row: ``{"listing_id", "seller", "report_id", "ask_price_cents",
+    "listed_at_tick", "status"}``. Status: ``active`` | ``sold`` | ``cancelled``."""
+    next_intel_listing_seq: int = 0
+    """Monotonic id for intelligence listings (format: ``int-{seq}``)."""
+    analytics_purchases: list[dict] = field(default_factory=list)
+    """Sprint 4 — Phase B: log of analytics products purchased by parties.
+    Each row: ``{"tick", "party", "product", "params", "cost_cents",
+    "summary"}``. UI displays recent purchases under "Past purchases"."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
+
+    def visible_survey_reports_for(self, party: PartyId) -> list["SurveyReport"]:
+        """All survey reports currently owned by ``party`` (Sprint 4 — Phase A).
+
+        The plot's own ``surveyed`` flag is unrelated — owning a report means
+        the holder can see the report's grades for that plot regardless of who
+        owns the plot itself.
+        """
+        ownership = self.scenario_state.get("report_ownership") or {}
+        if not isinstance(ownership, dict):
+            return []
+        target = str(party)
+        out: list[SurveyReport] = []
+        for rid, owner in ownership.items():
+            if str(owner) != target:
+                continue
+            report = self.survey_reports.get(str(rid))
+            if report is not None:
+                out.append(report)
+        out.sort(key=lambda r: r.conducted_at_tick)
+        return out
 
     def can_party_run_recipe(self, party: PartyId, recipe_id: str) -> bool:
         """Backwards-compatible recipe gate.
@@ -547,6 +605,12 @@ def bootstrap_genesis(
     from realm.genesis_consolidator import seed_consolidator
 
     seed_consolidator(world)
+    from realm.genesis_broker import seed_survey_broker
+
+    seed_survey_broker(world)
+    from realm.genesis_analytics import seed_analytics_vendor
+
+    seed_analytics_vendor(world)
     log_event(
         world,
         "world",
@@ -1034,7 +1098,70 @@ def world_public_dict(world: World) -> dict:
         "party_recipe_books": {
             str(k): sorted(v) for k, v in world.party_recipe_books.items()
         },
+        "intel_listings": _intel_listings_public(world),
+        "player_owned_reports": _player_owned_reports_public(world, PartyId("player")),
+        "analytics_purchases": list(world.analytics_purchases[-48:]),
+        "player_price_alerts": list(
+            (world.scenario_state.get("player_price_alerts") or [])
+        ),
+        "forward_contracts": _forward_contracts_public(world, PartyId("player")),
     }
+
+
+def _intel_listings_public(world: "World") -> list[dict]:
+    """Public view of active intelligence-market listings (grades hidden)."""
+    out: list[dict] = []
+    for row in world.intel_listings:
+        if str(row.get("status", "")) != "active":
+            continue
+        rid = str(row.get("report_id", ""))
+        report = world.survey_reports.get(rid)
+        if report is None:
+            continue
+        out.append(
+            {
+                "listing_id": str(row.get("listing_id", "")),
+                "seller": str(row.get("seller", "")),
+                "report_id": rid,
+                "plot_id": str(report.plot_id),
+                "survey_type": report.survey_type,
+                "is_deep": report.is_deep,
+                "conducted_at_tick": int(report.conducted_at_tick),
+                "ask_price_cents": int(row.get("ask_price_cents", 0)),
+                "listed_at_tick": int(row.get("listed_at_tick", 0)),
+            }
+        )
+    return out
+
+
+def _player_owned_reports_public(world: "World", party: PartyId) -> list[dict]:
+    """Public view of reports owned by ``party`` (grades revealed)."""
+    out: list[dict] = []
+    for report in world.visible_survey_reports_for(party):
+        out.append(
+            {
+                "report_id": report.report_id,
+                "plot_id": str(report.plot_id),
+                "conducted_by": str(report.conducted_by),
+                "conducted_at_tick": int(report.conducted_at_tick),
+                "survey_type": report.survey_type,
+                "is_deep": report.is_deep,
+                "grades": dict(report.grades),
+            }
+        )
+    return out
+
+
+def _forward_contracts_public(world: "World", party: PartyId) -> list[dict]:
+    """Forward contracts involving ``party`` as buyer or seller."""
+    out: list[dict] = []
+    for c in world.contracts:
+        if str(c.get("kind", "")) != "forward_contract":
+            continue
+        if str(c.get("seller", "")) != str(party) and str(c.get("buyer", "")) != str(party):
+            continue
+        out.append(dict(c))
+    return out
 
 
 def world_compact_dict(world: World) -> dict[str, Any]:
