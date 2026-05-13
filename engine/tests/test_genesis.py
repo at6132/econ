@@ -38,6 +38,16 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         CONSOLIDATOR_PARTY_ID,
         CONSOLIDATOR_STARTING_CASH_CENTS,
     )
+    from realm.genesis_archetypes import (
+        FINANCIER_PARTY_ID,
+        FINANCIER_STARTING_CASH_CENTS,
+        FLIPPER_PARTY_ID,
+        FLIPPER_STARTING_CASH_CENTS,
+        SHIPPER_PARTY_ID,
+        SHIPPER_STARTING_CASH_CENTS,
+        SPECIALIST_IRON_PARTY_ID,
+        SPECIALIST_TIMBER_PARTY_ID,
+    )
     from realm.genesis_bank import BANK_STARTING_CASH_CENTS, FIRST_BANK_PARTY_ID
     from realm.genesis_energy import NPC_ENERGY_IDS, NPC_ENERGY_STARTING_CASH_CENTS
     from realm.genesis_shippers import NPC_SHIPPER_STARTING_CASH_CENTS
@@ -48,6 +58,14 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_analytics = 1 if ANALYTICS_VENDOR_PARTY_ID in w.parties else 0
     n_energy = sum(1 for k in w.parties if k in NPC_ENERGY_IDS)
     n_banks = 1 if FIRST_BANK_PARTY_ID in w.parties else 0
+    n_specialists = sum(
+        1
+        for pid in (SPECIALIST_IRON_PARTY_ID, SPECIALIST_TIMBER_PARTY_ID)
+        if pid in w.parties
+    )
+    n_flippers = 1 if FLIPPER_PARTY_ID in w.parties else 0
+    n_arch_shippers = 1 if SHIPPER_PARTY_ID in w.parties else 0
+    n_financiers = 1 if FINANCIER_PARTY_ID in w.parties else 0
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
@@ -60,6 +78,10 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_brokers * SURVEY_BROKER_STARTING_CASH_CENTS  # Sprint 4 survey broker
         + n_analytics * ANALYTICS_VENDOR_STARTING_CASH_CENTS  # Sprint 4 analytics vendor
         + n_banks * BANK_STARTING_CASH_CENTS  # Sprint 5 first_bank
+        + n_specialists * 1_000_000  # Sprint 5 Specialists ($10K each working cash)
+        + n_flippers * FLIPPER_STARTING_CASH_CENTS  # Sprint 5 Flipper
+        + n_arch_shippers * SHIPPER_STARTING_CASH_CENTS  # Sprint 5 Cross-Country
+        + n_financiers * FINANCIER_STARTING_CASH_CENTS  # Sprint 5 Meridian
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out

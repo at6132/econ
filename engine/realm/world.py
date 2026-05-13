@@ -691,6 +691,9 @@ def bootstrap_genesis(
     from realm.genesis_bank import seed_first_bank
 
     seed_first_bank(world)
+    from realm.genesis_archetypes import seed_archetype_agents
+
+    seed_archetype_agents(world)
     log_event(
         world,
         "world",

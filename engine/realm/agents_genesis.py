@@ -122,6 +122,9 @@ def tick_genesis_agents(world: World) -> None:
     tick_survey_broker(world)
     tick_consolidator_forward_proposals(world)
     tick_settler_forward_proposals(world)
+    from realm.genesis_archetypes import tick_archetype_agents
+
+    tick_archetype_agents(world)
     tick_labor_transport_arrivals(world)
     tick_labor_migration(world)
     tick_population_demands(world)
