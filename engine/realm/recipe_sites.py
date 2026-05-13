@@ -56,6 +56,28 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "mine_raw_silica": frozenset({T.DESERT, T.PLAINS, T.MOUNTAIN}),
     "hand_mine_sulfur": frozenset({T.SWAMP, T.TUNDRA, T.MOUNTAIN, T.PLAINS}),
     "hand_mine_tin": frozenset({T.MOUNTAIN, T.PLAINS}),
+    # Tier-2 processing (chemical works tolerates plains/desert/mountain; foundry/stone_works inherit Tier-1 terrains).
+    "refine_sulfur": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    "make_sulfuric_acid": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    "refine_saltpeter": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN}),
+    "make_gunpowder": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN}),
+    "smelt_tin": frozenset({T.MOUNTAIN}),
+    "make_bronze": frozenset({T.MOUNTAIN}),
+    "smelt_lead": frozenset({T.MOUNTAIN}),
+    "process_phosphate": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    "fuse_silica": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS}),
+    # Pig iron / cast iron — blast furnace + foundry country.
+    "smelt_pig_iron": frozenset({T.MOUNTAIN}),
+    "cast_iron_pour": frozenset({T.MOUNTAIN}),
+    # Forge press + machine shop + tool workshop — heavy industry, mostly mountain & plains.
+    "forge_pick_head": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "forge_saw_blade": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "forge_drill_bit": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "make_pump_unit": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "make_gear_set": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "assemble_mining_pick": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
+    "assemble_hand_saw": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
+    "assemble_pick_axe": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})

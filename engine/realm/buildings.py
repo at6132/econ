@@ -113,6 +113,46 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"brick": 4, "timber": 2, "coal": 2, "glass": 2},
         "turnkey_total_cents": 110_000,
     },
+    "blast_furnace": {
+        "kind": "contracted",
+        "label": "Blast furnace (large-scale iron smelting, pig iron)",
+        "self_shell_cents": 380_000,
+        "self_contractor_fee_cents": 120_000,
+        "self_materials": {"brick": 24, "stone": 16, "coal": 12, "iron_ingot": 4},
+        "turnkey_total_cents": 680_000,
+    },
+    "chemical_works": {
+        "kind": "contracted",
+        "label": "Chemical works (sulfur, saltpeter, acids, phosphate)",
+        "self_shell_cents": 140_000,
+        "self_contractor_fee_cents": 55_000,
+        "self_materials": {"brick": 12, "stone": 6, "glass": 4, "lumber": 4, "coal": 3},
+        "turnkey_total_cents": 310_000,
+    },
+    "forge_press": {
+        "kind": "contracted",
+        "label": "Forge & press (metal tool components, drill bits)",
+        "self_shell_cents": 120_000,
+        "self_contractor_fee_cents": 45_000,
+        "self_materials": {"brick": 10, "stone": 4, "iron_ingot": 6, "coal": 4},
+        "turnkey_total_cents": 250_000,
+    },
+    "machine_shop": {
+        "kind": "contracted",
+        "label": "Machine shop (pumps, gears, industrial equipment)",
+        "self_shell_cents": 200_000,
+        "self_contractor_fee_cents": 80_000,
+        "self_materials": {"brick": 14, "stone": 6, "iron_ingot": 8, "copper_wire": 4, "coal": 5},
+        "turnkey_total_cents": 480_000,
+    },
+    "tool_workshop": {
+        "kind": "contracted",
+        "label": "Tool workshop (assemble mining picks, saws, axes)",
+        "self_shell_cents": 80_000,
+        "self_contractor_fee_cents": 32_000,
+        "self_materials": {"lumber": 6, "brick": 4, "iron_ingot": 4, "coal": 2},
+        "turnkey_total_cents": 195_000,
+    },
 }
 
 

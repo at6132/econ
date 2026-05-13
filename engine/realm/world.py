@@ -325,6 +325,23 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
         (MaterialId("mining_pick"), 50_000, 200),
         (MaterialId("spade"), 50_000, 200),
         (MaterialId("hand_saw"), 25_000, 100),
+        # Tier-2 raws — moderate stock so settlers can bootstrap chains after discovery.
+        (MaterialId("sulfur_ore"), 800, 60),
+        (MaterialId("saltpeter_ore"), 800, 60),
+        (MaterialId("tin_ore"), 700, 50),
+        (MaterialId("lead_ore"), 700, 50),
+        (MaterialId("phosphate_ore"), 900, 80),
+        (MaterialId("raw_silica"), 1_200, 100),
+        # Processed Tier-2 (turnkey buyers can skip the chemical works for a while).
+        (MaterialId("pig_iron"), 300, 30),
+        (MaterialId("cast_iron"), 200, 20),
+        (MaterialId("bronze_ingot"), 150, 15),
+        (MaterialId("tin_ingot"), 200, 20),
+        (MaterialId("lead_ingot"), 200, 20),
+        # Tool components — small clearing-house presence so tool_workshop is usable on day one.
+        (MaterialId("pick_head"), 300, 30),
+        (MaterialId("saw_blade"), 200, 20),
+        (MaterialId("drill_bit"), 100, 10),
     ]
     for mid, total_add, list_qty in listings:
         ad = inv.add(ex, mid, total_add)

@@ -14,13 +14,22 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     assert w.ledger.total_cents() == 100_000_000_000
     player = party_cash_account(PartyId("player"))
     assert w.ledger.balance(player) == 1_000_000
+    # genesis_exchange now lists Tier-2 raws / processed / tool components alongside the
+    # original staples & tools — count the materials actually registered so the test
+    # tracks bootstrap changes without re-hardcoding the number.
+    n_listed = sum(
+        1
+        for k in w.market_seller_registered
+        if str(k).startswith("genesis_exchange|")
+    )
+    assert n_listed >= 11
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
         + 2 * GENESIS_POP_HUB_CASH_CENTS  # pop hubs
         + 88_000  # Tier-3 Margaux (Genesis)
         + 25_000_000  # genesis_exchange operating cash (from reserve)
-        - 11 * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration (one per listed material)
+        - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
 
