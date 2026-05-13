@@ -113,20 +113,27 @@ def test_claim_cost_scales_with_density() -> None:
         starting_cash_cents=10_000_000,
     )
     hub_coords = [tuple(c) for c in w.scenario_state["pop_hub_coords"].values()]
-    dense_plot: PlotId | None = None
-    frontier_plot: PlotId | None = None
-    for p in w.plots.values():
-        if p.owner is not None:
-            continue
-        if p.terrain in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP):
-            continue
-        nearest = min(abs(p.x - hx) + abs(p.y - hy) for hx, hy in hub_coords)
-        if nearest <= 3 and dense_plot is None:
-            dense_plot = p.plot_id
-        elif nearest >= 60 and frontier_plot is None:
-            frontier_plot = p.plot_id
-        if dense_plot is not None and frontier_plot is not None:
-            break
+    # Find the densest (closest-to-hub) and most-frontier (lowest density) dry
+    # unowned plots. The exact Manhattan distance that counts as "frontier"
+    # depends on map layout (the island Genesis map caps max-to-nearest-hub
+    # around half the diagonal), so we filter by **density** itself — that's
+    # what the claim-cost function actually keys off.
+    density_map: dict[str, float] = w.scenario_state.get("population_density", {})  # type: ignore[assignment]
+    candidates = [
+        p
+        for p in w.plots.values()
+        if p.owner is None and p.terrain not in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP)
+    ]
+    candidates_by_density = sorted(
+        candidates,
+        key=lambda p: density_map.get(str(p.plot_id), 0.0),
+    )
+    dense_plot: PlotId | None = (
+        candidates_by_density[-1].plot_id if candidates_by_density else None
+    )
+    frontier_plot: PlotId | None = (
+        candidates_by_density[0].plot_id if candidates_by_density else None
+    )
     assert dense_plot is not None and frontier_plot is not None
     assert claim_cost_cents_for_plot(w, dense_plot) > claim_cost_cents_for_plot(
         w, frontier_plot
