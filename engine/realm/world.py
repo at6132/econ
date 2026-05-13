@@ -183,6 +183,7 @@ def generate_plots(
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
     from realm.event_log import log_event
+    from realm.genesis_pricing import exchange_ask_cents
     from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
     from realm.markets import place_sell_order
 
@@ -198,17 +199,19 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     )
     if isinstance(trx, MoneyErr):
         raise ValueError(trx.reason)
-    listings: list[tuple[MaterialId, int, int, int]] = [
-        (MaterialId("grain"), 80_000, 120, 128),
-        (MaterialId("timber"), 50_000, 80, 96),
-        (MaterialId("coal"), 500_000, 140, 62),
-        (MaterialId("electricity"), 100_000, 100, 52),
+    # Seed prices come from the same model used by ``tick_genesis_exchange_quoting``
+    # so the cold-start book is consistent with steady-state quotes (no mid-tick price jump).
+    listings: list[tuple[MaterialId, int, int]] = [
+        (MaterialId("grain"), 80_000, 120),
+        (MaterialId("timber"), 50_000, 80),
+        (MaterialId("coal"), 500_000, 140),
+        (MaterialId("electricity"), 100_000, 100),
     ]
-    for mid, total_add, list_qty, price in listings:
+    for mid, total_add, list_qty in listings:
         ad = inv.add(ex, mid, total_add)
         if isinstance(ad, MatterErr):
             raise ValueError(ad.reason)
-        pr = place_sell_order(world, ex, mid, list_qty, price)
+        pr = place_sell_order(world, ex, mid, list_qty, exchange_ask_cents(mid))
         if not pr.get("ok"):
             raise ValueError(str(pr.get("reason")))
     log_event(

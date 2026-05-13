@@ -9,8 +9,9 @@ from realm.actions import SURVEY_COST_CENTS, claim_plot, start_production_on_plo
 from realm.buildings import BUILDINGS, build_on_plot
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.ledger import party_cash_account
+from realm.genesis_pricing import settler_ask_cents
 from realm.markets import (
-    best_resting_ask_cents,
+    best_resting_bid_cents,
     cancel_party_asks_for_material,
     market_buy,
     place_sell_order,
@@ -64,29 +65,6 @@ _PRIMARY_RECIPES = frozenset(
         "grow_grain",
     }
 )
-
-_FALLBACK_LIST_CENTS: dict[str, int] = {
-    "coal": 58,
-    "timber": 90,
-    "grain": 120,
-    "electricity": 50,
-    "stone": 44,
-    "clay": 36,
-    "iron_ore": 72,
-    "copper_ore": 70,
-    "flour": 95,
-    "bread": 140,
-    "brick": 110,
-    "lumber": 125,
-    "rope": 85,
-    "iron_ingot": 420,
-    "copper_ingot": 380,
-    "charcoal": 70,
-    "sand": 55,
-    "limestone": 48,
-    "slag": 25,
-    "pottery": 90,
-}
 
 # Claim → survey → build → … can span many logical steps; chain several per tick until blocked.
 SETTLER_PIPELINE_BURST = 16
@@ -338,12 +316,14 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
 
 
 def _list_price_cents(world: World, material: MaterialId) -> int:
-    """Limit sell price: undercut best resting ask so we win price-time ties vs ``genesis_exchange`` (FIFO at same ¢)."""
-    ba = best_resting_ask_cents(world, material)
-    if ba is not None:
-        # −2¢ beats clearinghouse clips that stack at the same tick (ba−1 still ties at many prices).
-        return max(4, ba - 2)
-    return max(4, _FALLBACK_LIST_CENTS.get(str(material), 40))
+    """
+    Settler ask: cost-basis + margin, capped below the clearinghouse spread.
+
+    Decoupled from ``best_resting_ask`` to avoid anchoring to (and tying) the
+    exchange. See ``genesis_pricing.settler_ask_cents`` for the model.
+    """
+    bid = best_resting_bid_cents(world, material)
+    return settler_ask_cents(world, material, best_resting_bid=bid)
 
 
 def _workshop_cash_buffer(building_id: str) -> int:
