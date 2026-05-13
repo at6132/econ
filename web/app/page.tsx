@@ -105,12 +105,24 @@ type PlotDto = {
   surveyed: boolean;
   /** Sprint 3 — Phase A: True if the plot is within Manhattan-12 of any active power_shed. */
   powered?: boolean;
+  /** Sprint 3 — Phase B.2: population density (0..1) for this plot. */
+  population_density?: number;
+  /** Sprint 3 — Phase B.2: claim cost in cents (scales with density). */
+  claim_cost_cents?: number;
   /** True after a successful deep_survey — exposes Tier-3 grades in ``subsurface``. */
   deep_surveyed?: boolean;
   subsurface?: Record<string, number>;
   /** Surveyed plots: recipe ids the engine allows on this terrain (omitted until surveyed). */
   recipe_ids?: string[];
 };
+
+type ResourceOverlay =
+  | "off"
+  | "population"
+  | "iron_ore_grade"
+  | "coal_grade"
+  | "clay_grade"
+  | "copper_ore_grade";
 
 type RecipeDto = {
   id: string;
@@ -800,6 +812,9 @@ export default function HomePage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [mapZoom, setMapZoom] = useState(MAP_DEFAULT_ZOOM);
   const [mapStyle, setMapStyle] = useState<"terrain" | "satellite" | "political">("terrain");
+  // Sprint 3 — Phase B.4: resource heat-map overlay. Population is always
+  // visible; mineral grades show only for surveyed plots.
+  const [resourceOverlay, setResourceOverlay] = useState<ResourceOverlay>("off");
   const [mapRenderer, setMapRenderer] = useState<"svg" | "pixi">("svg");
   const [mapLegendOpen, setMapLegendOpen] = useState(false);
   const [mapLogisticsMineOnly, setMapLogisticsMineOnly] = useState(false);
@@ -2544,6 +2559,34 @@ export default function HomePage() {
                   </button>
                   <button
                     type="button"
+                    className={`realm-map-toolbar__btn${resourceOverlay !== "off" ? " realm-map-toolbar__btn--on" : ""}`}
+                    aria-pressed={resourceOverlay !== "off"}
+                    title="Cycle resource overlay: off → population density → iron → coal → clay → copper"
+                    onClick={() => {
+                      setResourceOverlay((cur) => {
+                        const order: ResourceOverlay[] = ["off", "population", "iron_ore_grade", "coal_grade", "clay_grade", "copper_ore_grade"];
+                        const idx = order.indexOf(cur);
+                        const next = order[(idx + 1) % order.length];
+                        return next;
+                      });
+                    }}
+                  >
+                    {resourceOverlay === "off"
+                      ? "Heat"
+                      : resourceOverlay === "population"
+                      ? "Pop"
+                      : resourceOverlay === "iron_ore_grade"
+                      ? "Fe"
+                      : resourceOverlay === "coal_grade"
+                      ? "C"
+                      : resourceOverlay === "clay_grade"
+                      ? "Clay"
+                      : resourceOverlay === "copper_ore_grade"
+                      ? "Cu"
+                      : "Heat"}
+                  </button>
+                  <button
+                    type="button"
                     className={`realm-map-toolbar__btn${mapLegendOpen ? " realm-map-toolbar__btn--on" : ""}`}
                     aria-pressed={mapLegendOpen}
                     title="Toggle map legend"
@@ -2649,6 +2692,7 @@ export default function HomePage() {
                             mapAnchor={mapAnchor}
                             ariaLabel={mapAriaLabel}
                             mapStyle={mapStyle}
+                            resourceOverlay={resourceOverlay}
                           />
                         )}
                         <RealmMapShipmentsOverlay

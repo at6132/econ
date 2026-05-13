@@ -55,12 +55,36 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
         return ActionErr(ok=False, reason="unknown plot")
     if plot.owner is not None:
         return ActionErr(ok=False, reason="plot already claimed")
+    # Sprint 3 — Phase B.2: claim fee scales with population density. Frontier
+    # plots (density 0.0) cost nothing; dense plots near pop hubs cost up to
+    # CLAIM_COST_PEAK_CENTS. The cost is sunk to system_reserve.
+    from realm.world import claim_cost_cents_for_plot
+
+    cost = int(claim_cost_cents_for_plot(world, plot_id))
+    if cost > 0:
+        cash = party_cash_account(party)
+        world.ledger.ensure_account(cash)
+        if world.ledger.balance(cash) < cost:
+            return ActionErr(ok=False, reason="insufficient cash for claim fee")
+        tr = world.ledger.transfer(
+            debit=cash, credit=system_reserve_account(), amount_cents=cost
+        )
+        if isinstance(tr, MoneyErr):
+            return ActionErr(ok=False, reason=tr.reason)
     plot.owner = party
     world.parties.add(party)
     from realm.world import ensure_party_recipe_book
 
     ensure_party_recipe_book(world, party)
-    log_event(world, "claim", f"{party} claimed plot {plot_id}", party=str(party), plot_id=str(plot_id))
+    log_event(
+        world,
+        "claim",
+        f"{party} claimed plot {plot_id}"
+        + (f" (paid ${cost / 100:.2f} land fee)" if cost > 0 else ""),
+        party=str(party),
+        plot_id=str(plot_id),
+        cost_cents=cost,
+    )
     return ActionOk(ok=True)
 
 

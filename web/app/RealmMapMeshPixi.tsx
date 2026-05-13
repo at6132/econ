@@ -14,7 +14,17 @@ type PlotDto = {
   owner: string | null;
   surveyed: boolean;
   powered?: boolean;
+  population_density?: number;
+  subsurface?: Record<string, number>;
 };
+
+export type ResourceOverlay =
+  | "off"
+  | "population"
+  | "iron_ore_grade"
+  | "coal_grade"
+  | "clay_grade"
+  | "copper_ore_grade";
 
 export type MapRenderStyle = "terrain" | "satellite" | "political";
 
@@ -67,6 +77,8 @@ type Props = {
   ariaLabel: string;
   mapStyle: MapRenderStyle;
   logisticsScope: "all" | "mine";
+  /** Sprint 3 — Phase B.4: optional resource heat-map overlay. */
+  resourceOverlay?: ResourceOverlay;
 };
 
 export const RealmMapMeshPixi = memo(function RealmMapMeshPixi(props: Props) {
@@ -121,6 +133,7 @@ export const RealmMapMeshPixi = memo(function RealmMapMeshPixi(props: Props) {
           mapAnchor,
           starterPulsePlotIds,
           logisticsScope,
+          resourceOverlay,
         } = pr;
 
         const ordered = [...plots].sort((a, b) => {
@@ -144,6 +157,22 @@ export const RealmMapMeshPixi = memo(function RealmMapMeshPixi(props: Props) {
           g.poly(flat, true).fill({ color: fillHex });
           if (p.powered) {
             g.poly(flat, true).fill({ color: 0xffc870, alpha: 0.08 });
+          }
+          // Sprint 3 — Phase B.4: resource overlay (population always
+          // available; mineral grades only for surveyed plots).
+          if (resourceOverlay && resourceOverlay !== "off") {
+            let value: number | null = null;
+            if (resourceOverlay === "population") {
+              value = typeof p.population_density === "number" ? p.population_density : null;
+            } else if (p.surveyed && p.subsurface) {
+              const v = p.subsurface[resourceOverlay];
+              value = typeof v === "number" ? v : null;
+            }
+            if (value !== null) {
+              const clamped = Math.max(0, Math.min(1, value));
+              const heat = resourceOverlay === "population" ? 0x6ee7ff : 0xff8030;
+              g.poly(flat, true).fill({ color: heat, alpha: 0.45 * clamped });
+            }
           }
           const tint = ownerTintPixi(p.owner);
           if (tint) {

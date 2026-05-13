@@ -80,9 +80,16 @@ def tick_population_demands(world: World) -> None:
         (MaterialId("bread"), 12),
         (MaterialId("charcoal"), 14),
     )
+    hub_coords = world.scenario_state.get("pop_hub_coords") or {}
     for hub in POP_HUBS:
         if hub not in world.parties:
             continue
+        # Sprint 3 — Phase B.3: hubs prefer nearby sellers (5 % effective discount
+        # at the matching layer; actual payment uses the asked price).
+        hxy_raw = hub_coords.get(str(hub))
+        hxy: tuple[int, int] | None = None
+        if isinstance(hxy_raw, (list, tuple)) and len(hxy_raw) == 2:
+            hxy = (int(hxy_raw[0]), int(hxy_raw[1]))
         for mid, clip in basket:
             market_buy(
                 world,
@@ -90,6 +97,7 @@ def tick_population_demands(world: World) -> None:
                 mid,
                 clip,
                 max_price_per_unit_cents=hub_max_bid_cents(mid),
+                prefer_origin=hxy,
             )
 
 

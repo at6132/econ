@@ -19,7 +19,16 @@ from realm.terrain import Terrain
 GENESIS_POP_HUB_CASH_CENTS = 5_000_000  # $50,000 each — aggregate staple demand.
 
 
-def _subsurface_roll(rng: random.Random, terrain: Terrain, *, correlate: bool) -> SubsurfaceRoll:
+def _subsurface_roll(
+    rng: random.Random,
+    terrain: Terrain,
+    *,
+    correlate: bool,
+    seed: int = 0,
+    x: int = 0,
+    y: int = 0,
+    apply_belts: bool = False,
+) -> SubsurfaceRoll:
     """Terrain-correlated subsurface when ``correlate`` (stronger ore under mountains, etc.).
 
     Tier-2 grades are rolled here too (sulfur/saltpeter/tin/lead/phosphate/silica). They are
@@ -84,6 +93,25 @@ def _subsurface_roll(rng: random.Random, terrain: Terrain, *, correlate: bool) -
             pt *= damp
             osh *= damp
             re *= damp
+    if apply_belts:
+        # Sprint 3 — Phase B.1: layered low-frequency noise creates mineral belts.
+        # The bias blends with the iid roll so within a belt the average grade
+        # lands at ~0.55–0.65 while neighbouring tiles still vary plot-to-plot.
+        from realm.geo_clustering import (
+            mineral_bias_clay,
+            mineral_bias_coal,
+            mineral_bias_copper,
+            mineral_bias_iron,
+        )
+
+        bi = mineral_bias_iron(seed, x, y)
+        bc = mineral_bias_coal(seed, x, y)
+        bcl = mineral_bias_clay(seed, x, y)
+        bcu = mineral_bias_copper(seed, x, y)
+        ir = min(1.0, ir * 0.45 + bi * 0.55)
+        co = min(1.0, co * 0.55 + bc * 0.45)
+        cl = min(1.0, cl * 0.55 + bcl * 0.45)
+        cu = min(1.0, cu * 0.55 + bcu * 0.45)
     # Tier-3 rarity gates (cliff most plots to 0 so only a few are interesting).
     pt = pt if pt > 0.97 else 0.0
     osh = osh if osh > 0.95 else 0.0
@@ -261,6 +289,25 @@ def tier1_recipe_ids() -> set[str]:
     return {rid for rid, r in RECIPES.items() if not bool(getattr(r, "requires_discovery", False))}
 
 
+def population_density_for(world: "World", plot_id: PlotId) -> float:
+    """Cached per-plot density in [0, 1]; frontier scenarios return 0.0.
+
+    Sprint 3 — Phase B.2. Density is set up by ``bootstrap_genesis`` based on
+    pop-hub coordinates and read here on demand.
+    """
+    d = (world.scenario_state.get("population_density") or {}).get(str(plot_id))
+    if d is None:
+        return 0.0
+    return float(d)
+
+
+def claim_cost_cents_for_plot(world: "World", plot_id: PlotId) -> int:
+    """How much it costs to claim ``plot_id`` (Sprint 3 — Phase B.2)."""
+    from realm.geo_clustering import claim_cost_cents_from_density
+
+    return claim_cost_cents_from_density(population_density_for(world, plot_id))
+
+
 def ensure_party_recipe_book(world: "World", party: PartyId) -> set[str]:
     """Seed the party's recipe book with Tier-1 recipes if not already present; return the set."""
     key = str(party)
@@ -285,7 +332,15 @@ def generate_plots(
             pid = PlotId(f"p-{x}-{y}")
             rng = make_rng(seed, f"gen:{pid}")
             terrain = terrain_for_cell(seed, x, y)
-            subsurface = _subsurface_roll(rng, terrain, correlate=correlate_subsurface)
+            subsurface = _subsurface_roll(
+                rng,
+                terrain,
+                correlate=correlate_subsurface,
+                seed=seed,
+                x=x,
+                y=y,
+                apply_belts=correlate_subsurface,
+            )
             plots[pid] = Plot(
                 plot_id=pid,
                 x=x,
@@ -446,6 +501,11 @@ def bootstrap_genesis(
     gst["next_settler_seq"] = initial_n + 1
     gst["starting_settler_cents"] = starting_cash_cents
     gst["broke_ticks"] = {}
+    # Pop hubs (anchors for the demand layer + Sprint 3 population density).
+    hub_w = (grid_width // 4, grid_height // 2)
+    hub_e = (3 * grid_width // 4, grid_height // 2)
+    pop_hub_coords = {"pop_hub_w": list(hub_w), "pop_hub_e": list(hub_e)}
+    world.scenario_state["pop_hub_coords"] = pop_hub_coords
     for name in ("pop_hub_e", "pop_hub_w"):
         ph = PartyId(name)
         world.parties.add(ph)
@@ -459,6 +519,13 @@ def bootstrap_genesis(
         )
         if isinstance(trp, MoneyErr):
             raise ValueError(trp.reason)
+    # Sprint 3 — Phase B.2: cache per-plot population density.
+    from realm.geo_clustering import population_density_for_cell
+
+    density_map: dict[str, float] = {}
+    for pid, p in world.plots.items():
+        density_map[str(pid)] = population_density_for_cell(p.x, p.y, [hub_w, hub_e])
+    world.scenario_state["population_density"] = density_map
     from realm.genesis_settler_names import assign_settler_display_names
 
     assign_settler_display_names(world, seed=seed)
@@ -833,8 +900,10 @@ def world_public_dict(world: World) -> dict:
     from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 
     powered_set = ensure_powered_plots_fresh(world)
+    density_map = world.scenario_state.get("population_density") or {}
     plots_out: list[dict] = []
     for p in world.plots.values():
+        density = float(density_map.get(str(p.plot_id), 0.0))
         entry: dict = {
             "id": p.plot_id,
             "x": p.x,
@@ -844,6 +913,8 @@ def world_public_dict(world: World) -> dict:
             "surveyed": p.surveyed,
             "deep_surveyed": getattr(p, "deep_surveyed", False),
             "powered": str(p.plot_id) in powered_set,
+            "population_density": density,
+            "claim_cost_cents": claim_cost_cents_for_plot(world, p.plot_id),
         }
         if p.surveyed:
             sub_view: dict[str, float] = {

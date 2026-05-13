@@ -14,6 +14,7 @@ meet the other's minimum (0 = off).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
@@ -628,6 +629,24 @@ def cancel_all_party_resting_orders(world: World, party: PartyId) -> None:
         cancel_party_bids_for_material(world, party, MaterialId(key))
 
 
+def _seller_home_xy(world: World, seller: PartyId) -> tuple[int, int] | None:
+    """Return the seller's primary plot coordinates (first plot they own).
+
+    Used by the Sprint 3 — Phase B.3 regional preference path. Settlers and
+    NPCs without any owned plot return ``None`` (treated as faraway).
+    """
+    for p in world.plots.values():
+        if p.owner is None:
+            continue
+        if str(p.owner) == str(seller):
+            return (int(p.x), int(p.y))
+    return None
+
+
+LOCAL_BUYER_PREFERENCE_RADIUS_TILES: Final[int] = 20
+LOCAL_BUYER_PREFERENCE_DISCOUNT_BPS: Final[int] = 500  # 5 %
+
+
 def market_buy(
     world: World,
     buyer: PartyId,
@@ -636,6 +655,7 @@ def market_buy(
     *,
     min_seller_honored: int = 0,
     max_price_per_unit_cents: int | None = None,
+    prefer_origin: tuple[int, int] | None = None,
 ) -> dict:
     """
     Aggressive buy: walk asks in ascending price order; pay sellers from buyer cash; deliver goods.
@@ -645,6 +665,13 @@ def market_buy(
 
     When ``max_price_per_unit_cents`` is provided the walker stops at the first ask above that
     ceiling — used by hub pop-buyers to cap willingness-to-pay (``hub_max_bid_cents``).
+
+    ``prefer_origin``: optional ``(x, y)`` for the buyer's location. When set,
+    asks from sellers within :data:`LOCAL_BUYER_PREFERENCE_RADIUS_TILES` of
+    that point are compared as if they were
+    :data:`LOCAL_BUYER_PREFERENCE_DISCOUNT_BPS`/10000 cheaper (Sprint 3 —
+    Phase B.3 regional buyer preference). Actual transfers still use the
+    asked price — only matching priority shifts.
     """
     if max_qty <= 0:
         return {"ok": False, "reason": "max_qty must be positive"}
@@ -663,13 +690,38 @@ def market_buy(
         if not asks:
             break
         idx = None
-        for j, o in enumerate(asks):
-            if (
-                _honored_count(world, o.party) >= min_seller_honored
-                and _honored_count(world, buyer) >= o.min_counterparty_honored
-            ):
-                idx = j
-                break
+        if prefer_origin is None:
+            # Standard ascending-price walk (the original Sprint 1/2 behaviour).
+            for j, o in enumerate(asks):
+                if (
+                    _honored_count(world, o.party) >= min_seller_honored
+                    and _honored_count(world, buyer) >= o.min_counterparty_honored
+                ):
+                    idx = j
+                    break
+        else:
+            # Sprint 3 — Phase B.3: rank by effective_price = ask × (1 - bps) for
+            # nearby sellers. Ties broken by original index (preserves order id).
+            best_eff: int | None = None
+            for j, o in enumerate(asks):
+                if not (
+                    _honored_count(world, o.party) >= min_seller_honored
+                    and _honored_count(world, buyer) >= o.min_counterparty_honored
+                ):
+                    continue
+                home = _seller_home_xy(world, o.party)
+                if home is not None:
+                    d = abs(home[0] - prefer_origin[0]) + abs(home[1] - prefer_origin[1])
+                    is_local = d <= LOCAL_BUYER_PREFERENCE_RADIUS_TILES
+                else:
+                    is_local = False
+                if is_local:
+                    eff = o.price_per_unit_cents * (10_000 - LOCAL_BUYER_PREFERENCE_DISCOUNT_BPS) // 10_000
+                else:
+                    eff = o.price_per_unit_cents
+                if best_eff is None or eff < best_eff:
+                    best_eff = eff
+                    idx = j
         if idx is None:
             break
         o = asks[idx]
