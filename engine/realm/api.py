@@ -36,6 +36,7 @@ from realm.markets import (
 )
 from realm.movement import dispatch_shipment
 from realm.roads import all_roads_public, build_road, set_road_toll
+from realm.supply_signals import all_region_activity, trade_flows_overlay
 from realm.persistence import load_snapshot, save_snapshot
 from realm.social import (
     accept_supply_contract,
@@ -1304,6 +1305,43 @@ def delete_price_alert(alert_id: str) -> dict:
     if not r.get("ok"):
         raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return dict(r)
+
+
+# ─────────────────── Sprint 6 — Phase C: supply chain visibility ───────────────────
+
+
+@app.get("/market/signals")
+def get_market_signals() -> dict:
+    """Aggregated public signals: per-material region activity + trade-flow overlay."""
+    return {
+        "ok": True,
+        "tick": int(_world.tick),
+        "region_activity": all_region_activity(_world),
+        "trade_flows": trade_flows_overlay(_world),
+    }
+
+
+@app.get("/market/routes")
+def get_market_routes() -> dict:
+    """Public route operator registry (Phase C.4 — observable without analytics)."""
+    raw = _world.scenario_state.get("route_operators") or {}
+    out: dict[str, list[dict]] = {}
+    if isinstance(raw, dict):
+        for k, entries in raw.items():
+            if not isinstance(entries, list):
+                continue
+            rows: list[dict] = []
+            for e in entries:
+                if not isinstance(e, dict):
+                    continue
+                rows.append(
+                    {
+                        "operator_party": str(e.get("operator_party") or ""),
+                        "fee_per_tile_cents": int(e.get("fee_per_tile_cents", 0)),
+                    }
+                )
+            out[str(k)] = rows
+    return {"ok": True, "tick": int(_world.tick), "routes": out}
 
 
 # ─────────────────── Sprint 6 — Phase A: roads ───────────────────

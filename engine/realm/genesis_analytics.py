@@ -238,7 +238,13 @@ def _classify_volume(qty: int) -> str:
 def _party_volume_signal(
     world: World, party: str
 ) -> dict[str, Any]:
-    """Categorical volume profile (no exact numbers in the public payload)."""
+    """Categorical volume profile (no exact numbers in the public payload).
+
+    Sprint 6 — Phase C.3: additionally exposes the regions where the target
+    party operates (from its plot ownership) and the routes it has registered
+    as an operator — all of which is *already* public from raw market data,
+    just nicely aggregated here.
+    """
     totals = _party_trade_volume_window(world, party, window_days=PARTY_VOLUME_WINDOW_DAYS)
     profile: list[dict[str, str]] = []
     for mat in sorted(totals.keys()):
@@ -250,10 +256,40 @@ def _party_volume_signal(
             profile.append({"material": mat, "side": "buyer", "signal": _classify_volume(bought)})
         if sold >= SIGNIFICANT_VOLUME_THRESHOLD:
             profile.append({"material": mat, "side": "seller", "signal": _classify_volume(sold)})
+    # Regions where the party has plots.
+    from realm.regions import region_for_plot
+
+    region_counts: dict[str, int] = {}
+    for plot_id, plot in world.plots.items():
+        if plot.owner is None or str(plot.owner) != str(party):
+            continue
+        r = region_for_plot(world, plot_id)
+        if r is None:
+            continue
+        region_counts[r] = region_counts.get(r, 0) + 1
+    regions_sorted = sorted(region_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    regions = [r for r, _ in regions_sorted]
+    # Routes the party operates on.
+    route_ops = world.scenario_state.get("route_operators") or {}
+    route_registrations: list[str] = []
+    if isinstance(route_ops, dict):
+        for route_key_str, entries in route_ops.items():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if str(entry.get("operator_party") or "") != str(party):
+                    continue
+                route_registrations.append(str(route_key_str))
+                break
+        route_registrations.sort()
     return {
         "party": party,
         "window_days": PARTY_VOLUME_WINDOW_DAYS,
         "profile": profile,
+        "regions": regions,
+        "route_registrations": route_registrations,
     }
 
 

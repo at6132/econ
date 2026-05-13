@@ -484,6 +484,11 @@ def place_sell_order(
         price_per_unit_cents=price_per_unit_cents,
         order_id=oid,
     )
+    # Sprint 6 — Phase C.1 Signal 2: anonymous supply concentration warning
+    # when one seller controls > 35% of listed supply for this material.
+    from realm.supply_signals import maybe_emit_supply_concentration
+
+    maybe_emit_supply_concentration(world, material)
     _cross_incoming_ask(world, new_ask)
     return {"ok": True, "order_id": oid}
 
@@ -590,6 +595,18 @@ def place_buy_order(
         max_price_per_unit_cents=max_price_per_unit_cents,
         order_id=oid,
     )
+    # Sprint 6 — Phase C.1 Signal 1: anonymous large-buy detection (≥ threshold
+    # units in a single tick). The buyer is intentionally NOT named.
+    from realm.supply_signals import LARGE_BUY_THRESHOLD_UNITS
+
+    if qty >= LARGE_BUY_THRESHOLD_UNITS:
+        log_event(
+            world,
+            "large_buy_detected",
+            f"An unusual buy order appeared for {material} — {qty} units at once.",
+            material=str(material),
+            qty=int(qty),
+        )
     _cross_incoming_bid(world, bid)
     return {"ok": True, "order_id": oid}
 
