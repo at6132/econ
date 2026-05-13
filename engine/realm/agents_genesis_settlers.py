@@ -102,6 +102,57 @@ def _plots_manhattan_order(world: World) -> list[PlotId]:
     return [p.plot_id for p in ordered]
 
 
+def _world_dimensions(world: World) -> tuple[int, int]:
+    if not world.plots:
+        return (1, 1)
+    max_x = 0
+    max_y = 0
+    for p in world.plots.values():
+        if p.x > max_x:
+            max_x = p.x
+        if p.y > max_y:
+            max_y = p.y
+    return (max_x + 1, max_y + 1)
+
+
+def _settler_home_anchor(world: World, party: PartyId) -> tuple[int, int]:
+    """Deterministic per-party "preferred starting region" — one of four quadrant anchors.
+
+    Without this, every settler would walk the same Manhattan-from-grid-center scan order
+    and pile onto whichever quadrant happens to sit closest to the grid centre. On the
+    Genesis four-islands map that would mean every settler claims the same island and the
+    other three landmasses stay frontier forever, which defeats the regional supply /
+    demand asymmetry the geography is meant to create. Hashing the party id into one of
+    four quadrant-corner anchors spreads settlers across all four quadrants while keeping
+    determinism (Law 9) intact.
+    """
+    w, h = _world_dimensions(world)
+    anchors = (
+        (w // 4, h // 4),
+        (3 * w // 4, h // 4),
+        (w // 4, 3 * h // 4),
+        (3 * w // 4, 3 * h // 4),
+    )
+    s = str(party)
+    acc = 0
+    for ch in s:
+        acc = (acc * 131 + ord(ch)) & 0xFFFFFFFF
+    return anchors[acc % 4]
+
+
+def _scan_from_anchor(world: World, dry_scan: list[PlotId], anchor: tuple[int, int]) -> list[PlotId]:
+    """Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break)."""
+    ax, ay = anchor
+    return sorted(
+        dry_scan,
+        key=lambda pid: (
+            abs(world.plots[pid].x - ax) + abs(world.plots[pid].y - ay),
+            world.plots[pid].x,
+            world.plots[pid].y,
+        ),
+    )
+
+
 def _first_owned_plot(world: World, party: PartyId) -> PlotId | None:
     for pid, pl in world.plots.items():
         if pl.owner == party:
@@ -914,7 +965,10 @@ def _settler_pipeline_step(
     """One settler micro-step; return True if we should try another step this same tick."""
     owned = _first_owned_plot(world, party)
     if owned is None:
-        for pid in scan:
+        # Per-party preferred starting region — see ``_settler_home_anchor`` docstring.
+        # Cheap: only re-sorts the dry scan on the (rare) unowned branch.
+        party_scan = _scan_from_anchor(world, scan, _settler_home_anchor(world, party))
+        for pid in party_scan:
             plot = world.plots[pid]
             if plot.owner is None:
                 claim_plot(world, party, pid)

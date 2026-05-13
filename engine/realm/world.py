@@ -688,6 +688,9 @@ def bootstrap_genesis(
     from realm.genesis_analytics import seed_analytics_vendor
 
     seed_analytics_vendor(world)
+    from realm.genesis_bank import seed_first_bank
+
+    seed_first_bank(world)
     log_event(
         world,
         "world",

@@ -1,4 +1,10 @@
-"""Deterministic biome fields for frontier plot generation (coherent regions, not iid tiles)."""
+"""Deterministic biome fields for frontier plot generation (coherent regions, not iid tiles).
+
+Genesis "four islands" layout (added 2026-05): see :func:`terrain_for_genesis_island_cell`
+and :func:`genesis_island_centers`. Each quadrant of a sufficiently large map holds one
+elliptical landmass with an FBM-wobbled coastline; deep water fills the cross-shaped gap
+between them, forcing inter-island shipping for the demand layer in non-hub islands.
+"""
 
 from __future__ import annotations
 
@@ -66,3 +72,106 @@ def terrain_for_cell(seed: int, x: int, y: int) -> Terrain:
     if heat < 0.28:
         return Terrain.TUNDRA
     return Terrain.PLAINS
+
+
+# ─────────────────── Genesis four-islands layout ───────────────────
+
+# Minimum map size that supports the four-island mask. Below this we fall back
+# to a regular continent map (tests with tiny grids stay valid). Tuned so each
+# island has room for FBM-driven biome variation and a coastline buffer.
+GENESIS_ISLAND_MIN_WIDTH: int = 48
+GENESIS_ISLAND_MIN_HEIGHT: int = 36
+
+# Beach (shallow water) thickness, in units of normalised ellipse distance
+# beyond the island core. d_eff < 1.0 → land; 1.0..1.0+BEACH → shallow; beyond → deep.
+_GENESIS_BEACH_BAND: float = 0.15
+
+# Magnitude of the FBM coastline wobble (in units of normalised ellipse distance).
+# Larger values produce more jagged / "organic" shorelines; smaller values are
+# closer to smooth ellipses. ±0.18 → noticeable bays + peninsulas without ruining
+# island integrity.
+_GENESIS_COAST_WOBBLE: float = 0.18
+
+
+def genesis_island_centers(width: int, height: int) -> list[tuple[int, int]]:
+    """Return the four island centre coordinates (NW, NE, SW, SE) for a w × h map.
+
+    Centres sit at the quadrant midpoints so islands are evenly spaced and the
+    cross-shaped ocean has equal arm length in each direction.
+    """
+    w = max(1, int(width))
+    h = max(1, int(height))
+    return [
+        (w // 4, h // 4),
+        (3 * w // 4, h // 4),
+        (w // 4, 3 * h // 4),
+        (3 * w // 4, 3 * h // 4),
+    ]
+
+
+def genesis_island_radii(width: int, height: int) -> tuple[int, int]:
+    """Half-axes (rx, ry) of each island ellipse for a w × h map.
+
+    Tuned so adjacent islands are separated by a non-trivial ocean gap (~10–14
+    tiles of open water) on the default 96 × 72 grid, while still occupying
+    most of their quadrant. Both axes are >= 1.
+    """
+    w = max(1, int(width))
+    h = max(1, int(height))
+    rx = max(1, w // 6)
+    ry = max(1, h // 6)
+    return (rx, ry)
+
+
+def genesis_island_layout_supported(width: int, height: int) -> bool:
+    """True if the map is big enough for the four-island layout."""
+    return int(width) >= GENESIS_ISLAND_MIN_WIDTH and int(height) >= GENESIS_ISLAND_MIN_HEIGHT
+
+
+def _nearest_island_normalised_distance(
+    x: int, y: int, centers: list[tuple[int, int]], rx: int, ry: int
+) -> float:
+    """Normalised elliptical distance to the closest island centre (0 at centre, 1 at edge)."""
+    rx_f = float(max(1, rx))
+    ry_f = float(max(1, ry))
+    best = float("inf")
+    for cx, cy in centers:
+        dx = (x - cx) / rx_f
+        dy = (y - cy) / ry_f
+        d2 = dx * dx + dy * dy
+        if d2 < best:
+            best = d2
+    return math.sqrt(best)
+
+
+def terrain_for_genesis_island_cell(seed: int, x: int, y: int, width: int, height: int) -> Terrain:
+    """Genesis "four islands" terrain for cell ``(x, y)`` on a ``width × height`` map.
+
+    The world is partitioned into four ellipse-shaped islands (one per quadrant)
+    separated by a cross-shaped ocean. Inside each island we delegate to
+    :func:`terrain_for_cell` for natural biome variation; any water that the
+    inland noise would have produced is coerced to PLAINS so islands feel
+    solidly land. Around each island we emit a ring of WATER_SHALLOW (the
+    "beach") that automatically makes the outer plots coastal. Beyond the beach
+    is WATER_DEEP open ocean.
+
+    Determinism: same ``(seed, x, y, width, height)`` always yields the same
+    terrain (Law 9 — the wobble FBM is seeded with a fixed offset).
+    """
+    centers = genesis_island_centers(width, height)
+    rx, ry = genesis_island_radii(width, height)
+    d = _nearest_island_normalised_distance(x, y, centers, rx, ry)
+    # Coastline wobble centred on 0 (so it can push the shoreline either way).
+    wob = fbm(seed + 911, x * 0.09, y * 0.09, 3) - 0.5
+    d_eff = d + _GENESIS_COAST_WOBBLE * 2.0 * wob
+    if d_eff >= 1.0 + _GENESIS_BEACH_BAND:
+        return Terrain.WATER_DEEP
+    if d_eff >= 1.0:
+        return Terrain.WATER_SHALLOW
+    inland = terrain_for_cell(seed, x, y)
+    if inland in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW):
+        # Keep islands solid; lakes inside the landmass would visually break the
+        # "four islands far apart" intent and would also create tiny isolated
+        # ponds the shipping market cannot meaningfully use.
+        return Terrain.PLAINS
+    return inland
