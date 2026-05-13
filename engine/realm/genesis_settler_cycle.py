@@ -116,6 +116,10 @@ def _retire_party(world: World, party: PartyId, *, reason: str) -> None:
         party=str(party),
         reason=reason,
     )
+    if reason == "bankruptcy":
+        from realm.genesis_feed_hooks import note_genesis_bankruptcy_feed
+
+        note_genesis_bankruptcy_feed(world, party)
 
 
 def _tick_bankruptcies(world: World) -> None:

@@ -141,6 +141,16 @@ def test_genesis_world_feed_emits_on_digest_cadence() -> None:
     assert any(e.get("kind") == "world_feed" for e in w.event_log)
 
 
+def test_genesis_margaux_opener_mirrors_to_world_feed() -> None:
+    from realm.time_scale import legacy_scaled
+
+    w = bootstrap_genesis(seed=303, grid_width=6, grid_height=5, settler_count=2)
+    for _ in range(legacy_scaled(14) + 1):
+        advance_tick(w)
+    msgs = [e for e in w.event_log if e.get("kind") == "world_feed"]
+    assert any("Margaux" in str(e.get("message", "")) for e in msgs), "expected Margaux line on public feed"
+
+
 def test_genesis_supply_contract_triggers_with_listed_coal() -> None:
     from realm.inventory import MatterErr
     from realm.markets import place_sell_order

@@ -1,4 +1,8 @@
-"""Curated Genesis digest headlines (``world_feed``) — delta-first, low churn."""
+"""Curated Genesis digest headlines (``world_feed``) — hourly cadence for macro deltas.
+
+Event-scale headlines (prices, Margaux, bankruptcies, milestones) live in
+``realm.genesis_feed_hooks.tick_genesis_feed_tick_scan`` and related hooks.
+"""
 
 from __future__ import annotations
 
@@ -97,24 +101,6 @@ def tick_genesis_world_feed(world: World) -> None:
             f"Since last digest: strip-mine count {'+' if d_mines > 0 else ''}{d_mines} "
             f"(now {total_mines}: {sm} settler, {pm} yours; {ty} timber-yards, {gr} grain-rows among settlers)."
         )
-    elif world.tick >= interval:
-        headlines.append(
-            f"Tick {world.tick}: settler workshop mix steady — {total_mines} strip-mines, "
-            f"{ty} timber yards, {gr} grain rows (settler-only)."
-        )
-
-    for label, cur, key in (
-        ("Coal", coal_ask, "coal_ask"),
-        ("Grain", grain_ask, "grain_ask"),
-        ("Electricity", elec_ask, "elec_ask"),
-    ):
-        old = prev.get(key)
-        if cur is None and old is not None:
-            headlines.append(f"{label} asks just went empty on the book (was {old}¢).")
-        elif cur is not None and old is None:
-            headlines.append(f"{label} asks returned at {cur}¢.")
-        elif cur is not None and old is not None and cur != old:
-            headlines.append(f"{label} best ask moved {old}¢ → {cur}¢.")
 
     if coal_ask is None and world.tick >= legacy_scaled(40):
         streak = int(gst.get("coal_ask_empty_streak", 0)) + 1

@@ -697,6 +697,16 @@ def market_buy(
         seller=first_seller_str or "",
         sellers=",".join(sorted(seller_parties)) if seller_parties else "",
     )
+    if world.scenario_id == "genesis" and filled > 0:
+        from realm.genesis_feed_hooks import note_genesis_hub_market_buy
+
+        note_genesis_hub_market_buy(
+            world,
+            buyer=buyer,
+            material=material,
+            filled=int(filled),
+            sellers_csv=",".join(sorted(seller_parties)) if seller_parties else "",
+        )
     return {"ok": True, "filled": filled, "spent_cents": spent}
 
 
