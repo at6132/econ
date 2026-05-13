@@ -227,6 +227,11 @@ class World:
     """Per-party set of recipe ids the party has discovered. Tier-1 recipes (``requires_discovery=False``)
     are always runnable regardless of book contents — only ``requires_discovery=True`` recipes need
     membership here. Keys are stringified party ids for stable serialization."""
+    building_maintenance: dict[str, dict[str, int]] = field(default_factory=dict)
+    """Per-building maintenance state, keyed by building instance_id. Values:
+    ``{"due_at_tick": int, "missed_cycles": int, "efficiency_pct": int}``. Initialised at
+    ``build_on_plot`` completion for any building with a ``maintenance_schedule`` in
+    ``buildings.BUILDINGS``. Plain buildings without a schedule have no entry."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -801,6 +806,13 @@ def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
     raise ValueError(f"unknown scenario: {scenario!r}")
 
 
+def _building_maintenance_view(world: World, row: dict) -> dict:
+    """Public DTO for a single building's maintenance state (forwarded to API/UI)."""
+    from realm.decay import building_maintenance_status
+
+    return building_maintenance_status(world, row)
+
+
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
     from realm.buildings import building_catalog_public
@@ -898,7 +910,10 @@ def world_public_dict(world: World) -> dict:
         "contracts": list(world.contracts),
         "event_log": list(world.event_log[-120:]),
         "world_feed_log": list(world.world_feed_log[-1500:]),
-        "plot_buildings": list(world.plot_buildings),
+        "plot_buildings": [
+            {**b, "maintenance": _building_maintenance_view(world, b)}
+            for b in world.plot_buildings
+        ],
         "stub_hires": list(world.stub_hires),
         "building_catalog": building_catalog_public(),
         "market_history": market_hist_out[-160:],
@@ -1017,7 +1032,11 @@ def world_compact_dict(world: World) -> dict[str, Any]:
             "balance_cents": balances.get(player_acct, 0),
             "inventory_top": inv_top,
             "plots": player_plot_entries,
-            "buildings": [b for b in world.plot_buildings if b.get("party") == str(player)],
+            "buildings": [
+                {**b, "maintenance": _building_maintenance_view(world, b)}
+                for b in world.plot_buildings
+                if b.get("party") == str(player)
+            ],
         },
         "active_production": [
             {

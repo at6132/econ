@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from realm.decay import building_effective_for_bonuses
+from realm.decay import (
+    EFFICIENCY_HEALTHY,
+    EFFICIENCY_STOPPED,
+    building_effective_for_bonuses,
+    building_efficiency_pct,
+)
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
@@ -51,17 +56,49 @@ def scale_extraction_output_qty(base: int, grade: float, min_grade: float) -> in
     return max(base, min(base * 4, base + extra))
 
 
+def _workshop_efficiency_pct_for_run(world: World, run: ActiveProduction, recipe) -> int:
+    """Lookup ``efficiency_pct`` for the workshop building this run uses.
+
+    Returns 100 for hand recipes (no workshop) and for buildings without a
+    scheduled maintenance record. When multiple matching buildings exist on the
+    plot (uncommon), the lowest efficiency wins — the spec scales output by the
+    weakest link.
+    """
+    if recipe.requires_tool is not None:
+        return EFFICIENCY_HEALTHY
+    req = recipe.requires_building_id
+    if not req:
+        return EFFICIENCY_HEALTHY
+    best = EFFICIENCY_HEALTHY
+    found = False
+    for b in world.plot_buildings:
+        if b.get("party") != str(run.party) or b.get("plot_id") != str(run.plot_id):
+            continue
+        if b.get("building_id") != req:
+            continue
+        iid = str(b.get("instance_id") or "")
+        if not iid:
+            continue
+        pct = building_efficiency_pct(world, iid)
+        if not found or pct < best:
+            best = pct
+            found = True
+    return best if found else EFFICIENCY_HEALTHY
+
+
 def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe) -> dict[MaterialId, int]:
     plot = world.plots.get(run.plot_id)
     out = {k: int(v) for k, v in recipe.outputs.items()}
-    if recipe.scaled_output is None or plot is None:
-        return out
-    field, mid = recipe.scaled_output
-    if mid not in out:
-        return out
-    grade = float(getattr(plot.subsurface, field, 0.0))
-    mn = _min_grade_for_field(recipe, field)
-    out[mid] = scale_extraction_output_qty(out[mid], grade, mn)
+    if plot is not None and recipe.scaled_output is not None:
+        field, mid = recipe.scaled_output
+        if mid in out:
+            grade = float(getattr(plot.subsurface, field, 0.0))
+            mn = _min_grade_for_field(recipe, field)
+            out[mid] = scale_extraction_output_qty(out[mid], grade, mn)
+    # Apply maintenance efficiency last so degraded plants produce proportionally less.
+    eff = _workshop_efficiency_pct_for_run(world, run, recipe)
+    if eff != EFFICIENCY_HEALTHY:
+        out = {k: max(0, (int(v) * int(eff)) // 100) for k, v in out.items()}
     return out
 
 
@@ -233,6 +270,22 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     elif not plot_has_workshop_for_recipe(world, party, plot_id, recipe_id):
         req = recipe.requires_building_id
         return {"ok": False, "reason": f"missing workshop: {req}"}
+    else:
+        # Refuse to start when the workshop is at 0% efficiency — the building has stopped.
+        req = recipe.requires_building_id
+        stopped = False
+        for b in world.plot_buildings:
+            if (
+                b.get("party") == str(party)
+                and b.get("plot_id") == str(plot_id)
+                and b.get("building_id") == req
+            ):
+                iid = str(b.get("instance_id") or "")
+                if iid and building_efficiency_pct(world, iid) == EFFICIENCY_STOPPED:
+                    stopped = True
+                    break
+        if stopped:
+            return {"ok": False, "reason": "building stopped — maintenance required"}
     if not subsurface_allows_recipe(plot, recipe):
         return {"ok": False, "reason": "subsurface below threshold for this recipe"}
     labor_bps = _labor_bps_for_plot(world, party, plot_id)

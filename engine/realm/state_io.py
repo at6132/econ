@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 8
+SNAPSHOT_VERSION = 9
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -165,12 +165,16 @@ def dump_world(world: World) -> dict[str, Any]:
         "party_recipe_books": {
             str(k): sorted(v) for k, v in world.party_recipe_books.items()
         },
+        "building_maintenance": {
+            str(k): {str(kk): int(vv) for kk, vv in v.items()}
+            for k, v in world.building_maintenance.items()
+        },
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -344,6 +348,13 @@ def load_world(d: dict[str, Any]) -> World:
                 world.party_recipe_books[str(k)] = {str(x) for x in v}
     for px in world.parties:
         ensure_party_recipe_book(world, px)
+    raw_maint = d.get("building_maintenance") or {}
+    if isinstance(raw_maint, dict):
+        for k, v in raw_maint.items():
+            if isinstance(v, dict):
+                world.building_maintenance[str(k)] = {
+                    str(kk): int(vv) for kk, vv in v.items()
+                }
     return world
 
 

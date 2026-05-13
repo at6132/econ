@@ -40,6 +40,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 12_000,
         "self_materials": {"timber": 4, "lumber": 2},
         "turnkey_total_cents": 78_000,
+        "maintenance_schedule": {
+            "interval_ticks": 5_760,  # 4 game-days
+            "materials": {"coal": 2, "timber": 1},
+            "grace_ticks": 720,  # 12 hours
+        },
     },
     "wood_shop": {
         "kind": "contracted",
@@ -48,6 +53,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 20_000,
         "self_materials": {"timber": 6, "lumber": 2, "coal": 2},
         "turnkey_total_cents": 118_000,
+        "maintenance_schedule": {
+            "interval_ticks": 8_640,  # 6 game-days
+            "materials": {"lumber": 1, "coal": 1},
+            "grace_ticks": 1_440,
+        },
     },
     "foundry": {
         "kind": "contracted",
@@ -56,6 +66,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 42_000,
         "self_materials": {"brick": 6, "stone": 4, "coal": 4},
         "turnkey_total_cents": 215_000,
+        "maintenance_schedule": {
+            "interval_ticks": 10_080,  # 7 game-days
+            "materials": {"brick": 2, "coal": 2},
+            "grace_ticks": 2_880,  # 2 game-days
+        },
     },
     "kiln_shed": {
         "kind": "contracted",
@@ -64,6 +79,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 22_000,
         "self_materials": {"clay": 8, "brick": 2, "coal": 2},
         "turnkey_total_cents": 128_000,
+        "maintenance_schedule": {
+            "interval_ticks": 7_200,  # 5 game-days
+            "materials": {"clay": 3, "coal": 1},
+            "grace_ticks": 1_440,
+        },
     },
     "stone_works": {
         "kind": "contracted",
@@ -72,6 +92,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 20_000,
         "self_materials": {"stone": 6, "timber": 3, "coal": 2},
         "turnkey_total_cents": 112_000,
+        "maintenance_schedule": {
+            "interval_ticks": 10_080,  # 7 game-days
+            "materials": {"stone": 2, "coal": 1},
+            "grace_ticks": 2_880,
+        },
     },
     "gristmill": {
         "kind": "contracted",
@@ -80,6 +105,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 16_000,
         "self_materials": {"grain": 6, "lumber": 2, "brick": 2},
         "turnkey_total_cents": 96_000,
+        "maintenance_schedule": {
+            "interval_ticks": 8_640,  # 6 game-days
+            "materials": {"timber": 1, "brick": 1},
+            "grace_ticks": 1_440,
+        },
     },
     "strip_mine": {
         "kind": "contracted",
@@ -88,6 +118,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 28_000,
         "self_materials": {"timber": 8, "brick": 4, "coal": 3},
         "turnkey_total_cents": 142_000,
+        "maintenance_schedule": {
+            "interval_ticks": 7_200,  # 5 game-days
+            "materials": {"timber": 2, "rope": 1},
+            "grace_ticks": 1_440,
+        },
     },
     "timber_yard": {
         "kind": "contracted",
@@ -96,6 +131,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 11_000,
         "self_materials": {"timber": 4, "lumber": 2},
         "turnkey_total_cents": 68_000,
+        "maintenance_schedule": {
+            "interval_ticks": 7_200,  # 5 game-days
+            "materials": {"lumber": 1},
+            "grace_ticks": 1_440,
+        },
     },
     "grain_row": {
         "kind": "contracted",
@@ -104,6 +144,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_contractor_fee_cents": 12_000,
         "self_materials": {"grain": 4, "lumber": 3, "brick": 2},
         "turnkey_total_cents": 78_000,
+        "maintenance_schedule": {
+            "interval_ticks": 5_760,  # 4 game-days
+            "materials": {"grain": 2, "timber": 1},
+            "grace_ticks": 720,
+        },
     },
     "assay_lab": {
         "kind": "contracted",
@@ -185,17 +230,25 @@ def building_catalog_public() -> list[dict]:
             )
         elif kind == "contracted":
             mats = spec.get("self_materials") or {}
-            out.append(
-                {
-                    "id": bid,
-                    "label": str(spec["label"]),
-                    "kind": "contracted",
-                    "self_shell_cents": int(spec["self_shell_cents"]),
-                    "self_contractor_fee_cents": int(spec["self_contractor_fee_cents"]),
-                    "self_materials": {str(k): int(v) for k, v in mats.items()},
-                    "turnkey_total_cents": int(spec["turnkey_total_cents"]),
+            row: dict[str, Any] = {
+                "id": bid,
+                "label": str(spec["label"]),
+                "kind": "contracted",
+                "self_shell_cents": int(spec["self_shell_cents"]),
+                "self_contractor_fee_cents": int(spec["self_contractor_fee_cents"]),
+                "self_materials": {str(k): int(v) for k, v in mats.items()},
+                "turnkey_total_cents": int(spec["turnkey_total_cents"]),
+            }
+            sched = spec.get("maintenance_schedule")
+            if isinstance(sched, dict):
+                row["maintenance_schedule"] = {
+                    "interval_ticks": int(sched.get("interval_ticks", 0)),
+                    "grace_ticks": int(sched.get("grace_ticks", 0)),
+                    "materials": {
+                        str(k): int(v) for k, v in (sched.get("materials") or {}).items()
+                    },
                 }
-            )
+            out.append(row)
     return out
 
 
@@ -295,6 +348,16 @@ def build_on_plot(
             "completes_at_tick": int(completes_at),
         }
     )
+    # Initialise the maintenance record for buildings with a schedule. First window
+    # opens one full ``interval`` after the building becomes operational.
+    sched = spec.get("maintenance_schedule")
+    if isinstance(sched, dict):
+        interval = max(1, int(sched.get("interval_ticks", 0)))
+        world.building_maintenance[instance_id] = {
+            "due_at_tick": int(completes_at) + interval,
+            "missed_cycles": 0,
+            "efficiency_pct": 100,
+        }
     log_event(
         world,
         "build",

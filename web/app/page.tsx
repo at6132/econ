@@ -250,6 +250,17 @@ function turnkeyBuildGate(
   return { turnkeyOk, selfOk, missingTurnkeyTitle, missingSelfTitle, turnkeyLines };
 }
 
+type BuildingMaintenanceDto = {
+  /** "materials" when a maintenance schedule is in effect; null for simple sheds. */
+  schedule: "materials" | null;
+  due_at_tick?: number;
+  missed_cycles?: number;
+  efficiency_pct?: number;
+  interval_ticks?: number;
+  grace_ticks?: number;
+  materials?: Record<string, number>;
+};
+
 type PlotBuildingDto = {
   instance_id?: string;
   condition_bps?: number;
@@ -259,6 +270,8 @@ type PlotBuildingDto = {
   label: string;
   cost_cents: number;
   build_mode?: string;
+  completes_at_tick?: number;
+  maintenance?: BuildingMaintenanceDto;
 };
 
 type StubHireDto = {
@@ -340,6 +353,111 @@ function gradeColor(value: number): string {
   if (value >= 0.5) return "#7fd1a8"; // rich
   if (value >= 0.2) return "#f0c46a"; // moderate
   return "#7c849a"; // poor
+}
+
+/**
+ * Render one plot building with its maintenance status + Maintain button.
+ *
+ * Dot color encodes urgency:
+ * - grey  → not yet operational (still under construction)
+ * - green → healthy (efficiency 100, plenty of headroom)
+ * - yellow→ due soon (<= 12 in-game hours away)
+ * - red   → overdue (efficiency < 100)
+ * - dark  → stopped (efficiency 0)
+ */
+function BuildingMaintenanceRow({
+  building,
+  worldTick,
+  playerInventory,
+  plotId,
+  busy,
+  onMaintain,
+}: {
+  building: PlotBuildingDto;
+  worldTick: number;
+  playerInventory: Record<string, number>;
+  plotId: string;
+  busy: boolean;
+  onMaintain: (plotId: string, instanceId: string) => Promise<void> | void;
+}): JSX.Element {
+  const m = building.maintenance;
+  const eff = m?.efficiency_pct;
+  const dueIn = typeof m?.due_at_tick === "number" ? m!.due_at_tick! - worldTick : null;
+  const completesAt = typeof building.completes_at_tick === "number" ? building.completes_at_tick : null;
+  const stillBuilding = completesAt !== null && worldTick < completesAt;
+  let dotColor = "#7fd1a8";
+  let label = "Healthy";
+  if (stillBuilding) {
+    dotColor = "#6c7686";
+    label = "Building";
+  } else if (eff === 0) {
+    dotColor = "#2a2f38";
+    label = "STOPPED — efficiency 0%";
+  } else if (typeof eff === "number" && eff < 100) {
+    dotColor = "#d6635a";
+    label = `Overdue — efficiency ${eff}%`;
+  } else if (m?.schedule === "materials" && typeof dueIn === "number") {
+    if (dueIn <= 720) {
+      dotColor = "#d6a35a";
+      const hoursLeft = Math.max(0, Math.floor(dueIn / 60));
+      label = `Due soon — ${hoursLeft}h left`;
+    } else {
+      const hoursLeft = Math.floor(dueIn / 60);
+      label = `Healthy — next due in ${hoursLeft}h`;
+    }
+  }
+  const mats = m?.materials ?? {};
+  const missing: string[] = [];
+  for (const [k, v] of Object.entries(mats)) {
+    const have = playerInventory[k] ?? 0;
+    if (have < v) {
+      missing.push(`${k}×${v - have} short`);
+    }
+  }
+  const canMaintain = m?.schedule === "materials" ? missing.length === 0 : true;
+  const matsBlurb = Object.entries(mats)
+    .map(([k, v]) => `${k}×${v}`)
+    .join(", ");
+  const buttonTitle = missing.length > 0 ? `Missing: ${missing.join("; ")}` : matsBlurb || undefined;
+  return (
+    <li style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+            background: dotColor,
+            flexShrink: 0,
+          }}
+        />
+        <span>{building.label}</span>
+        <span style={{ opacity: 0.85 }}>· {label}</span>
+        {typeof building.condition_bps === "number" ? (
+          <span style={{ opacity: 0.7 }}>· cond {(building.condition_bps / 100).toFixed(0)}%</span>
+        ) : null}
+        {building.instance_id ? (
+          <button
+            type="button"
+            className="realm-btn realm-btn--ghost realm-btn--sm"
+            disabled={busy || !canMaintain}
+            title={buttonTitle}
+            onClick={() => void onMaintain(plotId, building.instance_id!)}
+          >
+            Maintain
+          </button>
+        ) : null}
+      </div>
+      {m?.schedule === "materials" && matsBlurb ? (
+        <div className="realm-help" style={{ marginTop: 2, marginLeft: 18, opacity: 0.78 }}>
+          Needs: {matsBlurb}
+          {missing.length > 0 ? ` (${missing.join("; ")})` : ""}
+        </div>
+      ) : null}
+    </li>
+  );
 }
 
 function DeepSurveyControl({
@@ -2637,29 +2755,15 @@ export default function HomePage() {
                                   <SectionTitle>Built here</SectionTitle>
                                   <ul className="realm-help" style={{ marginTop: 4, paddingLeft: 18 }}>
                                     {buildingsHere.map((x, i) => (
-                                      <li key={x.instance_id ?? `${x.building_id}-${i}`} style={{ marginBottom: 8 }}>
-                                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                                          <span>
-                                            {x.label}
-                                            {typeof x.condition_bps === "number" ? (
-                                              <span style={{ opacity: 0.85 }}>
-                                                {" "}
-                                                · condition {(x.condition_bps / 100).toFixed(0)}%
-                                              </span>
-                                            ) : null}
-                                          </span>
-                                          {x.instance_id && selectedPlotId ? (
-                                            <button
-                                              type="button"
-                                              className="realm-btn realm-btn--ghost realm-btn--sm"
-                                              disabled={busy}
-                                              onClick={() => void maintainBuildingOnPlot(selectedPlotId, x.instance_id!)}
-                                            >
-                                              Maintain
-                                            </button>
-                                          ) : null}
-                                        </div>
-                                      </li>
+                                      <BuildingMaintenanceRow
+                                        key={x.instance_id ?? `${x.building_id}-${i}`}
+                                        building={x}
+                                        worldTick={world?.tick ?? 0}
+                                        playerInventory={playerInv}
+                                        plotId={selectedPlotId}
+                                        busy={busy}
+                                        onMaintain={maintainBuildingOnPlot}
+                                      />
                                     ))}
                                   </ul>
                                 </>

@@ -814,6 +814,55 @@ def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_un
     place_sell_order(world, party, mid, min(q, max_units), px)
 
 
+_TICKS_PER_GAME_DAY = 1440
+
+
+def _settler_maintain_buildings(world: World, party: PartyId) -> None:
+    """Buy maintenance materials from the exchange and call ``maintain_building`` for
+    any of this settler's buildings whose ``due_at_tick`` is within ~1 game-day.
+
+    Settlers prioritise maintenance over new construction — degraded plants destroy
+    margin faster than a missed expansion.
+    """
+    from realm.decay import maintain_building, maintenance_schedule_for
+
+    threshold = int(world.tick) + _TICKS_PER_GAME_DAY
+    for row in list(world.plot_buildings):
+        if row.get("party") != str(party):
+            continue
+        iid = str(row.get("instance_id") or "")
+        if not iid:
+            continue
+        rec = world.building_maintenance.get(iid)
+        if rec is None:
+            continue
+        if int(rec.get("efficiency_pct", 100)) == 0:
+            # Stopped buildings still want fresh materials so we can revive them.
+            pass
+        elif int(rec.get("due_at_tick", 0)) > threshold:
+            continue
+        bid = str(row.get("building_id", ""))
+        sched = maintenance_schedule_for(bid)
+        if sched is None:
+            continue
+        mats = sched.get("materials") or {}
+        # Acquire any missing material from the exchange.
+        for mid_s, qty in mats.items():
+            mid = MaterialId(mid_s)
+            need = int(qty) - int(world.inventory.qty(party, mid))
+            if need <= 0:
+                continue
+            market_buy(world, party, mid, need)
+        # If we still lack materials, skip — try again next tick.
+        ok = all(
+            world.inventory.qty(party, MaterialId(m)) >= int(q)
+            for m, q in mats.items()
+        )
+        if not ok:
+            continue
+        maintain_building(world, party, iid)
+
+
 def _settler_pipeline_step(
     world: World,
     party: PartyId,
@@ -859,6 +908,7 @@ def _settler_pipeline_step(
             _maybe_build_tier2_workshop(world, party, owned, plot)
 
     _settler_probabilistic_discovery(world, party)
+    _settler_maintain_buildings(world, party)
     _liquidate_settler_stockpiles(world, party)
 
     if plot_has_active_production(world, owned):

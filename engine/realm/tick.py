@@ -11,7 +11,7 @@ from realm.agents_tier1 import tick_tier1_agents
 from realm.agents_tier2 import tick_tier2_agents
 from realm.agents_tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
-from realm.decay import tick_building_decay
+from realm.decay import tick_building_decay, tick_building_maintenance
 from realm.market_history import record_market_snapshot
 from realm.movement import deliver_transit
 from realm.production import tick_production
@@ -25,6 +25,7 @@ def advance_tick(world: World) -> None:
     """One simulation step: transit → production → agents → clock."""
     deliver_transit(world)
     tick_building_decay(world)
+    tick_building_maintenance(world)
     tick_production(world)
     tick_material_spoilage(world)
     tick_stub_employment(world)
