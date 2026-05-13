@@ -526,6 +526,10 @@ def bootstrap_genesis(
     for pid, p in world.plots.items():
         density_map[str(pid)] = population_density_for_cell(p.x, p.y, [hub_w, hub_e])
     world.scenario_state["population_density"] = density_map
+    # Sprint 3 — Phase C.1: seed per-region labor pools from population density.
+    from realm.labor import bootstrap_labor_pools
+
+    bootstrap_labor_pools(world)
     from realm.genesis_settler_names import assign_settler_display_names
 
     assign_settler_display_names(world, seed=seed)

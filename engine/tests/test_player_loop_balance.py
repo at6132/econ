@@ -179,6 +179,26 @@ def test_coal_strategy_cash_positive_after_24_game_hours() -> None:
     warm = place_sell_order(w, player, MaterialId("coal"), 1, 100)
     assert warm.get("ok"), warm
 
+    # Sprint 3 — Phase C: production with labor_cents > 0 needs at least one
+    # hired worker to run at 100 % output. Plant a no-wage placeholder hire
+    # directly so the test focuses on operator-side P&L without entangling
+    # with the wage flow.
+    w.stub_hires.append(
+        {
+            "employer": str(player),
+            "employee": "npc_grain_vendor",
+            "wage_per_tick_cents": 0,
+            "wage_interval_ticks": 1,
+            "next_wage_tick": -1,
+            "signing_bonus_cents": 0,
+            "contract_id": "c-coal-test-hire",
+            "tick": int(w.tick),
+            "skill_level": 0,
+            "region_id": "",
+            "workers_count": 1,
+        }
+    )
+
     cash_after_build = w.ledger.balance(party_cash_account(player))
 
     # Stand-in for hub demand. Non-settler id so the genesis AI ignores it.

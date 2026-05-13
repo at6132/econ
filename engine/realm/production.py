@@ -111,6 +111,18 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
     eff = _workshop_efficiency_pct_for_run(world, run, recipe)
     if eff != EFFICIENCY_HEALTHY:
         out = {k: max(0, (int(v) * int(eff)) // 100) for k, v in out.items()}
+    # Sprint 3 — Phase C.2: labour staffing modifier.
+    #   - No hired workers + recipe demands labour  → 50 % output (understaffed).
+    #   - Hired workers                              → 100 %.
+    #   - Hired skilled workers                      → up to 120 %.
+    if int(getattr(recipe, "labor_cents", 0)) > 0:
+        from realm.labor import effective_output_bps_for_run
+
+        labour_bps = effective_output_bps_for_run(
+            world, run.party, has_recipe_labor=True
+        )
+        if labour_bps != 10_000:
+            out = {k: max(0, (int(v) * int(labour_bps)) // 10_000) for k, v in out.items()}
     return out
 
 
@@ -503,6 +515,11 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        # Sprint 3 — Phase C.3: every worker that participated levels up once.
+        if int(getattr(recipe, "labor_cents", 0)) > 0:
+            from realm.labor import increment_worker_skill
+
+            increment_worker_skill(world, run.party, by=1)
         if str(run.recipe_id).startswith("hand_") and world.scenario_id == "genesis":
             gst = world.scenario_state.setdefault("genesis", {})
             gst["hand_tier0_completions"] = int(gst.get("hand_tier0_completions", 0)) + 1

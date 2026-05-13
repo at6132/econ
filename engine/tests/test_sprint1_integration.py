@@ -217,6 +217,25 @@ def test_sprint1_player_coal_loop_cash_positive() -> None:
     warm = place_sell_order(w, player, MaterialId("coal"), 1, 100)
     assert warm.get("ok"), warm
 
+    # Sprint 3 — Phase C: production with labor_cents > 0 needs a hired worker
+    # for full output. Plant a zero-wage placeholder directly so we measure
+    # operator P&L without entangling the wage flow.
+    w.stub_hires.append(
+        {
+            "employer": str(player),
+            "employee": "npc_grain_vendor",
+            "wage_per_tick_cents": 0,
+            "wage_interval_ticks": 1,
+            "next_wage_tick": -1,
+            "signing_bonus_cents": 0,
+            "contract_id": "c-sprint1-coal-hire",
+            "tick": int(w.tick),
+            "skill_level": 0,
+            "region_id": "",
+            "workers_count": 1,
+        }
+    )
+
     cash_after_build = w.ledger.balance(party_cash_account(player))
 
     buyer = PartyId("hub_buyer")  # non-settler prefix → genesis AI ignores.
