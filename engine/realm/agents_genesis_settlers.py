@@ -41,6 +41,24 @@ _PRIMARY_WORKSHOPS = frozenset({"strip_mine", "timber_yard", "grain_row"})
 _SECONDARY_WORKSHOPS = frozenset(
     {"power_shed", "wood_shop", "gristmill", "kiln_shed", "foundry", "stone_works"}
 )
+_TIER2_WORKSHOPS = frozenset(
+    {"assay_lab", "blast_furnace", "chemical_works", "forge_press", "machine_shop", "tool_workshop"}
+)
+
+# Daily probability that a settler with an ``assay_lab`` advances one stage on their richest
+# Tier-2 mineral. Real-time-equivalent: a 1% chance per game-day (deterministic RNG, never
+# random.random()). Rolled once per game-day per settler in ``_settler_probabilistic_discovery``.
+SETTLER_DISCOVERY_PROB_PER_GAME_DAY: float = 0.01
+
+# When non-empty, a settler with the listed grade ≥ value can decide to build an assay_lab.
+_TIER2_GRADE_FIELDS: tuple[tuple[str, str], ...] = (
+    ("sulfur_grade", "sulfur_ore"),
+    ("saltpeter_grade", "saltpeter_ore"),
+    ("tin_grade", "tin_ore"),
+    ("lead_grade", "lead_ore"),
+    ("phosphate_grade", "phosphate_ore"),
+    ("silica_grade", "raw_silica"),
+)
 
 # Long / brittle chains for Phase-1 settler AI — rest stay eligible if terrain + workshop match.
 _SETTLER_EXCLUDE_RECIPES = frozenset(
@@ -165,6 +183,141 @@ def _settler_has_strip_mine_on_plot(world: World, party: PartyId, plot_id: PlotI
     )
 
 
+def _settler_richest_tier2_on_plot(plot) -> tuple[str, float] | None:
+    """Returns ``(mineral_id, grade)`` for the highest Tier-2 grade on this plot, or None if all <0.3."""
+    best: tuple[str, float] | None = None
+    for field, mineral in _TIER2_GRADE_FIELDS:
+        g = float(getattr(plot.subsurface, field, 0.0))
+        if g < 0.3:
+            continue
+        if best is None or g > best[1]:
+            best = (mineral, g)
+    return best
+
+
+def _settler_assay_lab_plot(world: World, party: PartyId) -> PlotId | None:
+    """The settler's first plot containing an operational assay_lab they own (or None)."""
+    from realm.decay import building_effective_for_bonuses
+    from realm.time_scale import building_operational
+
+    for b in world.plot_buildings:
+        if b.get("party") != str(party) or b.get("building_id") != "assay_lab":
+            continue
+        if not building_operational(b, at_tick=world.tick):
+            continue
+        if not building_effective_for_bonuses(b):
+            continue
+        return PlotId(str(b.get("plot_id", "")))
+    return None
+
+
+def _settler_probabilistic_discovery(world: World, party: PartyId) -> None:
+    """One deterministic 1%/game-day roll: if it hits, advance the party's richest Tier-2 mineral one stage.
+
+    Settlers without an assay_lab cannot benefit (matches the design — research needs a lab,
+    but settlers self-research at a glacial pace so half the economy isn't permanently locked out
+    of Tier-2 industry).
+    """
+    from realm.assay import (
+        ASSAY_MAX_STAGE,
+        ASSAY_MINERAL_RECIPE_UNLOCKS,
+        ASSAY_STAGE_HINTS,
+        get_assay_stage,
+        _set_assay_stage,
+    )
+    from realm.event_log import log_event
+    from realm.time_scale import TICKS_PER_GAME_DAY
+
+    if world.tick % TICKS_PER_GAME_DAY != 0:
+        return
+    lab_plot = _settler_assay_lab_plot(world, party)
+    if lab_plot is None:
+        return
+    plot = world.plots.get(lab_plot)
+    if plot is None:
+        return
+    richest = _settler_richest_tier2_on_plot(plot)
+    if richest is None:
+        return
+    mineral_id, _grade = richest
+    mid = MaterialId(mineral_id)
+    rng = world.rng(f"settler_discovery:{party}:{world.tick}")
+    if rng.random() >= SETTLER_DISCOVERY_PROB_PER_GAME_DAY:
+        return
+    current = get_assay_stage(world, party, mid)
+    if current >= ASSAY_MAX_STAGE:
+        return
+    new_stage = min(ASSAY_MAX_STAGE, current + 1)
+    _set_assay_stage(world, party, mid, new_stage)
+    log_event(
+        world,
+        "assay_stage",
+        f"{party} (settler self-research) advanced {mineral_id} to stage {new_stage}/{ASSAY_MAX_STAGE}",
+        party=str(party),
+        mineral=mineral_id,
+        stage=new_stage,
+        source="settler_self_research",
+    )
+    if new_stage >= ASSAY_MAX_STAGE:
+        from realm.recipes import RECIPES
+        from realm.world import ensure_party_recipe_book
+
+        unlocked = [
+            rid
+            for rid in ASSAY_MINERAL_RECIPE_UNLOCKS.get(mineral_id, ())
+            if rid in RECIPES
+        ]
+        book = ensure_party_recipe_book(world, party)
+        new_for_party = [rid for rid in unlocked if rid not in book]
+        for rid in new_for_party:
+            book.add(rid)
+        log_event(
+            world,
+            "recipe_discovered",
+            f"{party} (settler self-research) unlocked {len(new_for_party)} recipe(s) for {mineral_id}",
+            party=str(party),
+            mineral=mineral_id,
+            recipes=",".join(new_for_party),
+            recipe_count=len(new_for_party),
+            source="settler_self_research",
+        )
+        log_event(
+            world,
+            "world_feed",
+            f"DISCOVERY: {mineral_id} chain unlocked — {len(new_for_party)} new recipes available "
+            f"({party}).",
+            feed_source="recipe_discovery",
+            party=str(party),
+            mineral=mineral_id,
+            recipe_count=len(new_for_party),
+        )
+
+
+def _settler_has_book_recipe(world: World, party: PartyId, recipe_id: str) -> bool:
+    return recipe_id in world.party_recipe_books.get(str(party), set())
+
+
+def _settler_has_any_tier2_discovery(world: World, party: PartyId) -> bool:
+    """Any Tier-2 recipe in the party's book counts as a discovery."""
+    from realm.recipes import RECIPES
+
+    tier2_ids = {rid for rid, r in RECIPES.items() if r.requires_discovery}
+    book = world.party_recipe_books.get(str(party), set())
+    return bool(book & tier2_ids)
+
+
+def _settler_can_afford_tier2_build(
+    world: World, party: PartyId, building_id: str, *, max_cash_share_bps: int = 6000
+) -> bool:
+    """Cash gate: settler will never spend more than ``max_cash_share_bps`` (60%) of cash on one build."""
+    need = _TURNKEY_CENTS.get(building_id, 0)
+    if need <= 0:
+        return False
+    cash = world.ledger.balance(party_cash_account(party))
+    cap = cash * max_cash_share_bps // 10_000
+    return cash >= need + 5_000 and need <= cap
+
+
 def _maybe_build_secondary_workshop(
     world: World,
     party: PartyId,
@@ -234,6 +387,86 @@ def _maybe_build_secondary_workshop(
     if not _settler_acquire_turnkey_materials(world, party, chosen):
         return
     build_on_plot(world, party, plot_id, chosen, "turnkey")
+
+
+def _maybe_build_tier2_workshop(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    plot,
+) -> bool:
+    """Once Tier-1 is settled and the settler has cash to spare, consider a Tier-2 workshop.
+
+    Priority order (first match wins):
+      1. ``assay_lab`` — any Tier-2 grade ≥ 0.3 on this plot, no lab yet on any of the party's plots.
+      2. ``blast_furnace`` — iron_ore_grade ≥ 0.5 AND coal_grade ≥ 0.3 on this plot.
+      3. ``chemical_works`` — party has ≥1 Tier-2 recipe in their book.
+      4. ``forge_press`` / ``tool_workshop`` — party has steel_ingot stock (income proxy).
+
+    All builds are turnkey and limited to ≤60% of cash. Returns True if anything was built.
+    """
+    if world.tick < legacy_scaled(60):
+        return False
+
+    def _already_has(bid: str) -> bool:
+        return any(
+            b.get("party") == str(party) and b.get("building_id") == bid
+            for b in world.plot_buildings
+        )
+
+    if not _already_has("assay_lab") and _settler_richest_tier2_on_plot(plot) is not None:
+        if _settler_can_afford_tier2_build(world, party, "assay_lab"):
+            if _settler_acquire_turnkey_materials(world, party, "assay_lab"):
+                r = build_on_plot(world, party, plot_id, "assay_lab", "turnkey")
+                if r.get("ok"):
+                    return True
+
+    if (
+        not _already_has("blast_furnace")
+        and float(plot.subsurface.iron_ore_grade) >= 0.5
+        and float(plot.subsurface.coal_grade) >= 0.3
+        and recipe_allowed_on_terrain(plot.terrain, "smelt_pig_iron")
+        and _settler_can_afford_tier2_build(world, party, "blast_furnace")
+    ):
+        if _settler_acquire_turnkey_materials(world, party, "blast_furnace"):
+            r = build_on_plot(world, party, plot_id, "blast_furnace", "turnkey")
+            if r.get("ok"):
+                return True
+
+    if (
+        not _already_has("chemical_works")
+        and _settler_has_any_tier2_discovery(world, party)
+        and recipe_allowed_on_terrain(plot.terrain, "refine_sulfur")
+        and _settler_can_afford_tier2_build(world, party, "chemical_works")
+    ):
+        if _settler_acquire_turnkey_materials(world, party, "chemical_works"):
+            r = build_on_plot(world, party, plot_id, "chemical_works", "turnkey")
+            if r.get("ok"):
+                return True
+
+    steel = world.inventory.qty(party, MaterialId("steel_ingot"))
+    if (
+        steel >= 1
+        and not _already_has("forge_press")
+        and recipe_allowed_on_terrain(plot.terrain, "forge_pick_head")
+        and _settler_can_afford_tier2_build(world, party, "forge_press")
+    ):
+        if _settler_acquire_turnkey_materials(world, party, "forge_press"):
+            r = build_on_plot(world, party, plot_id, "forge_press", "turnkey")
+            if r.get("ok"):
+                return True
+
+    if (
+        not _already_has("tool_workshop")
+        and recipe_allowed_on_terrain(plot.terrain, "assemble_mining_pick")
+        and _settler_can_afford_tier2_build(world, party, "tool_workshop")
+    ):
+        if _settler_acquire_turnkey_materials(world, party, "tool_workshop"):
+            r = build_on_plot(world, party, plot_id, "tool_workshop", "turnkey")
+            if r.get("ok"):
+                return True
+
+    return False
 
 
 def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | None:
@@ -622,7 +855,10 @@ def _settler_pipeline_step(
     if allow_secondary:
         rng_sec = world.rng(f"gen:secondary:{party}:{world.tick}")
         _maybe_build_secondary_workshop(world, party, owned, plot, rng=rng_sec)
+        if _has_secondary_on_plot(world, party, owned):
+            _maybe_build_tier2_workshop(world, party, owned, plot)
 
+    _settler_probabilistic_discovery(world, party)
     _liquidate_settler_stockpiles(world, party)
 
     if plot_has_active_production(world, owned):
