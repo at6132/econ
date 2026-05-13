@@ -282,6 +282,37 @@ def post_build(
     return dict(r)
 
 
+@app.post("/assay")
+def post_assay(
+    plot_id: Annotated[str, Query()],
+    mineral_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    """Submit a paid mineral assay attempt on a player-owned plot with an ``assay_lab``."""
+    from realm.assay import assay_mineral
+
+    r = assay_mineral(_world, PartyId(party), PlotId(plot_id), MaterialId(mineral_id))
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "assay rejected")))
+    return dict(r)
+
+
+@app.get("/assay/status")
+def get_assay_status(party: Annotated[str, Query()] = "player") -> dict:
+    """All in-flight assay jobs for ``party``."""
+    from realm.assay import party_active_assay_jobs
+
+    return {"jobs": party_active_assay_jobs(_world, PartyId(party))}
+
+
+@app.get("/assay/book")
+def get_assay_book(party: Annotated[str, Query()] = "player") -> dict:
+    """Full discovered recipe book + per-mineral assay progress for ``party``."""
+    from realm.assay import party_recipe_book_summary
+
+    return party_recipe_book_summary(_world, PartyId(party))
+
+
 @app.post("/hire")
 def post_hire(
     employer: Annotated[str, Query()],

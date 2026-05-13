@@ -105,6 +105,14 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"grain": 4, "lumber": 3, "brick": 2},
         "turnkey_total_cents": 78_000,
     },
+    "assay_lab": {
+        "kind": "contracted",
+        "label": "Assay laboratory (mineral analysis & recipe discovery)",
+        "self_shell_cents": 45_000,
+        "self_contractor_fee_cents": 18_000,
+        "self_materials": {"brick": 4, "timber": 2, "coal": 2, "glass": 2},
+        "turnkey_total_cents": 110_000,
+    },
 }
 
 

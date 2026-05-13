@@ -422,3 +422,19 @@ def tick_genesis_margaux_scripts(world: World) -> None:
                 mx[key] = True
 
     _run_margaux_aux_beats(world, mx)
+
+    pending = _genesis_st(world).get("pending_margaux_discovery", [])
+    if isinstance(pending, list) and pending:
+        for entry in pending:
+            if not isinstance(entry, dict):
+                continue
+            mineral = str(entry.get("mineral", "")) or "this mineral"
+            count = int(entry.get("recipe_count", 0))
+            _append_margaux(
+                world,
+                f"A new assay result — {mineral} unlocks real industrial depth "
+                f"({count} new recipes). The first mover on a new material almost always sets the "
+                "price floor. Move before the settlers catch up.",
+                main_beat=False,
+            )
+        _genesis_st(world)["pending_margaux_discovery"] = []
