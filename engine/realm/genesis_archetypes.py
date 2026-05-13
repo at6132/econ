@@ -313,7 +313,19 @@ def _tick_flipper(world: World) -> None:
             if bool(report.is_deep)
             else _FLIPPER_REPORT_ASK_STANDARD
         )
-        list_survey_report(world, FLIPPER_PARTY_ID, str(rid), int(ask))
+        r = list_survey_report(world, FLIPPER_PARTY_ID, str(rid), int(ask))
+        if r.get("ok"):
+            try:
+                from realm.genesis_margaux_sprint5 import fire_archetype_observation_beat
+
+                fire_archetype_observation_beat(
+                    world,
+                    archetype="flipper_listed",
+                    report_id=str(rid),
+                    plot_id=str(report.plot_id),
+                )
+            except Exception:
+                pass
     state["last_acted_tick"] = int(world.tick)
 
 
