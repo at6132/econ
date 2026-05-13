@@ -55,7 +55,8 @@ def test_tier0_hand_chop_produces_timber() -> None:
     player = PartyId("player")
     pid = PlotId("p-0-0")
     assert claim_plot(w, player, pid)["ok"] is True
-    assert w.plots[pid].terrain in (Terrain.FOREST, Terrain.PLAINS)
+    # Sprint 1: hand_chop is forest-only; force the terrain after the claim to match.
+    w.plots[pid].terrain = Terrain.FOREST
     assert survey_plot(w, player, pid)["ok"] is True
     ad = w.inventory.add(player, MaterialId("pick_axe"), 1)
     assert not isinstance(ad, MatterErr)

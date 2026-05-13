@@ -21,7 +21,13 @@ from realm.plot_logistics import (
     uses_plot_logistics,
 )
 from realm.recipe_workshops import plot_has_workshop_for_recipe
-from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
+from realm.recipe_sites import (
+    recipe_allowed_on_plot,
+    recipe_allowed_on_terrain,
+    recipe_terrain_bonus_bps,
+    subsurface_allows_recipe,
+    terrain_allows_workshop,
+)
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
 from realm.time_scale import building_operational
@@ -95,6 +101,12 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
             grade = float(getattr(plot.subsurface, field, 0.0))
             mn = _min_grade_for_field(recipe, field)
             out[mid] = scale_extraction_output_qty(out[mid], grade, mn)
+    # Per-terrain output bonus (e.g. mountain ore +20%). Applied before maintenance
+    # scaling so the bonus survives a degraded plant proportionally.
+    if plot is not None:
+        bps = recipe_terrain_bonus_bps(recipe.recipe_id, plot.terrain)
+        if bps != 10_000:
+            out = {k: max(0, (int(v) * int(bps)) // 10_000) for k, v in out.items()}
     # Apply maintenance efficiency last so degraded plants produce proportionally less.
     eff = _workshop_efficiency_pct_for_run(world, run, recipe)
     if eff != EFFICIENCY_HEALTHY:
@@ -261,8 +273,9 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         return {"ok": False, "reason": "unknown recipe"}
     if not world.can_party_run_recipe(party, recipe_id):
         return {"ok": False, "reason": "recipe not yet discovered"}
-    if not recipe_allowed_on_terrain(plot.terrain, recipe_id):
-        return {"ok": False, "reason": "recipe not available on this plot"}
+    plot_ok, plot_reason = recipe_allowed_on_plot(world, plot, recipe_id)
+    if not plot_ok:
+        return {"ok": False, "reason": plot_reason or "recipe not available on this plot"}
     if recipe.requires_tool is not None:
         tool = recipe.requires_tool
         if world.inventory.qty(party, tool) < 1:

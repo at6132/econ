@@ -5,7 +5,12 @@ from __future__ import annotations
 from realm.decay import building_effective_for_bonuses
 from realm.ids import PartyId, PlotId
 from realm.time_scale import building_operational
-from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
+from realm.recipe_sites import (
+    recipe_allowed_on_plot,
+    recipe_allowed_on_terrain,
+    subsurface_allows_recipe,
+    terrain_allows_workshop,
+)
 from realm.recipes import RECIPES
 from realm.world import Plot, World
 
@@ -32,14 +37,16 @@ def plot_has_workshop_for_recipe(world: World, party: PartyId, plot_id: PlotId, 
 
 
 def recipe_ids_on_plot_for_owner(world: World, plot: Plot) -> list[str]:
-    """Surveyed dry plot owned by ``plot.owner``: recipes allowed by terrain, workshop, and discovery."""
+    """Surveyed dry plot owned by ``plot.owner``: recipes allowed by terrain (+ coastal),
+    workshop, subsurface, and discovery."""
     if plot.owner is None or not plot.surveyed or not terrain_allows_workshop(plot.terrain):
         return []
     party = plot.owner
     out: list[str] = []
     for rid in RECIPES:
         recipe = RECIPES[rid]
-        if not recipe_allowed_on_terrain(plot.terrain, rid):
+        ok, _ = recipe_allowed_on_plot(world, plot, rid)
+        if not ok:
             continue
         if not subsurface_allows_recipe(plot, recipe):
             continue

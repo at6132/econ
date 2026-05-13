@@ -313,6 +313,18 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         requires_building_id="",
         requires_tool=MaterialId("pick_axe"),
     ),
+    "fishing": Recipe(
+        recipe_id="fishing",
+        display_name="Fishing (coastal — no building needed)",
+        inputs={},
+        # Grain is the temporary food-proxy output until a ``fish`` material is added.
+        outputs={MaterialId("grain"): 2},
+        duration_ticks=2 * _TICKS_PER_GAME_HOUR,
+        labor_cents=80,
+        requires_building_id="",
+        # ``hand_saw`` doubles as fishing tackle in Sprint 1; revisit once a dedicated tool exists.
+        requires_tool=MaterialId("hand_saw"),
+    ),
     "hand_mine_coal": Recipe(
         recipe_id="hand_mine_coal",
         display_name="Hand mine coal (mining pick — no building)",

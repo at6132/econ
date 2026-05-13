@@ -91,6 +91,10 @@ def test_chop_timber_on_forest_plot() -> None:
     pid = PlotId("p-0-0")
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
+    # Sprint 1: chop_timber is strict forest only — force the terrain after the claim.
+    from realm.terrain import Terrain
+
+    w.plots[pid].terrain = Terrain.FOREST
     assert survey_plot(w, player, pid)["ok"] is True
     _turnkey(w, player, pid, "timber_yard")
     _advance_until_building_ready(w, player, pid, "timber_yard")
