@@ -114,6 +114,8 @@ type RecipeDto = {
   outputs: Record<string, number>;
   duration_ticks: number;
   labor_cents: number;
+  requires_building_id?: string;
+  requires_tool?: string;
 };
 
 type ActiveProductionDto = {
@@ -193,6 +195,53 @@ type BuildingCatalogDto = {
   self_materials?: Record<string, number>;
   turnkey_total_cents?: number;
 };
+
+const TOOL_MATERIAL_IDS = new Set(["pick_axe", "mining_pick", "spade", "hand_saw"]);
+
+function turnkeyBuildGate(
+  b: BuildingCatalogDto,
+  inv: Record<string, number>,
+  cashCents: number | undefined,
+): {
+  turnkeyOk: boolean;
+  selfOk: boolean;
+  missingTurnkeyTitle: string;
+  missingSelfTitle: string;
+  turnkeyLines: { mat: string; need: number; have: number; short: number }[];
+} {
+  const tt = b.turnkey_total_cents ?? 0;
+  const selfCash = (b.self_shell_cents ?? 0) + (b.self_contractor_fee_cents ?? 0);
+  const mats = b.self_materials ?? {};
+  const cc = cashCents ?? 0;
+  const turnkeyLines = Object.entries(mats).map(([mat, need]) => {
+    const have = inv[mat] ?? 0;
+    const n = Number(need);
+    return { mat, need: n, have, short: Math.max(0, n - have) };
+  });
+  const turnkeyMatOk = turnkeyLines.every((l) => l.short === 0);
+  const turnkeyCashOk = cc >= tt;
+  const turnkeyOk = turnkeyMatOk && turnkeyCashOk;
+  const selfMatOk = turnkeyMatOk;
+  const selfCashOk = cc >= selfCash;
+  const selfOk = selfMatOk && selfCashOk;
+  const missingTurnkeyTitle = !turnkeyOk
+    ? [
+        ...turnkeyLines.filter((l) => l.short > 0).map((l) => `${l.mat}×${l.short} short`),
+        !turnkeyCashOk ? `need $${(tt / 100).toFixed(2)} cash` : null,
+      ]
+        .filter(Boolean)
+        .join("; ")
+    : "";
+  const missingSelfTitle = !selfOk
+    ? [
+        ...turnkeyLines.filter((l) => l.short > 0).map((l) => `${l.mat}×${l.short} short`),
+        !selfCashOk ? `need $${(selfCash / 100).toFixed(2)} cash` : null,
+      ]
+        .filter(Boolean)
+        .join("; ")
+    : "";
+  return { turnkeyOk, selfOk, missingTurnkeyTitle, missingSelfTitle, turnkeyLines };
+}
 
 type PlotBuildingDto = {
   instance_id?: string;
@@ -781,7 +830,15 @@ export default function HomePage() {
     const ids = selectedPlot?.surveyed ? selectedPlot.recipe_ids : undefined;
     if (!ids?.length) return [];
     const allow = new Set(ids);
-    return all.filter((r) => allow.has(r.id));
+    return all.filter((r) => allow.has(r.id) && !r.requires_tool);
+  }, [world?.recipes, selectedPlot]);
+
+  const handRecipesForSelectedPlot = useMemo(() => {
+    const all = (world?.recipes ?? []) as RecipeDto[];
+    const ids = selectedPlot?.surveyed ? selectedPlot.recipe_ids : undefined;
+    if (!ids?.length) return [];
+    const allow = new Set(ids);
+    return all.filter((r) => allow.has(r.id) && Boolean(r.requires_tool));
   }, [world?.recipes, selectedPlot]);
 
   const playerInv = world?.inventory["player"] ?? {};
@@ -985,6 +1042,50 @@ export default function HomePage() {
       if (plot) queueFx({ kind: "produce", gx: plot.x, gy: plot.y, label: "MAKE" });
       await load();
       pushToast({ message: `Production started: ${recipeLabel}`, kind: "ok" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      pushToast({ message: msg.length > 140 ? `${msg.slice(0, 137)}…` : msg, kind: "warn" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function buyMarketToolThenProduce(plotId: string, toolMaterial: string, recipeId: string) {
+    const plot = world?.plots.find((pp) => pp.id === plotId);
+    const recipeLabel = world?.recipes?.find((x) => x.id === recipeId)?.display_name ?? recipeId;
+    setBusy(true);
+    setError(null);
+    try {
+      const qBuy = new URLSearchParams({ party: "player", material: toolMaterial, max_qty: "1" });
+      const rBuy = await fetch(`/api/engine/market/buy?${qBuy.toString()}`, { method: "POST" });
+      if (!rBuy.ok) throw new Error(await rBuy.text());
+      const qProd = new URLSearchParams({ recipe_id: recipeId });
+      const rProd = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/produce?${qProd.toString()}`, {
+        method: "POST",
+      });
+      if (!rProd.ok) throw new Error(await rProd.text());
+      if (plot) queueFx({ kind: "produce", gx: plot.x, gy: plot.y, label: "MAKE" });
+      await load();
+      pushToast({ message: `Bought tool + started: ${recipeLabel}`, kind: "ok" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      pushToast({ message: msg.length > 140 ? `${msg.slice(0, 137)}…` : msg, kind: "warn" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function marketBuyShortfall(material: string, qty: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ party: "player", material, max_qty: String(qty) });
+      const r = await fetch(`/api/engine/market/buy?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await load();
+      pushToast({ message: `Bought ${qty}× ${displayMaterial(material)}`, kind: "ok" });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -2259,7 +2360,7 @@ export default function HomePage() {
                                 <>
                                   <p className="realm-help" style={{ marginBottom: 8 }}>
                                     After survey, runnable recipes appear here only after the matching <strong>workshop</strong> is built on this plot (see Build
-                                    below).
+                                    below). <strong>Hand extraction</strong> (no building) is listed under Active production.
                                   </p>
                                   {selectedPlot.terrain === "water_shallow" || selectedPlot.terrain === "water_deep" ? (
                                     <p className="realm-help" style={{ marginBottom: 8 }}>
@@ -2294,27 +2395,70 @@ export default function HomePage() {
                                   if (kind === "contracted") {
                                     const tt = b.turnkey_total_cents ?? 0;
                                     const selfCash = (b.self_shell_cents ?? 0) + (b.self_contractor_fee_cents ?? 0);
-                                    const matParts = Object.entries(b.self_materials ?? {}).map(([k, v]) => `${v}×${k}`);
-                                    const matHint = matParts.length ? matParts.join(", ") : "mats";
+                                    const gate = turnkeyBuildGate(b, playerInv, playerCashCents);
                                     return (
-                                      <li key={b.id} style={{ marginBottom: 10 }}>
+                                      <li key={b.id} style={{ marginBottom: 14 }}>
                                         <div style={{ marginBottom: 4, opacity: 0.9 }}>{b.label}</div>
+                                        <p className="realm-help" style={{ marginTop: 0, marginBottom: 6, fontSize: 12 }}>
+                                          Turnkey stocks the site from <strong>your pack</strong> first (same bill of materials as self-build), then charges the
+                                          turnkey fee.
+                                        </p>
+                                        <div style={{ fontSize: 12, marginBottom: 8 }}>
+                                          {gate.turnkeyLines.map((l) => {
+                                            const ask = liveBestAskForMaterial(world.market_asks, l.mat);
+                                            const estUsd =
+                                              ask != null && l.short > 0
+                                                ? `~$${((ask * l.short) / 100).toFixed(2)}`
+                                                : null;
+                                            return (
+                                              <div
+                                                key={`${b.id}-${l.mat}`}
+                                                style={{
+                                                  marginBottom: 4,
+                                                  color: l.short > 0 ? "var(--realm-warn, #c45)" : undefined,
+                                                  display: "flex",
+                                                  flexWrap: "wrap",
+                                                  alignItems: "center",
+                                                  gap: 8,
+                                                }}
+                                              >
+                                                <span>
+                                                  {displayMaterial(l.mat)} ×{l.need} — have {l.have}
+                                                </span>
+                                                {l.short > 0 ? (
+                                                  <button
+                                                    type="button"
+                                                    className="realm-btn realm-btn--ghost realm-btn--sm"
+                                                    disabled={busy || ask == null}
+                                                    title={ask == null ? "No ask on the book for this material" : undefined}
+                                                    onClick={() => void marketBuyShortfall(l.mat, l.short)}
+                                                  >
+                                                    Buy {l.short}
+                                                    {estUsd ? ` (${estUsd})` : ""}
+                                                  </button>
+                                                ) : null}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
                                         <button
                                           type="button"
                                           className="realm-list-btn"
-                                          disabled={busy}
+                                          disabled={busy || !gate.turnkeyOk}
+                                          title={!gate.turnkeyOk ? gate.missingTurnkeyTitle : undefined}
                                           onClick={() => void buildOnSelectedPlot(b.id, "turnkey")}
                                         >
-                                          Turnkey · ${(tt / 100).toFixed(2)} <span style={{ opacity: 0.75 }}>(vendor supplies)</span>
+                                          Turnkey · ${(tt / 100).toFixed(2)}
                                         </button>
                                         <button
                                           type="button"
                                           className="realm-list-btn"
                                           style={{ marginTop: 6 }}
-                                          disabled={busy}
+                                          disabled={busy || !gate.selfOk}
+                                          title={!gate.selfOk ? gate.missingSelfTitle : undefined}
                                           onClick={() => void buildOnSelectedPlot(b.id, "self_contract")}
                                         >
-                                          Self + contractor · ${(selfCash / 100).toFixed(2)} + {matHint}
+                                          Self + contractor · ${(selfCash / 100).toFixed(2)} + materials from pack
                                         </button>
                                       </li>
                                     );
@@ -2379,7 +2523,8 @@ export default function HomePage() {
                       <SectionTitle>Active production</SectionTitle>
                       {(world.active_production ?? []).length === 0 ? (
                         <p className="realm-help">
-                          Nothing is running. <strong>Select a surveyed plot you own</strong>, then pick a recipe above to start a batch.
+                          Nothing is running. Pick a <strong>workshop recipe</strong> on your surveyed plot above, or a <strong>hand extraction</strong> batch below
+                          (tools never consume — durable capital).
                         </p>
                       ) : (
                         <ul className="realm-help" style={{ paddingLeft: 18, margin: 0 }}>
@@ -2400,6 +2545,50 @@ export default function HomePage() {
                           })}
                         </ul>
                       )}
+
+                      {selectedPlot?.owner === "player" && selectedPlot.surveyed && selectedPlotId ? (
+                        <>
+                          <SectionTitle>Hand extraction (no building)</SectionTitle>
+                          {handRecipesForSelectedPlot.length === 0 ? (
+                            <p className="realm-help" style={{ marginTop: 0 }}>
+                              No Tier-0 hand recipes on this terrain.
+                            </p>
+                          ) : (
+                            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 8px" }}>
+                              {handRecipesForSelectedPlot.map((r) => {
+                                const tool = r.requires_tool ?? "";
+                                const haveTool = tool ? (playerInv[tool] ?? 0) >= 1 : false;
+                                const ask = tool ? liveBestAskForMaterial(world.market_asks, tool) : null;
+                                return (
+                                  <li key={r.id} style={{ marginBottom: 6 }}>
+                                    <button
+                                      type="button"
+                                      className="realm-list-btn"
+                                      disabled={busy || (!haveTool && ask == null)}
+                                      style={{ opacity: haveTool ? 1 : 0.72 }}
+                                      title={
+                                        !haveTool && ask == null
+                                          ? `No ${displayMaterial(tool)} on the book — visit Bazaar or wait for liquidity.`
+                                          : undefined
+                                      }
+                                      onClick={() =>
+                                        void (haveTool
+                                          ? produce(selectedPlotId, r.id)
+                                          : buyMarketToolThenProduce(selectedPlotId, tool, r.id))
+                                      }
+                                    >
+                                      {r.display_name} · {r.duration_ticks} ticks · labor ${(r.labor_cents / 100).toFixed(2)}
+                                      {!haveTool && tool
+                                        ? ` — need ${displayMaterial(tool)}${ask != null ? ` (~$${(ask / 100).toFixed(2)})` : ""}`
+                                        : null}
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </>
+                      ) : null}
 
                       <SectionTitle>Inventory (player)</SectionTitle>
                       <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
@@ -2423,17 +2612,29 @@ export default function HomePage() {
                               </td>
                             </tr>
                           ) : null}
-                          {Object.entries(playerInv)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([k, v]) => {
+                          {(() => {
+                            const ent = Object.entries(playerInv).sort(([a], [b]) => a.localeCompare(b));
+                            const tools = ent.filter(([k]) => TOOL_MATERIAL_IDS.has(k));
+                            const rest = ent.filter(([k]) => !TOOL_MATERIAL_IDS.has(k));
+                            return [...tools, ...rest].map(([k, v]) => {
                               const unitCents = bookMidpointCentsPerUnit(world.market_history, k);
                               const unitUsd =
                                 unitCents != null ? `~$${(unitCents / 100).toFixed(2)}` : "—";
                               const stackUsd =
                                 unitCents != null ? `~$${((unitCents * v) / 100).toFixed(2)}` : "—";
+                              const isTool = TOOL_MATERIAL_IDS.has(k);
                               return (
                                 <tr key={k}>
-                                  <td>{displayMaterial(k)}</td>
+                                  <td>
+                                    {isTool ? (
+                                      <>
+                                        <span aria-hidden="true">🔧</span> {displayMaterial(k)}{" "}
+                                        <span style={{ opacity: 0.75 }}>(durable)</span>
+                                      </>
+                                    ) : (
+                                      displayMaterial(k)
+                                    )}
+                                  </td>
                                   <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)" }}>{v}</td>
                                   <td style={{ textAlign: "right", fontFamily: "var(--realm-mono)", fontSize: 13 }}>
                                     {unitUsd}
@@ -2443,7 +2644,8 @@ export default function HomePage() {
                                   </td>
                                 </tr>
                               );
-                            })}
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </>
