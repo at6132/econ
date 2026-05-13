@@ -240,6 +240,22 @@ BUILDINGS: dict[str, dict[str, Any]] = {
             "grace_ticks": 1_440,
         },
     },
+    # Sprint 3 — Phase D.4: coastal renewable power. Half the throughput of a
+    # coal power_shed but zero ongoing fuel cost.
+    "tidal_mill": {
+        "kind": "contracted",
+        "label": "Tidal mill (coastal renewable electricity — no coal needed)",
+        "self_shell_cents": 120_000,
+        "self_contractor_fee_cents": 40_000,
+        "self_materials": {"timber": 12, "rope": 4, "stone": 6, "lumber": 4},
+        "turnkey_total_cents": 260_000,
+        "terrain_required": ("coastal",),
+        "maintenance_schedule": {
+            "interval_ticks": 7_200,  # 5 game-days
+            "materials": {"timber": 2, "rope": 1},
+            "grace_ticks": 1_440,
+        },
+    },
 }
 
 

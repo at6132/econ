@@ -378,11 +378,20 @@ def test_no_operator_falls_back_to_system_reserve() -> None:
     ship = dispatch_shipment(w, alice, MaterialId("grain"), 2, pa, pb)
     assert ship["ok"], ship
     fee = int(ship["fee_cents"])
-    # Default PER_TILE rate applies.
+    # Default PER_TILE rate applies. ``pa``/``pb`` sit on the coastal strip in
+    # this fixture, so Sprint 3 Phase D.2 applies the 40 % coastal discount.
     from realm.geo import manhattan
+    from realm.movement import COASTAL_ROUTE_DISCOUNT_BPS
 
     dist = manhattan(w, pa, pb)
-    assert fee == BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+    raw = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+    if ship["coastal_route"]:
+        expected = max(
+            BASE_SHIP_FEE_CENTS, raw * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000
+        )
+    else:
+        expected = raw
+    assert fee == expected
     assert ship["operator_party"] is None
     assert w.ledger.balance(party_cash_account(alice)) == pre_alice - fee
     assert w.ledger.balance(system_reserve_account()) == pre_reserve + fee

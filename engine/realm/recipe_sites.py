@@ -68,6 +68,12 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     # lists land terrains that *can* be coastal-adjacent so the API surfaces it on those
     # plot tiles; ``plot_is_coastal`` enforces the actual gate at production time.
     "fishing": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA, T.DESERT, T.MOUNTAIN}),
+    # Sprint 3 — Phase D.1: smoking is a wood_shop process (land workshops).
+    "smoke_fish": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA, T.DESERT, T.MOUNTAIN}),
+    # Sprint 3 — Phase D.4: tidal power is coastal-only (gate enforced via
+    # ``COASTAL_ONLY_RECIPES`` + ``plot_is_coastal``); the terrain envelope
+    # lists land terrains that *can* be coastal-adjacent so the API surfaces it.
+    "tidal_power": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA, T.DESERT, T.MOUNTAIN}),
     # Tier-2 extraction terrain envelopes (sulfur thrives in swamp+tundra mountain-fringe; silica is wide).
     "mine_sulfur_ore": frozenset({T.SWAMP, T.TUNDRA, T.MOUNTAIN, T.PLAINS}),
     "mine_saltpeter": frozenset({T.DESERT, T.PLAINS}),
@@ -123,7 +129,7 @@ RECIPE_TERRAIN_BONUS_BPS: Final[dict[str, dict[Terrain, int]]] = {
 # ``recipe_allowed_on_plot``; ``recipe_allowed_on_terrain`` is permissive so the
 # API and UI can still surface the recipe on potentially-coastal terrains, with
 # the plot-level check rejecting inland tries at production start.
-COASTAL_ONLY_RECIPES: Final[frozenset[str]] = frozenset({"fishing"})
+COASTAL_ONLY_RECIPES: Final[frozenset[str]] = frozenset({"fishing", "tidal_power"})
 
 
 def terrain_allows_workshop(terrain: Terrain) -> bool:

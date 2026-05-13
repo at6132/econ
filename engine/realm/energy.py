@@ -42,9 +42,8 @@ POWER_COVERAGE_RADIUS: Final[int] = 12
 POWER_GRID_RECOMPUTE_INTERVAL_TICKS: Final[int] = 10
 POWER_BUILDING_WARMUP_TICKS: Final[int] = 60  # 1 game-hour
 
-# Building ids that count as a grid power source. ``tidal_mill`` (Phase D)
-# will be appended here too — the membership test centralises the list.
-POWER_SOURCE_BUILDING_IDS: Final[set[str]] = {"power_shed"}
+# Building ids that count as a grid power source.
+POWER_SOURCE_BUILDING_IDS: Final[set[str]] = {"power_shed", "tidal_mill"}
 
 
 # ───────────────────────── state ─────────────────────────

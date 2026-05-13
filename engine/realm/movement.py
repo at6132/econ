@@ -28,6 +28,10 @@ from realm.world import InTransit, World
 BASE_SHIP_FEE_CENTS = 100
 PER_TILE_SHIP_CENTS = 50
 
+# Sprint 3 — Phase D.2/D.3: coastal advantages.
+COASTAL_ROUTE_DISCOUNT_BPS: int = 4_000  # 40 % discount → multiplier 0.60
+HARBOR_TRANSIT_SPEEDUP_BPS: int = 5_000  # 50 % faster departure from dock plots
+
 # Unloading / receiving (dock handling): paid when goods are accepted at destination; all parties alike.
 RECEIVING_FEE_BASE_CENTS = 25
 RECEIVING_FEE_EXTRA_PER_CHUNK_CENTS = 1
@@ -87,6 +91,16 @@ def dispatch_shipment(
             fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
     else:
         fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+    # Sprint 3 — Phase D.2: 40 % discount for coastal → coastal lanes.
+    from realm.recipe_sites import plot_is_coastal
+
+    coastal_route = False
+    from_plot = world.plots.get(from_plot_id)
+    to_plot = world.plots.get(to_plot_id)
+    if from_plot is not None and to_plot is not None:
+        coastal_route = plot_is_coastal(world, from_plot) and plot_is_coastal(world, to_plot)
+    if coastal_route:
+        fee = max(BASE_SHIP_FEE_CENTS, fee * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000)
     cash = party_cash_account(party)
     if world.ledger.balance(cash) < fee:
         return {"ok": False, "reason": "insufficient cash for shipping"}
@@ -129,7 +143,19 @@ def dispatch_shipment(
                 world.inventory.add(party, material, take_inv)
             _refund_fee()
             return {"ok": False, "reason": r2.reason}
-    arrive = world.tick + dist * TRANSIT_TICKS_PER_TILE + TRANSIT_BASE_TICKS
+    # Sprint 3 — Phase D.3: harbor speed bonus. A dispatch from a coastal plot
+    # that has a completed ``dock`` building moves at 1.5 × normal speed.
+    transit_ticks = dist * TRANSIT_TICKS_PER_TILE + TRANSIT_BASE_TICKS
+    has_dock_at_origin = any(
+        str(b.get("plot_id")) == str(from_plot_id)
+        and str(b.get("building_id")) == "dock"
+        and int(b.get("completes_at_tick", 0)) <= int(world.tick)
+        for b in world.plot_buildings
+    )
+    if has_dock_at_origin and from_plot is not None and plot_is_coastal(world, from_plot):
+        # 1.5× speed → travel time × (10000 / 15000) = × 0.667
+        transit_ticks = max(1, transit_ticks * 10_000 // (10_000 + HARBOR_TRANSIT_SPEEDUP_BPS))
+    arrive = world.tick + transit_ticks
     world.next_shipment_seq += 1
     sid = f"ship-{world.next_shipment_seq}"
     world.in_transit.append(
@@ -165,6 +191,10 @@ def dispatch_shipment(
         "fee_cents": fee,
         "route_key": op_route_key,
         "operator_party": str(operator_payee) if operator_payee is not None else None,
+        "coastal_route": bool(coastal_route),
+        "harbor_speedup": bool(
+            from_plot is not None and has_dock_at_origin and plot_is_coastal(world, from_plot)
+        ),
     }
 
 

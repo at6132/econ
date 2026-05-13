@@ -66,6 +66,24 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("dissipated_energy"): MaterialDef(
         MaterialId("dissipated_energy"), "Dissipated energy", 0.0, "energy"
     ),
+    # Sprint 3 — Phase D.1: real coastal-produce food chain. Raw fish spoils
+    # in 12 game-hours (720 ticks); smoked fish keeps for 10 game-days.
+    MaterialId("fish"): MaterialDef(
+        MaterialId("fish"),
+        "Fresh fish",
+        500.0,
+        "organic",
+        spoils_to=MaterialId("spoiled_grain"),
+        spoilage_interval_ticks=720,
+    ),
+    MaterialId("smoked_fish"): MaterialDef(
+        MaterialId("smoked_fish"),
+        "Smoked fish",
+        420.0,
+        "organic",
+        spoils_to=MaterialId("spoiled_grain"),
+        spoilage_interval_ticks=14_400,
+    ),
     MaterialId("brick"): MaterialDef(
         MaterialId("brick"), "Fired brick", 1900.0, "construction"
     ),

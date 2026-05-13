@@ -66,14 +66,15 @@ def test_fishing_full_run_on_coastal_plot() -> None:
     assert survey_plot(w, player, pid)["ok"] is True
     _seed_party_cash(w, player, 50_000)
     w.inventory.add(player, MaterialId("hand_saw"), 1)
-    grain_before = w.inventory.qty(player, MaterialId("grain"))
+    # Sprint 3 — Phase D.1: fishing now yields ``fish`` (real food material),
+    # not the grain proxy used in Sprint 1.
+    fish_before = w.inventory.qty(player, MaterialId("fish"))
     r = start_production_on_plot(w, player, pid, "fishing")
     assert r["ok"], r
-    # Advance the recipe duration with no other ticking machinery (just production).
     for _ in range(int(r["ticks_remaining"]) + 1):
         tick_production(w)
         w.tick += 1
-    assert w.inventory.qty(player, MaterialId("grain")) == grain_before + 2
+    assert w.inventory.qty(player, MaterialId("fish")) == fish_before + 2
 
 
 # ──────────────────────────── hub bid calibration ────────────────────────────

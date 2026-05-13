@@ -407,6 +407,9 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
         # Transport capital — durable, no recipe path yet (Sprint 2). Small
         # finite supply makes coastal route registration achievable on day one.
         (MaterialId("vessel"), 20, 4),
+        # Sprint 3 — Phase D.1: coastal food chain liquidity.
+        (MaterialId("fish"), 600, 30),
+        (MaterialId("smoked_fish"), 200, 12),
     ]
     for mid, total_add, list_qty in listings:
         ad = inv.add(ex, mid, total_add)

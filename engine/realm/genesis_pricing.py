@@ -74,6 +74,9 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
     "gear_set": 11_000,
     # Transport capital (durable; Sprint 2 — required for coastal route registration).
     "vessel": 45_000,
+    # Sprint 3 — Phase D.1: coastal food chain.
+    "fish": 160,
+    "smoked_fish": 360,
 }
 
 # Materials whose fair value is so far above the cheapest recipe basis that the
@@ -165,6 +168,9 @@ _MARKUP_TIER_BY_MATERIAL: dict[str, int] = {
     "hand_saw": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     "ladder": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     "vessel": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    # Sprint 3 — Phase D.1: coastal food chain.
+    "fish": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "smoked_fish": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
 }
 
 

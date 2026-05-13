@@ -77,6 +77,17 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         labor_cents=2_00,
         requires_building_id="power_shed",
     ),
+    # Sprint 3 — Phase D.4: coastal renewable power. Half the rate of a
+    # coal generator (1 unit / 720 ticks vs 2 units / 120 ticks) but no fuel.
+    "tidal_power": Recipe(
+        recipe_id="tidal_power",
+        display_name="Tidal power (no fuel — coastal renewable)",
+        inputs={},
+        outputs={MaterialId("electricity"): 1},
+        duration_ticks=720,
+        labor_cents=1_00,
+        requires_building_id="tidal_mill",
+    ),
     "kiln_brick": Recipe(
         recipe_id="kiln_brick",
         display_name="Kiln (clay → brick)",
@@ -317,13 +328,22 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         recipe_id="fishing",
         display_name="Fishing (coastal — no building needed)",
         inputs={},
-        # Grain is the temporary food-proxy output until a ``fish`` material is added.
-        outputs={MaterialId("grain"): 2},
+        # Sprint 3 — Phase D.1: real fish material (was grain proxy in Sprint 1).
+        outputs={MaterialId("fish"): 2},
         duration_ticks=2 * _TICKS_PER_GAME_HOUR,
         labor_cents=80,
         requires_building_id="",
         # ``hand_saw`` doubles as fishing tackle in Sprint 1; revisit once a dedicated tool exists.
         requires_tool=MaterialId("hand_saw"),
+    ),
+    "smoke_fish": Recipe(
+        recipe_id="smoke_fish",
+        display_name="Smoke fish (wood_shop)",
+        inputs={MaterialId("fish"): 3, MaterialId("timber"): 1},
+        outputs={MaterialId("smoked_fish"): 4},
+        duration_ticks=3 * _TICKS_PER_GAME_HOUR,
+        labor_cents=200,
+        requires_building_id="wood_shop",
     ),
     "hand_mine_coal": Recipe(
         recipe_id="hand_mine_coal",
