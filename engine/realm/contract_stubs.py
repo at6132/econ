@@ -14,13 +14,19 @@ FSM summaries
 
 **service_sub:** ``proposed`` → (subscriber ``accept``: fee moves subscriber→provider) →
 ``active`` until ``expires_tick`` → ``expired``.
+
+**forward_contract** (Sprint 4 — Phase C): ``proposed`` → (buyer ``accept``: seller deposit
+escrowed) → ``active`` → (seller ``deliver``: goods + payment + deposit release) →
+``delivered``. Missed deadline ⇒ seller deposit transferred to buyer, ``defaulted``,
+seller reputation hit.
 """
 
 from __future__ import annotations
 
 from realm.event_log import log_event
-from realm.ids import PartyId
-from realm.ledger import MoneyErr, party_cash_account
+from realm.ids import MaterialId, PartyId
+from realm.inventory import MatterErr
+from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.world import World
 
 
@@ -387,3 +393,233 @@ def tick_phase2_financial_contracts(world: World) -> None:
     tick_equity_stub(world)
     tick_loan_contracts(world)
     tick_service_subscriptions(world)
+    tick_forward_contracts(world)
+
+
+# ─────────────────── Sprint 4 — Phase C: forward contracts ───────────────────
+
+# Deposit = 10% of total notional value (default skin in the game).
+FORWARD_DEPOSIT_BPS: int = 1_000
+
+
+def _forward_deposit_cents(qty: int, price_per_unit_cents: int) -> int:
+    notional = max(0, int(qty)) * max(0, int(price_per_unit_cents))
+    return max(1, (notional * FORWARD_DEPOSIT_BPS) // 10_000) if notional > 0 else 0
+
+
+def propose_forward_contract(
+    world: World,
+    seller: PartyId,
+    buyer: PartyId,
+    material: MaterialId,
+    qty: int,
+    price_per_unit_cents: int,
+    delivery_tick: int,
+) -> dict:
+    """Create a ``proposed`` forward delivery contract (no escrow until accepted).
+
+    Validations on accept (deposit availability). The contract sits as
+    ``proposed`` in ``world.contracts`` until the buyer accepts.
+    """
+    if qty <= 0:
+        return {"ok": False, "reason": "qty must be positive"}
+    if price_per_unit_cents <= 0:
+        return {"ok": False, "reason": "price must be positive"}
+    if delivery_tick <= int(world.tick):
+        return {"ok": False, "reason": "delivery_tick must be in the future"}
+    if seller not in world.parties or buyer not in world.parties:
+        return {"ok": False, "reason": "unknown party"}
+    if seller == buyer:
+        return {"ok": False, "reason": "seller and buyer must differ"}
+    deposit = _forward_deposit_cents(qty, price_per_unit_cents)
+    cid = _next_contract_id(world)
+    world.contracts.append(
+        {
+            "id": cid,
+            "kind": "forward_contract",
+            "status": "proposed",
+            "seller": str(seller),
+            "buyer": str(buyer),
+            "material": str(material),
+            "qty": int(qty),
+            "price_per_unit_cents": int(price_per_unit_cents),
+            "delivery_tick": int(delivery_tick),
+            "deposit_cents": int(deposit),
+            "proposed_at_tick": int(world.tick),
+        }
+    )
+    log_event(
+        world,
+        "contract_forward_propose",
+        f"{seller} proposes forward {cid} to {buyer}: "
+        f"{qty}×{material} at {price_per_unit_cents}¢/u by tick {delivery_tick} "
+        f"(deposit ${deposit / 100:.2f})",
+        contract_id=cid,
+        seller=str(seller),
+        buyer=str(buyer),
+        material=str(material),
+        qty=int(qty),
+        price_per_unit_cents=int(price_per_unit_cents),
+        delivery_tick=int(delivery_tick),
+        deposit_cents=int(deposit),
+    )
+    return {"ok": True, "contract_id": cid, "deposit_cents": int(deposit)}
+
+
+def accept_forward_contract(world: World, buyer: PartyId, contract_id: str) -> dict:
+    """Buyer confirms the proposal; seller's deposit moves to system escrow."""
+    for c in world.contracts:
+        if c.get("id") != contract_id:
+            continue
+        if c.get("kind") != "forward_contract":
+            return {"ok": False, "reason": "not a forward contract"}
+        if c.get("status") != "proposed":
+            return {"ok": False, "reason": "forward not awaiting acceptance"}
+        if PartyId(c["buyer"]) != buyer:
+            return {"ok": False, "reason": "not the buyer on this forward"}
+        seller = PartyId(c["seller"])
+        deposit = int(c.get("deposit_cents", 0))
+        if deposit > 0:
+            sc = party_cash_account(seller)
+            world.ledger.ensure_account(sc)
+            if world.ledger.balance(sc) < deposit:
+                return {"ok": False, "reason": "seller cannot post deposit"}
+            tr = world.ledger.transfer(
+                debit=sc,
+                credit=system_reserve_account(),
+                amount_cents=deposit,
+            )
+            if isinstance(tr, MoneyErr):
+                return {"ok": False, "reason": tr.reason}
+        c["status"] = "active"
+        c["accepted_at_tick"] = int(world.tick)
+        log_event(
+            world,
+            "contract_forward_accept",
+            f"{buyer} accepted forward {contract_id} ({c['qty']}×{c['material']} "
+            f"by tick {c['delivery_tick']}; deposit ${deposit / 100:.2f} escrowed)",
+            contract_id=contract_id,
+            buyer=str(buyer),
+            seller=str(seller),
+            deposit_cents=int(deposit),
+        )
+        return {"ok": True, "deposit_cents": int(deposit), "delivery_tick": int(c["delivery_tick"])}
+    return {"ok": False, "reason": "contract not found"}
+
+
+def deliver_forward_contract(world: World, seller: PartyId, contract_id: str) -> dict:
+    """Seller fulfils the forward — goods + payment + deposit release, all atomic."""
+    for c in world.contracts:
+        if c.get("id") != contract_id:
+            continue
+        if c.get("kind") != "forward_contract":
+            return {"ok": False, "reason": "not a forward contract"}
+        if c.get("status") != "active":
+            return {"ok": False, "reason": "forward not active"}
+        if PartyId(c["seller"]) != seller:
+            return {"ok": False, "reason": "not the seller on this forward"}
+        buyer = PartyId(c["buyer"])
+        material = MaterialId(str(c["material"]))
+        qty = int(c["qty"])
+        unit_px = int(c["price_per_unit_cents"])
+        payment = qty * unit_px
+        deposit = int(c.get("deposit_cents", 0))
+        if world.inventory.qty(seller, material) < qty:
+            return {"ok": False, "reason": "insufficient material to deliver"}
+        bc = party_cash_account(buyer)
+        sc = party_cash_account(seller)
+        world.ledger.ensure_account(bc)
+        world.ledger.ensure_account(sc)
+        if world.ledger.balance(bc) < payment:
+            return {"ok": False, "reason": "buyer cannot pay locked price"}
+        # Move materials first.
+        mv = world.inventory.transfer(
+            material=material, qty=qty, from_party=seller, to_party=buyer
+        )
+        if isinstance(mv, MatterErr):
+            return {"ok": False, "reason": mv.reason}
+        # Buyer pays at locked price.
+        pay = world.ledger.transfer(debit=bc, credit=sc, amount_cents=payment)
+        if isinstance(pay, MoneyErr):
+            world.inventory.transfer(
+                material=material, qty=qty, from_party=buyer, to_party=seller
+            )
+            return {"ok": False, "reason": pay.reason}
+        # Release deposit back to seller.
+        if deposit > 0:
+            ret = world.ledger.transfer(
+                debit=system_reserve_account(),
+                credit=sc,
+                amount_cents=deposit,
+            )
+            if isinstance(ret, MoneyErr):
+                return {"ok": False, "reason": ret.reason}
+        c["status"] = "delivered"
+        c["delivered_at_tick"] = int(world.tick)
+        for pid in (seller, buyer):
+            r = world.reputation.setdefault(str(pid), {"honored": 0, "breached": 0})
+            r["honored"] += 1
+        log_event(
+            world,
+            "contract_forward_delivered",
+            f"Forward {contract_id} delivered: {qty}×{material} @ {unit_px}¢/u "
+            f"(payment ${payment / 100:.2f}, deposit ${deposit / 100:.2f} released)",
+            contract_id=contract_id,
+            seller=str(seller),
+            buyer=str(buyer),
+            material=str(material),
+            qty=qty,
+            payment_cents=payment,
+            deposit_cents=deposit,
+        )
+        return {"ok": True, "payment_cents": payment, "deposit_cents": deposit}
+    return {"ok": False, "reason": "contract not found"}
+
+
+def tick_forward_contracts(world: World) -> None:
+    """Default any active forwards whose delivery_tick has passed."""
+    t = int(world.tick)
+    for c in world.contracts:
+        if c.get("kind") != "forward_contract":
+            continue
+        if c.get("status") != "active":
+            continue
+        if t <= int(c.get("delivery_tick", t)):
+            continue
+        seller = PartyId(c["seller"])
+        buyer = PartyId(c["buyer"])
+        deposit = int(c.get("deposit_cents", 0))
+        bc = party_cash_account(buyer)
+        world.ledger.ensure_account(bc)
+        if deposit > 0:
+            world.ledger.transfer(
+                debit=system_reserve_account(),
+                credit=bc,
+                amount_cents=deposit,
+            )
+        c["status"] = "defaulted"
+        c["defaulted_at_tick"] = int(world.tick)
+        rs = world.reputation.setdefault(str(seller), {"honored": 0, "breached": 0})
+        rs["breached"] += 1
+        rb = world.reputation.setdefault(str(buyer), {"honored": 0, "breached": 0})
+        rb["honored"] = int(rb.get("honored", 0))
+        log_event(
+            world,
+            "contract_forward_default",
+            f"Forward {c['id']}: seller {seller} missed delivery by tick {c['delivery_tick']} "
+            f"— deposit ${deposit / 100:.2f} forfeited to {buyer}.",
+            contract_id=c["id"],
+            seller=str(seller),
+            buyer=str(buyer),
+            deposit_cents=deposit,
+        )
+        log_event(
+            world,
+            "world_feed",
+            f"Forward contract {c['id']}: {seller} defaulted on {c['qty']}×{c['material']} delivery — "
+            f"buyer {buyer} collected the escrowed deposit.",
+            feed_source="forward_default",
+            seller=str(seller),
+            buyer=str(buyer),
+            material=str(c["material"]),
+        )
