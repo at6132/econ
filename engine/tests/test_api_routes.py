@@ -6,6 +6,9 @@ from fastapi.testclient import TestClient
 
 from realm.api import app
 from realm.decay import BUILDING_CONDITION_FULL_BPS
+from realm.ids import PartyId
+
+from turnkey_fixtures import grant_turnkey_self_materials
 
 
 def test_market_cancel_via_http_round_trip() -> None:
@@ -128,6 +131,9 @@ def test_produce_while_active_returns_200_with_started_false() -> None:
     pid = "p-0-0"
     assert c.post(f"/plots/{pid}/claim", params={"party": "player"}).status_code == 200
     assert c.post(f"/plots/{pid}/survey", params={"party": "player"}).status_code == 200
+    import realm.api as api
+
+    grant_turnkey_self_materials(api._world, PartyId("player"), "wood_shop")
     rb = c.post(
         f"/plots/{pid}/build",
         params={"party": "player", "building_id": "wood_shop", "build_mode": "turnkey"},
@@ -220,6 +226,9 @@ def test_survey_http_returns_terrain_and_recipe_ids() -> None:
     rs = c.post("/plots/p-0-0/survey", params={"party": "player"})
     assert rs.status_code == 200
     assert rs.json().get("terrain") == "plains"
+    import realm.api as api
+
+    grant_turnkey_self_materials(api._world, PartyId("player"), "wood_shop")
     rb = c.post(
         "/plots/p-0-0/build",
         params={"building_id": "wood_shop", "party": "player", "build_mode": "turnkey"},

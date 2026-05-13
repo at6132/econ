@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from typing import Final, Mapping
 
 from realm.ids import MaterialId
-from realm.time_scale import legacy_scaled
+from realm.time_scale import TICKS_PER_GAME_DAY, legacy_scaled
+
+# In-game hours → ticks (1 tick = 1 in-game minute per ``time_scale``).
+_TICKS_PER_GAME_HOUR: int = TICKS_PER_GAME_DAY // 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +25,8 @@ class Recipe:
     requires_subsurface: tuple[tuple[str, float], ...] = ()
     # If set, scales that output material quantity by subsurface grade (field must match a gate).
     scaled_output: tuple[str, MaterialId] | None = None
+    # Tier 0: party must hold this tool (not consumed). No workshop check when set.
+    requires_tool: MaterialId | None = None
 
 
 RECIPES: Final[Mapping[str, Recipe]] = {
@@ -295,6 +300,52 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         labor_cents=4_00,
         requires_building_id="grain_row",
     ),
+    "hand_chop": Recipe(
+        recipe_id="hand_chop",
+        display_name="Hand chop (pick axe — no building)",
+        inputs={},
+        outputs={MaterialId("timber"): 1},
+        duration_ticks=4 * _TICKS_PER_GAME_HOUR,
+        labor_cents=2_50,
+        requires_building_id="",
+        requires_tool=MaterialId("pick_axe"),
+    ),
+    "hand_mine_coal": Recipe(
+        recipe_id="hand_mine_coal",
+        display_name="Hand mine coal (mining pick — no building)",
+        inputs={},
+        outputs={MaterialId("coal"): 1},
+        duration_ticks=6 * _TICKS_PER_GAME_HOUR,
+        labor_cents=3_00,
+        requires_building_id="",
+        requires_subsurface=(("coal_grade", 0.3),),
+        scaled_output=("coal_grade", MaterialId("coal")),
+        requires_tool=MaterialId("mining_pick"),
+    ),
+    "hand_mine_ore": Recipe(
+        recipe_id="hand_mine_ore",
+        display_name="Hand mine iron ore (mining pick — no building)",
+        inputs={},
+        outputs={MaterialId("iron_ore"): 1},
+        duration_ticks=8 * _TICKS_PER_GAME_HOUR,
+        labor_cents=3_50,
+        requires_building_id="",
+        requires_subsurface=(("iron_ore_grade", 0.3),),
+        scaled_output=("iron_ore_grade", MaterialId("iron_ore")),
+        requires_tool=MaterialId("mining_pick"),
+    ),
+    "hand_dig_clay": Recipe(
+        recipe_id="hand_dig_clay",
+        display_name="Hand dig clay (spade — no building)",
+        inputs={},
+        outputs={MaterialId("clay"): 1},
+        duration_ticks=3 * _TICKS_PER_GAME_HOUR,
+        labor_cents=2_00,
+        requires_building_id="",
+        requires_subsurface=(("clay_grade", 0.3),),
+        scaled_output=("clay_grade", MaterialId("clay")),
+        requires_tool=MaterialId("spade"),
+    ),
 }
 
 
@@ -315,5 +366,7 @@ def recipe_public_list() -> list[dict]:
         if r.scaled_output is not None:
             fld, mid = r.scaled_output
             row["scaled_output"] = {"field": fld, "material": str(mid)}
+        if r.requires_tool is not None:
+            row["requires_tool"] = str(r.requires_tool)
         out.append(row)
     return out

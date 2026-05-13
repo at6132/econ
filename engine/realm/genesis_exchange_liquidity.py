@@ -19,6 +19,13 @@ _STAPLES: tuple[tuple[MaterialId, int], ...] = (
     (MaterialId("electricity"), 56),
     (MaterialId("grain"), 48),
     (MaterialId("timber"), 36),
+    (MaterialId("lumber"), 500),
+    (MaterialId("brick"), 500),
+    (MaterialId("stone"), 500),
+    (MaterialId("pick_axe"), 200),
+    (MaterialId("mining_pick"), 200),
+    (MaterialId("spade"), 200),
+    (MaterialId("hand_saw"), 100),
 )
 
 

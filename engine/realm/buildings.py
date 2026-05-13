@@ -15,7 +15,8 @@ from realm.world import World
 # ``kind``:
 # - ``simple``: single ``cost_cents`` cash to reserve (legacy sheds).
 # - ``contracted``: self path pays shell + contractor fee + removes ``self_materials`` from player;
-#   turnkey pays ``turnkey_total_cents`` only (vendor procures stock — fictionally more expensive).
+#   turnkey pays ``turnkey_total_cents`` **and** removes the same ``self_materials`` from the
+#   builder's inventory (site must be stocked before the contractor fee is charged).
 BUILDINGS: dict[str, dict[str, Any]] = {
     "field_stockade": {
         "kind": "simple",
@@ -175,10 +176,25 @@ def build_on_plot(
         mats: dict[str, int] = {str(k): int(v) for k, v in mats_raw.items()}
         turnkey = int(spec["turnkey_total_cents"])
         if build_mode == "turnkey":
+            # Turnkey: same physical ``self_materials`` must leave the builder's inventory before
+            # the turnkey cash fee (site is stocked; the fee covers labour / contractor margin).
             total_cents = turnkey
             mode_out = "turnkey"
             if world.ledger.balance(cash) < total_cents:
                 return {"ok": False, "reason": "insufficient cash"}
+            for mid_s, qty in mats.items():
+                mid = MaterialId(mid_s)
+                have = world.inventory.qty(party, mid)
+                if have < qty:
+                    return {
+                        "ok": False,
+                        "reason": f"missing material: {mid_s} (need {qty}, have {have})",
+                    }
+            for mid_s, qty in mats.items():
+                mid = MaterialId(mid_s)
+                rm = world.inventory.remove(party, mid, int(qty))
+                if isinstance(rm, MatterErr):
+                    return {"ok": False, "reason": rm.reason}
         else:
             total_cents = shell + fee
             mode_out = "self_contract"

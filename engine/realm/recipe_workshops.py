@@ -15,6 +15,8 @@ def plot_has_workshop_for_recipe(world: World, party: PartyId, plot_id: PlotId, 
     recipe = RECIPES.get(recipe_id)
     if recipe is None:
         return False
+    if recipe.requires_tool is not None:
+        return True
     req = recipe.requires_building_id
     for b in world.plot_buildings:
         if b.get("party") != str(party) or b.get("plot_id") != str(plot_id):
@@ -40,6 +42,9 @@ def recipe_ids_on_plot_for_owner(world: World, plot: Plot) -> list[str]:
         if not recipe_allowed_on_terrain(plot.terrain, rid):
             continue
         if not subsurface_allows_recipe(plot, recipe):
+            continue
+        if recipe.requires_tool is not None:
+            out.append(rid)
             continue
         if not plot_has_workshop_for_recipe(world, party, plot.plot_id, rid):
             continue

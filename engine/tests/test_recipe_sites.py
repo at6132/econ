@@ -12,6 +12,8 @@ from realm.terrain import Terrain
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier
 
+from turnkey_fixtures import grant_turnkey_self_materials
+
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
     while True:
@@ -54,6 +56,7 @@ def test_sawmill_ok_after_turnkey_wood_shop() -> None:
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
+    grant_turnkey_self_materials(w, player, "wood_shop")
     assert build_on_plot(w, player, pid, "wood_shop", build_mode="turnkey")["ok"] is True
     _advance_until_building_ready(w, player, pid, "wood_shop")
     assert start_production(w, player, pid, "sawmill")["ok"] is True
@@ -75,6 +78,7 @@ def test_mountain_foundry_unlocks_smelt_in_recipe_ids() -> None:
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     assert "smelt_iron" not in recipe_ids_on_plot_for_owner(w, w.plots[pid])
+    grant_turnkey_self_materials(w, player, "foundry")
     assert build_on_plot(w, player, pid, "foundry", build_mode="turnkey")["ok"] is True
     _advance_until_building_ready(w, player, pid, "foundry")
     ids = recipe_ids_on_plot_for_owner(w, w.plots[pid])

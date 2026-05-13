@@ -35,6 +35,10 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
     "limestone": 52,
     "slag": 24,
     "pottery": 105,
+    "pick_axe": 695,
+    "mining_pick": 1217,
+    "spade": 521,
+    "hand_saw": 782,
 }
 
 # Exchange sits 15% above fair value (one-sided ask). Settlers operate in
@@ -75,6 +79,10 @@ _FALLBACK_LIST_CENTS: dict[str, int] = {
     "limestone": 48,
     "slag": 25,
     "pottery": 90,
+    "pick_axe": 780,
+    "mining_pick": 1350,
+    "spade": 580,
+    "hand_saw": 870,
 }
 
 
@@ -99,6 +107,8 @@ def _recipe_unit_input_cost_cents(material: MaterialId) -> int | None:
     """
     best: int | None = None
     for recipe in RECIPES.values():
+        if recipe.requires_tool is not None:
+            continue
         out_qty = int(recipe.outputs.get(material, 0))
         if out_qty <= 0:
             continue

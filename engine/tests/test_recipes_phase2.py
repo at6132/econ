@@ -12,6 +12,8 @@ from realm.terrain import Terrain
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier
 
+from turnkey_fixtures import grant_turnkey_self_materials
+
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
     while True:
@@ -79,6 +81,7 @@ def test_mill_flour_run_conserves_player_inventory_units() -> None:
     player = PartyId("player")
     pid = PlotId("p-0-0")
     assert claim_plot(w, player, pid)["ok"] is True
+    grant_turnkey_self_materials(w, player, "gristmill")
     assert build_on_plot(w, player, pid, "gristmill", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _advance_until_building_ready(w, player, pid, "gristmill")
@@ -94,6 +97,7 @@ def test_steel_alloy_outputs_match_inputs_units() -> None:
     pid = PlotId("p-0-0")
     assert w.plots[pid].terrain == Terrain.MOUNTAIN
     assert claim_plot(w, player, pid)["ok"] is True
+    grant_turnkey_self_materials(w, player, "foundry")
     assert build_on_plot(w, player, pid, "foundry", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _advance_until_building_ready(w, player, pid, "foundry")

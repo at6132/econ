@@ -43,6 +43,10 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "dig_clay": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA}),
     "chop_timber": frozenset({T.FOREST, T.PLAINS}),
     "grow_grain": frozenset({T.PLAINS}),
+    "hand_chop": frozenset({T.FOREST, T.PLAINS}),
+    "hand_mine_coal": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.FOREST}),
+    "hand_mine_ore": frozenset({T.MOUNTAIN}),
+    "hand_dig_clay": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA}),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})

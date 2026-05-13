@@ -224,7 +224,11 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         return {"ok": False, "reason": "unknown recipe"}
     if not recipe_allowed_on_terrain(plot.terrain, recipe_id):
         return {"ok": False, "reason": "recipe not available on this plot"}
-    if not plot_has_workshop_for_recipe(world, party, plot_id, recipe_id):
+    if recipe.requires_tool is not None:
+        tool = recipe.requires_tool
+        if world.inventory.qty(party, tool) < 1:
+            return {"ok": False, "reason": f"missing tool: {tool}"}
+    elif not plot_has_workshop_for_recipe(world, party, plot_id, recipe_id):
         req = recipe.requires_building_id
         return {"ok": False, "reason": f"missing workshop: {req}"}
     if not subsurface_allows_recipe(plot, recipe):
@@ -398,4 +402,7 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        if str(run.recipe_id).startswith("hand_") and world.scenario_id == "genesis":
+            gst = world.scenario_state.setdefault("genesis", {})
+            gst["hand_tier0_completions"] = int(gst.get("hand_tier0_completions", 0)) + 1
     world.active_production = still

@@ -230,6 +230,8 @@ def _maybe_build_secondary_workshop(
     extra = 120_000 if chosen == "foundry" else 58_000
     cash = world.ledger.balance(party_cash_account(party))
     if cash < need + extra:
+        return False
+    if not _settler_acquire_turnkey_materials(world, party, chosen):
         return
     build_on_plot(world, party, plot_id, chosen, "turnkey")
 
@@ -326,6 +328,90 @@ def _list_price_cents(world: World, material: MaterialId) -> int:
     return settler_ask_cents(world, material, best_resting_bid=bid)
 
 
+def _settler_acquire_turnkey_materials(world: World, party: PartyId, building_id: str) -> bool:
+    """Buy missing ``self_materials`` from the book before ``turnkey`` build (Genesis settlers)."""
+    spec = BUILDINGS.get(building_id)
+    if not spec or str(spec.get("kind")) != "contracted":
+        return True
+    for mid_s, qty in (spec.get("self_materials") or {}).items():
+        mid = MaterialId(mid_s)
+        need = int(qty) - int(world.inventory.qty(party, mid))
+        if need <= 0:
+            continue
+        r = market_buy(world, party, mid, need)
+        filled = int(r.get("filled", 0))
+        if not r.get("ok") or filled < need:
+            return False
+    return True
+
+
+def _ensure_settler_boot_tools(world: World, party: PartyId, primary_recipe: str | None) -> None:
+    """One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while saving for builds."""
+    if not str(party).startswith("settler_"):
+        return
+    gst = world.scenario_state.setdefault("genesis", {})
+    key = "settler_tool_init"
+    done: set[str] = {str(x) for x in gst.setdefault(key, [])}
+    if str(party) in done:
+        return
+    ok = True
+    if world.inventory.qty(party, MaterialId("mining_pick")) < 1:
+        r = market_buy(world, party, MaterialId("mining_pick"), 1)
+        ok = bool(r.get("ok") and int(r.get("filled", 0)) >= 1)
+    if ok and primary_recipe == "dig_clay" and world.inventory.qty(party, MaterialId("spade")) < 1:
+        r2 = market_buy(world, party, MaterialId("spade"), 1)
+        ok = bool(r2.get("ok") and int(r2.get("filled", 0)) >= 1)
+    if ok:
+        done.add(str(party))
+        gst[key] = sorted(done)
+
+
+def _settler_try_hand_extraction(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    plot,
+    *,
+    prefer_recipe: str | None,
+) -> bool:
+    """Slow Tier-0 income while workshop materials are still being sourced."""
+    if plot_has_active_production(world, plot_id):
+        return False
+    if _has_primary_on_plot(world, party, plot_id):
+        return False
+    candidates: list[str] = []
+    if prefer_recipe == "mine_coal" and world.inventory.qty(party, MaterialId("mining_pick")) >= 1:
+        candidates.append("hand_mine_coal")
+    if prefer_recipe == "dig_clay" and world.inventory.qty(party, MaterialId("spade")) >= 1:
+        candidates.append("hand_dig_clay")
+    if world.inventory.qty(party, MaterialId("mining_pick")) >= 1:
+        candidates.append("hand_mine_coal")
+    if world.inventory.qty(party, MaterialId("pick_axe")) >= 1:
+        candidates.append("hand_chop")
+    if world.inventory.qty(party, MaterialId("spade")) >= 1:
+        candidates.append("hand_dig_clay")
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            ordered.append(c)
+    for rid in ordered:
+        rec = RECIPES.get(rid)
+        if rec is None:
+            continue
+        if not recipe_allowed_on_terrain(plot.terrain, rid):
+            continue
+        if not subsurface_allows_recipe(plot, rec):
+            continue
+        if world.ledger.balance(party_cash_account(party)) < rec.labor_cents:
+            continue
+        r = start_production_on_plot(world, party, plot_id, rid)
+        if r.get("ok") and r.get("started", True):
+            return True
+    return False
+
+
 def _workshop_cash_buffer(building_id: str) -> int:
     if building_id == "foundry":
         return 120_000
@@ -346,6 +432,8 @@ def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id:
     buf = _workshop_cash_buffer(building_id)
     cash = world.ledger.balance(party_cash_account(party))
     if cash < need + buf:
+        return False
+    if not _settler_acquire_turnkey_materials(world, party, building_id):
         return False
     r = build_on_plot(world, party, plot_id, building_id, "turnkey")
     return bool(r.get("ok"))
@@ -526,7 +614,9 @@ def _settler_pipeline_step(
     if line is None:
         return False
     _recipe_id, building_id = line
+    _ensure_settler_boot_tools(world, party, _recipe_id)
     if not _ensure_workshop(world, party, owned, building_id):
+        _settler_try_hand_extraction(world, party, owned, plot, prefer_recipe=_recipe_id)
         return False
 
     if allow_secondary:

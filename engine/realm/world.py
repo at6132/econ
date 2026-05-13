@@ -203,9 +203,16 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     # so the cold-start book is consistent with steady-state quotes (no mid-tick price jump).
     listings: list[tuple[MaterialId, int, int]] = [
         (MaterialId("grain"), 80_000, 120),
-        (MaterialId("timber"), 50_000, 80),
+        (MaterialId("timber"), 500_000, 200),
         (MaterialId("coal"), 500_000, 140),
         (MaterialId("electricity"), 100_000, 100),
+        (MaterialId("lumber"), 400_000, 200),
+        (MaterialId("brick"), 400_000, 200),
+        (MaterialId("stone"), 400_000, 200),
+        (MaterialId("pick_axe"), 50_000, 200),
+        (MaterialId("mining_pick"), 50_000, 200),
+        (MaterialId("spade"), 50_000, 200),
+        (MaterialId("hand_saw"), 25_000, 100),
     ]
     for mid, total_add, list_qty in listings:
         ad = inv.add(ex, mid, total_add)
@@ -217,7 +224,7 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     log_event(
         world,
         "world",
-        "genesis_exchange listed grain/timber/coal/electricity (cold-start clearing).",
+        "genesis_exchange listed grain/timber/coal/electricity/lumber/brick/stone/tools (cold-start clearing).",
     )
 
 

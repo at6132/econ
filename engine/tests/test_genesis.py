@@ -20,7 +20,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + 2 * GENESIS_POP_HUB_CASH_CENTS  # pop hubs
         + 88_000  # Tier-3 Margaux (Genesis)
         + 25_000_000  # genesis_exchange operating cash (from reserve)
-        - 4 * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse registration fees (exchange → reserve)
+        - 11 * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration (one per listed material)
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
 
@@ -158,6 +158,32 @@ def test_genesis_margaux_aux_poll_runs_cleanly_over_multi_day() -> None:
         advance_tick(w)
     texts = [m.get("text", "") for m in w.npc_messages_to_player if m.get("from_party") == "llm_margaux"]
     assert len(texts) >= 1
+
+
+def test_settler_buys_mining_pick_within_early_ticks() -> None:
+    """Settlers source a mining pick from the clearinghouse so Tier-0 extraction can run."""
+    w = bootstrap_genesis(seed=403, grid_width=14, grid_height=12, settler_count=8)
+    for _ in range(64):
+        advance_tick(w)
+    picks = sum(
+        w.inventory.qty(p, MaterialId("mining_pick"))
+        for p in w.parties
+        if str(p).startswith("settler_")
+    )
+    assert picks >= 6
+
+
+def test_settler_strip_mine_requires_exchange_materials() -> None:
+    """After enough ticks, at least one settler completes a strip_mine (bought turnkey mats first)."""
+    w = bootstrap_genesis(seed=404, grid_width=16, grid_height=14, settler_count=12)
+    for _ in range(1800):
+        advance_tick(w)
+    mines = sum(
+        1
+        for b in w.plot_buildings
+        if str(b.get("party", "")).startswith("settler_") and b.get("building_id") == "strip_mine"
+    )
+    assert mines >= 1
 
 
 def test_genesis_supply_contract_triggers_with_listed_coal() -> None:

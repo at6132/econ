@@ -11,6 +11,8 @@ from realm.terrain import Terrain
 from realm.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier
 
+from turnkey_fixtures import grant_turnkey_self_materials
+
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
     while True:
@@ -37,6 +39,7 @@ def _complete_recipe(w, recipe_id: str) -> None:
 
 
 def _turnkey(w, party: PartyId, pid: PlotId, building_id: str) -> None:
+    grant_turnkey_self_materials(w, party, building_id)
     r = build_on_plot(w, party, pid, building_id, build_mode="turnkey")
     assert r["ok"] is True, r
 

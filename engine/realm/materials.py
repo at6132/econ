@@ -14,9 +14,10 @@ class MaterialDef:
     material_id: MaterialId
     display_name: str
     mass_per_unit_kg: float
-    category: str  # ore, organic, processed, energy, construction
+    category: str  # ore, organic, processed, energy, construction, tool
     spoils_to: MaterialId | None = None
     spoilage_interval_ticks: int = 0  # 0 = disabled; checked as tick % interval == 0
+    durable: bool = False  # tools / capital goods — no organic spoilage path in v1
 
 
 # Phase 1–2 catalog: construction + ores + organics + industry chain (slag models process waste).
@@ -98,7 +99,21 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("ladder"): MaterialDef(
         MaterialId("ladder"), "Timber ladder (assembled)", 120.0, "construction"
     ),
+    MaterialId("pick_axe"): MaterialDef(
+        MaterialId("pick_axe"), "Pick axe", 2.2, "tool", durable=True
+    ),
+    MaterialId("mining_pick"): MaterialDef(
+        MaterialId("mining_pick"), "Mining pick", 3.5, "tool", durable=True
+    ),
+    MaterialId("spade"): MaterialDef(MaterialId("spade"), "Spade", 2.0, "tool", durable=True),
+    MaterialId("hand_saw"): MaterialDef(
+        MaterialId("hand_saw"), "Hand saw", 0.8, "tool", durable=True
+    ),
 }
+
+DURABLE_MATERIAL_IDS: frozenset[MaterialId] = frozenset(
+    mid for mid, mdef in MATERIALS.items() if mdef.durable
+)
 
 
 def all_material_ids() -> tuple[MaterialId, ...]:

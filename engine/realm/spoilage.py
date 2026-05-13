@@ -12,6 +12,8 @@ from realm.world import World
 def tick_material_spoilage(world: World) -> None:
     """Each tick: for materials with ``spoilage_interval_ticks``, maybe convert one unit to ``spoils_to``."""
     for mid, mdef in MATERIALS.items():
+        if mdef.durable:
+            continue
         interval = mdef.spoilage_interval_ticks
         if interval <= 0 or mdef.spoils_to is None:
             continue
