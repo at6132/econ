@@ -1035,6 +1035,72 @@ def post_business_register(body: Annotated[dict, Body()]) -> dict:
     return dict(r)
 
 
+# ─────────────────── Sprint 5 — Phase B: sub-accounts ───────────────────
+
+
+@app.get("/accounts")
+def get_accounts(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.sub_accounts import party_accounts_view
+
+    return {
+        "ok": True,
+        "tick": _world.tick,
+        "party": party,
+        "accounts": party_accounts_view(_world, PartyId(party)),
+    }
+
+
+@app.get("/accounts/{label}/history")
+def get_account_history(
+    label: str,
+    party: Annotated[str, Query()] = "player",
+    limit: Annotated[int, Query()] = 20,
+) -> dict:
+    from realm.sub_accounts import sub_account_history
+
+    return {
+        "ok": True,
+        "tick": _world.tick,
+        "party": party,
+        "label": label,
+        "transactions": sub_account_history(_world, PartyId(party), label, limit=limit),
+    }
+
+
+@app.post("/accounts/create")
+def post_account_create(body: Annotated[dict, Body()]) -> dict:
+    from realm.sub_accounts import create_sub_account
+
+    party_raw = body.get("party", "player")
+    label_raw = body.get("label")
+    if not isinstance(label_raw, str) or not label_raw.strip():
+        raise HTTPException(status_code=400, detail="label is required")
+    r = create_sub_account(_world, PartyId(str(party_raw)), str(label_raw))
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/accounts/transfer")
+def post_account_transfer(body: Annotated[dict, Body()]) -> dict:
+    from realm.sub_accounts import transfer_own
+
+    party_raw = body.get("party", "player")
+    from_label = body.get("from_label") or body.get("from")
+    to_label = body.get("to_label") or body.get("to")
+    cents = body.get("cents") or body.get("amount_cents") or 0
+    if not isinstance(from_label, str) or not isinstance(to_label, str):
+        raise HTTPException(status_code=400, detail="from_label and to_label are required")
+    try:
+        cents_int = int(cents)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="cents must be an integer")
+    r = transfer_own(_world, PartyId(str(party_raw)), str(from_label), str(to_label), cents_int)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
 # ─────────────────── Sprint 4 — Phase B: analytics products ───────────────────
 
 

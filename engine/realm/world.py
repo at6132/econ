@@ -1179,11 +1179,21 @@ def world_public_dict(world: World) -> dict:
         "player_owned_reports": _player_owned_reports_public(world, PartyId("player")),
         "analytics_purchases": list(world.analytics_purchases[-48:]),
         "business_registry": _business_registry_public(world),
+        "player_accounts": _player_accounts_public(world),
         "player_price_alerts": list(
             (world.scenario_state.get("player_price_alerts") or [])
         ),
         "forward_contracts": _forward_contracts_public(world, PartyId("player")),
     }
+
+
+def _player_accounts_public(world: "World") -> list[dict]:
+    """Public view of the player's accounts (Sprint 5 — Phase B)."""
+    try:
+        from realm.sub_accounts import party_accounts_view
+    except Exception:
+        return []
+    return party_accounts_view(world, PartyId("player"))
 
 
 def _business_registry_public(world: "World") -> dict[str, dict]:
