@@ -8,6 +8,7 @@ from realm.actions import claim_plot
 from realm.buildings import build_on_plot
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
+from realm.event_log import log_event
 from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.tick import advance_tick
 from realm.world import bootstrap_by_scenario, bootstrap_genesis
@@ -94,6 +95,17 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     w.scenario_state["persist_probe"] = {"n": w.tick}
     w3 = loads_json(dumps_json(w))
     assert w3.scenario_state.get("persist_probe", {}).get("n") == w.tick
+
+
+def test_world_feed_log_survives_dump_roundtrip() -> None:
+    w = bootstrap_by_scenario(seed=7, scenario="frontier")
+    log_event(w, "world_feed", "headline A", topic="coal")
+    log_event(w, "world_feed", "headline B")
+    log_event(w, "world", "non-feed row")
+    w2 = loads_json(dumps_json(w))
+    assert [e.get("message") for e in w2.world_feed_log] == ["headline A", "headline B"]
+    assert w2.world_feed_log[0].get("topic") == "coal"
+    assert "world_feed_log" in dump_world(w)
 
 
 def test_dump_plot_buildings_decoupled_from_live_mutations() -> None:

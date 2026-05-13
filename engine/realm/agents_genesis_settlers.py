@@ -338,9 +338,11 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
 
 
 def _list_price_cents(world: World, material: MaterialId) -> int:
+    """Limit sell price: undercut best resting ask so we win price-time ties vs ``genesis_exchange`` (FIFO at same ¢)."""
     ba = best_resting_ask_cents(world, material)
     if ba is not None:
-        return max(4, ba - 1)
+        # −2¢ beats clearinghouse clips that stack at the same tick (ba−1 still ties at many prices).
+        return max(4, ba - 2)
     return max(4, _FALLBACK_LIST_CENTS.get(str(material), 40))
 
 

@@ -118,6 +118,7 @@ class World:
     contracts: list[dict] = field(default_factory=list)
     next_contract_seq: int = 0
     event_log: list[dict] = field(default_factory=list)
+    world_feed_log: list[dict] = field(default_factory=list)  # world_feed mirror; larger cap than event_log
     plot_buildings: list[dict] = field(default_factory=list)
     stub_hires: list[dict] = field(default_factory=list)
     market_history: list[dict] = field(default_factory=list)
@@ -739,6 +740,7 @@ def world_public_dict(world: World) -> dict:
         "reputation": dict(world.reputation),
         "contracts": list(world.contracts),
         "event_log": list(world.event_log[-120:]),
+        "world_feed_log": list(world.world_feed_log[-1500:]),
         "plot_buildings": list(world.plot_buildings),
         "stub_hires": list(world.stub_hires),
         "building_catalog": building_catalog_public(),
@@ -882,6 +884,7 @@ def world_compact_dict(world: World) -> dict[str, Any]:
         ][:16],
         "market_asks_summary": {"materials_with_asks": ask_mats, "total_lots": ask_lots},
         "event_log_tail": [_trim_event(e) for e in world.event_log[-36:]],
+        "world_feed_tail": [_trim_event(e) for e in world.world_feed_log[-48:]],
         "npc_messages_tail": list(world.npc_messages_to_player[-12:]),
         "scenario_state_preview": scen_preview,
     }
