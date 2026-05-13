@@ -295,6 +295,7 @@ def generate_plots(
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
     from realm.event_log import log_event
+    from realm.genesis_exchange_liquidity import ensure_exchange_state_initialised
     from realm.genesis_pricing import exchange_ask_cents
     from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
     from realm.markets import place_sell_order
@@ -311,6 +312,7 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     )
     if isinstance(trx, MoneyErr):
         raise ValueError(trx.reason)
+    ensure_exchange_state_initialised(world)
     # Seed prices come from the same model used by ``tick_genesis_exchange_quoting``
     # so the cold-start book is consistent with steady-state quotes (no mid-tick price jump).
     listings: list[tuple[MaterialId, int, int]] = [

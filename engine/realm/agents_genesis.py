@@ -9,6 +9,7 @@ from realm.agents_genesis_settlers import tick_settler_business
 from realm.genesis_contracts import tick_genesis_pop_hub_contracts
 from realm.genesis_exchange_liquidity import tick_genesis_exchange_quoting
 from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
+from realm.genesis_pricing import hub_max_bid_cents
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
 from realm.ids import MaterialId, PartyId
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
@@ -74,7 +75,13 @@ def tick_population_demands(world: World) -> None:
         if hub not in world.parties:
             continue
         for mid, clip in basket:
-            market_buy(world, hub, mid, clip)
+            market_buy(
+                world,
+                hub,
+                mid,
+                clip,
+                max_price_per_unit_cents=hub_max_bid_cents(mid),
+            )
 
 
 def tick_genesis_agents(world: World) -> None:

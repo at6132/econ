@@ -19,6 +19,23 @@ from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, market_escrow_account, party_cash_account, system_reserve_account
+
+
+def _record_genesis_fill(
+    world: "World", material: MaterialId, qty: int, unit_px: int, seller: PartyId
+) -> None:
+    """Forward a realised fill to the genesis exchange's price-anchor buffer.
+
+    Imported lazily to avoid a circular import (``genesis_exchange_liquidity``
+    imports from ``markets`` at module top-level for ``place_sell_order``).
+    """
+    if world.scenario_id != "genesis":
+        return
+    try:
+        from realm.genesis_exchange_liquidity import record_market_fill
+    except ImportError:
+        return
+    record_market_fill(world, material, int(qty), int(unit_px), seller)
 from realm.social import bump_spot_exchange_honored
 from realm.storage_caps import try_add_inventory
 from realm.world import World
@@ -286,6 +303,7 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         qty=fill,
         price_per_unit_cents=unit_px,
     )
+    _record_genesis_fill(world, ask.material, fill, unit_px, ask.party)
     bump_spot_exchange_honored(world, bid.party, ask.party)
     return True
 
@@ -323,6 +341,7 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         qty=fill,
         price_per_unit_cents=unit_px,
     )
+    _record_genesis_fill(world, ask.material, fill, unit_px, ask.party)
     bump_spot_exchange_honored(world, bid.party, ask.party)
     return True
 
@@ -616,17 +635,23 @@ def market_buy(
     max_qty: int,
     *,
     min_seller_honored: int = 0,
+    max_price_per_unit_cents: int | None = None,
 ) -> dict:
     """
     Aggressive buy: walk asks in ascending price order; pay sellers from buyer cash; deliver goods.
 
     Skips asks whose ``min_counterparty_honored`` the buyer cannot satisfy, then continues to
     higher-priced fillable clips (so rep-gated cheap listings do not block the whole book).
+
+    When ``max_price_per_unit_cents`` is provided the walker stops at the first ask above that
+    ceiling — used by hub pop-buyers to cap willingness-to-pay (``hub_max_bid_cents``).
     """
     if max_qty <= 0:
         return {"ok": False, "reason": "max_qty must be positive"}
     if min_seller_honored < 0:
         return {"ok": False, "reason": "min_seller_honored must be non-negative"}
+    if max_price_per_unit_cents is not None and max_price_per_unit_cents <= 0:
+        return {"ok": False, "reason": "max_price_per_unit_cents must be positive"}
     remaining = max_qty
     spent = 0
     buyer_cash = party_cash_account(buyer)
@@ -648,6 +673,8 @@ def market_buy(
         if idx is None:
             break
         o = asks[idx]
+        if max_price_per_unit_cents is not None and o.price_per_unit_cents > max_price_per_unit_cents:
+            break
         fill = min(remaining, o.qty)
         cost = fill * o.price_per_unit_cents
         if world.ledger.balance(buyer_cash) < cost:
@@ -673,6 +700,7 @@ def market_buy(
         spent += cost
         remaining -= fill
         seller_parties.add(str(o.party))
+        _record_genesis_fill(world, material, fill, int(o.price_per_unit_cents), o.party)
         if first_seller_str is None:
             first_seller_str = str(o.party)
         bump_spot_exchange_honored(world, buyer, o.party)
@@ -781,6 +809,7 @@ def sell_into_bids(
         received += payment
         remaining -= fill
         bump_spot_exchange_honored(world, bid.party, seller)
+        _record_genesis_fill(world, material, fill, int(unit_px), seller)
         log_event(
             world,
             "market_sell_fill",

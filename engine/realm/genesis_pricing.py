@@ -1,10 +1,16 @@
-"""Genesis price model — fair-value table, exchange spread, settler cost-basis.
+"""Genesis price model — fair-value table, exchange markup, settler cost-basis.
 
 The clearinghouse (``genesis_exchange``) is a **backstop market-maker**, not the
-primary price. It quotes asks at ``fair_value × (1 + EXCHANGE_SPREAD_BPS / 10_000)``
-so real producers (settlers) can list **below** it and still earn margin over
-their recipe cost. Hub demand walks the book bottom-up, so a settler-priced clip
-strictly beats the exchange clip at the same material every tick.
+primary price. Its ask is computed as ``producer_cost_basis × markup_factor`` —
+markup tiered by material category (common / processed / rare-industrial) so the
+exchange is **always more expensive than a real producer**. Settlers list below it
+and still earn margin over their recipe cost. Hub demand walks the book
+bottom-up, so settler clips strictly beat the exchange every tick.
+
+Exchange prices are lagging indicators: ``tick_genesis_exchange_quoting`` re-anchors
+the ask every ``EXCHANGE_PRICE_REFRESH_TICKS`` to the volume-weighted average of
+recent fills (held flat if no fills). This makes the exchange slow to respond to
+sudden real-market shifts — strategic by design.
 """
 
 from __future__ import annotations
@@ -66,8 +72,8 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
     "gear_set": 11_000,
 }
 
-# Exchange sits 15% above fair value (one-sided ask). Settlers operate in
-# [cost_basis × 1.04, exchange_ask − 2¢], beating the clearinghouse on price-time.
+# Legacy: exchange sat 15% above fair value (one-sided ask). Kept only as a
+# fallback when neither cost-basis nor markup-tier is known for a material.
 EXCHANGE_SPREAD_BPS: int = 1500
 
 # Below this watermark of *non-exchange* resting ask units per material,
@@ -81,6 +87,132 @@ SETTLER_MARGIN_BPS: int = 400
 # downstream goods (timber, lumber, brick) far below the consensus print when
 # their material-input cost is artificially low.
 SETTLER_FAIR_VALUE_FLOOR_BPS: int = 8_500  # 85% of fair value
+
+# ─────────────────── Markup-tier pricing (Sprint 1) ───────────────────
+#
+# ``exchange_ask = max(producer_cost_basis × markup_factor, fair_value × spread)``
+# Tier the markup so common raws stay close to cost, while rare/industrial goods
+# command a higher backstop margin (the exchange is the *most expensive* legal
+# source, never the default). Materials not listed below default to TIER_COMMON.
+
+EXCHANGE_MARKUP_TIER_COMMON_BPS: int = 12_500   # 1.25× (coal, timber, grain, ores)
+EXCHANGE_MARKUP_TIER_PROCESSED_BPS: int = 14_000  # 1.40× (ingots, lumber, brick)
+EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS: int = 16_000  # 1.60× (wire, electricity, tools)
+
+# Hubs walk the book; they pay any ask but cap their willingness at a discount
+# vs the exchange so a polluted book never drains pop hubs.
+HUB_MAX_BID_BPS_OF_EXCHANGE: int = 9_200  # 0.92× the exchange ask
+
+# How often the exchange re-anchors its ask off the realised market average.
+EXCHANGE_PRICE_REFRESH_TICKS: int = 14_400  # 10 game-days @ 1440 ticks/day
+
+# Listing controls (managed mode). Smaller per-clip caps + relist cooldown so
+# real producers can outpace the exchange in steady-state.
+EXCHANGE_LISTING_MAX_QTY_PER_CLIP: int = 20
+EXCHANGE_RELIST_COOLDOWN_TICKS: int = 30
+
+# Withdrawal heuristic (managed → unmanaged transition).
+EXCHANGE_WITHDRAW_MIN_DISTINCT_SELLERS: int = 3
+EXCHANGE_RESTORE_MAX_DISTINCT_SELLERS: int = 1  # < 2 ⇒ ≤1 distinct sellers
+EXCHANGE_SELLER_WINDOW_TICKS: int = 7 * 1440  # 7 game-days
+EXCHANGE_RESTORE_LOW_DAYS: int = 3  # consecutive days under the floor → restore
+EXCHANGE_UNMANAGED_RESERVE_UNITS: int = 50  # finite pool while withdrawn
+
+# Markup tier table — explicit categorisation. Anything not listed falls to
+# TIER_COMMON. Keep this list aligned with the staples list in
+# ``genesis_exchange_liquidity._STAPLES``.
+_MARKUP_TIER_BY_MATERIAL: dict[str, int] = {
+    # Common raws
+    "coal": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "timber": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "grain": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "iron_ore": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "copper_ore": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "stone": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "clay": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "sand": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "limestone": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    "charcoal": EXCHANGE_MARKUP_TIER_COMMON_BPS,
+    # Processed
+    "iron_ingot": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "steel_ingot": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "copper_ingot": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "lumber": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "brick": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "flour": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "bread": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "pottery": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "rope": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "mortar": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "quicklime": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    "glass": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,
+    # Rare / industrial
+    "copper_wire": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "electricity": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "pick_axe": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "mining_pick": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "spade": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "hand_saw": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "ladder": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+}
+
+
+def markup_factor_bps(material: MaterialId) -> int:
+    """Pick the markup tier for ``material``; falls back to common (1.25×)."""
+    return _MARKUP_TIER_BY_MATERIAL.get(str(material), EXCHANGE_MARKUP_TIER_COMMON_BPS)
+
+
+def producer_cost_basis_cents(material: MaterialId) -> int | None:
+    """Estimated marginal cost a producer pays for one unit (inputs + share of labor).
+
+    Combines the cheapest known recipe's input cost (at fair-value inputs) plus a
+    half-share of the recipe's labor — the labor split mirrors how a real producer
+    actually accounts for the trade (labor is partially fixed, partially marginal).
+    Returns ``None`` if no recipe exists for this material.
+    """
+    best: int | None = None
+    for recipe in RECIPES.values():
+        if recipe.requires_tool is not None:
+            # Hand recipes have no recurring cost basis beyond labor.
+            out_qty = int(recipe.outputs.get(material, 0))
+            if out_qty <= 0:
+                continue
+            # Labor-only basis for hand recipes (no inputs to price).
+            per_unit = max(1, recipe.labor_cents // max(1, out_qty))
+            if best is None or per_unit < best:
+                best = per_unit
+            continue
+        out_qty = int(recipe.outputs.get(material, 0))
+        if out_qty <= 0:
+            continue
+        input_cost = 0
+        ok = True
+        for in_mat, in_qty in recipe.inputs.items():
+            unit = _FAIR_VALUE_CENTS.get(str(in_mat))
+            if unit is None:
+                ok = False
+                break
+            input_cost += unit * int(in_qty)
+        if not ok:
+            continue
+        # Half the recipe labor amortised across outputs — captures the marginal
+        # component without inflating cost basis like full-labor would.
+        labor_share = recipe.labor_cents // 2
+        per_unit = (input_cost + labor_share + out_qty - 1) // out_qty
+        if best is None or per_unit < best:
+            best = per_unit
+    return best
+
+
+def hub_max_bid_cents(material: MaterialId) -> int:
+    """Ceiling price a pop-hub buyer is willing to pay.
+
+    Anchored at ``exchange_ask × 0.92`` so settlers undercutting the exchange
+    automatically clear, while a polluted book (e.g. a single absurd ask) can't
+    drain hub wallets at usurious prices.
+    """
+    ex = exchange_ask_cents(material)
+    return max(4, (int(ex) * HUB_MAX_BID_BPS_OF_EXCHANGE) // 10_000)
 
 # Hard fallback list price when neither fair value nor recipe cost is known.
 _FALLBACK_LIST_CENTS: dict[str, int] = {
@@ -137,12 +269,42 @@ def fair_value_cents(material: MaterialId) -> int | None:
     return _FAIR_VALUE_CENTS.get(str(material))
 
 
-def exchange_ask_cents(material: MaterialId) -> int:
-    """Clearinghouse ask: ``fair_value × (1 + spread)``; falls back to fair value if unknown."""
+def _baseline_exchange_ask_cents(material: MaterialId) -> int:
+    """Static markup-over-cost ask (no recent-fills override applied)."""
+    basis = producer_cost_basis_cents(material)
     fv = _FAIR_VALUE_CENTS.get(str(material))
-    if fv is None:
+    fb = _FALLBACK_LIST_CENTS.get(str(material))
+    tier = markup_factor_bps(material)
+    candidates: list[int] = []
+    if basis is not None:
+        candidates.append((basis * tier + 9_999) // 10_000)
+    if fv is not None:
+        # Legacy spread floor — keeps the exchange above fair value even when
+        # the cost-basis path is shallow (e.g. for extraction recipes where
+        # input costs are tiny but fair value is meaningful).
+        candidates.append((fv * (10_000 + EXCHANGE_SPREAD_BPS) + 9_999) // 10_000)
+    if fb is not None:
+        candidates.append(int(fb))
+    if not candidates:
         return 4
-    return max(4, (fv * (10_000 + EXCHANGE_SPREAD_BPS) + 9_999) // 10_000)
+    return max(4, max(candidates))
+
+
+def exchange_ask_cents(material: MaterialId, *, world=None) -> int:
+    """Clearinghouse ask price.
+
+    If ``world`` is provided and the exchange has a freshly-anchored price for
+    this material in ``world.scenario_state["exchange"]["price"]``, prefer that
+    (it reflects the lagging 10-day market average). Otherwise compute the
+    static markup-over-cost baseline.
+    """
+    if world is not None:
+        ex_state = (world.scenario_state.get("exchange") or {}) if world.scenario_state else {}
+        price_map = ex_state.get("price") or {}
+        anchored = price_map.get(str(material))
+        if isinstance(anchored, int) and anchored > 0:
+            return int(anchored)
+    return _baseline_exchange_ask_cents(material)
 
 
 def _recipe_unit_input_cost_cents(material: MaterialId) -> int | None:
@@ -209,7 +371,7 @@ def settler_ask_cents(world, material: MaterialId, *, best_resting_bid: int | No
     )
     floor = max(4, cost_floor, fv_floor)
     if fv is not None:
-        ceiling = max(floor, exchange_ask_cents(material) - 2)
+        ceiling = max(floor, exchange_ask_cents(material, world=world) - 2)
     else:
         ceiling = max(floor, _FALLBACK_LIST_CENTS.get(str(material), floor))
     if best_resting_bid is not None and int(best_resting_bid) >= floor:
