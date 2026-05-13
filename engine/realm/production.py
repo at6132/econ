@@ -473,4 +473,13 @@ def tick_production(world: World) -> None:
         if str(run.recipe_id).startswith("hand_") and world.scenario_id == "genesis":
             gst = world.scenario_state.setdefault("genesis", {})
             gst["hand_tier0_completions"] = int(gst.get("hand_tier0_completions", 0)) + 1
+        # Sprint 2 / Phase B: feed the settler cost-basis tracker so future asks
+        # reflect this party's actual input costs rather than the exchange's quote.
+        if str(run.party).startswith("settler_") and world.scenario_id == "genesis":
+            from realm.settler_cost_basis import record_settler_production
+
+            for out_mid, out_qty in eff_out.items():
+                record_settler_production(
+                    world, run.party, run.recipe_id, out_mid, int(out_qty)
+                )
     world.active_production = still

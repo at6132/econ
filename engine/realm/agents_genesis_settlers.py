@@ -550,15 +550,55 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
     return (pick[0], pick[1])
 
 
-def _list_price_cents(world: World, material: MaterialId) -> int:
+def _list_price_cents(
+    world: World, material: MaterialId, *, party: PartyId | None = None
+) -> int:
     """
     Settler ask: cost-basis + margin, capped below the clearinghouse spread.
 
-    Decoupled from ``best_resting_ask`` to avoid anchoring to (and tying) the
-    exchange. See ``genesis_pricing.settler_ask_cents`` for the model.
+    Sprint 2 — Phase B: when ``party`` is supplied **and** that party has a
+    recorded ``output_basis`` for ``material``, use the per-settler basis
+    directly (``basis × 1.35``). This is what gives vertically-integrated
+    settlers — who paid 0¢ for their own coal — a structurally lower ask
+    than peers who buy inputs from the exchange.
+
+    Falls back to the static ``settler_ask_cents`` (fair-value × markup) when
+    no per-party basis is available yet (first listings, new materials, etc.).
+
+    A final cap keeps the ask strictly below the exchange's ask so price-time
+    priority still routes hub demand to settlers when they exist.
     """
     bid = best_resting_bid_cents(world, material)
+    if party is not None:
+        from realm.settler_cost_basis import settler_listing_price_cents
+
+        basis_px = settler_listing_price_cents(world, party, material)
+        if basis_px is not None:
+            from realm.genesis_pricing import exchange_ask_cents
+
+            ex = exchange_ask_cents(material, world=world)
+            ceiling = max(4, ex - 2)
+            floor = 4
+            if bid is not None and int(bid) >= floor:
+                # Lift any real bid above floor; but never above the exchange ceiling.
+                return max(floor, min(ceiling, max(basis_px, int(bid) + 1)))
+            # No supportive bid: list at basis_px but never *above* exchange ceiling.
+            return max(floor, min(ceiling, basis_px))
     return settler_ask_cents(world, material, best_resting_bid=bid)
+
+
+def _settler_market_buy(
+    world: World, party: PartyId, material: MaterialId, qty: int
+) -> dict:
+    """Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker."""
+    from realm.settler_cost_basis import record_settler_buy
+
+    r = market_buy(world, party, material, qty)
+    if r.get("ok"):
+        record_settler_buy(
+            world, party, material, int(r.get("filled", 0)), int(r.get("spent_cents", 0))
+        )
+    return r
 
 
 def _settler_acquire_turnkey_materials(world: World, party: PartyId, building_id: str) -> bool:
@@ -571,7 +611,7 @@ def _settler_acquire_turnkey_materials(world: World, party: PartyId, building_id
         need = int(qty) - int(world.inventory.qty(party, mid))
         if need <= 0:
             continue
-        r = market_buy(world, party, mid, need)
+        r = _settler_market_buy(world, party, mid, need)
         filled = int(r.get("filled", 0))
         if not r.get("ok") or filled < need:
             return False
@@ -589,10 +629,10 @@ def _ensure_settler_boot_tools(world: World, party: PartyId, primary_recipe: str
         return
     ok = True
     if world.inventory.qty(party, MaterialId("mining_pick")) < 1:
-        r = market_buy(world, party, MaterialId("mining_pick"), 1)
+        r = _settler_market_buy(world, party, MaterialId("mining_pick"), 1)
         ok = bool(r.get("ok") and int(r.get("filled", 0)) >= 1)
     if ok and primary_recipe == "dig_clay" and world.inventory.qty(party, MaterialId("spade")) < 1:
-        r2 = market_buy(world, party, MaterialId("spade"), 1)
+        r2 = _settler_market_buy(world, party, MaterialId("spade"), 1)
         ok = bool(r2.get("ok") and int(r2.get("filled", 0)) >= 1)
     if ok:
         done.add(str(party))
@@ -690,7 +730,7 @@ def _ensure_recipe_inputs(world: World, party: PartyId, recipe_id: str, *, stagi
             continue
         deficit = need - have
         clip = min(deficit + 14, room, 56)
-        market_buy(world, party, mid, clip)
+        _settler_market_buy(world, party, mid, clip)
 
 
 def _recipe_inputs_satisfied(world: World, party: PartyId, recipe_id: str, plot_id: PlotId) -> bool:
@@ -810,7 +850,7 @@ def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_un
     if q <= 0:
         return
     cancel_party_asks_for_material(world, party, mid)
-    px = _list_price_cents(world, mid)
+    px = _list_price_cents(world, mid, party=party)
     place_sell_order(world, party, mid, min(q, max_units), px)
 
 
@@ -852,7 +892,7 @@ def _settler_maintain_buildings(world: World, party: PartyId) -> None:
             need = int(qty) - int(world.inventory.qty(party, mid))
             if need <= 0:
                 continue
-            market_buy(world, party, mid, need)
+            _settler_market_buy(world, party, mid, need)
         # If we still lack materials, skip — try again next tick.
         ok = all(
             world.inventory.qty(party, MaterialId(m)) >= int(q)
