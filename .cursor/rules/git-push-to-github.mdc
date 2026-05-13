@@ -1,0 +1,34 @@
+---
+description: Push every commit to GitHub as you work; do not batch pushes to end of session
+alwaysApply: true
+---
+
+# Push to GitHub as you work
+
+This repo has a GitHub remote at `origin` (https://github.com/at6132/econ). Treat **pushing** as part of finishing a unit of work, not an end-of-session ritual.
+
+## Rules
+
+1. **Commit incrementally** per `git-incremental-commits.mdc` (logical slices, imperative subjects, buildable when reasonable).
+2. **Push after each commit** (or after a tight burst of 2–3 related commits) to the **current branch's** upstream on `origin`:
+   - First push on a new branch: `git push -u origin HEAD`
+   - Subsequent pushes: `git push`
+3. **Never end a turn with unpushed commits** on a branch that has a remote, unless the user explicitly asked you to hold off (e.g. "don't push yet" or "WIP only locally"). If you have unpushed commits at the end of a turn, push them before handing back.
+4. **Branch hygiene**
+   - If you create a new branch, push it with `-u` so it tracks `origin`.
+   - Don't auto-create branches just to push — push to whatever branch the user is on unless they asked for a branch.
+5. **Safety — never violate**
+   - Never `--force` push to `main` / `master`. If a non-fast-forward push to `main` is needed, **stop and ask**.
+   - Force-push elsewhere only with explicit user request, and prefer `--force-with-lease`.
+   - Never bypass hooks (`--no-verify`, `--no-gpg-sign`) without explicit user request.
+   - Never push commits that contain secrets (`.env`, credentials, API keys). Warn and stop if asked.
+   - Never edit `git config` to "fix" auth, identity, or remotes.
+6. **If `git push` fails**
+   - Non-fast-forward: `git fetch`, inspect divergence, and either rebase/merge or surface to the user. Do not silently force-push.
+   - Auth failure: report it to the user verbatim — don't try to "fix" credentials.
+   - Pre-push hook failure: fix the underlying issue and create a **new** commit; don't `--amend` a pushed commit.
+7. **Verification** — After pushing, a quick `git status` or noting "pushed to `origin/<branch>` at `<short-sha>`" is enough. No need to spam logs.
+
+## TL;DR for every agent
+
+> After every logical commit on this repo, run `git push` (or `git push -u origin HEAD` the first time on a new branch). Don't leave local-only commits sitting on the branch at the end of a turn.
