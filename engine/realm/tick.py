@@ -20,6 +20,7 @@ from realm.spoilage import tick_material_spoilage
 from realm.social import tick_supply_contract_breaches
 from realm.contract_stubs import tick_phase2_financial_contracts
 from realm.energy import ensure_powered_plots_fresh
+from realm.genesis_bank import tick_bank_loans
 from realm.sprint4_feed import tick_sprint4_feed
 from realm.world import World
 
@@ -47,6 +48,7 @@ def advance_tick(world: World) -> None:
         tick_genesis_world_feed(world)
     tick_supply_contract_breaches(world)
     tick_phase2_financial_contracts(world)
+    tick_bank_loans(world)
     record_market_snapshot(world)
     tick_price_alerts(world)
     if world.scenario_id == "genesis":

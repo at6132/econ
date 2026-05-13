@@ -41,10 +41,79 @@ from realm.genesis_pricing import (
     exchange_ask_cents,
 )
 from realm.ids import MaterialId, PartyId
+from realm.ledger import party_cash_account
 from realm.markets import place_sell_order
 from realm.world import World
 
 _GENESIS_EXCHANGE = PartyId("genesis_exchange")
+
+
+GENESIS_EXCHANGE_PARTY_ID = _GENESIS_EXCHANGE
+
+
+def exchange_price_for_party(
+    base_price_cents: int, party_reputation: dict | None
+) -> int:
+    """Reputation-adjusted exchange price (Sprint 5 — Phase C.5).
+
+    The base order-book price is the same for everyone; this function
+    returns the *effective* price the named party would pay when buying
+    from the genesis exchange. The diff is settled post-fill as a rebate
+    (or surcharge) between the buyer and the exchange.
+
+    Tiers
+    -----
+    * ``honored \u2265 25``: 8% discount
+    * ``honored \u2265 10``: 5% discount
+    * ``breached > honored``: 5% premium
+    * otherwise: unchanged
+    """
+    base = int(base_price_cents)
+    rep = party_reputation or {}
+    honored = int(rep.get("honored", 0))
+    breached = int(rep.get("breached", 0))
+    if honored >= 25:
+        return int(base * 92 // 100)
+    if honored >= 10:
+        return int(base * 95 // 100)
+    if breached > honored:
+        return int(base * 105 // 100)
+    return base
+
+
+def apply_exchange_reputation_adjustment(
+    world: World, buyer: PartyId, fill_qty: int, fill_unit_price_cents: int
+) -> None:
+    """Settle the rebate/surcharge after an exchange-seller fill.
+
+    Called from the market matcher when the resting ask was the genesis
+    exchange. Conservation is preserved: any rebate is paid from the
+    exchange account, any surcharge is sent to it.
+    """
+    base_total = int(fill_qty) * int(fill_unit_price_cents)
+    rep = world.reputation.get(str(buyer))
+    effective_unit = exchange_price_for_party(int(fill_unit_price_cents), rep)
+    effective_total = int(fill_qty) * effective_unit
+    diff = base_total - effective_total
+    if diff == 0:
+        return
+    buyer_acct = party_cash_account(buyer)
+    ex_acct = party_cash_account(_GENESIS_EXCHANGE)
+    if diff > 0:
+        world.ledger.transfer(
+            debit=ex_acct,
+            credit=buyer_acct,
+            amount_cents=int(diff),
+        )
+    else:
+        magnitude = -diff
+        if world.ledger.balance(buyer_acct) < magnitude:
+            return
+        world.ledger.transfer(
+            debit=buyer_acct,
+            credit=ex_acct,
+            amount_cents=int(magnitude),
+        )
 _TICKS_PER_GAME_DAY = 1440
 
 # Target backstop depth per material when no real seller is on the book.

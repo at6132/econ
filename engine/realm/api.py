@@ -1081,6 +1081,63 @@ def post_account_create(body: Annotated[dict, Body()]) -> dict:
     return dict(r)
 
 
+# ─────────────────── Sprint 5 — Phase C: NPC bank ───────────────────
+
+
+@app.get("/bank/rates")
+def get_bank_rates(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.genesis_bank import bank_rates_view
+
+    return {"ok": True, "tick": _world.tick, **bank_rates_view(_world, PartyId(party))}
+
+
+@app.get("/bank/loans")
+def get_bank_loans(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.genesis_bank import active_loans_for_borrower
+
+    return {
+        "ok": True,
+        "tick": _world.tick,
+        "party": party,
+        "loans": active_loans_for_borrower(_world, PartyId(party)),
+    }
+
+
+@app.post("/bank/loan/apply")
+def post_bank_loan_apply(body: Annotated[dict, Body()]) -> dict:
+    from realm.genesis_bank import apply_bank_loan
+
+    party_raw = body.get("party", "player")
+    principal = body.get("principal_cents") or body.get("principal") or 0
+    num_cycles = body.get("num_cycles") or 1
+    coll_raw = body.get("collateral_plot_id")
+    try:
+        principal_cents = int(principal)
+        cycles = int(num_cycles)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="principal and num_cycles must be integers")
+    coll_pid = PlotId(str(coll_raw)) if coll_raw else None
+    r = apply_bank_loan(
+        _world, PartyId(str(party_raw)), principal_cents, cycles, coll_pid
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/bank/loan/{loan_id}/repay")
+def post_bank_loan_repay(
+    loan_id: str, body: Annotated[dict, Body()]
+) -> dict:
+    from realm.genesis_bank import repay_bank_loan
+
+    party_raw = body.get("party", "player")
+    r = repay_bank_loan(_world, PartyId(str(party_raw)), loan_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
 @app.post("/accounts/transfer")
 def post_account_transfer(body: Annotated[dict, Body()]) -> dict:
     from realm.sub_accounts import transfer_own

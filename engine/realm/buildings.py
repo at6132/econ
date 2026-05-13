@@ -23,6 +23,11 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "label": "Field stockade (+5k storage units)",
         "cost_cents": 25_000,
     },
+    "bank_building": {
+        "kind": "simple",
+        "label": "First Bank of the Frontier",
+        "cost_cents": 0,
+    },
     "tool_cache": {
         "kind": "simple",
         "label": "Tool cache (−10% recipe labor cash on this plot)",

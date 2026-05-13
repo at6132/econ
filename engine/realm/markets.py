@@ -306,7 +306,24 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     )
     _record_genesis_fill(world, ask.material, fill, unit_px, ask.party)
     bump_spot_exchange_honored(world, bid.party, ask.party)
+    _maybe_apply_exchange_rep_adjustment(world, bid.party, ask.party, fill, unit_px)
     return True
+
+
+def _maybe_apply_exchange_rep_adjustment(
+    world: World, buyer: PartyId, seller: PartyId, fill: int, unit_px: int
+) -> None:
+    """Settle reputation-based rebate/surcharge when the seller is the exchange."""
+    try:
+        from realm.genesis_exchange_liquidity import (
+            GENESIS_EXCHANGE_PARTY_ID,
+            apply_exchange_reputation_adjustment,
+        )
+    except Exception:
+        return
+    if seller != GENESIS_EXCHANGE_PARTY_ID:
+        return
+    apply_exchange_reputation_adjustment(world, buyer, fill, unit_px)
 
 
 def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: int, unit_px: int) -> bool:

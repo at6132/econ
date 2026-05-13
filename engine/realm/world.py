@@ -1183,6 +1183,9 @@ def world_public_dict(world: World) -> dict:
         "analytics_purchases": list(world.analytics_purchases[-48:]),
         "business_registry": _business_registry_public(world),
         "player_accounts": _player_accounts_public(world),
+        "bank_rates": _bank_rates_public(world),
+        "bank_loans": _bank_loans_for_player(world),
+        "bank_plot_id": world.scenario_state.get("bank_plot"),
         "player_price_alerts": list(
             (world.scenario_state.get("player_price_alerts") or [])
         ),
@@ -1197,6 +1200,26 @@ def _player_accounts_public(world: "World") -> list[dict]:
     except Exception:
         return []
     return party_accounts_view(world, PartyId("player"))
+
+
+def _bank_rates_public(world: "World") -> dict | None:
+    """Public view of the bank's posted rates for the player (Sprint 5 — Phase C)."""
+    try:
+        from realm.genesis_bank import FIRST_BANK_PARTY_ID, bank_rates_view
+    except Exception:
+        return None
+    if FIRST_BANK_PARTY_ID not in world.parties:
+        return None
+    return bank_rates_view(world, PartyId("player"))
+
+
+def _bank_loans_for_player(world: "World") -> list[dict]:
+    """Active bank loans for the player (Sprint 5 — Phase C)."""
+    try:
+        from realm.genesis_bank import active_loans_for_borrower
+    except Exception:
+        return []
+    return active_loans_for_borrower(world, PartyId("player"))
 
 
 def _business_registry_public(world: "World") -> dict[str, dict]:
