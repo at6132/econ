@@ -18,6 +18,7 @@ from realm.production import tick_production
 from realm.spoilage import tick_material_spoilage
 from realm.social import tick_supply_contract_breaches
 from realm.contract_stubs import tick_phase2_financial_contracts
+from realm.energy import ensure_powered_plots_fresh
 from realm.world import World
 
 
@@ -26,6 +27,7 @@ def advance_tick(world: World) -> None:
     deliver_transit(world)
     tick_building_decay(world)
     tick_building_maintenance(world)
+    ensure_powered_plots_fresh(world)
     tick_production(world)
     tick_material_spoilage(world)
     tick_stub_employment(world)

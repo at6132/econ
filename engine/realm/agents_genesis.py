@@ -12,6 +12,7 @@ from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
 from realm.genesis_pricing import hub_max_bid_cents
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
 from realm.genesis_consolidator import tick_consolidator
+from realm.genesis_energy import tick_npc_energy
 from realm.genesis_shippers import tick_npc_shippers
 from realm.settler_upgrades import tick_settler_margin_review
 from realm.tenders import (
@@ -96,6 +97,7 @@ def tick_genesis_agents(world: World) -> None:
     _genesis_pop_hub_topup(world)
     tick_genesis_exchange_quoting(world)
     tick_npc_shippers(world)
+    tick_npc_energy(world)
     tick_hub_tender_posting(world)
     tick_genesis_settler_lifecycle(world)
     tick_settler_business(world)

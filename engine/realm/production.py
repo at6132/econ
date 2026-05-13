@@ -301,6 +301,29 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
             return {"ok": False, "reason": "building stopped — maintenance required"}
     if not subsurface_allows_recipe(plot, recipe):
         return {"ok": False, "reason": "subsurface below threshold for this recipe"}
+    # Sprint 3 — Phase A: electricity-requiring recipes need either a grid
+    # source within coverage or staged electricity to draw from.
+    electricity_mid = MaterialId("electricity")
+    needs_electricity = int(recipe.inputs.get(electricity_mid, 0)) > 0
+    powered_by_grid = False
+    if needs_electricity:
+        from realm.energy import is_plot_powered
+
+        powered_by_grid = is_plot_powered(world, plot_id)
+        if not powered_by_grid:
+            staged_e = (
+                plot_output_qty(world, plot_id, electricity_mid)
+                if uses_plot_logistics(world, party)
+                else 0
+            )
+            inv_e = world.inventory.qty(party, electricity_mid)
+            if inv_e + staged_e < int(recipe.inputs[electricity_mid]):
+                return {
+                    "ok": False,
+                    "reason": (
+                        "no power source within range — build a power_shed or ship electricity"
+                    ),
+                }
     labor_bps = _labor_bps_for_plot(world, party, plot_id)
     labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)
@@ -308,7 +331,15 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         return {"ok": False, "reason": "insufficient cash for labor"}
     consumed_inv: dict[MaterialId, int] = {}
     consumed_plot: dict[MaterialId, int] = {}
+    # When the plot sits on the energy grid, the electricity input is satisfied
+    # by the grid (the power_shed's owner ate the fuel cost). Skip that material
+    # in both the precondition check and the consumption loop.
+    def _is_waived_input(material: MaterialId) -> bool:
+        return needs_electricity and powered_by_grid and material == electricity_mid
+
     for mid, qty in recipe.inputs.items():
+        if _is_waived_input(mid):
+            continue
         inv_q = world.inventory.qty(party, mid)
         if uses_plot_logistics(world, party):
             if inv_q + plot_output_qty(world, plot_id, mid) < qty:
@@ -316,6 +347,8 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         elif inv_q < qty:
             return {"ok": False, "reason": f"insufficient {mid}"}
     for mid, qty in recipe.inputs.items():
+        if _is_waived_input(mid):
+            continue
         need = int(qty)
         take_inv = min(need, world.inventory.qty(party, mid))
         if take_inv > 0:

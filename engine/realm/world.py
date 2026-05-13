@@ -467,6 +467,9 @@ def bootstrap_genesis(
     from realm.genesis_shippers import seed_npc_shippers
 
     seed_npc_shippers(world)
+    from realm.genesis_energy import seed_npc_energy
+
+    seed_npc_energy(world)
     from realm.genesis_consolidator import seed_consolidator
 
     seed_consolidator(world)
@@ -825,9 +828,11 @@ def _building_maintenance_view(world: World, row: dict) -> dict:
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
     from realm.buildings import building_catalog_public
+    from realm.energy import ensure_powered_plots_fresh
     from realm.markets import market_book_public, market_bids_public
     from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 
+    powered_set = ensure_powered_plots_fresh(world)
     plots_out: list[dict] = []
     for p in world.plots.values():
         entry: dict = {
@@ -838,6 +843,7 @@ def world_public_dict(world: World) -> dict:
             "owner": p.owner,
             "surveyed": p.surveyed,
             "deep_surveyed": getattr(p, "deep_surveyed", False),
+            "powered": str(p.plot_id) in powered_set,
         }
         if p.surveyed:
             sub_view: dict[str, float] = {

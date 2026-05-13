@@ -53,8 +53,18 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         MaterialId("spoiled_grain"), "Spoiled grain", 780.0, "organic"
     ),
     MaterialId("coal"): MaterialDef(MaterialId("coal"), "Coal", 1300.0, "energy"),
+    # Electricity dissipates if held off-grid too long (Sprint 3 — Phase A.2).
+    # 480 ticks ≈ 8 game-hours; staged shipments must be consumed quickly.
     MaterialId("electricity"): MaterialDef(
-        MaterialId("electricity"), "Electricity (MWh)", 0.0, "energy"
+        MaterialId("electricity"),
+        "Electricity (MWh)",
+        0.0,
+        "energy",
+        spoils_to=MaterialId("dissipated_energy"),
+        spoilage_interval_ticks=480,
+    ),
+    MaterialId("dissipated_energy"): MaterialDef(
+        MaterialId("dissipated_energy"), "Dissipated energy", 0.0, "energy"
     ),
     MaterialId("brick"): MaterialDef(
         MaterialId("brick"), "Fired brick", 1900.0, "construction"

@@ -233,6 +233,33 @@ def post_produce(
     return r
 
 
+@app.get("/plots/{plot_id}/energy")
+def get_plot_energy(plot_id: str) -> dict:
+    """Power-coverage report for a single plot (UI: powered/unpowered detail)."""
+    from realm.energy import (
+        POWER_COVERAGE_RADIUS,
+        is_plot_powered,
+        nearest_power_source,
+        power_sources_for_plot,
+    )
+
+    pid = PlotId(plot_id)
+    plot = _world.plots.get(pid)
+    if plot is None:
+        raise HTTPException(status_code=404, detail="unknown plot")
+    powered = is_plot_powered(_world, pid)
+    sources = power_sources_for_plot(_world, pid) if powered else []
+    nearest = None if powered else nearest_power_source(_world, pid)
+    return {
+        "ok": True,
+        "plot_id": str(pid),
+        "powered": bool(powered),
+        "coverage_radius_tiles": POWER_COVERAGE_RADIUS,
+        "power_sources": sources,
+        "nearest_power_source": nearest,
+    }
+
+
 @app.post("/plots/{plot_id}/survey")
 def post_survey(plot_id: str, party: Annotated[str, Query()] = "player") -> dict:
     pid = PlotId(plot_id)

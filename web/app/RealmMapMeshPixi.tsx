@@ -13,6 +13,7 @@ type PlotDto = {
   terrain: string;
   owner: string | null;
   surveyed: boolean;
+  powered?: boolean;
 };
 
 export type MapRenderStyle = "terrain" | "satellite" | "political";
@@ -136,8 +137,14 @@ export const RealmMapMeshPixi = memo(function RealmMapMeshPixi(props: Props) {
           const g = new Graphics();
           let fillHex = terrainFill(p.terrain, mapStyle);
           if (p.surveyed) fillHex = lightenRgb(fillHex, 1.05);
+          // Sprint 3 — Phase A.4: unpowered plots are visually darker; powered
+          // plots get a faint warm glow overlay (drawn after the base fill).
+          if (p.powered === false) fillHex = scaleRgb(fillHex, 0.78);
 
           g.poly(flat, true).fill({ color: fillHex });
+          if (p.powered) {
+            g.poly(flat, true).fill({ color: 0xffc870, alpha: 0.08 });
+          }
           const tint = ownerTintPixi(p.owner);
           if (tint) {
             g.poly(flat, true).fill({ color: tint.color, alpha: tint.alpha });
