@@ -36,6 +36,7 @@ import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
 import { Sprint4MarketSection, Sprint4PactsSection, type Sprint4Snapshot } from "./Sprint4Panels";
+import { Sprint5MarketSection, type Sprint5Snapshot } from "./Sprint5Panels";
 import { PlotSchematicPanel } from "./PlotSchematicPanel";
 import { RecipeBookPanel } from "./RecipeBookPanel";
 import type { SchematicRecipe } from "./plotSchematic";
@@ -407,6 +408,11 @@ type WorldDto = {
   analytics_purchases?: import("./Sprint4Panels").Sprint4Snapshot["analytics_purchases"];
   player_price_alerts?: import("./Sprint4Panels").Sprint4Snapshot["player_price_alerts"];
   forward_contracts?: import("./Sprint4Panels").Sprint4Snapshot["forward_contracts"];
+  business_registry?: import("./Sprint5Panels").Sprint5Snapshot["business_registry"];
+  player_accounts?: import("./Sprint5Panels").Sprint5Snapshot["player_accounts"];
+  bank_rates?: import("./Sprint5Panels").Sprint5Snapshot["bank_rates"];
+  bank_loans?: import("./Sprint5Panels").Sprint5Snapshot["bank_loans"];
+  bank_plot_id?: string | null;
 };
 
 function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
@@ -3601,6 +3607,18 @@ export default function HomePage() {
                           player_price_alerts: world.player_price_alerts ?? [],
                           forward_contracts: world.forward_contracts ?? [],
                         } satisfies Sprint4Snapshot}
+                        apiBase="/api/engine"
+                        onMutate={() => void load()}
+                      />
+                      <Sprint5MarketSection
+                        snap={{
+                          tick: world.tick,
+                          business_registry: world.business_registry ?? {},
+                          player_accounts: world.player_accounts ?? [],
+                          bank_rates: world.bank_rates ?? null,
+                          bank_loans: world.bank_loans ?? [],
+                          bank_plot_id: world.bank_plot_id ?? null,
+                        } satisfies Sprint5Snapshot}
                         apiBase="/api/engine"
                         onMutate={() => void load()}
                       />
