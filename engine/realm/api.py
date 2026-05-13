@@ -230,7 +230,7 @@ def post_produce(
     r = start_production_on_plot(_world, PartyId(party), PlotId(plot_id), recipe_id)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
-    return dict(r)
+    return r
 
 
 @app.post("/plots/{plot_id}/survey")

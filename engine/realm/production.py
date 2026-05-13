@@ -79,6 +79,14 @@ def plot_has_active_production(world: World, plot_id: PlotId) -> bool:
     return _active_on_plot(world, plot_id)
 
 
+def active_production_on_plot(world: World, plot_id: PlotId) -> ActiveProduction | None:
+    """The active run on ``plot_id``, if any (any party — plot should be singly owned)."""
+    for a in world.active_production:
+        if a.plot_id == plot_id:
+            return a
+    return None
+
+
 def _labor_bps_for_plot(world: World, party: PartyId, plot_id: PlotId) -> int:
     """Lowest (best for player) labor BPS among buildings on this plot."""
     bps = 10_000
@@ -177,7 +185,13 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     """
     Start one batch: consumes inputs + labor (cash) immediately; delivers outputs after duration.
 
-    Returns {ok: True, run_id} | {ok: False, reason}.
+    On success: ``{ok: True, started: True, run_id, recipe_id, plot_id, ticks_remaining,
+    completes_at_tick, message}``.
+
+    If a batch is already running on this plot: ``{ok: True, started: False, status: "active", ...}``
+    (no state change). Failures: ``{ok: False, reason}``.
+
+    ``completes_at_tick`` is ``world.tick + ticks_remaining`` (approximate; storage stalls extend it).
     """
     if not _plot_owned_by(world, party, plot_id):
         return {"ok": False, "reason": "plot not owned"}
@@ -188,8 +202,23 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         return {"ok": False, "reason": "plot not surveyed"}
     if not terrain_allows_workshop(plot.terrain):
         return {"ok": False, "reason": "cannot produce on water"}
-    if _active_on_plot(world, plot_id):
-        return {"ok": False, "reason": "plot already has active production"}
+    active = active_production_on_plot(world, plot_id)
+    if active is not None:
+        ct = int(world.tick) + int(active.ticks_remaining)
+        return {
+            "ok": True,
+            "started": False,
+            "status": "active",
+            "run_id": active.run_id,
+            "recipe_id": active.recipe_id,
+            "plot_id": str(plot_id),
+            "ticks_remaining": int(active.ticks_remaining),
+            "completes_at_tick": ct,
+            "message": (
+                f"Production already in progress ({active.recipe_id} on {plot_id}); "
+                f"completes around tick {ct}."
+            ),
+        }
     recipe = RECIPES.get(recipe_id)
     if recipe is None:
         return {"ok": False, "reason": "unknown recipe"}
@@ -258,7 +287,17 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         run_id=run_id,
         labor_bps=labor_bps,
     )
-    return {"ok": True, "run_id": run_id}
+    ct = int(world.tick) + int(recipe.duration_ticks)
+    return {
+        "ok": True,
+        "started": True,
+        "run_id": run_id,
+        "recipe_id": recipe_id,
+        "plot_id": str(plot_id),
+        "ticks_remaining": int(recipe.duration_ticks),
+        "completes_at_tick": ct,
+        "message": f"Started {recipe_id}; outputs due around tick {ct}.",
+    }
 
 
 def tick_production(world: World) -> None:

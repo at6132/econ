@@ -83,7 +83,10 @@ def test_rejects_second_production_same_plot() -> None:
     _advance_until_building_ready(w, PartyId("player"), pid, "power_shed")
     assert start_production(w, PartyId("player"), pid, "coal_generator")["ok"] is True
     r = start_production(w, PartyId("player"), pid, "coal_generator")
-    assert r["ok"] is False
+    assert r["ok"] is True
+    assert r.get("started") is False
+    assert r.get("completes_at_tick") == w.tick + r["ticks_remaining"]
+    assert r.get("recipe_id") == "coal_generator"
 
 
 def test_tool_cache_reduces_recipe_labor_cash() -> None:

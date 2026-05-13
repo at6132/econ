@@ -122,6 +122,38 @@ def test_tick_batch_includes_compact_summary_when_requested() -> None:
     assert wc.get("compact") is True
 
 
+def test_produce_while_active_returns_200_with_started_false() -> None:
+    c = TestClient(app)
+    assert c.post("/dev/reset", params={"seed": 61}).status_code == 200
+    pid = "p-0-0"
+    assert c.post(f"/plots/{pid}/claim", params={"party": "player"}).status_code == 200
+    assert c.post(f"/plots/{pid}/survey", params={"party": "player"}).status_code == 200
+    rb = c.post(
+        f"/plots/{pid}/build",
+        params={"party": "player", "building_id": "wood_shop", "build_mode": "turnkey"},
+    )
+    assert rb.status_code == 200, rb.text
+    assert c.post("/tick/batch", params={"count": 180}).status_code == 200
+    r1 = c.post(f"/plots/{pid}/produce", params={"party": "player", "recipe_id": "sawmill"})
+    assert r1.status_code == 200
+    b1 = r1.json()
+    assert b1.get("ok") is True
+    assert b1.get("started") is True
+    assert isinstance(b1.get("completes_at_tick"), int)
+
+    # Same tick: duplicate start should be a no-op with scheduling hints (HTTP 200).
+    r2 = c.post(f"/plots/{pid}/produce", params={"party": "player", "recipe_id": "sawmill"})
+    assert r2.status_code == 200
+    b2 = r2.json()
+    assert b2.get("ok") is True
+    assert b2.get("started") is False
+    assert b2.get("status") == "active"
+    assert b2.get("recipe_id") == "sawmill"
+    assert b2.get("ticks_remaining") == b1.get("ticks_remaining")
+    assert b2.get("completes_at_tick") == b1.get("completes_at_tick")
+    assert "completes around tick" in (b2.get("message") or "")
+
+
 def test_p2p_trade_via_http() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"seed": 57})

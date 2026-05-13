@@ -570,7 +570,7 @@ def _settler_pipeline_step(
         return False
     _ensure_recipe_inputs(world, party, chosen_rid, staging_plot_id=owned)
     r = start_production_on_plot(world, party, owned, chosen_rid)
-    if not r.get("ok"):
+    if not r.get("ok") or not r.get("started", True):
         return False
 
     recipe = RECIPES.get(chosen_rid)

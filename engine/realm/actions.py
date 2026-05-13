@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict, Union
+from typing import Any, Literal, TypedDict, Union
 
 from realm.event_log import log_event
 from realm.ids import MaterialId, PartyId, PlotId
@@ -207,8 +207,6 @@ def plot_by_id(world: World, plot_id: PlotId) -> Plot | None:
 
 def start_production_on_plot(
     world: World, party: PartyId, plot_id: PlotId, recipe_id: str
-) -> ActionResult:
-    r = start_production(world, party, plot_id, recipe_id)
-    if r.get("ok"):
-        return ActionOk(ok=True)
-    return ActionErr(ok=False, reason=str(r.get("reason", "error")))
+) -> dict[str, Any]:
+    """Proxy to ``production.start_production`` (full result dict for API / agents)."""
+    return start_production(world, party, plot_id, recipe_id)
