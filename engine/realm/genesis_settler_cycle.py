@@ -186,6 +186,9 @@ def _tick_spawns(world: World) -> None:
         world.parties.discard(sid)
         return
     assign_display_name_for_new_settler(world, sid, seq=seq_try)
+    from realm.world import ensure_party_recipe_book
+
+    ensure_party_recipe_book(world, sid)
     st["next_settler_seq"] = seq_try + 1
     log_event(
         world,

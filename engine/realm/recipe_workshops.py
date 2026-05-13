@@ -32,7 +32,7 @@ def plot_has_workshop_for_recipe(world: World, party: PartyId, plot_id: PlotId, 
 
 
 def recipe_ids_on_plot_for_owner(world: World, plot: Plot) -> list[str]:
-    """Surveyed dry plot owned by ``plot.owner``: recipes allowed by terrain and installed workshop."""
+    """Surveyed dry plot owned by ``plot.owner``: recipes allowed by terrain, workshop, and discovery."""
     if plot.owner is None or not plot.surveyed or not terrain_allows_workshop(plot.terrain):
         return []
     party = plot.owner
@@ -42,6 +42,8 @@ def recipe_ids_on_plot_for_owner(world: World, plot: Plot) -> list[str]:
         if not recipe_allowed_on_terrain(plot.terrain, rid):
             continue
         if not subsurface_allows_recipe(plot, recipe):
+            continue
+        if not world.can_party_run_recipe(party, rid):
             continue
         if recipe.requires_tool is not None:
             out.append(rid)

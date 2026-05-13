@@ -222,6 +222,8 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
     recipe = RECIPES.get(recipe_id)
     if recipe is None:
         return {"ok": False, "reason": "unknown recipe"}
+    if not world.can_party_run_recipe(party, recipe_id):
+        return {"ok": False, "reason": "recipe not yet discovered"}
     if not recipe_allowed_on_terrain(plot.terrain, recipe_id):
         return {"ok": False, "reason": "recipe not available on this plot"}
     if recipe.requires_tool is not None:

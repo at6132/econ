@@ -109,6 +109,91 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("hand_saw"): MaterialDef(
         MaterialId("hand_saw"), "Hand saw", 0.8, "tool", durable=True
     ),
+    # ───────── Tier-2 raw minerals (extracted; recipes locked behind assay discovery) ─────────
+    MaterialId("sulfur_ore"): MaterialDef(
+        MaterialId("sulfur_ore"), "Sulfur ore", 2100.0, "ore"
+    ),
+    MaterialId("saltpeter_ore"): MaterialDef(
+        MaterialId("saltpeter_ore"), "Saltpeter ore", 2200.0, "ore"
+    ),
+    MaterialId("tin_ore"): MaterialDef(
+        MaterialId("tin_ore"), "Tin ore", 6900.0, "ore"
+    ),
+    MaterialId("lead_ore"): MaterialDef(
+        MaterialId("lead_ore"), "Lead ore", 7400.0, "ore"
+    ),
+    MaterialId("phosphate_ore"): MaterialDef(
+        MaterialId("phosphate_ore"), "Phosphate ore", 3100.0, "ore"
+    ),
+    MaterialId("raw_silica"): MaterialDef(
+        MaterialId("raw_silica"), "Raw silica", 2650.0, "ore"
+    ),
+    # ───────── Processed Tier-2 (chemical / metallurgical chains) ─────────
+    MaterialId("pig_iron"): MaterialDef(
+        MaterialId("pig_iron"), "Pig iron", 7200.0, "processed"
+    ),
+    MaterialId("cast_iron"): MaterialDef(
+        MaterialId("cast_iron"), "Cast iron", 7300.0, "processed"
+    ),
+    MaterialId("bronze_ingot"): MaterialDef(
+        MaterialId("bronze_ingot"), "Bronze ingot", 8800.0, "processed"
+    ),
+    MaterialId("tin_ingot"): MaterialDef(
+        MaterialId("tin_ingot"), "Tin ingot", 7300.0, "processed"
+    ),
+    MaterialId("lead_ingot"): MaterialDef(
+        MaterialId("lead_ingot"), "Lead ingot", 11340.0, "processed"
+    ),
+    MaterialId("sulfur_ore_refined"): MaterialDef(
+        MaterialId("sulfur_ore_refined"), "Refined sulfur", 2050.0, "processed"
+    ),
+    MaterialId("sulfuric_acid"): MaterialDef(
+        MaterialId("sulfuric_acid"), "Sulfuric acid", 1840.0, "processed"
+    ),
+    MaterialId("refined_saltpeter"): MaterialDef(
+        MaterialId("refined_saltpeter"), "Refined saltpeter", 2100.0, "processed"
+    ),
+    MaterialId("gunpowder"): MaterialDef(
+        MaterialId("gunpowder"), "Gunpowder", 1700.0, "processed"
+    ),
+    MaterialId("phosphate_meal"): MaterialDef(
+        MaterialId("phosphate_meal"), "Phosphate meal", 2400.0, "processed"
+    ),
+    MaterialId("fused_silica"): MaterialDef(
+        MaterialId("fused_silica"), "Fused silica", 2200.0, "processed"
+    ),
+    # ───────── Tool components (intermediate goods feeding tool_workshop) ─────────
+    MaterialId("pick_head"): MaterialDef(
+        MaterialId("pick_head"), "Pick head", 2.4, "processed"
+    ),
+    MaterialId("saw_blade"): MaterialDef(
+        MaterialId("saw_blade"), "Saw blade", 0.6, "processed"
+    ),
+    MaterialId("drill_bit"): MaterialDef(
+        MaterialId("drill_bit"), "Drill bit", 1.2, "processed"
+    ),
+    MaterialId("pump_unit"): MaterialDef(
+        MaterialId("pump_unit"), "Pump unit", 22.0, "processed"
+    ),
+    MaterialId("gear_set"): MaterialDef(
+        MaterialId("gear_set"), "Gear set", 8.5, "processed"
+    ),
+    # ───────── Tier-3 ultra-rare minerals (revealed only via deep_survey) ─────────
+    MaterialId("platinum_ore"): MaterialDef(
+        MaterialId("platinum_ore"), "Platinum ore", 5400.0, "ore"
+    ),
+    MaterialId("oil_shale"): MaterialDef(
+        MaterialId("oil_shale"), "Oil shale", 2400.0, "ore"
+    ),
+    MaterialId("rare_earth_ore"): MaterialDef(
+        MaterialId("rare_earth_ore"), "Rare earth ore", 4200.0, "ore"
+    ),
+    MaterialId("refined_platinum"): MaterialDef(
+        MaterialId("refined_platinum"), "Refined platinum", 21450.0, "processed"
+    ),
+    MaterialId("shale_oil"): MaterialDef(
+        MaterialId("shale_oil"), "Shale oil", 870.0, "processed"
+    ),
 }
 
 DURABLE_MATERIAL_IDS: frozenset[MaterialId] = frozenset(

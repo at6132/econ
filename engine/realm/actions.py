@@ -57,6 +57,9 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
         return ActionErr(ok=False, reason="plot already claimed")
     plot.owner = party
     world.parties.add(party)
+    from realm.world import ensure_party_recipe_book
+
+    ensure_party_recipe_book(world, party)
     log_event(world, "claim", f"{party} claimed plot {plot_id}", party=str(party), plot_id=str(plot_id))
     return ActionOk(ok=True)
 

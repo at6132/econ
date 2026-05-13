@@ -27,6 +27,9 @@ class Recipe:
     scaled_output: tuple[str, MaterialId] | None = None
     # Tier 0: party must hold this tool (not consumed). No workshop check when set.
     requires_tool: MaterialId | None = None
+    # When True, the recipe must appear in ``world.party_recipe_books[party]`` before it can run.
+    # Tier-2/Tier-3 industrial recipes unlock through the assay & deep-survey systems.
+    requires_discovery: bool = False
 
 
 RECIPES: Final[Mapping[str, Recipe]] = {
@@ -346,6 +349,105 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         scaled_output=("clay_grade", MaterialId("clay")),
         requires_tool=MaterialId("spade"),
     ),
+    # ─────────────── Tier-2 extraction recipes (locked behind assay discovery) ───────────────
+    "mine_sulfur_ore": Recipe(
+        recipe_id="mine_sulfur_ore",
+        display_name="Mine sulfur ore (strip mine — power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("sulfur_ore"): 1},
+        duration_ticks=4 * _TICKS_PER_GAME_HOUR,
+        labor_cents=7_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("sulfur_grade", 0.3),),
+        scaled_output=("sulfur_grade", MaterialId("sulfur_ore")),
+        requires_discovery=True,
+    ),
+    "mine_saltpeter": Recipe(
+        recipe_id="mine_saltpeter",
+        display_name="Mine saltpeter (strip mine — power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("saltpeter_ore"): 1},
+        duration_ticks=4 * _TICKS_PER_GAME_HOUR,
+        labor_cents=7_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("saltpeter_grade", 0.3),),
+        scaled_output=("saltpeter_grade", MaterialId("saltpeter_ore")),
+        requires_discovery=True,
+    ),
+    "mine_tin_ore": Recipe(
+        recipe_id="mine_tin_ore",
+        display_name="Mine tin ore (strip mine — power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("tin_ore"): 1},
+        duration_ticks=4 * _TICKS_PER_GAME_HOUR,
+        labor_cents=7_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("tin_grade", 0.3),),
+        scaled_output=("tin_grade", MaterialId("tin_ore")),
+        requires_discovery=True,
+    ),
+    "mine_lead_ore": Recipe(
+        recipe_id="mine_lead_ore",
+        display_name="Mine lead ore (strip mine — power + labor)",
+        inputs={MaterialId("electricity"): 2},
+        outputs={MaterialId("lead_ore"): 1},
+        duration_ticks=5 * _TICKS_PER_GAME_HOUR,
+        labor_cents=8_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("lead_grade", 0.3),),
+        scaled_output=("lead_grade", MaterialId("lead_ore")),
+        requires_discovery=True,
+    ),
+    "mine_phosphate": Recipe(
+        recipe_id="mine_phosphate",
+        display_name="Mine phosphate ore (strip mine — power + labor)",
+        inputs={MaterialId("electricity"): 1},
+        outputs={MaterialId("phosphate_ore"): 2},
+        duration_ticks=3 * _TICKS_PER_GAME_HOUR,
+        labor_cents=5_00,
+        requires_building_id="strip_mine",
+        requires_subsurface=(("phosphate_grade", 0.3),),
+        scaled_output=("phosphate_grade", MaterialId("phosphate_ore")),
+        requires_discovery=True,
+    ),
+    "mine_raw_silica": Recipe(
+        recipe_id="mine_raw_silica",
+        display_name="Mine raw silica (stone works — power + labor)",
+        inputs={MaterialId("stone"): 2, MaterialId("electricity"): 1},
+        outputs={MaterialId("raw_silica"): 3},
+        duration_ticks=3 * _TICKS_PER_GAME_HOUR,
+        labor_cents=4_00,
+        requires_building_id="stone_works",
+        requires_subsurface=(("silica_grade", 0.2),),
+        scaled_output=("silica_grade", MaterialId("raw_silica")),
+        requires_discovery=True,
+    ),
+    "hand_mine_sulfur": Recipe(
+        recipe_id="hand_mine_sulfur",
+        display_name="Hand mine sulfur (mining pick — no building)",
+        inputs={},
+        outputs={MaterialId("sulfur_ore"): 1},
+        duration_ticks=8 * _TICKS_PER_GAME_HOUR,
+        labor_cents=3_50,
+        requires_building_id="",
+        requires_subsurface=(("sulfur_grade", 0.3),),
+        scaled_output=("sulfur_grade", MaterialId("sulfur_ore")),
+        requires_tool=MaterialId("mining_pick"),
+        requires_discovery=True,
+    ),
+    "hand_mine_tin": Recipe(
+        recipe_id="hand_mine_tin",
+        display_name="Hand mine tin (mining pick — no building)",
+        inputs={},
+        outputs={MaterialId("tin_ore"): 1},
+        duration_ticks=10 * _TICKS_PER_GAME_HOUR,
+        labor_cents=4_00,
+        requires_building_id="",
+        requires_subsurface=(("tin_grade", 0.3),),
+        scaled_output=("tin_grade", MaterialId("tin_ore")),
+        requires_tool=MaterialId("mining_pick"),
+        requires_discovery=True,
+    ),
 }
 
 
@@ -368,5 +470,7 @@ def recipe_public_list() -> list[dict]:
             row["scaled_output"] = {"field": fld, "material": str(mid)}
         if r.requires_tool is not None:
             row["requires_tool"] = str(r.requires_tool)
+        if r.requires_discovery:
+            row["requires_discovery"] = True
         out.append(row)
     return out

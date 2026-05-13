@@ -47,6 +47,15 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "hand_mine_coal": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.FOREST}),
     "hand_mine_ore": frozenset({T.MOUNTAIN}),
     "hand_dig_clay": frozenset({T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA}),
+    # Tier-2 extraction terrain envelopes (sulfur thrives in swamp+tundra mountain-fringe; silica is wide).
+    "mine_sulfur_ore": frozenset({T.SWAMP, T.TUNDRA, T.MOUNTAIN, T.PLAINS}),
+    "mine_saltpeter": frozenset({T.DESERT, T.PLAINS}),
+    "mine_tin_ore": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "mine_lead_ore": frozenset({T.MOUNTAIN}),
+    "mine_phosphate": frozenset({T.PLAINS, T.FOREST}),
+    "mine_raw_silica": frozenset({T.DESERT, T.PLAINS, T.MOUNTAIN}),
+    "hand_mine_sulfur": frozenset({T.SWAMP, T.TUNDRA, T.MOUNTAIN, T.PLAINS}),
+    "hand_mine_tin": frozenset({T.MOUNTAIN, T.PLAINS}),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})

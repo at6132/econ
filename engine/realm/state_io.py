@@ -28,7 +28,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 7
+SNAPSHOT_VERSION = 8
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -52,11 +52,21 @@ def dump_world(world: World) -> dict[str, Any]:
             "terrain": p.terrain.value,
             "owner": str(p.owner) if p.owner else None,
             "surveyed": p.surveyed,
+            "deep_surveyed": getattr(p, "deep_surveyed", False),
             "subsurface": {
                 "iron_ore_grade": p.subsurface.iron_ore_grade,
                 "copper_ore_grade": p.subsurface.copper_ore_grade,
                 "clay_grade": p.subsurface.clay_grade,
                 "coal_grade": p.subsurface.coal_grade,
+                "sulfur_grade": p.subsurface.sulfur_grade,
+                "saltpeter_grade": p.subsurface.saltpeter_grade,
+                "tin_grade": p.subsurface.tin_grade,
+                "lead_grade": p.subsurface.lead_grade,
+                "phosphate_grade": p.subsurface.phosphate_grade,
+                "silica_grade": p.subsurface.silica_grade,
+                "platinum_grade": p.subsurface.platinum_grade,
+                "oil_shale_grade": p.subsurface.oil_shale_grade,
+                "rare_earth_grade": p.subsurface.rare_earth_grade,
             },
         }
     asks: dict[str, list[dict[str, Any]]] = {}
@@ -152,12 +162,15 @@ def dump_world(world: World) -> dict[str, Any]:
         "use_plot_output_logistics": world.use_plot_output_logistics,
         "plot_output_stock": copy.deepcopy(dict(world.plot_output_stock)),
         "market_seller_registered": sorted(world.market_seller_registered),
+        "party_recipe_books": {
+            str(k): sorted(v) for k, v in world.party_recipe_books.items()
+        },
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -171,12 +184,22 @@ def load_world(d: dict[str, Any]) -> World:
         p.terrain = Terrain(saved["terrain"])
         p.owner = PartyId(saved["owner"]) if saved.get("owner") else None
         p.surveyed = bool(saved.get("surveyed", False))
+        p.deep_surveyed = bool(saved.get("deep_surveyed", False))
         sub = saved.get("subsurface") or {}
         p.subsurface = SubsurfaceRoll(
             iron_ore_grade=float(sub.get("iron_ore_grade", 0)),
             copper_ore_grade=float(sub.get("copper_ore_grade", 0)),
             clay_grade=float(sub.get("clay_grade", 0)),
             coal_grade=float(sub.get("coal_grade", 0)),
+            sulfur_grade=float(sub.get("sulfur_grade", 0)),
+            saltpeter_grade=float(sub.get("saltpeter_grade", 0)),
+            tin_grade=float(sub.get("tin_grade", 0)),
+            lead_grade=float(sub.get("lead_grade", 0)),
+            phosphate_grade=float(sub.get("phosphate_grade", 0)),
+            silica_grade=float(sub.get("silica_grade", 0)),
+            platinum_grade=float(sub.get("platinum_grade", 0)),
+            oil_shale_grade=float(sub.get("oil_shale_grade", 0)),
+            rare_earth_grade=float(sub.get("rare_earth_grade", 0)),
         )
     ledger = Ledger()
     for acc, bal in d["ledger"].items():
@@ -310,6 +333,17 @@ def load_world(d: dict[str, Any]) -> World:
         plot_output_stock=plot_stock,
         market_seller_registered=seller_reg,
     )
+    # Restore (or seed) per-party recipe books — older snapshots predate this field, so we
+    # ensure every known party has at least the Tier-1 starter set so production isn't blocked.
+    from realm.world import ensure_party_recipe_book
+
+    raw_books = d.get("party_recipe_books") or {}
+    if isinstance(raw_books, dict):
+        for k, v in raw_books.items():
+            if isinstance(v, (list, set, tuple)):
+                world.party_recipe_books[str(k)] = {str(x) for x in v}
+    for px in world.parties:
+        ensure_party_recipe_book(world, px)
     return world
 
 
