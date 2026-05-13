@@ -27,9 +27,9 @@ def test_exchange_ask_sits_above_fair_value() -> None:
 
 
 def test_settler_cost_basis_uses_input_only_for_coal() -> None:
-    """``mine_coal``: 2 electricity (52¢ each) / 2 coal = 52¢ per coal (labor is overhead, excluded)."""
+    """``mine_coal``: 2 electricity (60¢ each) / 2 coal = 60¢ per coal (labor is overhead, excluded)."""
     cb = settler_cost_basis_cents(MaterialId("coal"))
-    assert cb == 52
+    assert cb == 60
 
 
 def test_settler_ask_undercuts_exchange_for_staples() -> None:

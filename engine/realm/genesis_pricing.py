@@ -20,11 +20,13 @@ from realm.recipes import RECIPES
 
 # Reference midprice per material. These are the engine's "fair-value anchors";
 # the exchange ask sits a spread above, settler cost-basis uses these for inputs.
+# Sprint 1 nudged coal/timber/grain slightly upward to ensure hub willingness-to-pay
+# (exchange_ask × 0.92) clears the spec's 75¢ floor for the player's coal strategy.
 _FAIR_VALUE_CENTS: dict[str, int] = {
-    "coal": 62,
-    "electricity": 52,
-    "grain": 128,
-    "timber": 96,
+    "coal": 72,
+    "electricity": 60,
+    "grain": 140,
+    "timber": 110,
     "stone": 48,
     "clay": 40,
     "iron_ore": 80,
@@ -163,24 +165,18 @@ def markup_factor_bps(material: MaterialId) -> int:
 
 
 def producer_cost_basis_cents(material: MaterialId) -> int | None:
-    """Estimated marginal cost a producer pays for one unit (inputs + share of labor).
+    """Cheapest input-only cost per output unit, across all recipes that produce
+    ``material``. Labor is intentionally excluded — labor cents are paid to the
+    system reserve (no employees) or split across employees (with employees), so
+    it represents distributed wage payment rather than a *marginal* cost the
+    producer must recoup unit-for-unit. Markup over this floor is what gives a
+    real producer headroom over the clearinghouse.
 
-    Combines the cheapest known recipe's input cost (at fair-value inputs) plus a
-    half-share of the recipe's labor — the labor split mirrors how a real producer
-    actually accounts for the trade (labor is partially fixed, partially marginal).
-    Returns ``None`` if no recipe exists for this material.
+    Hand recipes are skipped (they encode hand-tool costs separately).
     """
     best: int | None = None
     for recipe in RECIPES.values():
         if recipe.requires_tool is not None:
-            # Hand recipes have no recurring cost basis beyond labor.
-            out_qty = int(recipe.outputs.get(material, 0))
-            if out_qty <= 0:
-                continue
-            # Labor-only basis for hand recipes (no inputs to price).
-            per_unit = max(1, recipe.labor_cents // max(1, out_qty))
-            if best is None or per_unit < best:
-                best = per_unit
             continue
         out_qty = int(recipe.outputs.get(material, 0))
         if out_qty <= 0:
@@ -195,10 +191,8 @@ def producer_cost_basis_cents(material: MaterialId) -> int | None:
             input_cost += unit * int(in_qty)
         if not ok:
             continue
-        # Half the recipe labor amortised across outputs — captures the marginal
-        # component without inflating cost basis like full-labor would.
-        labor_share = recipe.labor_cents // 2
-        per_unit = (input_cost + labor_share + out_qty - 1) // out_qty
+        # Ceil division so per_unit covers the integer rounding losses on inputs.
+        per_unit = (input_cost + out_qty - 1) // out_qty
         if best is None or per_unit < best:
             best = per_unit
     return best
