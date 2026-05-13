@@ -36,6 +36,7 @@ import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
 import { PlotSchematicPanel } from "./PlotSchematicPanel";
+import { RecipeBookPanel } from "./RecipeBookPanel";
 import type { SchematicRecipe } from "./plotSchematic";
 import { buildOrganicMesh } from "./mapOrganicMesh";
 import type { MapFxEvent, MapFxKind } from "./mapFxTypes";
@@ -102,6 +103,8 @@ type PlotDto = {
   terrain: string;
   owner: string | null;
   surveyed: boolean;
+  /** True after a successful deep_survey — exposes Tier-3 grades in ``subsurface``. */
+  deep_surveyed?: boolean;
   subsurface?: Record<string, number>;
   /** Surveyed plots: recipe ids the engine allows on this terrain (omitted until surveyed). */
   recipe_ids?: string[];
@@ -116,6 +119,8 @@ type RecipeDto = {
   labor_cents: number;
   requires_building_id?: string;
   requires_tool?: string;
+  /** Tier-2/Tier-3 recipes locked behind assay discovery (filter in UI). */
+  requires_discovery?: boolean;
 };
 
 type ActiveProductionDto = {
@@ -181,6 +186,8 @@ type EventLogEntryDto = {
   recipe_id?: string;
   material?: string;
   qty?: number;
+  /** Set for ``kind === "world_feed"`` rows that originate from the discovery / deep-survey flows. */
+  feed_source?: string;
 };
 
 type BuildingCatalogDto = {
@@ -306,6 +313,8 @@ type WorldDto = {
   market_history?: MarketHistorySnap[];
   hire_catalog?: HireCatalogRow[];
   party_display_names?: Record<string, string>;
+  /** Per-party discovered recipe ids (Tier-1 are seeded for every party; Tier-2 are added by assay). */
+  party_recipe_books?: Record<string, string[]>;
 };
 
 function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
@@ -313,6 +322,132 @@ function SectionTitle({ children, style }: { children: ReactNode; style?: CSSPro
     <h3 className="realm-section-title" style={style}>
       {children}
     </h3>
+  );
+}
+
+const TIER1_GRADE_FIELDS = ["iron_ore_grade", "copper_ore_grade", "coal_grade", "clay_grade"] as const;
+const TIER2_GRADE_FIELDS = [
+  "sulfur_grade",
+  "saltpeter_grade",
+  "tin_grade",
+  "lead_grade",
+  "phosphate_grade",
+  "silica_grade",
+] as const;
+const TIER3_GRADE_FIELDS = ["platinum_grade", "oil_shale_grade", "rare_earth_grade"] as const;
+
+function gradeColor(value: number): string {
+  if (value >= 0.5) return "#7fd1a8"; // rich
+  if (value >= 0.2) return "#f0c46a"; // moderate
+  return "#7c849a"; // poor
+}
+
+function DeepSurveyControl({
+  plotId,
+  alreadyDeep,
+  drillBitCount,
+  onAfter,
+}: {
+  plotId: string;
+  alreadyDeep: boolean;
+  drillBitCount: number;
+  onAfter: () => void;
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const submit = useCallback(async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch(
+        `/api/engine/deep_survey?party=player&plot_id=${encodeURIComponent(plotId)}`,
+        { method: "POST" },
+      );
+      if (!r.ok) {
+        const detail = await r.json().catch(() => null);
+        setMsg(detail?.detail ?? `HTTP ${r.status}`);
+        return;
+      }
+      setMsg("submitted — completes in 2 game-days");
+      onAfter();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [onAfter, plotId]);
+  return (
+    <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>
+      <SectionTitle>Deep survey</SectionTitle>
+      <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+        Drill_rig present. Deep survey consumes <strong>1 drill_bit</strong> and <strong>$20</strong>, runs for two
+        game-days, and reveals any Tier-3 minerals (platinum / oil shale / rare earth) under this plot.
+      </p>
+      <p className="realm-help" style={{ marginTop: 0, marginBottom: 8 }}>
+        Drill bits on hand: <strong>{drillBitCount}</strong>. {alreadyDeep ? "Plot already deep-surveyed." : null}
+      </p>
+      <button
+        type="button"
+        className="realm-btn realm-btn--primary"
+        disabled={busy || alreadyDeep || drillBitCount < 1}
+        onClick={() => void submit()}
+      >
+        {busy ? "Submitting…" : alreadyDeep ? "Plot already deep-surveyed" : "Start deep survey"}
+      </button>
+      {msg ? (
+        <p className="realm-help" style={{ marginTop: 8, fontSize: 11 }}>
+          {msg}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function SubsurfaceReadout({
+  subsurface,
+  deepSurveyed,
+}: {
+  subsurface: Record<string, number>;
+  deepSurveyed: boolean;
+}): JSX.Element {
+  const renderRow = (fields: readonly string[], label: string) => {
+    const entries = fields
+      .map((f) => [f, subsurface[f]] as [string, number | undefined])
+      .filter(([, v]) => typeof v === "number");
+    if (entries.length === 0) return null;
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, fontSize: 11 }}>
+        <span style={{ minWidth: 56, opacity: 0.7 }}>{label}</span>
+        {entries.map(([k, v]) => (
+          <span
+            key={k}
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              background: "rgba(255,255,255,0.04)",
+              color: gradeColor(v as number),
+              fontFamily: "var(--realm-font-mono, monospace)",
+            }}
+          >
+            {k.replace(/_grade$/, "")} <strong>{(v as number).toFixed(2)}</strong>
+          </span>
+        ))}
+      </div>
+    );
+  };
+  return (
+    <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
+      <span style={{ opacity: 0.75 }}>Subsurface (green ≥0.5 · yellow ≥0.2 · grey &lt;0.2):</span>
+      {renderRow(TIER1_GRADE_FIELDS, "Tier 1")}
+      {renderRow(TIER2_GRADE_FIELDS, "Tier 2")}
+      {deepSurveyed ? (
+        renderRow(TIER3_GRADE_FIELDS, "Tier 3")
+      ) : (
+        <div style={{ marginTop: 4, fontSize: 11, opacity: 0.75 }}>
+          <strong>Tier 3:</strong> unknown — drill_rig + drill_bit (deep survey) required.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2248,12 +2383,33 @@ export default function HomePage() {
                             {worldFeedEntries
                               .slice(-48)
                               .reverse()
-                              .map((e) => (
-                                <li key={`${e.tick}|${e.message}`} className="realm-help" style={{ marginBottom: 8 }}>
-                                  <span style={{ opacity: 0.55 }}>t{e.tick}</span>{" "}
-                                  {prettifyChronicleMessage(e.message, partyLabels)}
-                                </li>
-                              ))}
+                              .map((e) => {
+                                const source = (e as { feed_source?: string }).feed_source ?? "";
+                                const isDiscovery = source === "recipe_discovery" || source === "deep_survey_find";
+                                return (
+                                  <li
+                                    key={`${e.tick}|${e.message}`}
+                                    className="realm-help"
+                                    style={{
+                                      marginBottom: 8,
+                                      ...(isDiscovery
+                                        ? {
+                                            background: "rgba(96, 213, 159, 0.10)",
+                                            borderLeft: "3px solid #7fd1a8",
+                                            paddingLeft: 8,
+                                            paddingTop: 4,
+                                            paddingBottom: 4,
+                                            fontWeight: 600,
+                                            color: "#dff4e6",
+                                          }
+                                        : {}),
+                                    }}
+                                  >
+                                    <span style={{ opacity: 0.55 }}>t{e.tick}</span>{" "}
+                                    {prettifyChronicleMessage(e.message, partyLabels)}
+                                  </li>
+                                );
+                              })}
                           </ul>
                         </>
                       ) : null}
@@ -2282,16 +2438,14 @@ export default function HomePage() {
                             {!selectedPlot.surveyed && selectedPlot.owner === "player" ? (
                               <span style={{ display: "block", marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
                                 Surveying costs <strong>${(FRONTIER_SURVEY_COST_CENTS / 100).toFixed(2)}</strong> cash and reveals
-                                subsurface grades (ore / clay / coal hints).
+                                subsurface grades — including Tier-2 minerals (sulfur, tin, lead, …).
                               </span>
                             ) : null}
                             {selectedPlot.owner === "player" && selectedPlot.surveyed && selectedPlot.subsurface ? (
-                              <span style={{ display: "block", marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
-                                Subsurface grades:{" "}
-                                {Object.entries(selectedPlot.subsurface)
-                                  .map(([k, v]) => `${displayMaterial(k.replace(/_grade$/, ""))} ${(v as number).toFixed(2)}`)
-                                  .join(" · ")}
-                              </span>
+                              <SubsurfaceReadout
+                                subsurface={selectedPlot.subsurface}
+                                deepSurveyed={selectedPlot.deep_surveyed === true}
+                              />
                             ) : null}
                             {selectedPlot.owner === "player" && selectedPlot.surveyed && !selectedPlot.subsurface ? (
                               <span style={{ display: "block", marginTop: 6, fontSize: 11 }}>
@@ -2509,6 +2663,14 @@ export default function HomePage() {
                                     ))}
                                   </ul>
                                 </>
+                              ) : null}
+                              {selectedPlot && selectedPlotId && buildingsHere.some((b) => b.building_id === "drill_rig") ? (
+                                <DeepSurveyControl
+                                  plotId={selectedPlotId}
+                                  alreadyDeep={selectedPlot.deep_surveyed === true}
+                                  drillBitCount={(playerInv["drill_bit"] as number | undefined) ?? 0}
+                                  onAfter={() => void load()}
+                                />
                               ) : null}
                             </>
                           ) : null}
@@ -3199,6 +3361,12 @@ export default function HomePage() {
 
                   {tab === "hire" ? (
                     <>
+                      <RecipeBookPanel
+                        knownRecipeIds={world.party_recipe_books?.player ?? []}
+                        apiBase="/api/engine"
+                        onAssaySubmitted={() => void load()}
+                      />
+                      <div style={{ height: 14 }} />
                       <SectionTitle>Hire (employment)</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
                         Signing bonus opens an employment record. Each production run routes <strong>40%</strong> of recipe labor cash to hired parties (split
