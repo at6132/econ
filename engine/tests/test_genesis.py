@@ -50,6 +50,10 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     )
     from realm.genesis_bank import BANK_STARTING_CASH_CENTS, FIRST_BANK_PARTY_ID
     from realm.genesis_energy import NPC_ENERGY_IDS, NPC_ENERGY_STARTING_CASH_CENTS
+    from realm.genesis_road_builders import (
+        FRONTIER_ROADS_PARTY_ID,
+        FRONTIER_ROADS_STARTING_CASH_CENTS,
+    )
     from realm.genesis_shippers import NPC_SHIPPER_STARTING_CASH_CENTS
 
     n_shippers = sum(1 for k in w.parties if str(k).startswith("shipper_"))
@@ -66,6 +70,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_flippers = 1 if FLIPPER_PARTY_ID in w.parties else 0
     n_arch_shippers = 1 if SHIPPER_PARTY_ID in w.parties else 0
     n_financiers = 1 if FINANCIER_PARTY_ID in w.parties else 0
+    n_road_builders = 1 if FRONTIER_ROADS_PARTY_ID in w.parties else 0
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
@@ -82,6 +87,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_flippers * FLIPPER_STARTING_CASH_CENTS  # Sprint 5 Flipper
         + n_arch_shippers * SHIPPER_STARTING_CASH_CENTS  # Sprint 5 Cross-Country
         + n_financiers * FINANCIER_STARTING_CASH_CENTS  # Sprint 5 Meridian
+        + n_road_builders * FRONTIER_ROADS_STARTING_CASH_CENTS  # Sprint 6 Frontier Roads Co.
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out

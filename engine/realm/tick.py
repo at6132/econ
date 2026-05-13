@@ -21,6 +21,7 @@ from realm.social import tick_supply_contract_breaches
 from realm.contract_stubs import tick_phase2_financial_contracts
 from realm.energy import ensure_powered_plots_fresh
 from realm.genesis_bank import tick_bank_loans
+from realm.genesis_road_builders import tick_frontier_roads
 from realm.genesis_margaux_sprint5 import (
     tick_margaux_sprint5_beats,
     update_margaux_player_profile,
@@ -53,6 +54,8 @@ def advance_tick(world: World) -> None:
     tick_supply_contract_breaches(world)
     tick_phase2_financial_contracts(world)
     tick_bank_loans(world)
+    if world.scenario_id == "genesis":
+        tick_frontier_roads(world)
     record_market_snapshot(world)
     tick_price_alerts(world)
     if world.scenario_id == "genesis":

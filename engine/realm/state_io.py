@@ -22,6 +22,7 @@ from realm.world import (
     ActiveProduction,
     BusinessRecord,
     InTransit,
+    RoadSegment,
     SubsurfaceRoll,
     SurveyReport,
     World,
@@ -30,7 +31,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 10
+SNAPSHOT_VERSION = 11
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -196,12 +197,24 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for pid_s, rec in world.business_registry.items()
         },
+        "road_segments": [
+            {
+                "segment_id": s.segment_id,
+                "from_plot": str(s.from_plot),
+                "to_plot": str(s.to_plot),
+                "owner": str(s.owner),
+                "built_at_tick": int(s.built_at_tick),
+                "toll_rate_pct": int(s.toll_rate_pct),
+            }
+            for s in world.road_segments
+        ],
+        "next_road_segment_seq": int(world.next_road_segment_seq),
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -415,6 +428,22 @@ def load_world(d: dict[str, Any]) -> World:
                 description=str(payload.get("description", "")),
                 registered_at_tick=int(payload.get("registered_at_tick", 0)),
             )
+    raw_roads = d.get("road_segments") or []
+    if isinstance(raw_roads, list):
+        for payload in raw_roads:
+            if not isinstance(payload, dict):
+                continue
+            world.road_segments.append(
+                RoadSegment(
+                    segment_id=str(payload.get("segment_id", "")),
+                    from_plot=PlotId(str(payload.get("from_plot", ""))),
+                    to_plot=PlotId(str(payload.get("to_plot", ""))),
+                    owner=PartyId(str(payload.get("owner", ""))),
+                    built_at_tick=int(payload.get("built_at_tick", 0)),
+                    toll_rate_pct=int(payload.get("toll_rate_pct", 0)),
+                )
+            )
+    world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
     return world
 
 

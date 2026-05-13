@@ -101,8 +101,41 @@ def dispatch_shipment(
         coastal_route = plot_is_coastal(world, from_plot) and plot_is_coastal(world, to_plot)
     if coastal_route:
         fee = max(BASE_SHIP_FEE_CENTS, fee * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000)
+    # Sprint 6 — Phase A: roads on the deterministic A→B path cut the per-tile
+    # cost by 50% on covered tiles and optionally collect ad-valorem tolls for
+    # the road owners.
+    from realm.roads import compute_road_savings_and_tolls
+    from realm.markets import best_resting_ask_cents, best_resting_bid_cents
+
+    per_tile_effective = (
+        max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS)))
+        if operator_payee is not None
+        else PER_TILE_SHIP_CENTS
+    )
+    if coastal_route:
+        per_tile_effective = (
+            per_tile_effective * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000
+        )
+    unit_value = best_resting_ask_cents(world, material)
+    if unit_value is None or unit_value <= 0:
+        unit_value = best_resting_bid_cents(world, material)
+    if unit_value is None or unit_value <= 0:
+        unit_value = 100
+    goods_value_cents = int(unit_value) * int(qty)
+    road_calc = compute_road_savings_and_tolls(
+        world,
+        from_plot_id=from_plot_id,
+        to_plot_id=to_plot_id,
+        per_tile_cents=per_tile_effective,
+        goods_value_cents=goods_value_cents,
+        shipper=party,
+    )
+    road_savings: int = int(road_calc["savings_cents"])
+    tolls: list[tuple[PartyId, str, int]] = list(road_calc["tolls"])
+    fee = max(BASE_SHIP_FEE_CENTS, fee - road_savings)
+    total_toll_cents = sum(amt for _, _, amt in tolls)
     cash = party_cash_account(party)
-    if world.ledger.balance(cash) < fee:
+    if world.ledger.balance(cash) < fee + total_toll_cents:
         return {"ok": False, "reason": "insufficient cash for shipping"}
     if operator_payee is not None:
         op_cash = party_cash_account(operator_payee)
@@ -118,7 +151,48 @@ def dispatch_shipment(
         return {"ok": False, "reason": pay.reason}
     if operator_payee is not None and op_route_key is not None:
         record_route_fee_collected(world, operator_payee, op_route_key, fee)
+    # Sprint 6 — Phase A.4: track shipment count per region pair (used by
+    # Frontier Roads Co. to pick high-traffic corridors to build).
+    if from_region and to_region and from_region != to_region:
+        key = route_key(from_region, to_region)
+        counts = world.scenario_state.setdefault("route_shipment_counts", {})
+        if isinstance(counts, dict):
+            counts[str(key)] = int(counts.get(str(key), 0)) + 1
+    # Sprint 6 — Phase A: pay tolls to each road owner along the path.
+    tolls_paid: list[tuple[PartyId, str, int]] = []
+    toll_failed = False
+    for owner, segment_id, amount in tolls:
+        if amount <= 0:
+            continue
+        owner_cash = party_cash_account(owner)
+        world.ledger.ensure_account(owner_cash)
+        tp = world.ledger.transfer(
+            debit=cash, credit=owner_cash, amount_cents=int(amount)
+        )
+        if isinstance(tp, MoneyErr):
+            toll_failed = True
+            break
+        tolls_paid.append((owner, segment_id, int(amount)))
+        log_event(
+            world,
+            "road_toll_paid",
+            f"{party} paid road toll on {segment_id} → {owner}: ${amount / 100:.2f}",
+            party=str(party),
+            owner=str(owner),
+            segment_id=segment_id,
+            amount_cents=int(amount),
+            material=str(material),
+            qty=qty,
+        )
+
+    def _refund_tolls() -> None:
+        for owner, _sid, amount in tolls_paid:
+            world.ledger.transfer(
+                debit=party_cash_account(owner), credit=cash, amount_cents=int(amount)
+            )
+
     def _refund_fee() -> None:
+        _refund_tolls()
         if operator_payee is not None:
             world.ledger.transfer(
                 debit=party_cash_account(operator_payee), credit=cash, amount_cents=fee
@@ -127,6 +201,10 @@ def dispatch_shipment(
             world.ledger.transfer(
                 debit=system_reserve_account(), credit=cash, amount_cents=fee
             )
+
+    if toll_failed:
+        _refund_fee()
+        return {"ok": False, "reason": "toll payment failed"}
 
     need = qty
     take_inv = min(need, inv_q)
@@ -195,6 +273,9 @@ def dispatch_shipment(
         "harbor_speedup": bool(
             from_plot is not None and has_dock_at_origin and plot_is_coastal(world, from_plot)
         ),
+        "road_savings_cents": int(road_savings),
+        "road_tolls_paid_cents": int(total_toll_cents),
+        "road_segments_used": [s for _, s, _ in tolls_paid],
     }
 
 

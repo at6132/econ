@@ -216,6 +216,22 @@ class BusinessRecord:
 
 
 @dataclass
+class RoadSegment:
+    """A road built between two adjacent plots (Sprint 6 — Phase A).
+
+    Reduces movement cost on the edge by 50% and lets the owner collect an
+    optional ad-valorem toll (0–10%) on goods value transiting the segment.
+    """
+
+    segment_id: str
+    from_plot: PlotId
+    to_plot: PlotId
+    owner: PartyId
+    built_at_tick: int
+    toll_rate_pct: int = 0  # 0-10%, applied to value of goods transiting
+
+
+@dataclass
 class SurveyReport:
     """Tradeable survey document — knowledge as an asset (Sprint 4 — Phase A).
 
@@ -317,6 +333,12 @@ class World:
     """Sprint 5 — Phase A: registered business identities keyed by party id
     str. Once registered, the business name is the authoritative
     ``party_display_names`` value for that party."""
+    road_segments: list["RoadSegment"] = field(default_factory=list)
+    """Sprint 6 — Phase A: built road segments connecting adjacent plot pairs.
+    Each segment cuts the per-tile shipping cost on its edge by 50% and lets
+    its owner collect a 0–10% ad-valorem toll on goods value transiting it."""
+    next_road_segment_seq: int = 0
+    """Monotonic id generator for ``RoadSegment.segment_id``."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -694,6 +716,9 @@ def bootstrap_genesis(
     from realm.genesis_archetypes import seed_archetype_agents
 
     seed_archetype_agents(world)
+    from realm.genesis_road_builders import seed_frontier_roads
+
+    seed_frontier_roads(world)
     log_event(
         world,
         "world",
@@ -1189,6 +1214,7 @@ def world_public_dict(world: World) -> dict:
         "bank_rates": _bank_rates_public(world),
         "bank_loans": _bank_loans_for_player(world),
         "bank_plot_id": world.scenario_state.get("bank_plot"),
+        "road_segments": _road_segments_public(world),
         "player_price_alerts": list(
             (world.scenario_state.get("player_price_alerts") or [])
         ),
@@ -1223,6 +1249,15 @@ def _bank_loans_for_player(world: "World") -> list[dict]:
     except Exception:
         return []
     return active_loans_for_borrower(world, PartyId("player"))
+
+
+def _road_segments_public(world: "World") -> list[dict]:
+    """Public view of every built road segment (Sprint 6 — Phase A)."""
+    try:
+        from realm.roads import all_roads_public
+    except Exception:
+        return []
+    return all_roads_public(world)
 
 
 def _business_registry_public(world: "World") -> dict[str, dict]:

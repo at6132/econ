@@ -35,6 +35,7 @@ from realm.markets import (
     sell_into_bids,
 )
 from realm.movement import dispatch_shipment
+from realm.roads import all_roads_public, build_road, set_road_toll
 from realm.persistence import load_snapshot, save_snapshot
 from realm.social import (
     accept_supply_contract,
@@ -1281,6 +1282,43 @@ def delete_price_alert(alert_id: str) -> dict:
     from realm.price_alerts import remove_price_alert
 
     r = remove_price_alert(_world, alert_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+# ─────────────────── Sprint 6 — Phase A: roads ───────────────────
+
+
+@app.get("/roads")
+def get_roads() -> dict:
+    return {"ok": True, "tick": _world.tick, "segments": all_roads_public(_world)}
+
+
+@app.post("/roads/build")
+def post_road_build(body: Annotated[dict, Body()]) -> dict:
+    party_raw = body.get("party", "player")
+    from_plot = body.get("from_plot") or body.get("from_plot_id")
+    to_plot = body.get("to_plot") or body.get("to_plot_id")
+    if not isinstance(from_plot, str) or not isinstance(to_plot, str):
+        raise HTTPException(status_code=400, detail="from_plot and to_plot are required")
+    r = build_road(_world, PartyId(str(party_raw)), PlotId(from_plot), PlotId(to_plot))
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/roads/{segment_id}/toll")
+def post_road_toll(segment_id: str, body: Annotated[dict, Body()]) -> dict:
+    party_raw = body.get("party", "player")
+    toll = body.get("toll_rate_pct")
+    if toll is None:
+        toll = body.get("toll_pct")
+    try:
+        toll_i = int(toll)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="toll_rate_pct must be an integer")
+    r = set_road_toll(_world, PartyId(str(party_raw)), str(segment_id), toll_i)
     if not r.get("ok"):
         raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return dict(r)

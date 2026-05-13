@@ -28,6 +28,12 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "label": "First Bank of the Frontier",
         "cost_cents": 0,
     },
+    "road_segment": {
+        "kind": "simple",
+        "label": "Road segment (connects to adjacent plot — reduces movement cost)",
+        "cost_cents": 12_000,
+        "material_inputs": {"lumber": 2, "stone": 2},
+    },
     "tool_cache": {
         "kind": "simple",
         "label": "Tool cache (−10% recipe labor cash on this plot)",
