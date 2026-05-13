@@ -147,6 +147,11 @@ class ActiveProduction:
     plot_id: PlotId
     recipe_id: str
     ticks_remaining: int
+    runs_remaining: int = 0
+    """Sprint 6 — Phase B: number of additional runs to queue after this one
+    completes. ``0`` = one-shot (current behaviour). ``-1`` = continuous (until
+    cancelled or the workshop degrades below 60% efficiency). ``> 0`` = queue
+    that many more runs sequentially."""
 
 
 @dataclass

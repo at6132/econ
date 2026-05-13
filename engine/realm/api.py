@@ -236,10 +236,29 @@ def post_produce(
     plot_id: str,
     recipe_id: Annotated[str, Query()],
     party: Annotated[str, Query()] = "player",
+    run_count: Annotated[int, Query()] = 1,
 ) -> dict:
-    r = start_production_on_plot(_world, PartyId(party), PlotId(plot_id), recipe_id)
+    from realm.production import start_production
+
+    r = start_production(
+        _world, PartyId(party), PlotId(plot_id), recipe_id, run_count=int(run_count)
+    )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
+    return r
+
+
+@app.get("/plots/{plot_id}/throughput")
+def get_throughput(
+    plot_id: str,
+    recipe_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    from realm.production import throughput_breakdown
+
+    r = throughput_breakdown(_world, PartyId(party), PlotId(plot_id), recipe_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return r
 
 

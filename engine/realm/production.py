@@ -242,18 +242,49 @@ def _pay_recipe_labor(
     return None
 
 
-def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: str) -> dict:
+CONTINUOUS_RUN_COUNT: int = -1
+"""Sentinel for ``start_production(run_count=-1)`` — keep restarting until the
+workshop degrades or inputs disappear."""
+
+MIN_EFFICIENCY_FOR_AUTO_RESTART: int = 60
+"""Auto-restart stops once efficiency drops below this percent."""
+
+AUTO_RESTART_INPUT_STALL_RETRY_TICKS: int = 60
+
+
+def start_production(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    recipe_id: str,
+    run_count: int = 1,
+) -> dict:
     """
     Start one batch: consumes inputs + labor (cash) immediately; delivers outputs after duration.
 
+    ``run_count``:
+      - ``1`` (default) — single batch, current behaviour.
+      - ``> 1`` — start one batch now and queue ``run_count - 1`` more runs to
+        auto-restart sequentially after each ``production_done``.
+      - ``-1`` (``CONTINUOUS_RUN_COUNT``) — auto-restart continuously until the
+        workshop degrades below 60% efficiency, inputs run out, or the player
+        cancels.
+
+    Auto-restart attempts to begin the next run immediately on completion; on
+    insufficient input it emits ``production_input_stall`` and retries every
+    ``AUTO_RESTART_INPUT_STALL_RETRY_TICKS`` ticks via ``tick_production_auto_restart``.
+
     On success: ``{ok: True, started: True, run_id, recipe_id, plot_id, ticks_remaining,
-    completes_at_tick, message}``.
+    completes_at_tick, runs_remaining, message}``.
 
     If a batch is already running on this plot: ``{ok: True, started: False, status: "active", ...}``
     (no state change). Failures: ``{ok: False, reason}``.
 
     ``completes_at_tick`` is ``world.tick + ticks_remaining`` (approximate; storage stalls extend it).
     """
+    rc = int(run_count)
+    if rc == 0 or rc < -1:
+        return {"ok": False, "reason": "run_count must be -1 (continuous) or >= 1"}
     if not _plot_owned_by(world, party, plot_id):
         return {"ok": False, "reason": "plot not owned"}
     plot = world.plots.get(plot_id)
@@ -385,6 +416,11 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         return {"ok": False, "reason": labor_err.reason}
     world.next_production_seq += 1
     run_id = f"run-{world.next_production_seq}"
+    # runs_remaining = additional runs to queue after this one.
+    if rc == CONTINUOUS_RUN_COUNT:
+        queued = CONTINUOUS_RUN_COUNT
+    else:
+        queued = max(0, rc - 1)
     world.active_production.append(
         ActiveProduction(
             run_id=run_id,
@@ -392,6 +428,7 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
             plot_id=plot_id,
             recipe_id=recipe_id,
             ticks_remaining=recipe.duration_ticks,
+            runs_remaining=queued,
         )
     )
     log_event(
@@ -413,13 +450,20 @@ def start_production(world: World, party: PartyId, plot_id: PlotId, recipe_id: s
         "plot_id": str(plot_id),
         "ticks_remaining": int(recipe.duration_ticks),
         "completes_at_tick": ct,
+        "runs_remaining": int(queued),
         "message": f"Started {recipe_id}; outputs due around tick {ct}.",
     }
 
 
 def tick_production(world: World) -> None:
-    """Advance all active runs; complete finished batches."""
+    """Advance all active runs; complete finished batches.
+
+    Auto-restart (Sprint 6 Phase B) is deferred until after the completion
+    loop so the newly-started run doesn't see the completed run still sitting
+    in ``world.active_production`` (which would short-circuit it as "active").
+    """
     still: list[ActiveProduction] = []
+    completed_for_auto_restart: list[ActiveProduction] = []
     for run in world.active_production:
         run.ticks_remaining -= 1
         if run.ticks_remaining > 0:
@@ -515,6 +559,10 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        # Sprint 6 — Phase B: auto-restart is deferred until after the loop
+        # so the new ActiveProduction doesn't collide with the completed one.
+        if run.runs_remaining != 0:
+            completed_for_auto_restart.append(run)
         # Sprint 3 — Phase C.3: every worker that participated levels up once.
         if int(getattr(recipe, "labor_cents", 0)) > 0:
             from realm.labor import increment_worker_skill
@@ -533,3 +581,189 @@ def tick_production(world: World) -> None:
                     world, run.party, run.recipe_id, out_mid, int(out_qty)
                 )
     world.active_production = still
+    for completed in completed_for_auto_restart:
+        _maybe_schedule_auto_restart(world, completed)
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Sprint 6 — Phase B: auto-restart machinery
+# ────────────────────────────────────────────────────────────────────────
+
+
+def _auto_restart_queue(world: World) -> list[dict]:
+    """Pending auto-restarts (stalls and queued counts).
+
+    Each entry: ``{party, plot_id, recipe_id, runs_remaining, retry_at_tick}``.
+    ``runs_remaining`` decrements per successful re-launch; ``-1`` = continuous.
+    """
+    return world.scenario_state.setdefault("production_auto_restart_queue", [])
+
+
+def _maybe_schedule_auto_restart(world: World, run: ActiveProduction) -> None:
+    """After a successful completion, queue the next run if the player asked for one.
+
+    ``run.runs_remaining`` semantics: "additional runs to launch after this one".
+    For run_count=3 (initial), the first ActiveProduction carries ``runs_remaining=2``.
+    On its completion we need to launch a new ActiveProduction whose own
+    ``runs_remaining=1`` — i.e. invoke ``start_production`` with ``run_count=2``.
+    """
+    if run.runs_remaining == 0:
+        return
+    # ``rc_for_next`` for ``start_production`` = total runs left including the
+    # one we are about to launch.
+    rc_for_next = (
+        CONTINUOUS_RUN_COUNT
+        if run.runs_remaining == CONTINUOUS_RUN_COUNT
+        else int(run.runs_remaining)
+    )
+    next_remaining = rc_for_next
+    if _workshop_below_auto_restart_threshold(world, run):
+        log_event(
+            world,
+            "production_auto_restart_stopped",
+            f"{run.party} auto-restart for {run.recipe_id} stopped (workshop below {MIN_EFFICIENCY_FOR_AUTO_RESTART}%)",
+            party=str(run.party),
+            plot_id=str(run.plot_id),
+            recipe_id=run.recipe_id,
+        )
+        return
+    res = start_production(
+        world, run.party, run.plot_id, run.recipe_id, run_count=rc_for_next
+    )
+    if res.get("ok") and res.get("started"):
+        return
+    # Otherwise queue a retry. ``insufficient X`` covers the "input stall" case.
+    reason = str(res.get("reason", "")) if not res.get("ok") else ""
+    if reason.startswith("insufficient"):
+        log_event(
+            world,
+            "production_input_stall",
+            f"{run.party} {run.recipe_id} on {run.plot_id} stalled: {reason}",
+            party=str(run.party),
+            plot_id=str(run.plot_id),
+            recipe_id=run.recipe_id,
+            reason=reason,
+        )
+        _auto_restart_queue(world).append(
+            {
+                "party": str(run.party),
+                "plot_id": str(run.plot_id),
+                "recipe_id": str(run.recipe_id),
+                "runs_remaining": int(next_remaining),
+                "retry_at_tick": int(world.tick) + AUTO_RESTART_INPUT_STALL_RETRY_TICKS,
+            }
+        )
+
+
+def _workshop_below_auto_restart_threshold(world: World, run: ActiveProduction) -> bool:
+    """Return True when the workshop on this plot is at < 60% efficiency."""
+    recipe = RECIPES.get(run.recipe_id)
+    if recipe is None:
+        return False
+    req = recipe.requires_building_id
+    if not req:
+        return False
+    for b in world.plot_buildings:
+        if (
+            b.get("party") == str(run.party)
+            and b.get("plot_id") == str(run.plot_id)
+            and b.get("building_id") == req
+        ):
+            iid = str(b.get("instance_id") or "")
+            if iid:
+                eff = building_efficiency_pct(world, iid)
+                if int(eff) < MIN_EFFICIENCY_FOR_AUTO_RESTART:
+                    return True
+    return False
+
+
+def tick_production_auto_restart(world: World) -> None:
+    """Poll the auto-restart queue and try to start any entries whose
+    ``retry_at_tick`` has elapsed.
+
+    Queue entry ``runs_remaining`` here means total runs still owed including
+    the one we want to start now — so we pass it straight to ``start_production``
+    as ``run_count``.
+    """
+    q = _auto_restart_queue(world)
+    if not q:
+        return
+    kept: list[dict] = []
+    for entry in q:
+        if int(entry.get("retry_at_tick", 0)) > int(world.tick):
+            kept.append(entry)
+            continue
+        party = PartyId(str(entry.get("party", "")))
+        plot_id = PlotId(str(entry.get("plot_id", "")))
+        recipe_id = str(entry.get("recipe_id", ""))
+        runs_remaining = int(entry.get("runs_remaining", 0))
+        if runs_remaining == 0:
+            continue
+        rc_for_next = (
+            CONTINUOUS_RUN_COUNT if runs_remaining == CONTINUOUS_RUN_COUNT else runs_remaining
+        )
+        res = start_production(world, party, plot_id, recipe_id, run_count=rc_for_next)
+        if res.get("ok") and res.get("started"):
+            continue
+        # Still blocked — reschedule one more retry window.
+        entry["retry_at_tick"] = int(world.tick) + AUTO_RESTART_INPUT_STALL_RETRY_TICKS
+        kept.append(entry)
+    world.scenario_state["production_auto_restart_queue"] = kept
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Sprint 6 — Phase B3: throughput multiplier (UI display helper)
+# ────────────────────────────────────────────────────────────────────────
+
+
+def throughput_breakdown(
+    world: World, party: PartyId, plot_id: PlotId, recipe_id: str
+) -> dict:
+    """Return the multiplicative factors that determine output magnitude.
+
+    Useful for the UI "Efficiency" indicator. The individual factors are in
+    basis points (10_000 = 100%). The combined value is the integer product
+    divided down to a single ``bps`` number.
+    """
+    from realm.decay import EFFICIENCY_HEALTHY
+    from realm.labor import effective_output_bps_for_run
+
+    plot = world.plots.get(plot_id)
+    recipe = RECIPES.get(recipe_id)
+    if plot is None or recipe is None:
+        return {"ok": False, "reason": "unknown plot or recipe"}
+    # Maintenance efficiency (taken from the workshop instance if present).
+    eff_pct = EFFICIENCY_HEALTHY
+    req = recipe.requires_building_id
+    if req:
+        for b in world.plot_buildings:
+            if (
+                b.get("party") == str(party)
+                and b.get("plot_id") == str(plot_id)
+                and b.get("building_id") == req
+            ):
+                iid = str(b.get("instance_id") or "")
+                if iid:
+                    eff_pct = building_efficiency_pct(world, iid)
+                    break
+    # Terrain bonus.
+    terrain_bps = recipe_terrain_bonus_bps(recipe_id, plot.terrain)
+    # Labor multiplier — only meaningful for recipes that consume labour.
+    labour_bps = 10_000
+    if int(getattr(recipe, "labor_cents", 0)) > 0:
+        labour_bps = effective_output_bps_for_run(
+            world, party, has_recipe_labor=True
+        )
+    combined_bps = (
+        int(eff_pct) * 100  # eff_pct is /100 → convert to /10_000
+        * int(terrain_bps) // 10_000
+        * int(labour_bps) // 10_000
+    )
+    return {
+        "ok": True,
+        "efficiency_pct": int(eff_pct),
+        "terrain_bps": int(terrain_bps),
+        "labour_bps": int(labour_bps),
+        "combined_bps": int(combined_bps),
+        "combined_pct": int(combined_bps) // 100,
+    }

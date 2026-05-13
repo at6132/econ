@@ -126,6 +126,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 "plot_id": str(a.plot_id),
                 "recipe_id": a.recipe_id,
                 "ticks_remaining": a.ticks_remaining,
+                "runs_remaining": int(getattr(a, "runs_remaining", 0)),
             }
             for a in world.active_production
         ],
@@ -266,6 +267,7 @@ def load_world(d: dict[str, Any]) -> World:
                 plot_id=PlotId(row["plot_id"]),
                 recipe_id=row["recipe_id"],
                 ticks_remaining=int(row["ticks_remaining"]),
+                runs_remaining=int(row.get("runs_remaining", 0)),
             )
         )
     transit: list[InTransit] = []
