@@ -114,6 +114,7 @@ def _sort_bids(lst: list[BidOrder]) -> None:
 def best_resting_ask_cents(world: World, material: MaterialId) -> int | None:
     """Lowest limit sell price on the book, or None if no asks."""
     asks = _asks(world, material)
+    _sort_asks(asks)
     if not asks:
         return None
     return int(asks[0].price_per_unit_cents)
@@ -122,6 +123,7 @@ def best_resting_ask_cents(world: World, material: MaterialId) -> int | None:
 def best_resting_bid_cents(world: World, material: MaterialId) -> int | None:
     """Highest limit buy price on the book, or None if no bids."""
     bids = _bids(world, material)
+    _sort_bids(bids)
     if not bids:
         return None
     return int(bids[0].max_price_per_unit_cents)
@@ -632,6 +634,7 @@ def market_buy(
     first_seller_str: str | None = None
     while remaining > 0:
         asks = _asks(world, material)
+        _sort_asks(asks)
         if not asks:
             break
         idx = None
@@ -726,6 +729,7 @@ def sell_into_bids(
     escrow = market_escrow_account()
     while remaining > 0:
         bids = _bids(world, material)
+        _sort_bids(bids)
         if not bids:
             break
         idx = None

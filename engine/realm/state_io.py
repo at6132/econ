@@ -17,7 +17,7 @@ from realm.decay import BUILDING_CONDITION_FULL_BPS
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import Inventory
 from realm.ledger import Ledger
-from realm.markets import AskOrder, BidOrder
+from realm.markets import AskOrder, BidOrder, _sort_asks, _sort_bids
 from realm.world import (
     ActiveProduction,
     InTransit,
@@ -228,6 +228,7 @@ def load_world(d: dict[str, Any]) -> World:
             )
             for r in rows
         ]
+        _sort_asks(asks_map[mat_key])
     bids_map: dict[str, list[Any]] = {}
     for mat_key, rows in d.get("market_bids", {}).items():
         bids_map[mat_key] = [
@@ -244,6 +245,7 @@ def load_world(d: dict[str, Any]) -> World:
             )
             for r in rows
         ]
+        _sort_bids(bids_map[mat_key])
     saved_bseq = int(d.get("next_building_instance_seq", 0))
     plot_buildings_m: list[dict[str, Any]] = []
     for raw in d.get("plot_buildings", []):

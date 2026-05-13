@@ -37,6 +37,33 @@ def test_genesis_settlers_start_production_after_workshops() -> None:
     assert n >= 1, "expected at least one settler production_start after workshops complete"
 
 
+def test_genesis_hub_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
+    """Aggressive buy must not trust in-memory list order; shuffle then verify cheapest clip wins."""
+    from realm.inventory import MatterErr
+    from realm.markets import cancel_sell_order, market_buy, place_sell_order
+
+    w = bootstrap_genesis(seed=77, grid_width=4, grid_height=4, settler_count=0)
+    hub = PartyId("pop_hub_e")
+    p = PartyId("player")
+    ex = PartyId("genesis_exchange")
+    mid = MaterialId("coal")
+    key = str(mid)
+    for o in list(w.market_asks_by_material.get(key, [])):
+        cancel_sell_order(w, o.party, o.order_id)
+    ad = w.inventory.add(p, mid, 20)
+    assert not isinstance(ad, MatterErr)
+    assert place_sell_order(w, p, mid, 12, 44)["ok"] is True
+    ad2 = w.inventory.add(ex, mid, 50)
+    assert not isinstance(ad2, MatterErr)
+    assert place_sell_order(w, ex, mid, 14, 70)["ok"] is True
+    lst = w.market_asks_by_material[key]
+    lst.reverse()
+    r = market_buy(w, hub, mid, 8)
+    assert r.get("ok") is True
+    assert int(r["filled"]) == 8
+    assert int(r["spent_cents"]) == 8 * 44
+
+
 def test_genesis_skips_tier1_npc_bootstrap() -> None:
     w = bootstrap_genesis(seed=1, grid_width=6, grid_height=4, settler_count=2)
     assert PartyId("npc_grain_vendor") not in w.parties
