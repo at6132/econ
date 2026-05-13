@@ -522,6 +522,82 @@ def post_revise_route_fee(
     return dict(r)
 
 
+@app.get("/tenders")
+def get_tenders() -> dict:
+    """List every tender (open and historical). UI groups by status."""
+    from realm.settler_cost_basis import settler_output_basis_cents
+    from realm.tenders import list_all_tenders
+
+    player = PartyId("player")
+    tenders_out = []
+    for t in list_all_tenders(_world):
+        bids = list(t.get("bids") or [])
+        bids_sorted = sorted(
+            bids,
+            key=lambda b: (int(b.get("price_per_unit_cents", 0)), int(b.get("submitted_at_tick", 0))),
+        )
+        lowest = bids_sorted[0] if bids_sorted else None
+        player_bid = next(
+            (b for b in bids if str(b.get("bidder")) == str(player)),
+            None,
+        )
+        player_basis = settler_output_basis_cents(_world, player, MaterialId(str(t.get("material"))))
+        tenders_out.append(
+            {
+                "id": str(t.get("id")),
+                "posted_by": str(t.get("posted_by")),
+                "material": str(t.get("material")),
+                "qty_per_cycle": int(t.get("qty_per_cycle", 0)),
+                "interval_ticks": int(t.get("interval_ticks", 0)),
+                "duration_cycles": int(t.get("duration_cycles", 0)),
+                "bid_deadline_tick": int(t.get("bid_deadline_tick", 0)),
+                "posted_at_tick": int(t.get("posted_at_tick", 0)),
+                "bids": [
+                    {
+                        "bidder": str(b.get("bidder")),
+                        "price_per_unit_cents": int(b.get("price_per_unit_cents", 0)),
+                        "submitted_at_tick": int(b.get("submitted_at_tick", 0)),
+                    }
+                    for b in bids_sorted
+                ],
+                "lowest_bid_cents": int(lowest["price_per_unit_cents"]) if lowest else None,
+                "player_bid_cents": (
+                    int(player_bid["price_per_unit_cents"]) if player_bid else None
+                ),
+                "player_estimated_basis_cents": player_basis,
+                "awarded_to": (
+                    str(t.get("awarded_to")) if t.get("awarded_to") else None
+                ),
+                "awarded_price_per_unit_cents": (
+                    int(t["awarded_price_per_unit_cents"])
+                    if t.get("awarded_price_per_unit_cents") is not None
+                    else None
+                ),
+                "awarded_contract_id": (
+                    str(t.get("awarded_contract_id"))
+                    if t.get("awarded_contract_id")
+                    else None
+                ),
+                "status": str(t.get("status", "open")),
+            }
+        )
+    return {"ok": True, "tick": _world.tick, "tenders": tenders_out}
+
+
+@app.post("/tenders/bid")
+def post_tender_bid(
+    party: Annotated[str, Query()],
+    tender_id: Annotated[str, Query()],
+    price_per_unit_cents: Annotated[int, Query()],
+) -> dict:
+    from realm.tenders import submit_tender_bid
+
+    r = submit_tender_bid(_world, PartyId(party), tender_id, price_per_unit_cents)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
 @app.post("/plot/harvest")
 def post_plot_harvest(
     party: Annotated[str, Query()],

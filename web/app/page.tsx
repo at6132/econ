@@ -328,6 +328,37 @@ type RoutesDto = {
   };
 };
 
+type TenderBidDto = {
+  bidder: string;
+  price_per_unit_cents: number;
+  submitted_at_tick: number;
+};
+
+type TenderDto = {
+  id: string;
+  posted_by: string;
+  material: string;
+  qty_per_cycle: number;
+  interval_ticks: number;
+  duration_cycles: number;
+  bid_deadline_tick: number;
+  posted_at_tick: number;
+  bids: TenderBidDto[];
+  lowest_bid_cents: number | null;
+  player_bid_cents: number | null;
+  player_estimated_basis_cents: number | null;
+  awarded_to: string | null;
+  awarded_price_per_unit_cents: number | null;
+  awarded_contract_id: string | null;
+  status: "open" | "awarded" | "expired";
+};
+
+type TendersDto = {
+  ok: boolean;
+  tick: number;
+  tenders: TenderDto[];
+};
+
 type WorldDto = {
   seed: number;
   tick: number;
@@ -649,6 +680,8 @@ export default function HomePage() {
   const [routeRegToRegion, setRouteRegToRegion] = useState("");
   const [routeRegPlot, setRouteRegPlot] = useState("");
   const [routeRegFee, setRouteRegFee] = useState("3");
+  const [tendersData, setTendersData] = useState<TendersDto | null>(null);
+  const [tenderBidPrices, setTenderBidPrices] = useState<Record<string, string>>({});
   const [codeLayerStatusJson, setCodeLayerStatusJson] = useState<string | null>(null);
   const [bazaarSymbol, setBazaarSymbol] = useState("timber");
   const [bazaarActiveId, setBazaarActiveId] = useState("timber");
@@ -844,6 +877,22 @@ export default function HomePage() {
     if (tab !== "logistics") return;
     void loadRoutes();
   }, [tab, loadRoutes, world?.tick]);
+
+  const loadTenders = useCallback(async () => {
+    try {
+      const r = await fetch("/api/engine/tenders");
+      if (!r.ok) return;
+      const j = (await r.json()) as TendersDto;
+      setTendersData(j);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "pacts") return;
+    void loadTenders();
+  }, [tab, loadTenders, world?.tick]);
 
   useEffect(() => {
     if (!world?.event_log) return;
@@ -1477,6 +1526,32 @@ export default function HomePage() {
       if (!r.ok) throw new Error(await r.text());
       await loadRoutes();
       pushToast({ message: `Route registered at ${Math.floor(fee)}¢/tile.`, kind: "ok" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitTenderBid(tenderId: string) {
+    const rawPrice = tenderBidPrices[tenderId];
+    const cents = Number(rawPrice);
+    if (!Number.isFinite(cents) || cents < 1) {
+      setError("Bid price must be at least 1¢.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        party: "player",
+        tender_id: tenderId,
+        price_per_unit_cents: String(Math.floor(cents)),
+      });
+      const r = await fetch(`/api/engine/tenders/bid?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await loadTenders();
+      pushToast({ message: `Bid submitted at ${Math.floor(cents)}¢/unit.`, kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -3702,6 +3777,119 @@ export default function HomePage() {
 
                   {tab === "pacts" ? (
                     <>
+                      <SectionTitle>Tenders</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 10 }}>
+                        Pop hubs post <strong>open supply tenders</strong>: lowest bid wins a multi-cycle SupplyContract.
+                        Bid <em>without holding inventory</em> — you commit to deliver by the contract deadline.
+                      </p>
+                      {(() => {
+                        const open = (tendersData?.tenders ?? []).filter((t) => t.status === "open");
+                        const recent = (tendersData?.tenders ?? [])
+                          .filter((t) => t.status !== "open")
+                          .slice(-6)
+                          .reverse();
+                        return (
+                          <>
+                            <div style={{ marginBottom: 12 }}>
+                              <table className="realm-table" style={{ width: "100%" }}>
+                                <thead>
+                                  <tr>
+                                    <th>Tender</th>
+                                    <th>Buyer</th>
+                                    <th>Material</th>
+                                    <th>Per cycle</th>
+                                    <th>Cycles</th>
+                                    <th>Closes (tick)</th>
+                                    <th>Lowest</th>
+                                    <th>Your bid</th>
+                                    <th>Est. basis</th>
+                                    <th></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {open.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={10} style={{ opacity: 0.6 }}>
+                                        No open tenders right now. Hubs post on a 14-game-day cadence.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    open.map((t) => {
+                                      const draft = tenderBidPrices[t.id] ?? "";
+                                      return (
+                                        <tr key={t.id}>
+                                          <td>{t.id}</td>
+                                          <td>{displayParty(t.posted_by, partyLabels)}</td>
+                                          <td>{t.material}</td>
+                                          <td>{t.qty_per_cycle}</td>
+                                          <td>{t.duration_cycles}</td>
+                                          <td>{t.bid_deadline_tick}</td>
+                                          <td>{t.lowest_bid_cents != null ? `${t.lowest_bid_cents}¢` : "—"}</td>
+                                          <td>{t.player_bid_cents != null ? `${t.player_bid_cents}¢` : "—"}</td>
+                                          <td>{t.player_estimated_basis_cents != null ? `${t.player_estimated_basis_cents}¢` : "—"}</td>
+                                          <td>
+                                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                              <input
+                                                className="realm-input"
+                                                value={draft}
+                                                onChange={(e) =>
+                                                  setTenderBidPrices((prev) => ({ ...prev, [t.id]: e.target.value }))
+                                                }
+                                                placeholder="¢/unit"
+                                                style={{ width: 64 }}
+                                              />
+                                              <button
+                                                className="realm-button"
+                                                onClick={() => void submitTenderBid(t.id)}
+                                                disabled={busy || !draft}
+                                              >
+                                                Bid
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                            {recent.length > 0 ? (
+                              <div style={{ marginBottom: 16 }}>
+                                <h4 style={{ margin: "8px 0 4px" }}>Recent outcomes</h4>
+                                <table className="realm-table" style={{ width: "100%" }}>
+                                  <thead>
+                                    <tr>
+                                      <th>Tender</th>
+                                      <th>Material</th>
+                                      <th>Status</th>
+                                      <th>Winner</th>
+                                      <th>Price</th>
+                                      <th>Contract</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {recent.map((t) => (
+                                      <tr key={t.id}>
+                                        <td>{t.id}</td>
+                                        <td>{t.material}</td>
+                                        <td>{t.status}</td>
+                                        <td>{t.awarded_to ? displayParty(t.awarded_to, partyLabels) : "—"}</td>
+                                        <td>
+                                          {t.awarded_price_per_unit_cents != null
+                                            ? `${t.awarded_price_per_unit_cents}¢`
+                                            : "—"}
+                                        </td>
+                                        <td>{t.awarded_contract_id ?? "—"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                       <SectionTitle>Supply contracts</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 10 }}>
                         Propose terms: the <strong>buyer accepts</strong>, then the <strong>supplier fulfills</strong> (goods + payment) before the deadline
