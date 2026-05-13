@@ -109,6 +109,10 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("hand_saw"): MaterialDef(
         MaterialId("hand_saw"), "Hand saw", 0.8, "tool", durable=True
     ),
+    # ───────── Transport capital (durable; required for coastal route registration) ─────────
+    MaterialId("vessel"): MaterialDef(
+        MaterialId("vessel"), "Vessel (cargo)", 4800.0, "transport", durable=True
+    ),
     # ───────── Tier-2 raw minerals (extracted; recipes locked behind assay discovery) ─────────
     MaterialId("sulfur_ore"): MaterialDef(
         MaterialId("sulfur_ore"), "Sulfur ore", 2100.0, "ore"

@@ -212,6 +212,34 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         },
         "turnkey_total_cents": 580_000,
     },
+    # ───────── Shipping infrastructure (Sprint 2 — route operators) ─────────
+    "dock": {
+        "kind": "contracted",
+        "label": "Coastal dock (vessel operations + coastal route registration)",
+        "self_shell_cents": 85_000,
+        "self_contractor_fee_cents": 28_000,
+        "self_materials": {"timber": 10, "lumber": 4, "rope": 3, "stone": 2},
+        "turnkey_total_cents": 185_000,
+        "terrain_required": ("coastal",),
+        "maintenance_schedule": {
+            "interval_ticks": 7_200,  # 5 game-days
+            "materials": {"timber": 2, "rope": 1},
+            "grace_ticks": 1_440,
+        },
+    },
+    "waystation": {
+        "kind": "contracted",
+        "label": "Inland waystation (route operations on inland regions)",
+        "self_shell_cents": 40_000,
+        "self_contractor_fee_cents": 15_000,
+        "self_materials": {"timber": 6, "lumber": 2, "brick": 2},
+        "turnkey_total_cents": 90_000,
+        "maintenance_schedule": {
+            "interval_ticks": 8_640,  # 6 game-days
+            "materials": {"timber": 1, "brick": 1},
+            "grace_ticks": 1_440,
+        },
+    },
 }
 
 
@@ -248,6 +276,11 @@ def building_catalog_public() -> list[dict]:
                         str(k): int(v) for k, v in (sched.get("materials") or {}).items()
                     },
                 }
+            terrain_req = spec.get("terrain_required")
+            if terrain_req:
+                row["terrain_required"] = (
+                    list(terrain_req) if not isinstance(terrain_req, str) else [terrain_req]
+                )
             out.append(row)
     return out
 
@@ -272,6 +305,21 @@ def build_on_plot(
         return {"ok": False, "reason": "unknown plot"}
     if plot.owner != party:
         return {"ok": False, "reason": "not your plot"}
+    terrain_req = spec.get("terrain_required")
+    if terrain_req:
+        req_tuple = (terrain_req,) if isinstance(terrain_req, str) else tuple(terrain_req)
+        req_names = tuple(str(t) for t in req_tuple)
+        if "coastal" in req_names:
+            from realm.recipe_sites import plot_is_coastal
+
+            allowed = plot_is_coastal(world, plot)
+        else:
+            allowed = plot.terrain.value in req_names
+        if not allowed:
+            return {
+                "ok": False,
+                "reason": f"{building_id} requires terrain in {sorted(req_names)} (plot is {plot.terrain.value})",
+            }
     cash = party_cash_account(party)
     label = str(spec["label"])
     total_cents: int

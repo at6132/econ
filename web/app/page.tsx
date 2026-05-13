@@ -300,6 +300,34 @@ type SupplyContractDto = {
   deliver_by_tick?: number;
 };
 
+type RouteOperatorDto = {
+  party: string;
+  plot_id: string;
+  building: string;
+  fee_per_tile_cents: number;
+  registered_at_tick: number;
+};
+
+type RouteDto = {
+  key: string;
+  region_a: string;
+  region_b: string;
+  operators: RouteOperatorDto[];
+};
+
+type RoutesDto = {
+  ok: boolean;
+  regions: string[];
+  routes: RouteDto[];
+  player: {
+    plots_by_region: Record<string, string[]>;
+    operating_buildings_by_plot: Record<string, string[]>;
+    vessel_qty: number;
+    route_revenue_today_cents: number;
+    route_revenue_previous_day_cents: number;
+  };
+};
+
 type WorldDto = {
   seed: number;
   tick: number;
@@ -616,6 +644,11 @@ export default function HomePage() {
   const [shipTo, setShipTo] = useState("p-1-0");
   const [shipMaterial, setShipMaterial] = useState("timber");
   const [shipQty, setShipQty] = useState("1");
+  const [routesData, setRoutesData] = useState<RoutesDto | null>(null);
+  const [routeRegFromRegion, setRouteRegFromRegion] = useState("");
+  const [routeRegToRegion, setRouteRegToRegion] = useState("");
+  const [routeRegPlot, setRouteRegPlot] = useState("");
+  const [routeRegFee, setRouteRegFee] = useState("3");
   const [codeLayerStatusJson, setCodeLayerStatusJson] = useState<string | null>(null);
   const [bazaarSymbol, setBazaarSymbol] = useState("timber");
   const [bazaarActiveId, setBazaarActiveId] = useState("timber");
@@ -795,6 +828,22 @@ export default function HomePage() {
       cancelled = true;
     };
   }, [tab]);
+
+  const loadRoutes = useCallback(async () => {
+    try {
+      const r = await fetch("/api/engine/routes");
+      if (!r.ok) return;
+      const j = (await r.json()) as RoutesDto;
+      setRoutesData(j);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "logistics") return;
+    void loadRoutes();
+  }, [tab, loadRoutes, world?.tick]);
 
   useEffect(() => {
     if (!world?.event_log) return;
@@ -1397,6 +1446,37 @@ export default function HomePage() {
       didInitPan.current = false;
       await load();
       pushToast({ message: `World reset (${devResetScenario}).`, kind: "ok" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function registerRoute() {
+    const fee = Number(routeRegFee);
+    if (!routeRegPlot || !routeRegFromRegion || !routeRegToRegion) {
+      setError("Choose a plot and two distinct regions.");
+      return;
+    }
+    if (!Number.isFinite(fee) || fee < 1) {
+      setError("Fee per tile must be at least 1¢.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({
+        party: "player",
+        plot_id: routeRegPlot,
+        from_region: routeRegFromRegion,
+        to_region: routeRegToRegion,
+        fee_per_tile_cents: String(Math.floor(fee)),
+      });
+      const r = await fetch(`/api/engine/routes/register?${q.toString()}`, { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      await loadRoutes();
+      pushToast({ message: `Route registered at ${Math.floor(fee)}¢/tile.`, kind: "ok" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -3425,6 +3505,123 @@ export default function HomePage() {
                         <p className="realm-help" style={{ marginTop: 10 }}>
                           Pick two different owned plots to see fee and arrival time.
                         </p>
+                      )}
+                      <SectionTitle>Shipping routes</SectionTitle>
+                      <p className="realm-help" style={{ marginBottom: 8 }}>
+                        Operators set per-tile fees for region-to-region shipments. The cheapest registration on
+                        each route collects every shipment fee. Build a <strong>dock</strong> (coastal) or
+                        <strong> waystation</strong> (inland) and a vessel for coastal routes to compete.
+                      </p>
+                      {routesData ? (
+                        <>
+                          <p className="realm-help" style={{ marginBottom: 6 }}>
+                            You earned <strong>{formatUsdFromCents(routesData.player.route_revenue_today_cents)}</strong>{" "}
+                            in route fees today · yesterday{" "}
+                            <strong>{formatUsdFromCents(routesData.player.route_revenue_previous_day_cents)}</strong> ·{" "}
+                            {routesData.player.vessel_qty} vessel{routesData.player.vessel_qty === 1 ? "" : "s"} in hand.
+                          </p>
+                          {routesData.routes.length === 0 ? (
+                            <p className="realm-help">No routes registered yet.</p>
+                          ) : (
+                            <table className="realm-help" style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
+                              <thead>
+                                <tr style={{ textAlign: "left" }}>
+                                  <th style={{ padding: "2px 6px" }}>Route</th>
+                                  <th style={{ padding: "2px 6px" }}>Cheapest</th>
+                                  <th style={{ padding: "2px 6px" }}>Fee / tile</th>
+                                  <th style={{ padding: "2px 6px" }}>All operators</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {routesData.routes.map((rt) => {
+                                  const cheapest = rt.operators[0];
+                                  return (
+                                    <tr key={rt.key}>
+                                      <td style={{ padding: "2px 6px" }}>{rt.region_a} ↔ {rt.region_b}</td>
+                                      <td style={{ padding: "2px 6px" }}>{cheapest ? cheapest.party : "—"}</td>
+                                      <td style={{ padding: "2px 6px" }}>
+                                        {cheapest ? `${cheapest.fee_per_tile_cents}¢` : "—"}
+                                      </td>
+                                      <td style={{ padding: "2px 6px" }}>
+                                        {rt.operators.map((op, i) => (
+                                          <span key={`${op.party}-${i}`} style={{ opacity: i === 0 ? 1 : 0.65, marginRight: 8 }}>
+                                            {op.party} ({op.fee_per_tile_cents}¢)
+                                          </span>
+                                        ))}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                          <p className="realm-help" style={{ marginTop: 12, marginBottom: 6 }}>
+                            <strong>Register a route</strong> — your plot must host a completed dock or waystation. Coastal docks also need a vessel.
+                          </p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end" }}>
+                            <label className="realm-label">
+                              From region
+                              <select
+                                className="realm-input"
+                                value={routeRegFromRegion}
+                                onChange={(e) => setRouteRegFromRegion(e.target.value)}
+                                style={{ minWidth: 90 }}
+                              >
+                                <option value="">—</option>
+                                {routesData.regions.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="realm-label">
+                              To region
+                              <select
+                                className="realm-input"
+                                value={routeRegToRegion}
+                                onChange={(e) => setRouteRegToRegion(e.target.value)}
+                                style={{ minWidth: 90 }}
+                              >
+                                <option value="">—</option>
+                                {routesData.regions.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="realm-label">
+                              Plot
+                              <select
+                                className="realm-input"
+                                value={routeRegPlot}
+                                onChange={(e) => setRouteRegPlot(e.target.value)}
+                                style={{ minWidth: 120 }}
+                              >
+                                <option value="">—</option>
+                                {Object.entries(routesData.player.operating_buildings_by_plot).map(([pid, bids]) => (
+                                  <option key={pid} value={pid}>{pid} ({bids.join("/")})</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="realm-label">
+                              Fee ¢/tile
+                              <input
+                                className="realm-input"
+                                value={routeRegFee}
+                                onChange={(e) => setRouteRegFee(e.target.value)}
+                                style={{ width: 60 }}
+                              />
+                            </label>
+                            <button type="button" className="realm-btn" disabled={busy} onClick={() => void registerRoute()}>
+                              Register
+                            </button>
+                          </div>
+                          {Object.keys(routesData.player.operating_buildings_by_plot).length === 0 ? (
+                            <p className="realm-help" style={{ marginTop: 6 }}>
+                              Build a dock on a coastal plot (or a waystation inland) before you can register a route.
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="realm-help">Loading routes…</p>
                       )}
                       <SectionTitle>User code layer</SectionTitle>
                       <p className="realm-help" style={{ marginBottom: 8 }}>

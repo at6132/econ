@@ -414,6 +414,114 @@ def post_ship(
     return dict(r)
 
 
+@app.get("/routes")
+def get_routes() -> dict:
+    """Shipping market: registered operators per route, per-region partitioning,
+    and the player's own revenue/spend totals for today and yesterday."""
+    from realm.regions import all_region_ids, region_for_plot
+    from realm.route_operators import (
+        list_route_operators,
+        route_revenue_by_party_previous_day,
+        route_revenue_by_party_today,
+    )
+
+    operators = _world.scenario_state.get("route_operators") or {}
+    routes_out: list[dict] = []
+    for key in sorted(operators.keys()):
+        entries = list_route_operators(_world, key)
+        a, b = key.split(":", 1)
+        routes_out.append(
+            {
+                "key": key,
+                "region_a": a,
+                "region_b": b,
+                "operators": [
+                    {
+                        "party": str(e.get("operator_party")),
+                        "plot_id": str(e.get("operator_plot")),
+                        "building": str(e.get("building")),
+                        "fee_per_tile_cents": int(e.get("fee_per_tile_cents", 0)),
+                        "registered_at_tick": int(e.get("registered_at_tick", 0)),
+                    }
+                    for e in entries
+                ],
+            }
+        )
+    player = PartyId("player")
+    # Player-owned plots grouped by region (for the "register a route" form).
+    plots_by_region: dict[str, list[str]] = {r: [] for r in all_region_ids()}
+    for plot in _world.plots.values():
+        if plot.owner != player:
+            continue
+        region = region_for_plot(_world, plot.plot_id) or ""
+        if not region:
+            continue
+        plots_by_region.setdefault(region, []).append(str(plot.plot_id))
+    # Building registry on player plots — surfaces which plots already have a dock/waystation.
+    player_plot_buildings: dict[str, list[str]] = {}
+    for row in _world.plot_buildings:
+        if str(row.get("party")) != str(player):
+            continue
+        bid = str(row.get("building_id"))
+        if bid not in ("dock", "waystation"):
+            continue
+        if int(row.get("completes_at_tick", 0)) > int(_world.tick):
+            continue
+        player_plot_buildings.setdefault(str(row["plot_id"]), []).append(bid)
+    vessel_qty = int(_world.inventory.qty(player, MaterialId("vessel")))
+    return {
+        "ok": True,
+        "regions": all_region_ids(),
+        "routes": routes_out,
+        "player": {
+            "plots_by_region": plots_by_region,
+            "operating_buildings_by_plot": player_plot_buildings,
+            "vessel_qty": vessel_qty,
+            "route_revenue_today_cents": route_revenue_by_party_today(_world, player),
+            "route_revenue_previous_day_cents": route_revenue_by_party_previous_day(
+                _world, player
+            ),
+        },
+    }
+
+
+@app.post("/routes/register")
+def post_register_route(
+    party: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+    from_region: Annotated[str, Query()],
+    to_region: Annotated[str, Query()],
+    fee_per_tile_cents: Annotated[int, Query()],
+) -> dict:
+    from realm.actions import register_route as _register_route
+
+    r = _register_route(
+        _world,
+        PartyId(party),
+        PlotId(plot_id),
+        from_region,
+        to_region,
+        fee_per_tile_cents,
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/routes/revise_fee")
+def post_revise_route_fee(
+    party: Annotated[str, Query()],
+    route_key: Annotated[str, Query()],
+    fee_per_tile_cents: Annotated[int, Query()],
+) -> dict:
+    from realm.actions import revise_route_fee
+
+    r = revise_route_fee(_world, PartyId(party), route_key, fee_per_tile_cents)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
 @app.post("/plot/harvest")
 def post_plot_harvest(
     party: Annotated[str, Query()],

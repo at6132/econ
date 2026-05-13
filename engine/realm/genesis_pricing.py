@@ -72,7 +72,15 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
     "drill_bit": 6_500,
     "pump_unit": 18_000,
     "gear_set": 11_000,
+    # Transport capital (durable; Sprint 2 — required for coastal route registration).
+    "vessel": 45_000,
 }
+
+# Materials whose fair value is so far above the cheapest recipe basis that the
+# markup-over-cost path produces nonsense (e.g. capital goods with no recipe at
+# all). We pin the exchange ask to fair value for these — there is no cheaper
+# legal source in v1.
+_FAIR_VALUE_ONLY_PRICING: frozenset[str] = frozenset({"vessel"})
 
 # Legacy: exchange sat 15% above fair value (one-sided ask). Kept only as a
 # fallback when neither cost-basis nor markup-tier is known for a material.
@@ -156,6 +164,7 @@ _MARKUP_TIER_BY_MATERIAL: dict[str, int] = {
     "spade": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     "hand_saw": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     "ladder": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "vessel": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
 }
 
 
@@ -265,6 +274,12 @@ def fair_value_cents(material: MaterialId) -> int | None:
 
 def _baseline_exchange_ask_cents(material: MaterialId) -> int:
     """Static markup-over-cost ask (no recent-fills override applied)."""
+    if str(material) in _FAIR_VALUE_ONLY_PRICING:
+        # Capital goods with no recipe path — pin to fair value directly so the
+        # ask doesn't get clamped to ¢4 by the missing-cost-basis fallback.
+        fv_only = _FAIR_VALUE_CENTS.get(str(material))
+        if fv_only is not None:
+            return max(4, int(fv_only))
     basis = producer_cost_basis_cents(material)
     fv = _FAIR_VALUE_CENTS.get(str(material))
     fb = _FALLBACK_LIST_CENTS.get(str(material))

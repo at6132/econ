@@ -349,6 +349,9 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
         (MaterialId("pick_head"), 300, 30),
         (MaterialId("saw_blade"), 200, 20),
         (MaterialId("drill_bit"), 100, 10),
+        # Transport capital — durable, no recipe path yet (Sprint 2). Small
+        # finite supply makes coastal route registration achievable on day one.
+        (MaterialId("vessel"), 20, 4),
     ]
     for mid, total_add, list_qty in listings:
         ad = inv.add(ex, mid, total_add)
@@ -461,6 +464,9 @@ def bootstrap_genesis(
     assign_settler_display_names(world, seed=seed)
     _seed_genesis_exchange(world, inv)
     _seed_tier3_character(world, inv, "genesis")
+    from realm.genesis_shippers import seed_npc_shippers
+
+    seed_npc_shippers(world)
     log_event(
         world,
         "world",

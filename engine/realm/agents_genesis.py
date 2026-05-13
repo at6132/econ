@@ -11,6 +11,7 @@ from realm.genesis_exchange_liquidity import tick_genesis_exchange_quoting
 from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
 from realm.genesis_pricing import hub_max_bid_cents
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
+from realm.genesis_shippers import tick_npc_shippers
 from realm.ids import MaterialId, PartyId
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.markets import market_buy
@@ -87,6 +88,7 @@ def tick_population_demands(world: World) -> None:
 def tick_genesis_agents(world: World) -> None:
     _genesis_pop_hub_topup(world)
     tick_genesis_exchange_quoting(world)
+    tick_npc_shippers(world)
     tick_genesis_settler_lifecycle(world)
     tick_settler_business(world)
     tick_population_demands(world)

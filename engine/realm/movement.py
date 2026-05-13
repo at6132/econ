@@ -1,8 +1,14 @@
 """Goods in transit — Law 3 (time + distance).
 
-Shipping fee (integer cents): ``BASE_SHIP_FEE_CENTS + manhattan(from, to) * PER_TILE_SHIP_CENTS``.
-Paid to ``system:reserve`` on dispatch. Arrival tick uses Manhattan distance × ``TRANSIT_TICKS_PER_TILE``
-(game-minutes per tile) plus ``TRANSIT_BASE_TICKS`` handling.
+Shipping fee (integer cents): ``BASE_SHIP_FEE_CENTS + manhattan(from, to) * per_tile``.
+
+When a registered route operator exists for the two regions the shipment crosses,
+``per_tile`` is that operator's ``fee_per_tile_cents`` (cheapest wins) and the
+entire fee is credited to them. Otherwise the fee falls back to the legacy
+``PER_TILE_SHIP_CENTS`` and is credited to ``system:reserve`` (sink).
+
+Arrival tick uses Manhattan distance × ``TRANSIT_TICKS_PER_TILE`` (game-minutes
+per tile) plus ``TRANSIT_BASE_TICKS`` handling.
 """
 
 from __future__ import annotations
@@ -13,6 +19,8 @@ from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import MatterErr
 from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
+from realm.regions import region_for_plot, route_key
+from realm.route_operators import find_cheapest_operator, record_route_fee_collected
 from realm.storage_caps import try_add_inventory
 from realm.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
 from realm.world import InTransit, World
@@ -62,23 +70,56 @@ def dispatch_shipment(
     if inv_q + stash_q < qty:
         return {"ok": False, "reason": "insufficient material"}
     dist = manhattan(world, from_plot_id, to_plot_id)
-    fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+    from_region = region_for_plot(world, from_plot_id)
+    to_region = region_for_plot(world, to_plot_id)
+    operator_payee: PartyId | None = None
+    op_route_key: str | None = None
+    if from_region and to_region and from_region != to_region:
+        key = route_key(from_region, to_region)
+        op_route_key = key
+        op = find_cheapest_operator(world, key)
+        if op is not None and str(op.get("operator_party")) != str(party):
+            # An operator other than the shipper themselves: credit them the fee.
+            operator_payee = PartyId(str(op["operator_party"]))
+            per_tile = max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS)))
+            fee = BASE_SHIP_FEE_CENTS + dist * per_tile
+        else:
+            fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+    else:
+        fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
     cash = party_cash_account(party)
     if world.ledger.balance(cash) < fee:
         return {"ok": False, "reason": "insufficient cash for shipping"}
-    pay = world.ledger.transfer(
-        debit=cash,
-        credit=system_reserve_account(),
-        amount_cents=fee,
-    )
+    if operator_payee is not None:
+        op_cash = party_cash_account(operator_payee)
+        world.ledger.ensure_account(op_cash)
+        pay = world.ledger.transfer(debit=cash, credit=op_cash, amount_cents=fee)
+    else:
+        pay = world.ledger.transfer(
+            debit=cash,
+            credit=system_reserve_account(),
+            amount_cents=fee,
+        )
     if isinstance(pay, MoneyErr):
         return {"ok": False, "reason": pay.reason}
+    if operator_payee is not None and op_route_key is not None:
+        record_route_fee_collected(world, operator_payee, op_route_key, fee)
+    def _refund_fee() -> None:
+        if operator_payee is not None:
+            world.ledger.transfer(
+                debit=party_cash_account(operator_payee), credit=cash, amount_cents=fee
+            )
+        else:
+            world.ledger.transfer(
+                debit=system_reserve_account(), credit=cash, amount_cents=fee
+            )
+
     need = qty
     take_inv = min(need, inv_q)
     if take_inv > 0:
         rm = world.inventory.remove(party, material, take_inv)
         if isinstance(rm, MatterErr):
-            world.ledger.transfer(debit=system_reserve_account(), credit=cash, amount_cents=fee)
+            _refund_fee()
             return {"ok": False, "reason": rm.reason}
     need -= take_inv
     if need > 0:
@@ -86,7 +127,7 @@ def dispatch_shipment(
         if isinstance(r2, MatterErr):
             if take_inv > 0:
                 world.inventory.add(party, material, take_inv)
-            world.ledger.transfer(debit=system_reserve_account(), credit=cash, amount_cents=fee)
+            _refund_fee()
             return {"ok": False, "reason": r2.reason}
     arrive = world.tick + dist * TRANSIT_TICKS_PER_TILE + TRANSIT_BASE_TICKS
     world.next_shipment_seq += 1
@@ -105,15 +146,26 @@ def dispatch_shipment(
     log_event(
         world,
         "ship_dispatch",
-        f"{party} shipped {qty}×{material} → {to_plot_id} (arrive tick {arrive}, fee ${fee / 100:.2f})",
+        f"{party} shipped {qty}×{material} → {to_plot_id} (arrive tick {arrive}, fee ${fee / 100:.2f}"
+        + (f", route {op_route_key} → {operator_payee}" if operator_payee is not None else "")
+        + ")",
         party=str(party),
         material=str(material),
         qty=qty,
         dest_plot_id=str(to_plot_id),
         arrive_tick=arrive,
         fee_cents=fee,
+        route_key=op_route_key,
+        operator_party=str(operator_payee) if operator_payee is not None else None,
     )
-    return {"ok": True, "shipment_id": sid, "arrive_tick": arrive, "fee_cents": fee}
+    return {
+        "ok": True,
+        "shipment_id": sid,
+        "arrive_tick": arrive,
+        "fee_cents": fee,
+        "route_key": op_route_key,
+        "operator_party": str(operator_payee) if operator_payee is not None else None,
+    }
 
 
 def deliver_transit(world: World) -> None:

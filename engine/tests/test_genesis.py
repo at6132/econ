@@ -23,12 +23,19 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         if str(k).startswith("genesis_exchange|")
     )
     assert n_listed >= 11
+    # Sprint 2 adds up to 3 NPC shippers when the world has coastal plots; bootstrap is a
+    # no-op when none exist. Count whatever shippers actually got seeded so the assertion
+    # tracks `seed_npc_shippers` without re-hardcoding map dependencies.
+    from realm.genesis_shippers import NPC_SHIPPER_STARTING_CASH_CENTS
+
+    n_shippers = sum(1 for k in w.parties if str(k).startswith("shipper_"))
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
         + 2 * GENESIS_POP_HUB_CASH_CENTS  # pop hubs
         + 88_000  # Tier-3 Margaux (Genesis)
         + 25_000_000  # genesis_exchange operating cash (from reserve)
+        + n_shippers * NPC_SHIPPER_STARTING_CASH_CENTS  # Sprint 2 NPC shippers
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
