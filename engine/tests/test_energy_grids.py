@@ -198,11 +198,8 @@ def test_shipped_electricity_powers_plot() -> None:
     _install_kiln(world, party, plot)
     _give(world, party, "clay", 4)
     _give(world, party, "coal", 2)
-    # No grid coverage, but stage electricity on the plot directly (mimics a shipment).
-    from realm.plot_logistics import try_add_plot_output
-
-    res = try_add_plot_output(world, plot, party, MaterialId("electricity"), 2)
-    assert not isinstance(res, MatterErr)
+    # Sprint 6 — Phase D.1: electricity is sourced from party inventory now.
+    _give(world, party, "electricity", 2)
     r = start_production(world, party, plot, "kiln_brick")
     assert r["ok"], r
 

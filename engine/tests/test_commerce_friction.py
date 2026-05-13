@@ -41,7 +41,9 @@ def test_delivery_deferred_when_insufficient_cash_for_receiving() -> None:
     p = PartyId("player")
     assert claim_plot(w, p, a)["ok"] is True
     assert claim_plot(w, p, b)["ok"] is True
-    assert not isinstance(try_add_plot_output(w, a, p, MaterialId("coal"), 8), MatterErr)
+    # Sprint 6 — Phase D.1: matter lives in party inventory now (plot_output_stock
+    # is a display log). Stage directly into inventory.
+    w.inventory.add(p, MaterialId("coal"), 8)
     r = dispatch_shipment(w, p, MaterialId("coal"), 6, a, b)
     assert r["ok"] is True
     recv = receiving_fee_cents(6)

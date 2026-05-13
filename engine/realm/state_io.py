@@ -446,6 +446,27 @@ def load_world(d: dict[str, Any]) -> World:
                 )
             )
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
+    # Sprint 6 — Phase D.1: matter no longer lives in ``plot_output_stock``.
+    # Migrate any staged output from old snapshots (version ≤ 10) into the
+    # plot owner's inventory and reset the per-plot dict to a fresh display log.
+    if int(ver) <= 10:
+        migrated = False
+        for plot_id_s, mats in list(world.plot_output_stock.items()):
+            plot = world.plots.get(PlotId(plot_id_s))
+            if plot is None or plot.owner is None:
+                continue
+            for mat_s, qty in list(mats.items()):
+                try:
+                    q = int(qty)
+                except (TypeError, ValueError):
+                    continue
+                if q <= 0:
+                    continue
+                world.inventory.add(plot.owner, MaterialId(str(mat_s)), q)
+                migrated = True
+        if migrated:
+            # Display log starts fresh — old saves' counters are subsumed into inventory.
+            world.plot_output_stock = {}
     return world
 
 

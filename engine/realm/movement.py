@@ -70,8 +70,7 @@ def dispatch_shipment(
     if from_plot_id == to_plot_id:
         return {"ok": False, "reason": "same plot"}
     inv_q = world.inventory.qty(party, material)
-    stash_q = plot_output_qty(world, from_plot_id, material) if uses_plot_logistics(world, party) else 0
-    if inv_q + stash_q < qty:
+    if inv_q < qty:
         return {"ok": False, "reason": "insufficient material"}
     dist = manhattan(world, from_plot_id, to_plot_id)
     from_region = region_for_plot(world, from_plot_id)
@@ -206,21 +205,10 @@ def dispatch_shipment(
         _refund_fee()
         return {"ok": False, "reason": "toll payment failed"}
 
-    need = qty
-    take_inv = min(need, inv_q)
-    if take_inv > 0:
-        rm = world.inventory.remove(party, material, take_inv)
-        if isinstance(rm, MatterErr):
-            _refund_fee()
-            return {"ok": False, "reason": rm.reason}
-    need -= take_inv
-    if need > 0:
-        r2 = remove_plot_output(world, party, from_plot_id, material, need)
-        if isinstance(r2, MatterErr):
-            if take_inv > 0:
-                world.inventory.add(party, material, take_inv)
-            _refund_fee()
-            return {"ok": False, "reason": r2.reason}
+    rm = world.inventory.remove(party, material, qty)
+    if isinstance(rm, MatterErr):
+        _refund_fee()
+        return {"ok": False, "reason": rm.reason}
     # Sprint 3 — Phase D.3: harbor speed bonus. A dispatch from a coastal plot
     # that has a completed ``dock`` building moves at 1.5 × normal speed.
     transit_ticks = dist * TRANSIT_TICKS_PER_TILE + TRANSIT_BASE_TICKS
@@ -300,10 +288,10 @@ def deliver_transit(world: World) -> None:
                 receiving_fee_cents=recv_fee,
             )
             continue
-        if uses_plot_logistics(world, s.party):
-            ad = try_add_plot_output(world, s.dest_plot_id, s.party, s.material, s.qty)
-        else:
-            ad = try_add_inventory(world, s.party, s.material, s.qty)
+        # Sprint 6 — Phase D.1: matter always lands in party inventory; the
+        # destination's plot_output_stock is updated as a display-only log when
+        # plot logistics is enabled.
+        ad = try_add_inventory(world, s.party, s.material, s.qty)
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue
@@ -314,14 +302,13 @@ def deliver_transit(world: World) -> None:
                 amount_cents=recv_fee,
             )
             if isinstance(pay_recv, MoneyErr):
-                if uses_plot_logistics(world, s.party):
-                    rb = remove_plot_output(world, s.party, s.dest_plot_id, s.material, s.qty)
-                    assert not isinstance(rb, MatterErr)
-                else:
-                    rb2 = world.inventory.remove(s.party, s.material, s.qty)
-                    assert not isinstance(rb2, MatterErr)
+                rb2 = world.inventory.remove(s.party, s.material, s.qty)
+                assert not isinstance(rb2, MatterErr)
                 keep.append(s)
                 continue
+        if world.use_plot_output_logistics:
+            bucket = world.plot_output_stock.setdefault(str(s.dest_plot_id), {})
+            bucket[str(s.material)] = int(bucket.get(str(s.material), 0)) + int(s.qty)
         log_event(
             world,
             "ship_deliver",

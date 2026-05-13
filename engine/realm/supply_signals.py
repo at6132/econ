@@ -66,6 +66,9 @@ def maybe_emit_supply_concentration(world: World, material: MaterialId) -> None:
     total = sum(totals.values())
     if total <= 0:
         return
+    # Concentration is only meaningful when at least 2 distinct sellers are listed.
+    if len(totals) < 2:
+        return
     top_seller, top_units = max(totals.items(), key=lambda kv: kv[1])
     share_bps = top_units * 10_000 // total
     if share_bps <= SUPPLY_CONCENTRATION_THRESHOLD_BPS:

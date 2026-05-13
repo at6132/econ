@@ -80,14 +80,12 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     assert w2.deployed_lua_sources.get("player") == "return 0\n"
     assert w2.use_plot_output_logistics is True
     assert w.use_plot_output_logistics is True
-    from realm.plot_logistics import try_add_plot_output
-
+    # Sprint 6 — Phase D.1: ``plot_output_stock`` is a display log, mutated
+    # by production_done and shipment arrival. We seed a counter directly
+    # to verify the snapshot field still round-trips.
     pid2 = PlotId("p-1-0")
     assert claim_plot(w, PartyId("player"), pid2)["ok"] is True
-    assert not isinstance(
-        try_add_plot_output(w, pid2, PartyId("player"), MaterialId("timber"), 11),
-        MatterErr,
-    )
+    w.plot_output_stock[str(pid2)] = {"timber": 11}
     w4 = loads_json(dumps_json(w))
     assert w4.plot_output_stock.get(str(pid2), {}).get("timber") == 11
     assert w4.use_plot_output_logistics is True
