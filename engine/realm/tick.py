@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from realm.agents_genesis import tick_genesis_agents
 from realm.assay import tick_assay_jobs
+from realm.deep_survey import tick_deep_survey_jobs
 from realm.genesis_digest import tick_genesis_world_feed
 from realm.genesis_feed_hooks import tick_genesis_feed_tick_scan
 from realm.agents_tier1 import tick_tier1_agents
@@ -28,6 +29,7 @@ def advance_tick(world: World) -> None:
     tick_material_spoilage(world)
     tick_stub_employment(world)
     tick_assay_jobs(world)
+    tick_deep_survey_jobs(world)
     if world.scenario_id == "genesis":
         tick_genesis_agents(world)
     else:

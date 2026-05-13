@@ -78,6 +78,12 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "assemble_mining_pick": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
     "assemble_hand_saw": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
     "assemble_pick_axe": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
+    # Tier-3 extraction & refining (drill rig + downstream foundry/chemical_works).
+    "mine_platinum": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.TUNDRA}),
+    "mine_oil_shale": frozenset({T.SWAMP, T.PLAINS, T.MOUNTAIN, T.FOREST, T.TUNDRA}),
+    "mine_rare_earth": frozenset({T.MOUNTAIN, T.DESERT, T.TUNDRA}),
+    "refine_platinum": frozenset({T.MOUNTAIN}),
+    "process_shale": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})

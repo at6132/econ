@@ -313,6 +313,28 @@ def get_assay_book(party: Annotated[str, Query()] = "player") -> dict:
     return party_recipe_book_summary(_world, PartyId(party))
 
 
+@app.post("/deep_survey")
+def post_deep_survey(
+    plot_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    """Start a deep survey on a player-owned plot with a drill_rig and 1 drill_bit."""
+    from realm.deep_survey import deep_survey
+
+    r = deep_survey(_world, PartyId(party), PlotId(plot_id))
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "deep survey rejected")))
+    return dict(r)
+
+
+@app.get("/deep_survey/status")
+def get_deep_survey_status(party: Annotated[str, Query()] = "player") -> dict:
+    """All in-flight deep survey jobs for ``party``."""
+    from realm.deep_survey import party_active_deep_survey_jobs
+
+    return {"jobs": party_active_deep_survey_jobs(_world, PartyId(party))}
+
+
 @app.post("/hire")
 def post_hire(
     employer: Annotated[str, Query()],

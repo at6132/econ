@@ -153,6 +153,20 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"lumber": 6, "brick": 4, "iron_ingot": 4, "coal": 2},
         "turnkey_total_cents": 195_000,
     },
+    "drill_rig": {
+        "kind": "contracted",
+        "label": "Drill rig (deep geological survey for rare minerals)",
+        "self_shell_cents": 280_000,
+        "self_contractor_fee_cents": 90_000,
+        "self_materials": {
+            "steel_ingot": 8,
+            "cast_iron": 4,
+            "lumber": 6,
+            "rope": 4,
+            "pump_unit": 1,
+        },
+        "turnkey_total_cents": 580_000,
+    },
 }
 
 
