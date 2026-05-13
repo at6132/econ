@@ -148,6 +148,19 @@ def get_world(compact: Annotated[int, Query()] = 0) -> dict:
     return world_public_dict(_world)
 
 
+@app.get("/world/summary")
+def get_world_summary(party: Annotated[str, Query()] = "player") -> dict:
+    """Sprint 6 — Phase D.4: lightweight HUD payload (poll every ~30 ticks).
+
+    Excludes the plots grid and feed bodies. Just enough for the top bar:
+    cash, net-worth estimate, active production, maintenance warnings,
+    unread message/feed counters, contract and open-order counts.
+    """
+    from realm.world import world_summary_dict
+
+    return world_summary_dict(_world, PartyId(str(party)))
+
+
 @app.get("/hire/catalog")
 def get_hire_catalog() -> dict:
     return {"roles": hire_catalog_public()}
@@ -1376,6 +1389,19 @@ def post_road_toll(segment_id: str, body: Annotated[dict, Body()]) -> dict:
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="toll_rate_pct must be an integer")
     r = set_road_toll(_world, PartyId(str(party_raw)), str(segment_id), toll_i)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@app.post("/buildings/{instance_id}/auto_list")
+def post_building_auto_list(instance_id: str, body: Annotated[dict, Body()]) -> dict:
+    """Sprint 6 — Phase D.2: toggle auto-listing of production output."""
+    from realm.production import set_building_auto_list
+
+    party_raw = body.get("party", "player")
+    enabled = bool(body.get("enabled", False))
+    r = set_building_auto_list(_world, PartyId(str(party_raw)), str(instance_id), enabled)
     if not r.get("ok"):
         raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return dict(r)

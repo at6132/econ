@@ -510,6 +510,9 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        # Sprint 6 — Phase D.2: optional auto-listing of fresh output.
+        if eff_out:
+            _maybe_auto_list_outputs(world, run, eff_out)
         # Sprint 6 — Phase B: auto-restart is deferred until after the loop
         # so the new ActiveProduction doesn't collide with the completed one.
         if run.runs_remaining != 0:
@@ -534,6 +537,109 @@ def tick_production(world: World) -> None:
     world.active_production = still
     for completed in completed_for_auto_restart:
         _maybe_schedule_auto_restart(world, completed)
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Sprint 6 — Phase D.2: auto-list output
+# ────────────────────────────────────────────────────────────────────────
+
+AUTO_LIST_MARGIN_BPS: int = 13_000
+"""Auto-list target = ``cost_basis × 1.30`` (30 % margin)."""
+
+
+def _building_for_run(world: World, run: ActiveProduction) -> dict | None:
+    """The first matching ``plot_buildings`` row this run is using, if any.
+
+    Hand recipes have no workshop; this returns ``None``.
+    """
+    recipe = RECIPES.get(run.recipe_id)
+    if recipe is None or not recipe.requires_building_id:
+        return None
+    req = recipe.requires_building_id
+    for b in world.plot_buildings:
+        if b.get("party") != str(run.party):
+            continue
+        if b.get("plot_id") != str(run.plot_id):
+            continue
+        if b.get("building_id") == req:
+            return b
+    return None
+
+
+def _auto_list_price_cents(world: World, material: MaterialId) -> int | None:
+    """Auto-list price = cost basis × 1.30, falling back through cost-basis sources.
+
+    Returns ``None`` only if no priceable basis exists for the material.
+    """
+    try:
+        from realm.genesis_pricing import (
+            producer_cost_basis_cents,
+            settler_cost_basis_cents,
+            _FAIR_VALUE_CENTS,
+        )
+    except Exception:
+        return None
+    basis = producer_cost_basis_cents(material)
+    if basis is None:
+        basis = settler_cost_basis_cents(material)
+    if basis is None:
+        fv = _FAIR_VALUE_CENTS.get(str(material))
+        if fv is None:
+            return None
+        basis = int(fv)
+    return max(1, (int(basis) * AUTO_LIST_MARGIN_BPS + 9_999) // 10_000)
+
+
+def _maybe_auto_list_outputs(
+    world: World, run: ActiveProduction, eff_out: dict[MaterialId, int]
+) -> None:
+    """If the building has ``auto_list_output: True``, list each output material
+    at ``cost_basis × 1.30`` from the party's inventory.
+
+    Hand recipes are skipped (no workshop row to flag).
+    """
+    b = _building_for_run(world, run)
+    if b is None or not bool(b.get("auto_list_output")):
+        return
+    from realm.markets import place_sell_order
+
+    for mid, qty in eff_out.items():
+        q = int(qty)
+        if q <= 0:
+            continue
+        if world.inventory.qty(run.party, mid) < q:
+            continue
+        price = _auto_list_price_cents(world, mid)
+        if price is None:
+            continue
+        place_sell_order(world, run.party, mid, q, price)
+
+
+def set_building_auto_list(
+    world: World, party: PartyId, instance_id: str, enabled: bool
+) -> dict:
+    """Toggle ``auto_list_output`` for a building owned by ``party``.
+
+    Players opt-in per workshop. The flag persists in the building row and
+    is consulted on every ``production_done``.
+    """
+    for b in world.plot_buildings:
+        if str(b.get("instance_id") or "") != str(instance_id):
+            continue
+        if b.get("party") != str(party):
+            return {"ok": False, "reason": "not owner"}
+        b["auto_list_output"] = bool(enabled)
+        log_event(
+            world,
+            "auto_list_toggled",
+            f"{party} {'enabled' if enabled else 'disabled'} auto-list on {b.get('building_id')} ({instance_id})",
+            party=str(party),
+            building_id=str(b.get("building_id")),
+            instance_id=str(instance_id),
+            enabled=bool(enabled),
+        )
+        return {"ok": True, "enabled": bool(enabled)}
+    return {"ok": False, "reason": "building not found"}
 
 
 # ────────────────────────────────────────────────────────────────────────

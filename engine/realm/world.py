@@ -1334,6 +1334,108 @@ def _forward_contracts_public(world: "World", party: PartyId) -> list[dict]:
     return out
 
 
+def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
+    """Sprint 6 — Phase D.4: ultra-lightweight HUD payload.
+
+    Intended for high-frequency polling (every ~30 ticks). Excludes the plots
+    grid, full inventories, and event-log bodies — just enough for the HUD
+    bar at the top of the UI.
+    """
+    cash_acct = str(party_cash_account(party))
+    balances = world.ledger.snapshot()
+    cash_cents = int(balances.get(cash_acct, 0))
+    # Inventory units valued at fair-value heuristic; falls back to 0 if missing.
+    try:
+        from realm.genesis_pricing import _FAIR_VALUE_CENTS
+    except Exception:
+        _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
+    inv_value_cents = 0
+    for mat, qty in world.inventory.stock.get(party, {}).items():
+        unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
+        inv_value_cents += unit * int(qty)
+    net_worth_estimate = cash_cents + inv_value_cents
+
+    active = [
+        {
+            "run_id": a.run_id,
+            "plot_id": str(a.plot_id),
+            "recipe_id": a.recipe_id,
+            "ticks_remaining": int(a.ticks_remaining),
+            "runs_remaining": int(getattr(a, "runs_remaining", 0)),
+        }
+        for a in world.active_production
+        if a.party == party
+    ]
+
+    maintenance_warning: list[dict[str, Any]] = []
+    try:
+        from realm.maintenance import building_efficiency_pct
+        for b in world.plot_buildings:
+            if b.get("party") != str(party):
+                continue
+            iid = str(b.get("instance_id") or "")
+            if not iid:
+                continue
+            pct = building_efficiency_pct(world, iid)
+            if pct < 100:
+                maintenance_warning.append({
+                    "instance_id": iid,
+                    "building_id": str(b.get("building_id") or ""),
+                    "plot_id": str(b.get("plot_id") or ""),
+                    "efficiency_pct": int(pct),
+                })
+    except Exception:
+        pass
+
+    npc_msgs = world.scenario_state.get("npc_messages", []) if isinstance(world.scenario_state, dict) else []
+    unread_msgs = sum(1 for m in npc_msgs if not bool(m.get("read")))
+    unread_feed = len(getattr(world, "world_feed_log", []) or [])
+
+    open_orders = sum(
+        1
+        for lst in world.market_asks_by_material.values()
+        for o in lst
+        if o.party == party
+    ) + sum(
+        1
+        for lst in world.market_bids_by_material.values()
+        for o in lst
+        if o.party == party
+    )
+
+    ac_count = 0
+    try:
+        for c in getattr(world, "contracts", []) or []:
+            if str(c.get("status") or "") != "active":
+                continue
+            ps = str(party)
+            if (
+                c.get("buyer") == ps
+                or c.get("seller") == ps
+                or c.get("borrower") == ps
+                or c.get("lender") == ps
+                or c.get("from_party") == ps
+                or c.get("to_party") == ps
+            ):
+                ac_count += 1
+    except Exception:
+        ac_count = 0
+
+    return {
+        "tick": world.tick,
+        "party": str(party),
+        "cash": cash_cents,
+        "inventory_value_estimate": inv_value_cents,
+        "net_worth_estimate": net_worth_estimate,
+        "active_production": active,
+        "maintenance_warnings": maintenance_warning[:8],
+        "unread_npc_messages": unread_msgs,
+        "unread_feed_entries": unread_feed,
+        "active_contracts": int(ac_count),
+        "open_orders": int(open_orders),
+    }
+
+
 def world_compact_dict(world: World) -> dict[str, Any]:
     """Small JSON snapshot for dev/automation: player + aggregates, no full ``plots`` grid."""
     from realm.recipe_workshops import recipe_ids_on_plot_for_owner

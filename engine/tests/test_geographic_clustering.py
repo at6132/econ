@@ -138,7 +138,9 @@ def test_claim_cost_scales_with_density() -> None:
     assert claim_cost_cents_for_plot(w, dense_plot) > claim_cost_cents_for_plot(
         w, frontier_plot
     )
-    assert claim_cost_cents_for_plot(w, frontier_plot) <= 50
+    # Sprint 6 — Phase D.3: frontier density (≈0.0) costs ~500¢; allow up to
+    # ~1100¢ (covers density-creep up to ~0.3 in mid-frontier).
+    assert claim_cost_cents_for_plot(w, frontier_plot) <= 1100
 
 
 def test_regional_buyer_preference() -> None:

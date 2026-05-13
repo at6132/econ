@@ -44,14 +44,22 @@ __all__ = [
 # ─────────────────── claim cost ───────────────────
 
 
-CLAIM_COST_BASE_CENTS: Final[int] = 0
-CLAIM_COST_PEAK_CENTS: Final[int] = 5_00  # $5 on the most-dense plots
+CLAIM_COST_BASE_CENTS: Final[int] = 5_00  # 500¢ frontier baseline
+CLAIM_COST_DENSITY_MULT_BPS: Final[int] = 4 * 10_000  # +4× per unit density
+CLAIM_COST_PEAK_CENTS: Final[int] = 5_00 * 5  # $25 at density=1.0
 
 
 def claim_cost_cents_from_density(density: float) -> int:
-    """Quadratic ramp: frontier (≈0.05) ≈ free, dense (0.9+) approaches the peak."""
+    """Sprint 6 — Phase D.3: ``BASE_CLAIM_COST × (1 + density × 4)``.
+
+    - density ≈ 0.1 (frontier) → 500 × 1.4 ≈ 700¢ (~$7)
+    - density ≈ 0.5 (mid)      → 500 × 3.0 ≈ 1500¢
+    - density ≈ 0.9 (hub-adj)  → 500 × 4.6 ≈ 2300¢
+    - density = 1.0 ceiling    → 500 × 5.0 = 2500¢ (~$25)
+    """
     d = max(0.0, min(1.0, float(density)))
-    return CLAIM_COST_BASE_CENTS + int(round(d * d * CLAIM_COST_PEAK_CENTS))
+    mult_bps = 10_000 + int(round(d * CLAIM_COST_DENSITY_MULT_BPS))
+    return (CLAIM_COST_BASE_CENTS * mult_bps + 9_999) // 10_000
 
 
 # ─────────────────── belt noise primitives ───────────────────
