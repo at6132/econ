@@ -35,6 +35,7 @@ import { FrontierSettingsModal } from "./FrontierSettingsModal";
 import { FrontierTopNav } from "./FrontierTopNav";
 import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
+import { Sprint4MarketSection, Sprint4PactsSection, type Sprint4Snapshot } from "./Sprint4Panels";
 import { PlotSchematicPanel } from "./PlotSchematicPanel";
 import { RecipeBookPanel } from "./RecipeBookPanel";
 import type { SchematicRecipe } from "./plotSchematic";
@@ -401,6 +402,11 @@ type WorldDto = {
   party_display_names?: Record<string, string>;
   /** Per-party discovered recipe ids (Tier-1 are seeded for every party; Tier-2 are added by assay). */
   party_recipe_books?: Record<string, string[]>;
+  intel_listings?: import("./Sprint4Panels").Sprint4Snapshot["intel_listings"];
+  player_owned_reports?: import("./Sprint4Panels").Sprint4Snapshot["player_owned_reports"];
+  analytics_purchases?: import("./Sprint4Panels").Sprint4Snapshot["analytics_purchases"];
+  player_price_alerts?: import("./Sprint4Panels").Sprint4Snapshot["player_price_alerts"];
+  forward_contracts?: import("./Sprint4Panels").Sprint4Snapshot["forward_contracts"];
 };
 
 function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
@@ -3586,6 +3592,18 @@ export default function HomePage() {
                           </div>
                         </div>
                       ) : null}
+                      <Sprint4MarketSection
+                        snap={{
+                          tick: world.tick,
+                          intel_listings: world.intel_listings ?? [],
+                          player_owned_reports: world.player_owned_reports ?? [],
+                          analytics_purchases: world.analytics_purchases ?? [],
+                          player_price_alerts: world.player_price_alerts ?? [],
+                          forward_contracts: world.forward_contracts ?? [],
+                        } satisfies Sprint4Snapshot}
+                        apiBase="/api/engine"
+                        onMutate={() => void load()}
+                      />
                     </>
                   ) : null}
 
@@ -4405,6 +4423,18 @@ export default function HomePage() {
                           </div>
                         </>
                       ) : null}
+                      <Sprint4PactsSection
+                        snap={{
+                          tick: world.tick,
+                          intel_listings: world.intel_listings ?? [],
+                          player_owned_reports: world.player_owned_reports ?? [],
+                          analytics_purchases: world.analytics_purchases ?? [],
+                          player_price_alerts: world.player_price_alerts ?? [],
+                          forward_contracts: world.forward_contracts ?? [],
+                        } satisfies Sprint4Snapshot}
+                        apiBase="/api/engine"
+                        onMutate={() => void load()}
+                      />
                     </>
                   ) : null}
 
