@@ -15,6 +15,7 @@ from realm.actions import (
     hire_catalog_public,
     hire_worker_stub,
     list_survey_report,
+    register_business,
     start_production_on_plot,
     survey_plot,
     transfer_survey_report,
@@ -1002,6 +1003,32 @@ def post_intel_transfer(
 ) -> dict:
     r = transfer_survey_report(
         _world, PartyId(from_party), PartyId(to_party), report_id, price_cents
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+# ─────────────────── Sprint 5 — Phase A: business registry ───────────────────
+
+
+@app.get("/business")
+def get_business_registry() -> dict:
+    """Snapshot of the world's registered businesses."""
+    from realm.world import _business_registry_public
+
+    return {"ok": True, "tick": _world.tick, "registry": _business_registry_public(_world)}
+
+
+@app.post("/business/register")
+def post_business_register(body: Annotated[dict, Body()]) -> dict:
+    party_raw = body.get("party", "player")
+    name_raw = body.get("name") or body.get("business_name")
+    description_raw = body.get("description") or ""
+    if not isinstance(name_raw, str) or not name_raw:
+        raise HTTPException(status_code=400, detail="name is required")
+    r = register_business(
+        _world, PartyId(str(party_raw)), str(name_raw), str(description_raw)
     )
     if not r.get("ok"):
         raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))

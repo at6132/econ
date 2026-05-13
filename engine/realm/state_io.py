@@ -20,6 +20,7 @@ from realm.ledger import Ledger
 from realm.markets import AskOrder, BidOrder, _sort_asks, _sort_bids
 from realm.world import (
     ActiveProduction,
+    BusinessRecord,
     InTransit,
     SubsurfaceRoll,
     SurveyReport,
@@ -29,7 +30,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 9
+SNAPSHOT_VERSION = 10
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -186,12 +187,21 @@ def dump_world(world: World) -> dict[str, Any]:
         "intel_listings": [copy.deepcopy(row) for row in world.intel_listings],
         "next_intel_listing_seq": int(world.next_intel_listing_seq),
         "analytics_purchases": [copy.deepcopy(row) for row in world.analytics_purchases],
+        "business_registry": {
+            pid_s: {
+                "party_id": str(rec.party_id),
+                "business_name": rec.business_name,
+                "description": rec.description,
+                "registered_at_tick": int(rec.registered_at_tick),
+            }
+            for pid_s, rec in world.business_registry.items()
+        },
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -394,6 +404,17 @@ def load_world(d: dict[str, Any]) -> World:
     world.analytics_purchases = [
         copy.deepcopy(row) for row in d.get("analytics_purchases", []) or []
     ]
+    raw_biz = d.get("business_registry") or {}
+    if isinstance(raw_biz, dict):
+        for pid_s, payload in raw_biz.items():
+            if not isinstance(payload, dict):
+                continue
+            world.business_registry[str(pid_s)] = BusinessRecord(
+                party_id=PartyId(str(payload.get("party_id", pid_s))),
+                business_name=str(payload.get("business_name", "")),
+                description=str(payload.get("description", "")),
+                registered_at_tick=int(payload.get("registered_at_tick", 0)),
+            )
     return world
 
 

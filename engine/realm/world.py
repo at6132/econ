@@ -200,6 +200,22 @@ class Plot:
 
 
 @dataclass
+class BusinessRecord:
+    """A registered business name backing a party (Sprint 5 — Phase A).
+
+    Registration costs a one-time fee and gives the party a public-facing
+    identity that flows through every market event, contract, and feed entry
+    via ``world.party_display_names``. Once registered, the business name is
+    the authoritative display label.
+    """
+
+    party_id: PartyId
+    business_name: str
+    description: str
+    registered_at_tick: int
+
+
+@dataclass
 class SurveyReport:
     """Tradeable survey document — knowledge as an asset (Sprint 4 — Phase A).
 
@@ -297,6 +313,10 @@ class World:
     """Sprint 4 — Phase B: log of analytics products purchased by parties.
     Each row: ``{"tick", "party", "product", "params", "cost_cents",
     "summary"}``. UI displays recent purchases under "Past purchases"."""
+    business_registry: dict[str, "BusinessRecord"] = field(default_factory=dict)
+    """Sprint 5 — Phase A: registered business identities keyed by party id
+    str. Once registered, the business name is the authoritative
+    ``party_display_names`` value for that party."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -382,14 +402,22 @@ def generate_plots(
     width: int,
     height: int,
     correlate_subsurface: bool = False,
+    terrain_fn: Any | None = None,
 ) -> dict[PlotId, Plot]:
-    """Grid of width x height plots; terrain from coherent biome fields; subsurface rolled per plot."""
+    """Grid of width x height plots; terrain from coherent biome fields; subsurface rolled per plot.
+
+    ``terrain_fn`` is an optional callable ``(seed, x, y) -> Terrain`` that overrides the
+    default :func:`realm.biome_noise.terrain_for_cell`. Genesis bootstraps the four-island
+    layout by passing a closure that wraps :func:`realm.biome_noise.terrain_for_genesis_island_cell`
+    with the active map width/height.
+    """
     plots: dict[PlotId, Plot] = {}
+    pick = terrain_fn if terrain_fn is not None else terrain_for_cell
     for y in range(height):
         for x in range(width):
             pid = PlotId(f"p-{x}-{y}")
             rng = make_rng(seed, f"gen:{pid}")
-            terrain = terrain_for_cell(seed, x, y)
+            terrain = pick(seed, x, y)
             subsurface = _subsurface_roll(
                 rng,
                 terrain,
@@ -492,26 +520,65 @@ def bootstrap_genesis(
     settler_spawn_cap: int | None = None,
     starting_cash_cents: int = 1_000_000,
     system_reserve_cents: int = 100_000_000_000,
+    map_layout: str = "auto",
 ) -> World:
     """
     Empty-world / co-founder scenario: large map, cash-only player + algorithmic settlers,
     population demand wallets, neutral exchange listing (no Tier-1 / Tier-2 NPC bootstrap).
+
+    Map layout (``map_layout``):
+      * ``"islands"`` — four landmasses in the four quadrants, separated by a
+        cross-shaped ocean. Pop hubs sit on the NW and SE islands; the other two
+        islands have to **export to reach demand**, which forces inter-island
+        shipping and creates regional supply/demand asymmetry.
+      * ``"continent"`` — legacy single-continent map (whatever ``terrain_for_cell``
+        produces for the seed).
+      * ``"auto"`` (default) — use ``"islands"`` if the grid is large enough
+        (≥ ``GENESIS_ISLAND_MIN_WIDTH × GENESIS_ISLAND_MIN_HEIGHT``), otherwise
+        fall back to ``"continent"``. Keeps tiny-grid tests intact.
 
     Settlers: **all** ``settler_count`` parties are funded at tick 0 (no random partial wave).
     Optional ``settler_spawn_cap`` (≥ ``settler_count``) sets ``settler_cap``; when omitted and
     ``settler_count`` is the default 250, cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (1000) so random
     arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
     """
+    from realm.biome_noise import (
+        genesis_island_centers,
+        genesis_island_layout_supported,
+        terrain_for_genesis_island_cell,
+    )
     from realm.event_log import log_event
     from realm.market_history import record_market_snapshot
 
     human = PartyId("player")
-    plots = generate_plots(
-        seed=seed,
-        width=grid_width,
-        height=grid_height,
-        correlate_subsurface=True,
-    )
+    if map_layout == "auto":
+        effective_layout = (
+            "islands" if genesis_island_layout_supported(grid_width, grid_height) else "continent"
+        )
+    elif map_layout in ("islands", "continent"):
+        effective_layout = map_layout
+    else:
+        raise ValueError(
+            f"unknown map_layout {map_layout!r}; expected 'auto' | 'islands' | 'continent'"
+        )
+    if effective_layout == "islands":
+        def _genesis_island_fn(s: int, x: int, y: int) -> Terrain:
+            return terrain_for_genesis_island_cell(s, x, y, grid_width, grid_height)
+
+        plots = generate_plots(
+            seed=seed,
+            width=grid_width,
+            height=grid_height,
+            correlate_subsurface=True,
+            terrain_fn=_genesis_island_fn,
+        )
+    else:
+        plots = generate_plots(
+            seed=seed,
+            width=grid_width,
+            height=grid_height,
+            correlate_subsurface=True,
+        )
     n_plots = len(plots)
     ledger = Ledger()
     inv = Inventory()
@@ -563,8 +630,18 @@ def bootstrap_genesis(
     gst["starting_settler_cents"] = starting_cash_cents
     gst["broke_ticks"] = {}
     # Pop hubs (anchors for the demand layer + Sprint 3 population density).
-    hub_w = (grid_width // 4, grid_height // 2)
-    hub_e = (3 * grid_width // 4, grid_height // 2)
+    # Island layout puts hubs on diagonally opposite islands (NW + SE) so the
+    # other two islands (NE + SW) must export to reach demand → forces real
+    # inter-island shipping. Continent layout keeps the legacy E/W mid-row
+    # placement.
+    if effective_layout == "islands":
+        island_centers = genesis_island_centers(grid_width, grid_height)
+        # genesis_island_centers returns [NW, NE, SW, SE].
+        hub_w = island_centers[0]  # NW island → pop_hub_w
+        hub_e = island_centers[3]  # SE island → pop_hub_e
+    else:
+        hub_w = (grid_width // 4, grid_height // 2)
+        hub_e = (3 * grid_width // 4, grid_height // 2)
     pop_hub_coords = {"pop_hub_w": list(hub_w), "pop_hub_e": list(hub_e)}
     world.scenario_state["pop_hub_coords"] = pop_hub_coords
     for name in ("pop_hub_e", "pop_hub_w"):
@@ -1101,11 +1178,25 @@ def world_public_dict(world: World) -> dict:
         "intel_listings": _intel_listings_public(world),
         "player_owned_reports": _player_owned_reports_public(world, PartyId("player")),
         "analytics_purchases": list(world.analytics_purchases[-48:]),
+        "business_registry": _business_registry_public(world),
         "player_price_alerts": list(
             (world.scenario_state.get("player_price_alerts") or [])
         ),
         "forward_contracts": _forward_contracts_public(world, PartyId("player")),
     }
+
+
+def _business_registry_public(world: "World") -> dict[str, dict]:
+    """Public view of registered businesses (Sprint 5 — Phase A)."""
+    out: dict[str, dict] = {}
+    for pid_s, rec in world.business_registry.items():
+        out[str(pid_s)] = {
+            "party_id": str(rec.party_id),
+            "business_name": rec.business_name,
+            "description": rec.description,
+            "registered_at_tick": int(rec.registered_at_tick),
+        }
+    return out
 
 
 def _intel_listings_public(world: "World") -> list[dict]:
