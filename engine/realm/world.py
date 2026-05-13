@@ -467,6 +467,9 @@ def bootstrap_genesis(
     from realm.genesis_shippers import seed_npc_shippers
 
     seed_npc_shippers(world)
+    from realm.genesis_consolidator import seed_consolidator
+
+    seed_consolidator(world)
     log_event(
         world,
         "world",

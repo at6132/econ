@@ -26,9 +26,14 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     # Sprint 2 adds up to 3 NPC shippers when the world has coastal plots; bootstrap is a
     # no-op when none exist. Count whatever shippers actually got seeded so the assertion
     # tracks `seed_npc_shippers` without re-hardcoding map dependencies.
+    from realm.genesis_consolidator import (
+        CONSOLIDATOR_PARTY_ID,
+        CONSOLIDATOR_STARTING_CASH_CENTS,
+    )
     from realm.genesis_shippers import NPC_SHIPPER_STARTING_CASH_CENTS
 
     n_shippers = sum(1 for k in w.parties if str(k).startswith("shipper_"))
+    n_consolidators = 1 if CONSOLIDATOR_PARTY_ID in w.parties else 0
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
@@ -36,6 +41,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + 88_000  # Tier-3 Margaux (Genesis)
         + 25_000_000  # genesis_exchange operating cash (from reserve)
         + n_shippers * NPC_SHIPPER_STARTING_CASH_CENTS  # Sprint 2 NPC shippers
+        + n_consolidators * CONSOLIDATOR_STARTING_CASH_CENTS  # Sprint 2 consolidator
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
