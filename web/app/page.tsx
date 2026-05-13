@@ -250,6 +250,7 @@ type WorldDto = {
   reputation?: Record<string, { honored: number; breached: number }>;
   contracts?: Record<string, unknown>[];
   event_log?: EventLogEntryDto[];
+  world_feed_log?: EventLogEntryDto[];
   building_catalog?: BuildingCatalogDto[];
   plot_buildings?: PlotBuildingDto[];
   stub_hires?: StubHireDto[];
@@ -794,6 +795,12 @@ export default function HomePage() {
     const ev = world?.event_log ?? [];
     return [...ev].reverse();
   }, [world?.event_log]);
+
+  const worldFeedEntries = useMemo(() => {
+    const dedicated = world?.world_feed_log;
+    if (dedicated && dedicated.length > 0) return dedicated;
+    return (world?.event_log ?? []).filter((e) => e.kind === "world_feed");
+  }, [world?.world_feed_log, world?.event_log]);
 
   const supplyContractRows = useMemo(() => {
     if (!world?.contracts) return [];
@@ -2133,14 +2140,12 @@ export default function HomePage() {
                         Market depth — resting orders <strong>{marketActivitySnapshot.restingOrders}</strong> · contract rows{" "}
                         <strong>{marketActivitySnapshot.contractRows}</strong>
                       </p>
-                      {world.scenario_id === "genesis" &&
-                      (world.event_log ?? []).some((e) => e.kind === "world_feed") ? (
+                      {world.scenario_id === "genesis" && worldFeedEntries.length > 0 ? (
                         <>
                           <SectionTitle>World feed</SectionTitle>
                           <ul style={{ marginTop: 0, marginBottom: 16, paddingLeft: 18 }}>
-                            {(world.event_log ?? [])
-                              .filter((e) => e.kind === "world_feed")
-                              .slice(-12)
+                            {worldFeedEntries
+                              .slice(-48)
                               .reverse()
                               .map((e) => (
                                 <li key={`${e.tick}|${e.message}`} className="realm-help" style={{ marginBottom: 8 }}>
