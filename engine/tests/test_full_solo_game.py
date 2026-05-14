@@ -284,7 +284,7 @@ def test_05_frontier_plots_are_mostly_unpowered(solo_world):
 
     The exact "frontier" cutoff depends on grid size; we look at the bottom
     quartile of population_density values instead of a fixed threshold."""
-    from realm.energy import is_plot_powered
+    from realm.infrastructure.energy import is_plot_powered
 
     w = solo_world["world"]
     density_map = w.scenario_state.get("population_density", {}) or {}

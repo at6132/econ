@@ -158,7 +158,7 @@ def _register_store_with_town(world: World, plot_id: PlotId) -> None:
     town's catchment are not registered (laborers in towns can't reach
     them).
     """
-    from realm.towns import TOWN_PROXIMITY_TILES
+    from realm.population.towns import TOWN_PROXIMITY_TILES
 
     plot = world.plots.get(plot_id)
     if plot is None:
@@ -324,7 +324,7 @@ def _execute_purchase(
     Returns the spend amount + the units actually moved (caller decides
     whether to apply need restoration based on this).
     """
-    from realm.laborers import laborer_cash_account
+    from realm.population.laborers import laborer_cash_account
 
     lab = world.laborers.get(laborer_id)
     if lab is None:
@@ -396,7 +396,7 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
 
     Returns a small counter dict (``purchases``, ``laborers_serviced``).
     """
-    from realm.laborers import TICKS_PER_GAME_DAY
+    from realm.population.laborers import TICKS_PER_GAME_DAY
 
     stats = {"purchases": 0, "laborers_serviced": 0}
     if not world.laborers:

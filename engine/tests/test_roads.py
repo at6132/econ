@@ -7,8 +7,8 @@ import pytest
 from realm.actions import claim_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.movement import dispatch_shipment
-from realm.roads import (
+from realm.infrastructure.movement import dispatch_shipment
+from realm.infrastructure.roads import (
     BUILD_COST_CENTS,
     build_road,
     find_segment_between,

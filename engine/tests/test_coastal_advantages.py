@@ -21,7 +21,7 @@ from realm.core.ledger import (
     system_reserve_account,
 )
 from realm.materials import MATERIALS
-from realm.movement import (
+from realm.infrastructure.movement import (
     BASE_SHIP_FEE_CENTS,
     PER_TILE_SHIP_CENTS,
     dispatch_shipment,

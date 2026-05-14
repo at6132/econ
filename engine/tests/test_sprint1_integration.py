@@ -37,7 +37,7 @@ from realm.economy.markets import (
     market_buy,
     place_sell_order,
 )
-from realm.plot_logistics import (
+from realm.infrastructure.plot_logistics import (
     ensure_inventory_from_stash,
     plot_output_qty,
     uses_plot_logistics,

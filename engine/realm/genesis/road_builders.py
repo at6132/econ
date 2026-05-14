@@ -23,7 +23,7 @@ from realm.world.geo import manhattan
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world.regions import all_region_ids, region_centre_coords, region_for_plot, route_key
-from realm.roads import (
+from realm.infrastructure.roads import (
     BUILD_COST_CENTS,
     BUILD_MATERIALS,
     build_road,

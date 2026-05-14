@@ -8,7 +8,7 @@ from realm.actions import claim_plot
 from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import PartyId, PlotId
 from realm.world.terrain import Terrain
-from realm.towns import (
+from realm.population.towns import (
     RESIDENCE_BUILDING_ID,
     SETTLEMENT_PARTY_ID,
     STARTING_RESIDENCES_PER_ISLAND,

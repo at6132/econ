@@ -34,8 +34,8 @@ from realm.economy.markets import (
     place_sell_order,
     sell_into_bids,
 )
-from realm.movement import dispatch_shipment
-from realm.roads import all_roads_public, build_road, set_road_toll
+from realm.infrastructure.movement import dispatch_shipment
+from realm.infrastructure.roads import all_roads_public, build_road, set_road_toll
 from realm.economy.supply_signals import all_region_activity, trade_flows_overlay
 from realm.persistence import load_snapshot, save_snapshot
 from realm.contracts.social import (
@@ -279,7 +279,7 @@ def get_throughput(
 @app.get("/plots/{plot_id}/energy")
 def get_plot_energy(plot_id: str) -> dict:
     """Power-coverage report for a single plot (UI: powered/unpowered detail)."""
-    from realm.energy import (
+    from realm.infrastructure.energy import (
         POWER_COVERAGE_RADIUS,
         is_plot_powered,
         nearest_power_source,
@@ -489,7 +489,7 @@ def get_routes() -> dict:
     """Shipping market: registered operators per route, per-region partitioning,
     and the player's own revenue/spend totals for today and yesterday."""
     from realm.world.regions import all_region_ids, region_for_plot
-    from realm.route_operators import (
+    from realm.infrastructure.route_operators import (
         list_route_operators,
         route_revenue_by_party_previous_day,
         route_revenue_by_party_today,

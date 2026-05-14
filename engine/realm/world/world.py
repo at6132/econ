@@ -16,9 +16,9 @@ from realm.core.rng import make_rng
 from realm.world.terrain import Terrain
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from realm.employment import JobOpening
-    from realm.laborers import LaborerNPC
-    from realm.towns import Town
+    from realm.population.employment import JobOpening
+    from realm.population.laborers import LaborerNPC
+    from realm.population.towns import Town
 
 
 def _subsurface_roll(
@@ -353,7 +353,7 @@ class World:
     obey conservation. Mortal, needs-driven, employed by entrepreneurs."""
     towns: dict[str, "Town"] = field(default_factory=dict)
     """Phase 7C: emergent residential clusters keyed by ``town_id``. A town
-    is auto-detected by ``realm.towns.detect_towns`` whenever three or more
+    is auto-detected by ``realm.population.towns.detect_towns`` whenever three or more
     residences sit within 5 tiles of one another. Towns are the catchment
     for laborer spending (7D) and the anchor for store placement."""
     store_inventories: dict[str, dict[str, int]] = field(default_factory=dict)
@@ -701,7 +701,7 @@ def bootstrap_genesis(
     # ledger account funded with the subsistence stake from the system
     # reserve. Non-island worlds (small grids in tests) get no laborer
     # population — those tests target older sprint mechanics.
-    from realm.laborers import bootstrap_island_laborer_populations
+    from realm.population.laborers import bootstrap_island_laborer_populations
 
     laborer_seeds = bootstrap_island_laborer_populations(world)
     if laborer_seeds:
@@ -711,7 +711,7 @@ def bootstrap_genesis(
     # Phase 7C — seed one starting town per island so laborers have somewhere
     # to live on day 1. Residences are owned by a synthetic ``genesis_settlement``
     # placeholder so players + entrepreneur NPCs build their own on top.
-    from realm.towns import seed_genesis_starting_towns
+    from realm.population.towns import seed_genesis_starting_towns
 
     starting_towns = seed_genesis_starting_towns(world)
     if starting_towns:
@@ -722,7 +722,7 @@ def bootstrap_genesis(
     # laborers can buy food/fuel from day 1 (at a generous markup). The first
     # player to undercut these training-wheels stores captures real market
     # share.
-    from realm.stores import seed_genesis_npc_stores
+    from realm.population.stores import seed_genesis_npc_stores
 
     npc_stores = seed_genesis_npc_stores(world)
     if npc_stores:
@@ -742,7 +742,7 @@ def bootstrap_genesis(
     # (``hire_worker_stub`` scarcity branch); 7B replaces this entirely with
     # live LaborerNPC counts. With uniform low density every region gets the
     # ``REGION_LABOR_FRONTIER_POOL`` baseline.
-    from realm.labor import bootstrap_labor_pools
+    from realm.population.labor import bootstrap_labor_pools
 
     bootstrap_labor_pools(world)
     from realm.genesis.settler_names import assign_settler_display_names
@@ -778,7 +778,7 @@ def bootstrap_genesis(
     # earn wages immediately. Runs AFTER every entrepreneur NPC is seated
     # (consolidator, archetypes, shippers, energy, bank) so their owned
     # plots are eligible to host openings.
-    from realm.employment import seed_genesis_npc_job_market
+    from realm.population.employment import seed_genesis_npc_job_market
 
     employment_seed = seed_genesis_npc_job_market(world)
     if employment_seed:
@@ -1140,7 +1140,7 @@ def _building_maintenance_view(world: World, row: dict) -> dict:
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
     from realm.production.buildings import building_catalog_public
-    from realm.energy import ensure_powered_plots_fresh
+    from realm.infrastructure.energy import ensure_powered_plots_fresh
     from realm.economy.markets import market_book_public, market_bids_public
     from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
 
@@ -1320,7 +1320,7 @@ def _bank_loans_for_player(world: "World") -> list[dict]:
 def _road_segments_public(world: "World") -> list[dict]:
     """Public view of every built road segment (Sprint 6 — Phase A)."""
     try:
-        from realm.roads import all_roads_public
+        from realm.infrastructure.roads import all_roads_public
     except Exception:
         return []
     return all_roads_public(world)

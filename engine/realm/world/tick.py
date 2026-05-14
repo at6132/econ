@@ -13,23 +13,23 @@ from realm.agents.tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
 from realm.production.decay import tick_building_decay, tick_building_maintenance
 from realm.economy.market_history import record_market_snapshot
-from realm.movement import deliver_transit
+from realm.infrastructure.movement import deliver_transit
 from realm.events.price_alerts import tick_price_alerts
 from realm.production import tick_production, tick_production_auto_restart
 from realm.production.spoilage import tick_material_spoilage
 from realm.contracts.social import tick_supply_contract_breaches
 from realm.contracts.stubs import tick_phase2_financial_contracts
-from realm.energy import ensure_powered_plots_fresh
+from realm.infrastructure.energy import ensure_powered_plots_fresh
 from realm.genesis.bank import tick_bank_loans
 from realm.genesis.road_builders import tick_frontier_roads
 from realm.genesis.margaux_sprint5 import (
     tick_margaux_sprint5_beats,
     update_margaux_player_profile,
 )
-from realm.employment import tick_job_market, tick_laborer_wages
-from realm.laborers import tick_laborer_births, tick_laborers
+from realm.population.employment import tick_job_market, tick_laborer_wages
+from realm.population.laborers import tick_laborer_births, tick_laborers
 from realm.events.sprint4_feed import tick_sprint4_feed
-from realm.stores import tick_laborer_spending
+from realm.population.stores import tick_laborer_spending
 from realm.world import World
 
 

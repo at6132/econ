@@ -19,7 +19,7 @@ from realm.genesis.shippers import NPC_SHIPPER_IDS, tick_npc_shippers
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.economy.markets import market_buy, place_sell_order
-from realm.movement import dispatch_shipment
+from realm.infrastructure.movement import dispatch_shipment
 from realm.genesis.settler_cost_basis import (
     ensure_cost_basis_state,
     record_settler_production,

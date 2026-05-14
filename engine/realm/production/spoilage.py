@@ -11,7 +11,7 @@ from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.materials import MATERIALS
-from realm.plot_logistics import (
+from realm.infrastructure.plot_logistics import (
     plot_output_qty,
     remove_plot_output,
     try_add_plot_output,

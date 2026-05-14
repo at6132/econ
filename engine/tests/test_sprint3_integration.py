@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import statistics
 
-from realm.energy import (
+from realm.infrastructure.energy import (
     POWER_COVERAGE_RADIUS,
     ensure_powered_plots_fresh,
     nearest_power_source,
@@ -29,8 +29,8 @@ from realm.energy import (
 from realm.genesis.energy import NPC_ENERGY_IDS
 from realm.genesis.shippers import NPC_SHIPPER_IDS
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.labor import labor_pool_for_region
-from realm.movement import dispatch_shipment
+from realm.population.labor import labor_pool_for_region
+from realm.infrastructure.movement import dispatch_shipment
 from realm.production.recipe_sites import plot_is_coastal
 from realm.world.regions import _world_bounds, region_for_coords, region_for_plot
 from realm.world.tick import advance_tick

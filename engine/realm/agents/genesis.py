@@ -27,7 +27,7 @@ from realm.contracts.forward import (
     tick_settler_forward_proposals,
 )
 from realm.genesis.shippers import tick_npc_shippers
-from realm.labor import tick_labor_migration, tick_labor_transport_arrivals
+from realm.population.labor import tick_labor_migration, tick_labor_transport_arrivals
 from realm.genesis.settler_upgrades import tick_settler_margin_review
 from realm.contracts.tenders import (
     tick_settler_tender_bidding,

@@ -34,7 +34,7 @@ from realm.world.regions import (
     region_for_plot,
     route_key,
 )
-from realm.route_operators import (
+from realm.infrastructure.route_operators import (
     ensure_route_state_initialised,
     list_route_operators,
     register_route,

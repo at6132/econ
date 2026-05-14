@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import claim_plot
-from realm.employment import (
+from realm.population.employment import (
     DEFAULT_WAGE_PER_GAME_DAY_CENTS,
     JOB_SEARCH_RADIUS_TILES,
     active_employment_count,
@@ -16,7 +16,7 @@ from realm.employment import (
     tick_laborer_wages,
 )
 from realm.core.ids import PartyId, PlotId
-from realm.laborers import (
+from realm.population.laborers import (
     LABORER_STARTING_CASH_CENTS,
     TICKS_PER_GAME_DAY,
     laborer_cash_account,

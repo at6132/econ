@@ -19,7 +19,7 @@ from realm.core.ledger import party_cash_account
 from realm.agents.llm_haiku import run_haiku_tool_session, session_cap_micro_usd
 from realm.economy.markets import market_buy, place_buy_order, place_sell_order
 from realm.materials import MATERIALS
-from realm.movement import dispatch_shipment
+from realm.infrastructure.movement import dispatch_shipment
 from realm.world import World
 
 

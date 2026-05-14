@@ -8,13 +8,13 @@ from realm.actions import claim_plot
 from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
-from realm.laborers import (
+from realm.population.laborers import (
     LABORER_STARTING_CASH_CENTS,
     TICKS_PER_GAME_DAY,
     laborer_cash_account,
 )
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.stores import (
+from realm.population.stores import (
     FOOD_PER_UNIT,
     FUEL_PER_UNIT,
     NPC_STORE_COAL_QTY,
@@ -31,7 +31,7 @@ from realm.stores import (
     withdraw_store_stock,
 )
 from realm.world.terrain import Terrain
-from realm.towns import town_for_plot
+from realm.population.towns import town_for_plot
 from realm.world import bootstrap_genesis
 from turnkey_fixtures import grant_turnkey_self_materials
 

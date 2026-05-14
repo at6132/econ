@@ -17,7 +17,7 @@ from realm.economy.markets import (
     place_sell_order,
     sell_into_bids,
 )
-from realm.plot_logistics import (
+from realm.infrastructure.plot_logistics import (
     ensure_inventory_from_stash,
     party_material_held,
     party_material_on_plot,

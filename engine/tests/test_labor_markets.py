@@ -29,7 +29,7 @@ from realm.production.buildings import build_on_plot
 from turnkey_fixtures import grant_turnkey_self_materials
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
-from realm.labor import (
+from realm.population.labor import (
     LABOR_SCARCITY_CRITICAL_THRESHOLD,
     LABOR_SCARCITY_THIN_THRESHOLD,
     effective_output_bps_for_run,

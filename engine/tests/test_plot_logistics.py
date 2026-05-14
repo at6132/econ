@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from realm.actions import claim_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.movement import dispatch_shipment
-from realm.plot_logistics import plot_output_qty
+from realm.infrastructure.movement import dispatch_shipment
+from realm.infrastructure.plot_logistics import plot_output_qty
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 

@@ -3,7 +3,7 @@
 Laborers get hired by entrepreneurs through a job-posting → application
 → daily-wage flow. All cash movement is real ledger transfers between
 the employer's cash account and the laborer's cash account (one per
-laborer per ``realm.laborers.laborer_cash_account``). Conservation
+laborer per ``realm.population.laborers.laborer_cash_account``). Conservation
 holds: every cent paid in wages comes from some entrepreneur's account.
 
 This complements the existing ``hire_worker_stub`` system (which models
@@ -25,7 +25,7 @@ from typing import Final
 
 from realm.events.event_log import log_event
 from realm.core.ids import PartyId, PlotId
-from realm.laborers import (
+from realm.population.laborers import (
     TICKS_PER_GAME_DAY,
     laborer_cash_account,
 )

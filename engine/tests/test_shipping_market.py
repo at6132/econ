@@ -23,7 +23,7 @@ from realm.core.ledger import (
     party_cash_account,
     system_reserve_account,
 )
-from realm.movement import (
+from realm.infrastructure.movement import (
     BASE_SHIP_FEE_CENTS,
     PER_TILE_SHIP_CENTS,
     dispatch_shipment,
@@ -35,7 +35,7 @@ from realm.world.regions import (
     region_for_plot,
     route_key,
 )
-from realm.route_operators import (
+from realm.infrastructure.route_operators import (
     find_cheapest_operator,
     list_route_operators,
     register_route as register_route_lowlevel,
@@ -381,7 +381,7 @@ def test_no_operator_falls_back_to_system_reserve() -> None:
     # Default PER_TILE rate applies. ``pa``/``pb`` sit on the coastal strip in
     # this fixture, so Sprint 3 Phase D.2 applies the 40 % coastal discount.
     from realm.world.geo import manhattan
-    from realm.movement import COASTAL_ROUTE_DISCOUNT_BPS
+    from realm.infrastructure.movement import COASTAL_ROUTE_DISCOUNT_BPS
 
     dist = manhattan(w, pa, pb)
     raw = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS

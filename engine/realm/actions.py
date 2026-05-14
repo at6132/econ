@@ -6,7 +6,7 @@ from typing import Any, Literal, TypedDict, Union
 
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.plot_logistics import harvest_plot_output_to_party
+from realm.infrastructure.plot_logistics import harvest_plot_output_to_party
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.production import start_production
 from realm.world import BusinessRecord, Plot, SurveyReport, World
@@ -518,7 +518,7 @@ def hire_worker_stub(
     # Regional labor cost premium + pool draw (Sprint 3 — Phase C.2).
     # Skipped for Frontier and minimal testbeds where the labor market is
     # inactive (``labor_market_active`` returns False there).
-    from realm.labor import (
+    from realm.population.labor import (
         critical_hire_batch_cap,
         decrement_pool,
         hire_cost_multiplier_bps,
@@ -559,7 +559,7 @@ def hire_worker_stub(
     )
     if isinstance(pay, MoneyErr):
         if region_id is not None:
-            from realm.labor import increment_pool as _restore_pool
+            from realm.population.labor import increment_pool as _restore_pool
 
             _restore_pool(world, region_id, workers_count)
         return ActionErr(ok=False, reason=pay.reason)
@@ -667,10 +667,10 @@ def register_route(
 ) -> dict[str, Any]:
     """Register ``party`` as the operator of a region-to-region shipping route.
 
-    Proxy to :func:`realm.route_operators.register_route`. See that function's
+    Proxy to :func:`realm.infrastructure.route_operators.register_route`. See that function's
     docstring for the full precondition list.
     """
-    from realm.route_operators import register_route as _register
+    from realm.infrastructure.route_operators import register_route as _register
 
     return _register(world, party, plot_id, from_region, to_region, fee_per_tile_cents)
 
@@ -744,7 +744,7 @@ def request_labor_transport_action(
     workers: int,
 ) -> ActionResult:
     """Player-facing wrapper around the labor-transport scheduler."""
-    from realm.labor import request_labor_transport
+    from realm.population.labor import request_labor_transport
 
     r = request_labor_transport(
         world,
@@ -766,6 +766,6 @@ def revise_route_fee(
     new_fee_per_tile_cents: int,
 ) -> dict[str, Any]:
     """Update the per-tile fee on a route the ``party`` already operates."""
-    from realm.route_operators import set_operator_fee
+    from realm.infrastructure.route_operators import set_operator_fee
 
     return set_operator_fee(world, party, route_key, new_fee_per_tile_cents)

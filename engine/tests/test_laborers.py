@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from realm.laborers import (
+from realm.population.laborers import (
     DEATH_THRESHOLD,
     DEFAULT_ISLAND_LABORER_COUNTS,
     FOOD_DECAY_PER_DAY,

@@ -12,7 +12,7 @@ Covers:
 
 from __future__ import annotations
 
-from realm.energy import (
+from realm.infrastructure.energy import (
     POWER_COVERAGE_RADIUS,
     is_plot_powered,
     recompute_powered_plots,
@@ -83,7 +83,7 @@ def _claim(world: World, party: PartyId, plot_id: PlotId) -> None:
 
 def _install_power_shed(world: World, party: PartyId, plot_id: PlotId, *, warm: bool = True) -> str:
     """Drop a completed ``power_shed`` on the plot; optionally pre-warm past the warmup window."""
-    from realm.energy import POWER_BUILDING_WARMUP_TICKS
+    from realm.infrastructure.energy import POWER_BUILDING_WARMUP_TICKS
 
     world.next_building_instance_seq += 1
     iid = f"b{world.next_building_instance_seq:06d}"
@@ -208,7 +208,7 @@ def test_electricity_spoils_if_unused() -> None:
     world, party = _build_world()
     plot = PlotId("p-5-5")
     _claim(world, party, plot)
-    from realm.plot_logistics import plot_output_qty, try_add_plot_output
+    from realm.infrastructure.plot_logistics import plot_output_qty, try_add_plot_output
 
     res = try_add_plot_output(world, plot, party, MaterialId("electricity"), 3)
     assert not isinstance(res, MatterErr)

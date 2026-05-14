@@ -3,7 +3,7 @@
 Two named energy operators spawn near the map's geographic centre, each
 with a pre-built ``power_shed`` and a starting cash buffer for coal. Their
 buildings provide grid coverage immediately (warmup window of one game-hour
-applies), so plots within :data:`realm.energy.POWER_COVERAGE_RADIUS` of
+applies), so plots within :data:`realm.infrastructure.energy.POWER_COVERAGE_RADIUS` of
 either operator can run electricity-requiring recipes for free.
 
 Daily loop:
@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import Final
 
 from realm.actions import start_production_on_plot
-from realm.energy import POWER_COVERAGE_RADIUS
+from realm.infrastructure.energy import POWER_COVERAGE_RADIUS
 from realm.events.event_log import log_event
 from realm.economy.pricing import exchange_ask_cents
 from realm.core.ids import MaterialId, PartyId, PlotId

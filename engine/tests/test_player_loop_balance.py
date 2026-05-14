@@ -211,7 +211,7 @@ def test_coal_strategy_cash_positive_after_24_game_hours() -> None:
     # absorb settler-priced fills later.
     market_buy(w, buyer, MaterialId("coal"), 1)
 
-    from realm.plot_logistics import (
+    from realm.infrastructure.plot_logistics import (
         ensure_inventory_from_stash,
         plot_output_qty,
         uses_plot_logistics,

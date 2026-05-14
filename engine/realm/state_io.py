@@ -503,7 +503,7 @@ def load_world(d: dict[str, Any]) -> World:
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
     raw_jobs = d.get("job_openings") or []
     if isinstance(raw_jobs, list):
-        from realm.employment import JobOpening
+        from realm.population.employment import JobOpening
 
         for payload in raw_jobs:
             if not isinstance(payload, dict):
@@ -535,7 +535,7 @@ def load_world(d: dict[str, Any]) -> World:
             world.store_revenue_today[str(pid)] = int(c)
     raw_towns = d.get("towns") or {}
     if isinstance(raw_towns, dict):
-        from realm.towns import Town
+        from realm.population.towns import Town
 
         for tid, payload in raw_towns.items():
             if not isinstance(payload, dict):
@@ -555,7 +555,7 @@ def load_world(d: dict[str, Any]) -> World:
             )
     raw_laborers = d.get("laborers") or {}
     if isinstance(raw_laborers, dict):
-        from realm.laborers import LaborerNPC
+        from realm.population.laborers import LaborerNPC
 
         for lid, payload in raw_laborers.items():
             if not isinstance(payload, dict):

@@ -12,7 +12,7 @@ from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.plot_logistics import (
+from realm.infrastructure.plot_logistics import (
     PLOT_OUTPUT_STORAGE_CAP_UNITS,
     plot_output_qty,
     plot_output_total,
@@ -116,7 +116,7 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
     #   - Hired workers                              → 100 %.
     #   - Hired skilled workers                      → up to 120 %.
     if int(getattr(recipe, "labor_cents", 0)) > 0:
-        from realm.labor import effective_output_bps_for_run
+        from realm.population.labor import effective_output_bps_for_run
 
         labour_bps = effective_output_bps_for_run(
             world, run.party, has_recipe_labor=True
@@ -350,7 +350,7 @@ def start_production(
     needs_electricity = int(recipe.inputs.get(electricity_mid, 0)) > 0
     powered_by_grid = False
     if needs_electricity:
-        from realm.energy import is_plot_powered
+        from realm.infrastructure.energy import is_plot_powered
 
         powered_by_grid = is_plot_powered(world, plot_id)
         if not powered_by_grid:
@@ -519,7 +519,7 @@ def tick_production(world: World) -> None:
             completed_for_auto_restart.append(run)
         # Sprint 3 — Phase C.3: every worker that participated levels up once.
         if int(getattr(recipe, "labor_cents", 0)) > 0:
-            from realm.labor import increment_worker_skill
+            from realm.population.labor import increment_worker_skill
 
             increment_worker_skill(world, run.party, by=1)
         if str(run.recipe_id).startswith("hand_") and world.scenario_id == "genesis":
@@ -783,7 +783,7 @@ def throughput_breakdown(
     divided down to a single ``bps`` number.
     """
     from realm.production.decay import EFFICIENCY_HEALTHY
-    from realm.labor import effective_output_bps_for_run
+    from realm.population.labor import effective_output_bps_for_run
 
     plot = world.plots.get(plot_id)
     recipe = RECIPES.get(recipe_id)

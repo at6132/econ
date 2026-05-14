@@ -473,7 +473,7 @@ def build_on_plot(
     if building_id == "residence":
         # Phase 7C — residences are town nodes. Refresh the town cluster map
         # immediately (idempotent + cheap; runs once per residence build).
-        from realm.towns import on_residence_built
+        from realm.population.towns import on_residence_built
 
         on_residence_built(world, plot_id)
     if building_id == "store":
@@ -481,7 +481,7 @@ def build_on_plot(
         # ``tick_laborer_spending`` can find it. Town must already exist
         # (build a residence first); otherwise the registration is deferred
         # until the next ``detect_towns`` rebuild that includes this area.
-        from realm.stores import _register_store_with_town
+        from realm.population.stores import _register_store_with_town
 
         _register_store_with_town(world, plot_id)
     return {
