@@ -22,6 +22,32 @@ from realm.world import Plot, SurveyReport, World
 
 SURVEY_COST_CENTS = 50_000  # $500.00 per first-hour script
 
+# Phase 9B — plot trading. The transfer fee is a small registry fee paid by
+# the seller to ``system:reserve`` (a "land office" cost — keeps the channel
+# clean for v1; can be redirected to a town treasury later). Set to 1 % of
+# sale price with a floor + cap so cheap frontier flips stay affordable.
+PLOT_TRANSFER_FEE_BPS: int = 100  # 1 %
+PLOT_TRANSFER_FEE_MIN_CENTS: int = 1_000  # $10 floor
+PLOT_TRANSFER_FEE_MAX_CENTS: int = 100_000  # $1,000 cap
+
+# Phase 9B — speculative surveying authorization window. Owners grant a
+# surveyor permission to survey their plot for ``SURVEY_AUTH_DURATION_TICKS``
+# game-minutes (default 30 game-days). The surveyor then runs ``survey_plot_for``
+# at their own cost and keeps the report.
+SURVEY_AUTH_DURATION_TICKS: int = 30 * 1_440  # 30 game-days
+
+
+def _plot_transfer_fee_cents(price_cents: int) -> int:
+    """Compute the registry fee on a plot sale (clamped to floor/cap)."""
+    if price_cents <= 0:
+        return 0
+    raw = price_cents * PLOT_TRANSFER_FEE_BPS // 10_000
+    if raw < PLOT_TRANSFER_FEE_MIN_CENTS:
+        return PLOT_TRANSFER_FEE_MIN_CENTS
+    if raw > PLOT_TRANSFER_FEE_MAX_CENTS:
+        return PLOT_TRANSFER_FEE_MAX_CENTS
+    return int(raw)
+
 
 def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
     plot = world.plots.get(plot_id)
@@ -343,3 +369,308 @@ def buy_survey_report(world: World, buyer: PartyId, listing_id: str) -> dict:
 
 def plot_by_id(world: World, plot_id: PlotId) -> Plot | None:
     return world.plots.get(plot_id)
+
+
+# ─────────────────── Phase 9B — plot trading ───────────────────
+
+
+def _active_plot_listing_for(world: World, plot_id: PlotId) -> dict | None:
+    for row in world.plot_listings:
+        if (
+            str(row.get("plot_id", "")) == str(plot_id)
+            and str(row.get("status", "")) == "active"
+        ):
+            return row
+    return None
+
+
+def transfer_plot(
+    world: World,
+    from_party: PartyId,
+    to_party: PartyId,
+    plot_id: PlotId,
+    price_cents: int,
+) -> dict:
+    """Atomically transfer plot ownership from ``from_party`` to ``to_party``.
+
+    Cash flow: ``to_party`` pays ``price_cents`` to ``from_party``; the seller
+    additionally pays a registry fee (``_plot_transfer_fee_cents``) to
+    ``system:reserve``. Ownership flips and any associated buildings stay on
+    the plot (their owner-of-record on the building row is unchanged — those
+    are a separate primitive). Active sale listings for the plot are marked
+    cancelled.
+    """
+    if price_cents < 0:
+        return {"ok": False, "reason": "price must be non-negative"}
+    if from_party == to_party:
+        return {"ok": False, "reason": "buyer and seller must differ"}
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return {"ok": False, "reason": "unknown plot"}
+    if plot.owner != from_party:
+        return {"ok": False, "reason": "seller does not own this plot"}
+    if to_party not in world.parties or from_party not in world.parties:
+        return {"ok": False, "reason": "unknown party"}
+    buyer_cash = party_cash_account(to_party)
+    seller_cash = party_cash_account(from_party)
+    world.ledger.ensure_account(buyer_cash)
+    world.ledger.ensure_account(seller_cash)
+    fee = _plot_transfer_fee_cents(price_cents)
+    if price_cents > 0:
+        if world.ledger.balance(buyer_cash) < price_cents:
+            return {"ok": False, "reason": "insufficient cash"}
+        tr_pay = world.ledger.transfer(
+            debit=buyer_cash, credit=seller_cash, amount_cents=price_cents
+        )
+        if isinstance(tr_pay, MoneyErr):
+            return {"ok": False, "reason": tr_pay.reason}
+    if fee > 0:
+        if world.ledger.balance(seller_cash) < fee:
+            if price_cents > 0:
+                world.ledger.transfer(
+                    debit=seller_cash, credit=buyer_cash, amount_cents=price_cents
+                )
+            return {"ok": False, "reason": "seller cannot pay registry fee"}
+        tr_fee = world.ledger.transfer(
+            debit=seller_cash,
+            credit=system_reserve_account(),
+            amount_cents=fee,
+        )
+        if isinstance(tr_fee, MoneyErr):
+            if price_cents > 0:
+                world.ledger.transfer(
+                    debit=seller_cash, credit=buyer_cash, amount_cents=price_cents
+                )
+            return {"ok": False, "reason": tr_fee.reason}
+    plot.owner = to_party
+    listing = _active_plot_listing_for(world, plot_id)
+    if listing is not None and str(listing.get("seller", "")) == str(from_party):
+        listing["status"] = "sold"
+        listing["buyer"] = str(to_party)
+        listing["sold_at_tick"] = int(world.tick)
+    log_event(
+        world,
+        "plot_transfer",
+        f"{from_party} sold plot {plot_id} to {to_party} for ${price_cents / 100:.2f} "
+        f"(registry fee ${fee / 100:.2f})",
+        from_party=str(from_party),
+        to_party=str(to_party),
+        plot_id=str(plot_id),
+        price_cents=int(price_cents),
+        fee_cents=int(fee),
+    )
+    return {
+        "ok": True,
+        "plot_id": str(plot_id),
+        "new_owner": str(to_party),
+        "price_cents": int(price_cents),
+        "fee_cents": int(fee),
+    }
+
+
+def list_plot_for_sale(
+    world: World, party: PartyId, plot_id: PlotId, ask_price_cents: int
+) -> dict:
+    """Open an active sale listing for one of the party's plots."""
+    if ask_price_cents <= 0:
+        return {"ok": False, "reason": "ask price must be positive"}
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return {"ok": False, "reason": "unknown plot"}
+    if plot.owner != party:
+        return {"ok": False, "reason": "you do not own this plot"}
+    if _active_plot_listing_for(world, plot_id) is not None:
+        return {"ok": False, "reason": "plot already listed"}
+    world.next_plot_listing_seq += 1
+    listing_id = f"plot-{world.next_plot_listing_seq}"
+    world.plot_listings.append(
+        {
+            "listing_id": listing_id,
+            "seller": str(party),
+            "plot_id": str(plot_id),
+            "ask_price_cents": int(ask_price_cents),
+            "listed_at_tick": int(world.tick),
+            "status": "active",
+        }
+    )
+    log_event(
+        world,
+        "plot_listing_created",
+        f"{party} listed plot {plot_id} for ${ask_price_cents / 100:.2f}",
+        party=str(party),
+        listing_id=listing_id,
+        plot_id=str(plot_id),
+        ask_price_cents=int(ask_price_cents),
+    )
+    return {
+        "ok": True,
+        "listing_id": listing_id,
+        "plot_id": str(plot_id),
+        "ask_price_cents": int(ask_price_cents),
+    }
+
+
+def cancel_plot_listing(world: World, party: PartyId, listing_id: str) -> dict:
+    """Cancel an active plot listing (seller only)."""
+    for row in world.plot_listings:
+        if str(row.get("listing_id", "")) != str(listing_id):
+            continue
+        if str(row.get("seller", "")) != str(party):
+            return {"ok": False, "reason": "not your listing"}
+        if str(row.get("status", "")) != "active":
+            return {"ok": False, "reason": "listing not active"}
+        row["status"] = "cancelled"
+        log_event(
+            world,
+            "plot_listing_cancelled",
+            f"{party} cancelled plot listing {listing_id}",
+            party=str(party),
+            listing_id=str(listing_id),
+            plot_id=str(row.get("plot_id", "")),
+        )
+        return {"ok": True}
+    return {"ok": False, "reason": "unknown listing"}
+
+
+def buy_plot_listing(world: World, buyer: PartyId, listing_id: str) -> dict:
+    """Atomically purchase a listed plot at its ask price."""
+    target: dict | None = None
+    for row in world.plot_listings:
+        if str(row.get("listing_id", "")) == str(listing_id):
+            target = row
+            break
+    if target is None:
+        return {"ok": False, "reason": "unknown listing"}
+    if str(target.get("status", "")) != "active":
+        return {"ok": False, "reason": "listing not active"}
+    seller = PartyId(str(target.get("seller", "")))
+    plot_id = PlotId(str(target.get("plot_id", "")))
+    price = int(target.get("ask_price_cents", 0))
+    if buyer == seller:
+        return {"ok": False, "reason": "cannot buy your own listing"}
+    tr = transfer_plot(world, seller, buyer, plot_id, price)
+    if not tr.get("ok"):
+        return dict(tr)
+    log_event(
+        world,
+        "plot_listing_sold",
+        f"{buyer} bought plot listing {listing_id} ({plot_id}) for ${price / 100:.2f}",
+        buyer=str(buyer),
+        seller=str(seller),
+        listing_id=str(listing_id),
+        plot_id=str(plot_id),
+        price_cents=price,
+    )
+    return {
+        "ok": True,
+        "listing_id": str(listing_id),
+        "plot_id": str(plot_id),
+        "new_owner": str(buyer),
+        "price_cents": price,
+        "fee_cents": int(tr.get("fee_cents", 0)),
+    }
+
+
+# ─────────────────── Phase 9B — speculative surveying ───────────────────
+
+
+def authorize_survey(
+    world: World, owner: PartyId, surveyor: PartyId, plot_id: PlotId
+) -> dict:
+    """Grant a surveyor a time-limited right to survey one of your plots.
+
+    Authorizations are one-shot: the row is removed when consumed by
+    ``survey_plot_for`` or when the expiry tick is reached.
+    """
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return {"ok": False, "reason": "unknown plot"}
+    if plot.owner != owner:
+        return {"ok": False, "reason": "you do not own this plot"}
+    if owner == surveyor:
+        return {"ok": False, "reason": "self-authorization not needed"}
+    if surveyor not in world.parties:
+        return {"ok": False, "reason": "unknown surveyor"}
+    expires = int(world.tick) + SURVEY_AUTH_DURATION_TICKS
+    world.survey_authorizations.append(
+        {
+            "plot_id": str(plot_id),
+            "surveyor": str(surveyor),
+            "owner": str(owner),
+            "granted_at_tick": int(world.tick),
+            "expires_at_tick": expires,
+        }
+    )
+    log_event(
+        world,
+        "survey_authorized",
+        f"{owner} authorized {surveyor} to survey {plot_id} (expires tick {expires})",
+        owner=str(owner),
+        surveyor=str(surveyor),
+        plot_id=str(plot_id),
+        expires_at_tick=expires,
+    )
+    return {"ok": True, "plot_id": str(plot_id), "expires_at_tick": expires}
+
+
+def _consume_survey_auth(
+    world: World, surveyor: PartyId, plot_id: PlotId
+) -> bool:
+    """Find + drop one active authorization for (surveyor, plot)."""
+    for i, row in enumerate(world.survey_authorizations):
+        if str(row.get("plot_id")) != str(plot_id):
+            continue
+        if str(row.get("surveyor")) != str(surveyor):
+            continue
+        if int(row.get("expires_at_tick", 0)) < int(world.tick):
+            continue
+        world.survey_authorizations.pop(i)
+        return True
+    return False
+
+
+def survey_plot_for(world: World, surveyor: PartyId, plot_id: PlotId) -> dict:
+    """Speculative / on-contract survey of a plot the surveyor does **not** own.
+
+    Allowed when:
+      * the plot has no owner (frontier — anyone may speculatively survey), or
+      * an active ``survey_authorizations`` row exists for this surveyor
+        + plot pair (consumed on success).
+
+    The survey cost is paid by the surveyor; the resulting SurveyReport is
+    owned by the surveyor (they can then sell it to the plot owner or anyone
+    else via the existing intel-listing market).
+    """
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return {"ok": False, "reason": "unknown plot"}
+    if plot.surveyed:
+        return {"ok": False, "reason": "already surveyed"}
+    if plot.owner == surveyor:
+        return {"ok": False, "reason": "use survey_plot for your own plot"}
+    if plot.owner is not None and not _consume_survey_auth(world, surveyor, plot_id):
+        return {
+            "ok": False,
+            "reason": "speculative survey requires the owner's authorization",
+        }
+    cash = party_cash_account(surveyor)
+    world.ledger.ensure_account(cash)
+    res = world.ledger.transfer(
+        debit=cash,
+        credit=system_reserve_account(),
+        amount_cents=SURVEY_COST_CENTS,
+    )
+    if isinstance(res, MoneyErr):
+        return {"ok": False, "reason": res.reason}
+    plot.surveyed = True
+    create_survey_report(world, surveyor, plot_id, is_deep=False)
+    log_event(
+        world,
+        "survey",
+        f"{surveyor} surveyed {plot_id} on commission (paid ${SURVEY_COST_CENTS / 100:.0f})",
+        party=str(surveyor),
+        plot_id=str(plot_id),
+        cost_cents=SURVEY_COST_CENTS,
+        speculative=True,
+    )
+    return {"ok": True, "plot_id": str(plot_id)}

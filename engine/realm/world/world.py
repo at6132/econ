@@ -203,6 +203,18 @@ class World:
     """Sprint 4 — Phase B: log of analytics products purchased by parties.
     Each row: ``{"tick", "party", "product", "params", "cost_cents",
     "summary"}``. UI displays recent purchases under "Past purchases"."""
+    plot_listings: list[dict] = field(default_factory=list)
+    """Phase 9B — public plot sale listings. Each row:
+    ``{"listing_id", "seller", "plot_id", "ask_price_cents", "listed_at_tick",
+    "status"}``. Status: ``active`` | ``sold`` | ``cancelled``."""
+    next_plot_listing_seq: int = 0
+    """Phase 9B — monotonic id for plot listings (format: ``plot-{seq}``)."""
+    survey_authorizations: list[dict] = field(default_factory=list)
+    """Phase 9B — owner authorizations for third-party (speculative) surveying.
+    Each row: ``{"plot_id", "surveyor", "expires_at_tick"}``. A surveyor may
+    survey a plot they don't own when an active authorization exists.
+    Unauthorized speculative surveys are still allowed when the plot is
+    unclaimed (no owner)."""
     business_registry: dict[str, "BusinessRecord"] = field(default_factory=dict)
     """Sprint 5 — Phase A: registered business identities keyed by party id
     str. Once registered, the business name is the authoritative

@@ -190,6 +190,11 @@ def dump_world(world: World) -> dict[str, Any]:
         "next_report_seq": int(world.next_report_seq),
         "intel_listings": [copy.deepcopy(row) for row in world.intel_listings],
         "next_intel_listing_seq": int(world.next_intel_listing_seq),
+        "plot_listings": [copy.deepcopy(row) for row in world.plot_listings],
+        "next_plot_listing_seq": int(world.next_plot_listing_seq),
+        "survey_authorizations": [
+            copy.deepcopy(row) for row in world.survey_authorizations
+        ],
         "analytics_purchases": [copy.deepcopy(row) for row in world.analytics_purchases],
         "business_registry": {
             pid_s: {
@@ -475,6 +480,11 @@ def load_world(d: dict[str, Any]) -> World:
     world.next_report_seq = int(d.get("next_report_seq", 0))
     world.intel_listings = [copy.deepcopy(row) for row in d.get("intel_listings", []) or []]
     world.next_intel_listing_seq = int(d.get("next_intel_listing_seq", 0))
+    world.plot_listings = [copy.deepcopy(row) for row in d.get("plot_listings", []) or []]
+    world.next_plot_listing_seq = int(d.get("next_plot_listing_seq", 0))
+    world.survey_authorizations = [
+        copy.deepcopy(row) for row in d.get("survey_authorizations", []) or []
+    ]
     world.analytics_purchases = [
         copy.deepcopy(row) for row in d.get("analytics_purchases", []) or []
     ]
