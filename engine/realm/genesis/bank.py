@@ -68,7 +68,9 @@ BANK_RATE_TIERS: list[dict] = [
         "max_honored": None,
         "rate_bps_per_cycle": 600,
         "max_principal_cents": 2_000_000,
-        "requires_collateral": False,
+        # Phase 9D — top-tier loans (up to $20,000) require collateral so the
+        # bank has skin in the game. Starter and established stay unsecured.
+        "requires_collateral": True,
     },
 ]
 
@@ -272,6 +274,15 @@ def apply_bank_loan(
         plot = world.plots.get(collateral_plot_id)
         if plot is None or plot.owner != borrower:
             return {"ok": False, "reason": "collateral plot must be owned by borrower"}
+    # Phase 9D — tier flag may demand collateral. The bank wants skin in the
+    # game on its biggest loans; ``rate_bps_override`` cannot bypass it.
+    if bool(tier.get("requires_collateral")) and collateral_plot_id is None:
+        return {
+            "ok": False,
+            "reason": (
+                f"tier '{tier['tier']}' requires a collateral plot owned by the borrower"
+            ),
+        }
     lender_cash = party_cash_account(lender_pid)
     if world.ledger.balance(lender_cash) < principal_cents:
         return {"ok": False, "reason": "lender has insufficient capital"}
@@ -398,8 +409,66 @@ def repay_bank_loan(world: World, borrower: PartyId, loan_id: str) -> dict:
     }
 
 
+def _auto_deduct_loan_payment(world: World, loan: dict) -> bool:
+    """Phase 9D — try to auto-deduct one cycle on a due loan.
+
+    Returns ``True`` if a payment was successfully pulled from the
+    borrower's cash; ``False`` if they can't cover it (caller treats this
+    as a missed payment).
+    """
+    payment = cycle_payment_cents(loan)
+    borrower = PartyId(str(loan["borrower"]))
+    borrower_cash = party_cash_account(borrower)
+    if world.ledger.balance(borrower_cash) < payment:
+        return False
+    lender_pid = PartyId(str(loan["lender"]))
+    tr = world.ledger.transfer(
+        debit=borrower_cash,
+        credit=party_cash_account(lender_pid),
+        amount_cents=int(payment),
+    )
+    if isinstance(tr, MoneyErr):
+        return False
+    loan["payments_made"] = int(loan.get("payments_made", 0)) + 1
+    # An auto-pay also clears one prior miss (gives borrowers a recovery path).
+    loan["missed_payments"] = max(0, int(loan.get("missed_payments", 0)) - 1)
+    if int(loan["payments_made"]) >= int(loan["num_cycles"]):
+        loan["status"] = "repaid"
+        loan["closed_at_tick"] = int(world.tick)
+        rep = world.reputation.setdefault(
+            str(borrower), {"honored": 0, "breached": 0}
+        )
+        rep["honored"] = int(rep.get("honored", 0)) + 1
+        log_event(
+            world,
+            "bank_loan_auto_repaid",
+            f"{borrower} auto-paid final cycle on {loan['id']} (loan repaid in full)",
+            contract_id=str(loan["id"]),
+            borrower=str(borrower),
+            payment_cents=int(payment),
+        )
+    else:
+        loan["next_due_tick"] = (
+            int(loan.get("next_due_tick", 0)) + int(loan.get("cycle_ticks", LOAN_CYCLE_TICKS))
+        )
+        log_event(
+            world,
+            "bank_loan_auto_paid",
+            f"{borrower} auto-paid cycle {loan['payments_made']}/{loan['num_cycles']} on {loan['id']}",
+            contract_id=str(loan["id"]),
+            borrower=str(borrower),
+            payment_cents=int(payment),
+        )
+    return True
+
+
 def tick_bank_loans(world: World) -> None:
-    """Detect missed payments, apply reputation damage, claim collateral after 2 misses."""
+    """Auto-deduct on due-tick; default + claim collateral after 2 misses.
+
+    Phase 9D — pulled the deduction into ``_auto_deduct_loan_payment``.
+    Auto-pay is attempted first; only when the borrower can't cover the
+    payment do we record a missed cycle.
+    """
     for loan in list(world.contracts):
         if loan.get("kind") != "bank_loan":
             continue
@@ -407,6 +476,8 @@ def tick_bank_loans(world: World) -> None:
             continue
         due_at = int(loan.get("next_due_tick", 0))
         if int(world.tick) < due_at:
+            continue
+        if _auto_deduct_loan_payment(world, loan):
             continue
         loan["missed_payments"] = int(loan.get("missed_payments", 0)) + 1
         loan["next_due_tick"] = due_at + int(loan.get("cycle_ticks", LOAN_CYCLE_TICKS))
@@ -417,7 +488,7 @@ def tick_bank_loans(world: World) -> None:
             world,
             "bank_loan_missed",
             f"{borrower} missed payment on {loan['id']} "
-            f"(miss #{loan['missed_payments']})",
+            f"(miss #{loan['missed_payments']}) — insufficient cash",
             contract_id=str(loan["id"]),
             borrower=borrower,
             missed=int(loan["missed_payments"]),
