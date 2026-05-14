@@ -621,7 +621,7 @@ def _list_price_cents(
     """
     bid = best_resting_bid_cents(world, material)
     if party is not None:
-        from realm.settler_cost_basis import settler_listing_price_cents
+        from realm.genesis.settler_cost_basis import settler_listing_price_cents
 
         basis_px = settler_listing_price_cents(world, party, material)
         if basis_px is not None:
@@ -642,7 +642,7 @@ def _settler_market_buy(
     world: World, party: PartyId, material: MaterialId, qty: int
 ) -> dict:
     """Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker."""
-    from realm.settler_cost_basis import record_settler_buy
+    from realm.genesis.settler_cost_basis import record_settler_buy
 
     r = market_buy(world, party, material, qty)
     if r.get("ok"):

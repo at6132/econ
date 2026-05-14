@@ -30,7 +30,7 @@ from realm.economy.analytics import (
     purchase_analytics_product,
     seed_analytics_vendor,
 )
-from realm.genesis_broker import (
+from realm.genesis.broker import (
     BROKER_HIGH_GRADE_THRESHOLD,
     SURVEY_BROKER_PARTY_ID,
     seed_survey_broker,

@@ -17,18 +17,18 @@ No Tier-1 timer NPCs: ``advance_tick`` skips ``tick_tier1/tier2`` when
 from __future__ import annotations
 
 from realm.agents.genesis_settlers import tick_settler_business
-from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
-from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
-from realm.genesis_broker import tick_survey_broker
-from realm.genesis_consolidator import tick_consolidator
-from realm.genesis_energy import tick_npc_energy
+from realm.genesis.margaux import tick_genesis_margaux_scripts
+from realm.genesis.settler_cycle import tick_genesis_settler_lifecycle
+from realm.genesis.broker import tick_survey_broker
+from realm.genesis.consolidator import tick_consolidator
+from realm.genesis.energy import tick_npc_energy
 from realm.genesis_forwards import (
     tick_consolidator_forward_proposals,
     tick_settler_forward_proposals,
 )
-from realm.genesis_shippers import tick_npc_shippers
+from realm.genesis.shippers import tick_npc_shippers
 from realm.labor import tick_labor_migration, tick_labor_transport_arrivals
-from realm.settler_upgrades import tick_settler_margin_review
+from realm.genesis.settler_upgrades import tick_settler_margin_review
 from realm.tenders import (
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
@@ -48,7 +48,7 @@ def tick_genesis_agents(world: World) -> None:
     tick_survey_broker(world)
     tick_consolidator_forward_proposals(world)
     tick_settler_forward_proposals(world)
-    from realm.genesis_archetypes import tick_archetype_agents
+    from realm.genesis.archetypes import tick_archetype_agents
 
     tick_archetype_agents(world)
     tick_labor_transport_arrivals(world)

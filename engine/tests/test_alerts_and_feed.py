@@ -161,7 +161,7 @@ def test_feed_fires_on_new_building_type() -> None:
     """The first time a new building_id appears in plot_buildings the existing
     ``note_genesis_first_building_operational`` hook emits ``first_building``.
     """
-    from realm.genesis_feed_hooks import note_genesis_first_building_operational
+    from realm.genesis.feed_hooks import note_genesis_first_building_operational
 
     w = bootstrap_genesis(seed=57, grid_width=8, grid_height=6, settler_count=2)
     party = PartyId("settler_001")

@@ -26,8 +26,8 @@ from realm.energy import (
     ensure_powered_plots_fresh,
     nearest_power_source,
 )
-from realm.genesis_energy import NPC_ENERGY_IDS
-from realm.genesis_shippers import NPC_SHIPPER_IDS
+from realm.genesis.energy import NPC_ENERGY_IDS
+from realm.genesis.shippers import NPC_SHIPPER_IDS
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.labor import labor_pool_for_region
 from realm.movement import dispatch_shipment

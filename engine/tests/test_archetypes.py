@@ -6,14 +6,14 @@ import dataclasses
 
 import pytest
 
-from realm.genesis_archetypes import (
+from realm.genesis.archetypes import (
     FINANCIER_PARTY_ID,
     FLIPPER_PARTY_ID,
     SHIPPER_PARTY_ID,
     SPECIALIST_IRON_PARTY_ID,
     SPECIALIST_TIMBER_PARTY_ID,
 )
-from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world.regions import all_region_ids, route_key

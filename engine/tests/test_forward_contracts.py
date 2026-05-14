@@ -158,7 +158,7 @@ def test_settler_proposes_forward_with_surplus() -> None:
     (the default ``map_layout="auto"`` will pick continent at this size and
     still produce coastal tiles via the elev<0.24 water threshold).
     """
-    from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+    from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
     from realm.genesis_forwards import tick_settler_forward_proposals
     from realm.core.ids import MaterialId
     from realm.core.inventory import MatterErr

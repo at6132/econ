@@ -11,21 +11,21 @@ boundaries, which is what the cadence triggers actually look at.
 
 from __future__ import annotations
 
-from realm.genesis_consolidator import (
+from realm.genesis.consolidator import (
     CONSOLIDATOR_PARTY_ID,
     tick_consolidator,
 )
-from realm.genesis_shippers import NPC_SHIPPER_IDS, tick_npc_shippers
+from realm.genesis.shippers import NPC_SHIPPER_IDS, tick_npc_shippers
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.economy.markets import market_buy, place_sell_order
 from realm.movement import dispatch_shipment
-from realm.settler_cost_basis import (
+from realm.genesis.settler_cost_basis import (
     ensure_cost_basis_state,
     record_settler_production,
     settler_listing_price_cents,
 )
-from realm.settler_upgrades import _UPGRADE_PATHS, tick_settler_margin_review
+from realm.genesis.settler_upgrades import _UPGRADE_PATHS, tick_settler_margin_review
 from realm.tenders import (
     TENDER_BID_WINDOW_TICKS,
     TENDER_DURATION_CYCLES,

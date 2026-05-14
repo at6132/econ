@@ -19,11 +19,11 @@ from __future__ import annotations
 from typing import Any
 
 from realm.events.event_log import log_event
-from realm.genesis_archetypes import (
+from realm.genesis.archetypes import (
     FLIPPER_PARTY_ID,
     SHIPPER_PARTY_ID,
 )
-from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
 from realm.world import World
@@ -193,7 +193,7 @@ def _append_margaux(world: World, text: str) -> None:
     )
     if len(world.npc_messages_to_player) > 96:
         world.npc_messages_to_player = world.npc_messages_to_player[-96:]
-    from realm.genesis_feed_hooks import mirror_margaux_line_to_world_feed
+    from realm.genesis.feed_hooks import mirror_margaux_line_to_world_feed
 
     mirror_margaux_line_to_world_feed(world, display, text)
     log_event(

@@ -30,15 +30,15 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         ANALYTICS_VENDOR_PARTY_ID,
         ANALYTICS_VENDOR_STARTING_CASH_CENTS,
     )
-    from realm.genesis_broker import (
+    from realm.genesis.broker import (
         SURVEY_BROKER_PARTY_ID,
         SURVEY_BROKER_STARTING_CASH_CENTS,
     )
-    from realm.genesis_consolidator import (
+    from realm.genesis.consolidator import (
         CONSOLIDATOR_PARTY_ID,
         CONSOLIDATOR_STARTING_CASH_CENTS,
     )
-    from realm.genesis_archetypes import (
+    from realm.genesis.archetypes import (
         FINANCIER_PARTY_ID,
         FINANCIER_STARTING_CASH_CENTS,
         FLIPPER_PARTY_ID,
@@ -48,13 +48,13 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         SPECIALIST_IRON_PARTY_ID,
         SPECIALIST_TIMBER_PARTY_ID,
     )
-    from realm.genesis_bank import BANK_STARTING_CASH_CENTS, FIRST_BANK_PARTY_ID
-    from realm.genesis_energy import NPC_ENERGY_IDS, NPC_ENERGY_STARTING_CASH_CENTS
-    from realm.genesis_road_builders import (
+    from realm.genesis.bank import BANK_STARTING_CASH_CENTS, FIRST_BANK_PARTY_ID
+    from realm.genesis.energy import NPC_ENERGY_IDS, NPC_ENERGY_STARTING_CASH_CENTS
+    from realm.genesis.road_builders import (
         FRONTIER_ROADS_PARTY_ID,
         FRONTIER_ROADS_STARTING_CASH_CENTS,
     )
-    from realm.genesis_shippers import NPC_SHIPPER_STARTING_CASH_CENTS
+    from realm.genesis.shippers import NPC_SHIPPER_STARTING_CASH_CENTS
 
     n_shippers = sum(1 for k in w.parties if str(k).startswith("shipper_"))
     n_consolidators = 1 if CONSOLIDATOR_PARTY_ID in w.parties else 0
@@ -320,7 +320,7 @@ def test_genesis_full_initial_settler_cohort_no_partial_bootstrap() -> None:
 
 
 def test_genesis_default_250_start_with_spawn_headroom() -> None:
-    from realm.genesis_settler_cycle import GENESIS_DEFAULT_MAX_SETTLERS, GENESIS_DEFAULT_START_SETTLERS
+    from realm.genesis.settler_cycle import GENESIS_DEFAULT_MAX_SETTLERS, GENESIS_DEFAULT_START_SETTLERS
 
     w = bootstrap_genesis(seed=101)
     n = sum(1 for p in w.parties if str(p).startswith("settler_"))
@@ -339,7 +339,7 @@ def test_genesis_explicit_spawn_cap_enables_arrivals() -> None:
 
 
 def test_genesis_bankruptcy_retires_settler_after_streak() -> None:
-    from realm.genesis_settler_cycle import BANKRUPT_CASH_CENTS, BANKRUPT_STREAK_TICKS, tick_genesis_settler_lifecycle
+    from realm.genesis.settler_cycle import BANKRUPT_CASH_CENTS, BANKRUPT_STREAK_TICKS, tick_genesis_settler_lifecycle
     from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 
     w = bootstrap_genesis(seed=201, grid_width=10, grid_height=8, settler_count=4)

@@ -191,7 +191,7 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
     )
     if not candidate_plots:
         return []
-    from realm.laborer_names import generate_laborer_name
+    from realm.genesis.laborer_names import generate_laborer_name
 
     rng = world.rng(f"seed_laborers:{island_id}:{count}")
     seeded: list[str] = []

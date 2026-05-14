@@ -10,7 +10,7 @@ from realm.actions import (
     survey_plot,
     transfer_survey_report,
 )
-from realm.genesis_broker import (
+from realm.genesis.broker import (
     BROKER_BUY_STANDARD_CENTS,
     BROKER_HIGH_GRADE_THRESHOLD,
     SURVEY_BROKER_PARTY_ID,
@@ -134,7 +134,7 @@ def test_report_not_visible_without_ownership() -> None:
 
 def test_high_grade_check_threshold() -> None:
     """Sanity: the broker's helper recognises grade ≥ 0.5 as high."""
-    from realm.genesis_broker import _is_high_grade
+    from realm.genesis.broker import _is_high_grade
     from realm.world import SurveyReport
 
     high = SurveyReport(

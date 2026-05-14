@@ -13,15 +13,15 @@ import pytest
 
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
 from realm.production.buildings import BUILDINGS, build_on_plot
-from realm.genesis_archetypes import (
+from realm.genesis.archetypes import (
     FINANCIER_PARTY_ID,
     FLIPPER_PARTY_ID,
     SHIPPER_PARTY_ID,
     SPECIALIST_IRON_PARTY_ID,
     SPECIALIST_TIMBER_PARTY_ID,
 )
-from realm.genesis_bank import FIRST_BANK_PARTY_ID
-from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+from realm.genesis.bank import FIRST_BANK_PARTY_ID
+from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.economy.markets import market_buy, place_sell_order
@@ -347,7 +347,7 @@ def test_08_consolidator_present_and_active(solo_world):
     """Kessler exists, is funded, and has accumulated either market share OR
     raw inventory in at least one vertical. Genuine 20% market share is a
     multi-week phenomenon; here we check participation."""
-    from realm.genesis_consolidator import consolidator_market_share_bps
+    from realm.genesis.consolidator import consolidator_market_share_bps
 
     w = solo_world["world"]
     assert CONSOLIDATOR_PARTY_ID in w.parties
@@ -486,7 +486,7 @@ def test_16_bank_active(solo_world):
     """The bank is present, funded, and offering rates — that is the
     minimum for "active." Loan applications depend on settler/agent demand
     which may not fire inside a 3-game-day window."""
-    from realm.genesis_bank import BANK_STARTING_CASH_CENTS, bank_rates_view
+    from realm.genesis.bank import BANK_STARTING_CASH_CENTS, bank_rates_view
 
     w = solo_world["world"]
     bal = w.ledger.balance(party_cash_account(FIRST_BANK_PARTY_ID))
@@ -504,7 +504,7 @@ def test_16_bank_active(solo_world):
 def test_17_loan_system_is_callable(solo_world):
     """At least one bank loan record exists OR the loan-apply path returns a
     well-formed answer. A 3-day window may not produce active loans organically."""
-    from realm.genesis_bank import apply_bank_loan
+    from realm.genesis.bank import apply_bank_loan
 
     w = solo_world["world"]
     loans = [

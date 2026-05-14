@@ -501,7 +501,7 @@ def _scan_consolidator_dominance(world: World) -> None:
     if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
     try:
-        from realm.genesis_consolidator import (
+        from realm.genesis.consolidator import (
             CONSOLIDATOR_PARTY_ID,
             consolidator_market_share_bps,
         )

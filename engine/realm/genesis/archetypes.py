@@ -27,7 +27,7 @@ from realm.actions import (
     survey_plot,
 )
 from realm.events.event_log import log_event
-from realm.genesis_bank import (
+from realm.genesis.bank import (
     LOAN_CYCLE_TICKS,
     apply_bank_loan,
 )
@@ -316,7 +316,7 @@ def _tick_flipper(world: World) -> None:
         r = list_survey_report(world, FLIPPER_PARTY_ID, str(rid), int(ask))
         if r.get("ok"):
             try:
-                from realm.genesis_margaux_sprint5 import fire_archetype_observation_beat
+                from realm.genesis.margaux_sprint5 import fire_archetype_observation_beat
 
                 fire_archetype_observation_beat(
                     world,

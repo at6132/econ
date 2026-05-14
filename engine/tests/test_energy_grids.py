@@ -233,7 +233,7 @@ def test_npc_energy_companies_at_spawn() -> None:
         settler_count=4,
         starting_cash_cents=1_000_000,
     )
-    from realm.genesis_energy import NPC_ENERGY_IDS
+    from realm.genesis.energy import NPC_ENERGY_IDS
 
     seeded = [pid for pid in NPC_ENERGY_IDS if pid in w.parties]
     assert len(seeded) >= 2, f"expected ≥2 NPC energy companies, got {seeded}"

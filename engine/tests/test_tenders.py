@@ -13,7 +13,7 @@ Phase 7A: ``pop_hub_e/w`` were removed. Tests post tenders directly from
 from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
-from realm.settler_cost_basis import record_settler_production
+from realm.genesis.settler_cost_basis import record_settler_production
 from realm.tenders import (
     list_all_tenders,
     list_open_tenders,
@@ -199,7 +199,7 @@ def test_settlers_bid_on_tenders_when_basis_is_low_enough() -> None:
     # Plant a low basis: 30c per coal (well below the implied price of ~80c).
     record_settler_production(w, settler, "mine_coal", MaterialId("coal"), 100)
     # Override basis directly for determinism (the recorded value depends on labor).
-    from realm.settler_cost_basis import ensure_cost_basis_state
+    from realm.genesis.settler_cost_basis import ensure_cost_basis_state
 
     blob = ensure_cost_basis_state(w).setdefault(str(settler), {})
     blob.setdefault("output_basis", {})["coal"] = 30

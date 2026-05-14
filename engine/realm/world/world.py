@@ -662,7 +662,7 @@ def bootstrap_genesis(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
-    from realm.genesis_settler_cycle import genesis_settler_population_plan
+    from realm.genesis.settler_cycle import genesis_settler_population_plan
 
     initial_n, settler_cap, cycle_enabled = genesis_settler_population_plan(
         settler_count=settler_count,
@@ -745,33 +745,33 @@ def bootstrap_genesis(
     from realm.labor import bootstrap_labor_pools
 
     bootstrap_labor_pools(world)
-    from realm.genesis_settler_names import assign_settler_display_names
+    from realm.genesis.settler_names import assign_settler_display_names
 
     assign_settler_display_names(world, seed=seed)
     _seed_genesis_exchange(world, inv)
     _seed_tier3_character(world, inv, "genesis")
-    from realm.genesis_shippers import seed_npc_shippers
+    from realm.genesis.shippers import seed_npc_shippers
 
     seed_npc_shippers(world)
-    from realm.genesis_energy import seed_npc_energy
+    from realm.genesis.energy import seed_npc_energy
 
     seed_npc_energy(world)
-    from realm.genesis_consolidator import seed_consolidator
+    from realm.genesis.consolidator import seed_consolidator
 
     seed_consolidator(world)
-    from realm.genesis_broker import seed_survey_broker
+    from realm.genesis.broker import seed_survey_broker
 
     seed_survey_broker(world)
     from realm.economy.analytics import seed_analytics_vendor
 
     seed_analytics_vendor(world)
-    from realm.genesis_bank import seed_first_bank
+    from realm.genesis.bank import seed_first_bank
 
     seed_first_bank(world)
-    from realm.genesis_archetypes import seed_archetype_agents
+    from realm.genesis.archetypes import seed_archetype_agents
 
     seed_archetype_agents(world)
-    from realm.genesis_road_builders import seed_frontier_roads
+    from realm.genesis.road_builders import seed_frontier_roads
 
     seed_frontier_roads(world)
     # Phase 7E — seed the day-1 job market so laborers have somewhere to
@@ -1300,7 +1300,7 @@ def _player_accounts_public(world: "World") -> list[dict]:
 def _bank_rates_public(world: "World") -> dict | None:
     """Public view of the bank's posted rates for the player (Sprint 5 — Phase C)."""
     try:
-        from realm.genesis_bank import FIRST_BANK_PARTY_ID, bank_rates_view
+        from realm.genesis.bank import FIRST_BANK_PARTY_ID, bank_rates_view
     except Exception:
         return None
     if FIRST_BANK_PARTY_ID not in world.parties:
@@ -1311,7 +1311,7 @@ def _bank_rates_public(world: "World") -> dict | None:
 def _bank_loans_for_player(world: "World") -> list[dict]:
     """Active bank loans for the player (Sprint 5 — Phase C)."""
     try:
-        from realm.genesis_bank import active_loans_for_borrower
+        from realm.genesis.bank import active_loans_for_borrower
     except Exception:
         return []
     return active_loans_for_borrower(world, PartyId("player"))

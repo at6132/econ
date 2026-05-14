@@ -210,7 +210,7 @@ def test_npc_road_builder_builds_on_high_traffic_routes():
         "r-0-0:r-1-1": 50,
         "r-1-1:r-2-2": 30,
     }
-    from realm.genesis_road_builders import FRONTIER_ROADS_PARTY_ID
+    from realm.genesis.road_builders import FRONTIER_ROADS_PARTY_ID
 
     assert FRONTIER_ROADS_PARTY_ID in w.parties
     # Advance 7 game-days (10080 ticks).

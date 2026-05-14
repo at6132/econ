@@ -528,7 +528,7 @@ def tick_production(world: World) -> None:
         # Sprint 2 / Phase B: feed the settler cost-basis tracker so future asks
         # reflect this party's actual input costs rather than the exchange's quote.
         if str(run.party).startswith("settler_") and world.scenario_id == "genesis":
-            from realm.settler_cost_basis import record_settler_production
+            from realm.genesis.settler_cost_basis import record_settler_production
 
             for out_mid, out_qty in eff_out.items():
                 record_settler_production(

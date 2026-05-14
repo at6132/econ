@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from realm.genesis_archetypes import FLIPPER_PARTY_ID
-from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
-from realm.genesis_margaux_sprint5 import (
+from realm.genesis.archetypes import FLIPPER_PARTY_ID
+from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
+from realm.genesis.margaux_sprint5 import (
     MARGAUX_BEATS_FIRED_KEY,
     fire_archetype_observation_beat,
     tick_margaux_sprint5_beats,
@@ -91,7 +91,7 @@ def test_day5_beat_fires_on_kessler_dominance(gen_world) -> None:
     # The beat's _kessler_has_vertical_share inspects market_match events with
     # material == player's dominant_vertical building_id; here building_id is
     # 'foundry' which is NOT a material. We instead test the function directly.
-    from realm.genesis_margaux_sprint5 import _kessler_has_vertical_share
+    from realm.genesis.margaux_sprint5 import _kessler_has_vertical_share
 
     for _ in range(20):
         w.event_log.append(
@@ -179,7 +179,7 @@ def test_margaux_observes_flipper_adjacent_listing(gen_world) -> None:
 def test_profile_tracks_loans_taken(gen_world) -> None:
     w = gen_world
     # Originate a loan to the player.
-    from realm.genesis_bank import apply_bank_loan
+    from realm.genesis.bank import apply_bank_loan
 
     apply_bank_loan(w, PartyId("player"), 100_000, 3)
     update_margaux_player_profile(w)

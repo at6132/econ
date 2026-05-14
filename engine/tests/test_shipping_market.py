@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from realm.actions import register_route
 from realm.production.buildings import build_on_plot
-from realm.genesis_shippers import NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS, NPC_SHIPPER_IDS
+from realm.genesis.shippers import NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS, NPC_SHIPPER_IDS
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import (

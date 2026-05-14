@@ -1,7 +1,7 @@
 """Curated Genesis digest headlines (``world_feed``) — hourly cadence for macro deltas.
 
 Event-scale headlines (prices, Margaux, bankruptcies, milestones) live in
-``realm.genesis_feed_hooks.tick_genesis_feed_tick_scan`` and related hooks.
+``realm.genesis.feed_hooks.tick_genesis_feed_tick_scan`` and related hooks.
 """
 
 from __future__ import annotations

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.events.event_log import log_event
-from realm.genesis_settler_names import assign_display_name_for_new_settler
+from realm.genesis.settler_names import assign_display_name_for_new_settler
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
@@ -117,7 +117,7 @@ def _retire_party(world: World, party: PartyId, *, reason: str) -> None:
         reason=reason,
     )
     if reason == "bankruptcy":
-        from realm.genesis_feed_hooks import note_genesis_bankruptcy_feed
+        from realm.genesis.feed_hooks import note_genesis_bankruptcy_feed
 
         note_genesis_bankruptcy_feed(world, party)
 

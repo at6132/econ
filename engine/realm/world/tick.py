@@ -5,8 +5,8 @@ from __future__ import annotations
 from realm.agents.genesis import tick_genesis_agents
 from realm.assay import tick_assay_jobs
 from realm.deep_survey import tick_deep_survey_jobs
-from realm.genesis_digest import tick_genesis_world_feed
-from realm.genesis_feed_hooks import tick_genesis_feed_tick_scan
+from realm.genesis.digest import tick_genesis_world_feed
+from realm.genesis.feed_hooks import tick_genesis_feed_tick_scan
 from realm.agents.tier1 import tick_tier1_agents
 from realm.agents.tier2 import tick_tier2_agents
 from realm.agents.tier3 import tick_tier3_llm_agents
@@ -20,9 +20,9 @@ from realm.production.spoilage import tick_material_spoilage
 from realm.social import tick_supply_contract_breaches
 from realm.contract_stubs import tick_phase2_financial_contracts
 from realm.energy import ensure_powered_plots_fresh
-from realm.genesis_bank import tick_bank_loans
-from realm.genesis_road_builders import tick_frontier_roads
-from realm.genesis_margaux_sprint5 import (
+from realm.genesis.bank import tick_bank_loans
+from realm.genesis.road_builders import tick_frontier_roads
+from realm.genesis.margaux_sprint5 import (
     tick_margaux_sprint5_beats,
     update_margaux_player_profile,
 )

@@ -48,7 +48,7 @@ def _append_margaux(world: World, text: str, *, main_beat: bool = False) -> None
     )
     if len(world.npc_messages_to_player) > 96:
         world.npc_messages_to_player = world.npc_messages_to_player[-96:]
-    from realm.genesis_feed_hooks import mirror_margaux_line_to_world_feed
+    from realm.genesis.feed_hooks import mirror_margaux_line_to_world_feed
 
     mirror_margaux_line_to_world_feed(world, display, text)
     log_event(

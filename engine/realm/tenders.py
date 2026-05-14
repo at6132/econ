@@ -47,7 +47,7 @@ from typing import Any
 from realm.events.event_log import log_event
 from realm.economy.pricing import exchange_ask_cents, hub_max_bid_cents
 from realm.core.ids import MaterialId, PartyId
-from realm.settler_cost_basis import (
+from realm.genesis.settler_cost_basis import (
     settler_output_basis_cents,
 )
 from realm.social import propose_supply_contract, accept_supply_contract

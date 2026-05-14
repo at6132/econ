@@ -23,7 +23,7 @@ from realm.core.ledger import (
     system_reserve_account,
 )
 from realm.production.recipes import RECIPES
-from realm.settler_cost_basis import (
+from realm.genesis.settler_cost_basis import (
     SETTLER_LIST_MARGIN_BPS,
     record_settler_buy,
     record_settler_production,
@@ -32,7 +32,7 @@ from realm.settler_cost_basis import (
     settler_listing_price_cents,
     settler_output_basis_cents,
 )
-from realm.settler_upgrades import (
+from realm.genesis.settler_upgrades import (
     _UPGRADE_PATHS,
     tick_settler_margin_review,
 )
@@ -191,7 +191,7 @@ def test_vertical_upgrade_fires_when_math_justifies() -> None:
         }
     )
     # Plant a very low upstream basis (mine_iron_ore at low effective unit cost).
-    from realm.settler_cost_basis import ensure_cost_basis_state
+    from realm.genesis.settler_cost_basis import ensure_cost_basis_state
 
     state = ensure_cost_basis_state(w)
     state[str(party)] = {

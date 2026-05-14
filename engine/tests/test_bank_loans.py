@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from realm.genesis_bank import (
+from realm.genesis.bank import (
     BANK_STARTING_CASH_CENTS,
     FIRST_BANK_PARTY_ID,
     LOAN_CYCLE_TICKS,

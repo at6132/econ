@@ -91,7 +91,7 @@ def tick_settler_forward_proposals(world: World) -> None:
     # removed pop_hub_e. The consolidator already accumulates raw materials
     # at scale — they're the natural buyer for settler surplus.
     try:
-        from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+        from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
     except ImportError:
         return
     buyer = CONSOLIDATOR_PARTY_ID if CONSOLIDATOR_PARTY_ID in world.parties else None
@@ -162,7 +162,7 @@ def tick_consolidator_forward_proposals(world: World) -> None:
     if int(world.tick) <= 0 or int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
     try:
-        from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID, consolidator_state
+        from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID, consolidator_state
     except ImportError:
         return
     if CONSOLIDATOR_PARTY_ID not in world.parties:

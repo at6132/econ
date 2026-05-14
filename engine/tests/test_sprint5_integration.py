@@ -5,19 +5,19 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import register_business
-from realm.genesis_archetypes import (
+from realm.genesis.archetypes import (
     FINANCIER_PARTY_ID,
     FLIPPER_PARTY_ID,
     SHIPPER_PARTY_ID,
     SPECIALIST_IRON_PARTY_ID,
     SPECIALIST_TIMBER_PARTY_ID,
 )
-from realm.genesis_bank import (
+from realm.genesis.bank import (
     BANK_STARTING_CASH_CENTS,
     FIRST_BANK_PARTY_ID,
     bank_rates_view,
 )
-from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
 from realm.economy.exchange import exchange_price_for_party
 from realm.core.ids import PartyId
 from realm.core.ledger import party_cash_account

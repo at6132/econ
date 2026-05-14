@@ -595,7 +595,7 @@ def post_revise_route_fee(
 @app.get("/tenders")
 def get_tenders() -> dict:
     """List every tender (open and historical). UI groups by status."""
-    from realm.settler_cost_basis import settler_output_basis_cents
+    from realm.genesis.settler_cost_basis import settler_output_basis_cents
     from realm.tenders import list_all_tenders
 
     player = PartyId("player")
@@ -1120,14 +1120,14 @@ def post_account_create(body: Annotated[dict, Body()]) -> dict:
 
 @app.get("/bank/rates")
 def get_bank_rates(party: Annotated[str, Query()] = "player") -> dict:
-    from realm.genesis_bank import bank_rates_view
+    from realm.genesis.bank import bank_rates_view
 
     return {"ok": True, "tick": _world.tick, **bank_rates_view(_world, PartyId(party))}
 
 
 @app.get("/bank/loans")
 def get_bank_loans(party: Annotated[str, Query()] = "player") -> dict:
-    from realm.genesis_bank import active_loans_for_borrower
+    from realm.genesis.bank import active_loans_for_borrower
 
     return {
         "ok": True,
@@ -1139,7 +1139,7 @@ def get_bank_loans(party: Annotated[str, Query()] = "player") -> dict:
 
 @app.post("/bank/loan/apply")
 def post_bank_loan_apply(body: Annotated[dict, Body()]) -> dict:
-    from realm.genesis_bank import apply_bank_loan
+    from realm.genesis.bank import apply_bank_loan
 
     party_raw = body.get("party", "player")
     principal = body.get("principal_cents") or body.get("principal") or 0
@@ -1163,7 +1163,7 @@ def post_bank_loan_apply(body: Annotated[dict, Body()]) -> dict:
 def post_bank_loan_repay(
     loan_id: str, body: Annotated[dict, Body()]
 ) -> dict:
-    from realm.genesis_bank import repay_bank_loan
+    from realm.genesis.bank import repay_bank_loan
 
     party_raw = body.get("party", "player")
     r = repay_bank_loan(_world, PartyId(str(party_raw)), loan_id)

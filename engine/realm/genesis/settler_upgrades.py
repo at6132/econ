@@ -36,7 +36,7 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account
 from realm.economy.markets import market_buy
 from realm.production.recipes import RECIPES
-from realm.settler_cost_basis import (
+from realm.genesis.settler_cost_basis import (
     SETTLER_BUFFER_BUY_DAYS_FORWARD,
     SETTLER_BUFFER_BUY_PRICE_RISE_BPS,
     record_settler_buy,

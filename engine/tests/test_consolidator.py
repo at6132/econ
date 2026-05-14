@@ -9,7 +9,7 @@ growth, and the design-rule guarantee that a player with their own supply is
 from __future__ import annotations
 
 from realm.actions import claim_plot
-from realm.genesis_consolidator import (
+from realm.genesis.consolidator import (
     CONSOLIDATOR_DISPLAY_NAME,
     CONSOLIDATOR_PARTY_ID,
     CONSOLIDATOR_STARTING_CASH_CENTS,
