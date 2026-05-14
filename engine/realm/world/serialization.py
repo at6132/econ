@@ -1,0 +1,515 @@
+"""Public-dict serialization for ``World``: the JSON DTOs returned by
+``/world``, ``/world/compact``, and ``/world/summary``.
+
+All three previously lived in ``realm.world.world``. They were extracted
+to keep the world-state module focused on dataclasses, bootstrap, and
+worldgen primitives — the serialization layer is read-only and only ever
+walks the world graph.
+
+Functions intentionally take ``world: World`` (and sometimes ``party``)
+and return JSON-serializable ``dict``s. They never mutate state.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from realm.core.ids import PartyId
+from realm.core.ledger import party_cash_account
+from realm.production.recipes import recipe_public_list
+from realm.world.terrain import Terrain
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from realm.world.world import World
+
+
+def _building_maintenance_view(world: "World", row: dict) -> dict:
+    """Public DTO for a single building's maintenance state (forwarded to API/UI)."""
+    from realm.production.decay import building_maintenance_status
+
+    return building_maintenance_status(world, row)
+
+
+def world_public_dict(world: "World") -> dict:
+    """JSON-serializable view for API (hides unsurveyed subsurface)."""
+    from realm.actions import hire_catalog_public
+    from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
+    from realm.economy.markets import market_bids_public, market_book_public
+    from realm.infrastructure.energy import ensure_powered_plots_fresh
+    from realm.production.buildings import building_catalog_public
+    from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
+    from realm.world.world import claim_cost_cents_for_plot
+
+    powered_set = ensure_powered_plots_fresh(world)
+    density_map = world.scenario_state.get("population_density") or {}
+    plots_out: list[dict] = []
+    for p in world.plots.values():
+        density = float(density_map.get(str(p.plot_id), 0.0))
+        entry: dict = {
+            "id": p.plot_id,
+            "x": p.x,
+            "y": p.y,
+            "terrain": p.terrain.value,
+            "owner": p.owner,
+            "surveyed": p.surveyed,
+            "deep_surveyed": getattr(p, "deep_surveyed", False),
+            "powered": str(p.plot_id) in powered_set,
+            "population_density": density,
+            "claim_cost_cents": claim_cost_cents_for_plot(world, p.plot_id),
+        }
+        if p.surveyed:
+            sub_view: dict[str, float] = {
+                "iron_ore_grade": p.subsurface.iron_ore_grade,
+                "copper_ore_grade": p.subsurface.copper_ore_grade,
+                "clay_grade": p.subsurface.clay_grade,
+                "coal_grade": p.subsurface.coal_grade,
+                "sulfur_grade": p.subsurface.sulfur_grade,
+                "saltpeter_grade": p.subsurface.saltpeter_grade,
+                "tin_grade": p.subsurface.tin_grade,
+                "lead_grade": p.subsurface.lead_grade,
+                "phosphate_grade": p.subsurface.phosphate_grade,
+                "silica_grade": p.subsurface.silica_grade,
+            }
+            if getattr(p, "deep_surveyed", False):
+                sub_view["platinum_grade"] = p.subsurface.platinum_grade
+                sub_view["oil_shale_grade"] = p.subsurface.oil_shale_grade
+                sub_view["rare_earth_grade"] = p.subsurface.rare_earth_grade
+            entry["subsurface"] = sub_view
+            entry["recipe_ids"] = recipe_ids_on_plot_for_owner(world, p)
+        if world.use_plot_output_logistics and p.owner is not None:
+            entry["output_stock"] = dict(world.plot_output_stock.get(str(p.plot_id), {}))
+        plots_out.append(entry)
+    balances = {str(k): v for k, v in world.ledger.snapshot().items()}
+    inv = {
+        str(party): {str(m): q for m, q in mats.items()}
+        for party, mats in world.inventory.snapshot().items()
+    }
+
+    intel_active = world.tick < world.market_intel_expires_tick
+    hist = world.market_history
+    if intel_active:
+        market_hist_out = list(hist)
+    else:
+        market_hist_out = list(hist[-FREE_MARKET_HISTORY_TICKS:])
+
+    return {
+        "seed": world.seed,
+        "tick": world.tick,
+        "ticks_per_game_day": TICKS_PER_GAME_DAY,
+        "scenario_id": world.scenario_id,
+        "market_intel_expires_tick": world.market_intel_expires_tick,
+        "market_intel_active": intel_active,
+        "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
+        "plots": plots_out,
+        "balances_cents": balances,
+        "inventory": inv,
+        "parties": [str(x) for x in world.parties],
+        "recipes": recipe_public_list(),
+        "active_production": [
+            {
+                "run_id": a.run_id,
+                "party": str(a.party),
+                "plot_id": str(a.plot_id),
+                "recipe_id": a.recipe_id,
+                "ticks_remaining": a.ticks_remaining,
+            }
+            for a in world.active_production
+        ],
+        "in_transit": [
+            {
+                "id": s.shipment_id,
+                "shipment_id": s.shipment_id,
+                "party": str(s.party),
+                "material": str(s.material),
+                "qty": s.qty,
+                "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
+                "dest_plot_id": str(s.dest_plot_id),
+                "arrive_tick": s.arrive_tick,
+            }
+            for s in world.in_transit
+        ],
+        "market_asks": market_book_public(world),
+        "market_bids": market_bids_public(world),
+        "reputation": dict(world.reputation),
+        "contracts": list(world.contracts),
+        "event_log": list(world.event_log[-120:]),
+        "world_feed_log": list(world.world_feed_log[-1500:]),
+        "plot_buildings": [
+            {**b, "maintenance": _building_maintenance_view(world, b)}
+            for b in world.plot_buildings
+        ],
+        "stub_hires": list(world.stub_hires),
+        "building_catalog": building_catalog_public(),
+        "market_history": market_hist_out[-160:],
+        "hire_catalog": hire_catalog_public(),
+        "llm_agents": [
+            {
+                "party": pid,
+                "display_name": blob.get("display_name", pid),
+                "memory_summary": str(blob.get("memory_summary", ""))[:800],
+            }
+            for pid, blob in sorted(world.llm_agents.items(), key=lambda x: x[0])
+        ],
+        "npc_messages": list(world.npc_messages_to_player[-48:]),
+        "party_display_names": dict(world.party_display_names),
+        "llm_session_cost_micro_usd": world.llm_session_cost_micro_usd,
+        "llm_session_input_tokens": world.llm_session_input_tokens,
+        "llm_session_output_tokens": world.llm_session_output_tokens,
+        "deployed_lua": {
+            k: {
+                "chars": len(v),
+                "lines": v.count("\n") + (1 if v else 0),
+            }
+            for k, v in sorted(world.deployed_lua_sources.items(), key=lambda x: x[0])
+        },
+        "party_recipe_books": {
+            str(k): sorted(v) for k, v in world.party_recipe_books.items()
+        },
+        "intel_listings": _intel_listings_public(world),
+        "player_owned_reports": _player_owned_reports_public(world, PartyId("player")),
+        "analytics_purchases": list(world.analytics_purchases[-48:]),
+        "business_registry": _business_registry_public(world),
+        "player_accounts": _player_accounts_public(world),
+        "bank_rates": _bank_rates_public(world),
+        "bank_loans": _bank_loans_for_player(world),
+        "bank_plot_id": world.scenario_state.get("bank_plot"),
+        "road_segments": _road_segments_public(world),
+        "player_price_alerts": list(
+            (world.scenario_state.get("player_price_alerts") or [])
+        ),
+        "forward_contracts": _forward_contracts_public(world, PartyId("player")),
+    }
+
+
+def _player_accounts_public(world: "World") -> list[dict]:
+    """Public view of the player's accounts (Sprint 5 — Phase B)."""
+    try:
+        from realm.core.sub_accounts import party_accounts_view
+    except Exception:
+        return []
+    return party_accounts_view(world, PartyId("player"))
+
+
+def _bank_rates_public(world: "World") -> dict | None:
+    """Public view of the bank's posted rates for the player (Sprint 5 — Phase C)."""
+    try:
+        from realm.genesis.bank import FIRST_BANK_PARTY_ID, bank_rates_view
+    except Exception:
+        return None
+    if FIRST_BANK_PARTY_ID not in world.parties:
+        return None
+    return bank_rates_view(world, PartyId("player"))
+
+
+def _bank_loans_for_player(world: "World") -> list[dict]:
+    """Active bank loans for the player (Sprint 5 — Phase C)."""
+    try:
+        from realm.genesis.bank import active_loans_for_borrower
+    except Exception:
+        return []
+    return active_loans_for_borrower(world, PartyId("player"))
+
+
+def _road_segments_public(world: "World") -> list[dict]:
+    """Public view of every built road segment (Sprint 6 — Phase A)."""
+    try:
+        from realm.infrastructure.roads import all_roads_public
+    except Exception:
+        return []
+    return all_roads_public(world)
+
+
+def _business_registry_public(world: "World") -> dict[str, dict]:
+    """Public view of registered businesses (Sprint 5 — Phase A)."""
+    out: dict[str, dict] = {}
+    for pid_s, rec in world.business_registry.items():
+        out[str(pid_s)] = {
+            "party_id": str(rec.party_id),
+            "business_name": rec.business_name,
+            "description": rec.description,
+            "registered_at_tick": int(rec.registered_at_tick),
+        }
+    return out
+
+
+def _intel_listings_public(world: "World") -> list[dict]:
+    """Public view of active intelligence-market listings (grades hidden)."""
+    out: list[dict] = []
+    for row in world.intel_listings:
+        if str(row.get("status", "")) != "active":
+            continue
+        rid = str(row.get("report_id", ""))
+        report = world.survey_reports.get(rid)
+        if report is None:
+            continue
+        out.append(
+            {
+                "listing_id": str(row.get("listing_id", "")),
+                "seller": str(row.get("seller", "")),
+                "report_id": rid,
+                "plot_id": str(report.plot_id),
+                "survey_type": report.survey_type,
+                "is_deep": report.is_deep,
+                "conducted_at_tick": int(report.conducted_at_tick),
+                "ask_price_cents": int(row.get("ask_price_cents", 0)),
+                "listed_at_tick": int(row.get("listed_at_tick", 0)),
+            }
+        )
+    return out
+
+
+def _player_owned_reports_public(world: "World", party: PartyId) -> list[dict]:
+    """Public view of reports owned by ``party`` (grades revealed)."""
+    out: list[dict] = []
+    for report in world.visible_survey_reports_for(party):
+        out.append(
+            {
+                "report_id": report.report_id,
+                "plot_id": str(report.plot_id),
+                "conducted_by": str(report.conducted_by),
+                "conducted_at_tick": int(report.conducted_at_tick),
+                "survey_type": report.survey_type,
+                "is_deep": report.is_deep,
+                "grades": dict(report.grades),
+            }
+        )
+    return out
+
+
+def _forward_contracts_public(world: "World", party: PartyId) -> list[dict]:
+    """Forward contracts involving ``party`` as buyer or seller."""
+    out: list[dict] = []
+    for c in world.contracts:
+        if str(c.get("kind", "")) != "forward_contract":
+            continue
+        if str(c.get("seller", "")) != str(party) and str(c.get("buyer", "")) != str(party):
+            continue
+        out.append(dict(c))
+    return out
+
+
+def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
+    """Sprint 6 — Phase D.4: ultra-lightweight HUD payload.
+
+    Intended for high-frequency polling (every ~30 ticks). Excludes the plots
+    grid, full inventories, and event-log bodies — just enough for the HUD
+    bar at the top of the UI.
+    """
+    cash_acct = str(party_cash_account(party))
+    balances = world.ledger.snapshot()
+    cash_cents = int(balances.get(cash_acct, 0))
+    try:
+        from realm.economy.pricing import _FAIR_VALUE_CENTS
+    except Exception:
+        _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
+    inv_value_cents = 0
+    for mat, qty in world.inventory.stock.get(party, {}).items():
+        unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
+        inv_value_cents += unit * int(qty)
+    net_worth_estimate = cash_cents + inv_value_cents
+
+    active = [
+        {
+            "run_id": a.run_id,
+            "plot_id": str(a.plot_id),
+            "recipe_id": a.recipe_id,
+            "ticks_remaining": int(a.ticks_remaining),
+            "runs_remaining": int(getattr(a, "runs_remaining", 0)),
+        }
+        for a in world.active_production
+        if a.party == party
+    ]
+
+    maintenance_warning: list[dict[str, Any]] = []
+    try:
+        from realm.maintenance import building_efficiency_pct
+        for b in world.plot_buildings:
+            if b.get("party") != str(party):
+                continue
+            iid = str(b.get("instance_id") or "")
+            if not iid:
+                continue
+            pct = building_efficiency_pct(world, iid)
+            if pct < 100:
+                maintenance_warning.append({
+                    "instance_id": iid,
+                    "building_id": str(b.get("building_id") or ""),
+                    "plot_id": str(b.get("plot_id") or ""),
+                    "efficiency_pct": int(pct),
+                })
+    except Exception:
+        pass
+
+    npc_msgs = world.scenario_state.get("npc_messages", []) if isinstance(world.scenario_state, dict) else []
+    unread_msgs = sum(1 for m in npc_msgs if not bool(m.get("read")))
+    unread_feed = len(getattr(world, "world_feed_log", []) or [])
+
+    open_orders = sum(
+        1
+        for lst in world.market_asks_by_material.values()
+        for o in lst
+        if o.party == party
+    ) + sum(
+        1
+        for lst in world.market_bids_by_material.values()
+        for o in lst
+        if o.party == party
+    )
+
+    ac_count = 0
+    try:
+        for c in getattr(world, "contracts", []) or []:
+            if str(c.get("status") or "") != "active":
+                continue
+            ps = str(party)
+            if (
+                c.get("buyer") == ps
+                or c.get("seller") == ps
+                or c.get("borrower") == ps
+                or c.get("lender") == ps
+                or c.get("from_party") == ps
+                or c.get("to_party") == ps
+            ):
+                ac_count += 1
+    except Exception:
+        ac_count = 0
+
+    return {
+        "tick": world.tick,
+        "party": str(party),
+        "cash": cash_cents,
+        "inventory_value_estimate": inv_value_cents,
+        "net_worth_estimate": net_worth_estimate,
+        "active_production": active,
+        "maintenance_warnings": maintenance_warning[:8],
+        "unread_npc_messages": unread_msgs,
+        "unread_feed_entries": unread_feed,
+        "active_contracts": int(ac_count),
+        "open_orders": int(open_orders),
+    }
+
+
+def world_compact_dict(world: "World") -> dict[str, Any]:
+    """Small JSON snapshot for dev/automation: player + aggregates, no full ``plots`` grid."""
+    from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
+
+    player = PartyId("player")
+    balances = {str(k): v for k, v in world.ledger.snapshot().items()}
+    player_acct = str(party_cash_account(player))
+    bal_sample: dict[str, int] = {player_acct: balances.get(player_acct, 0)}
+    for acct, cents in sorted(
+        ((k, v) for k, v in balances.items() if k != player_acct),
+        key=lambda kv: -abs(kv[1]),
+    )[:24]:
+        bal_sample[acct] = cents
+
+    inv_player = world.inventory.stock.get(player, {})
+    inv_top = [
+        {"material": str(m), "qty": q}
+        for m, q in sorted(inv_player.items(), key=lambda x: -x[1])[:28]
+    ]
+
+    player_plot_entries: list[dict[str, Any]] = []
+    for pid, pl in world.plots.items():
+        if pl.owner != player:
+            continue
+        player_plot_entries.append(
+            {
+                "id": str(pid),
+                "terrain": pl.terrain.value,
+                "surveyed": pl.surveyed,
+                "recipe_ids": recipe_ids_on_plot_for_owner(world, pl),
+            }
+        )
+    player_plot_entries.sort(key=lambda x: x["id"])
+
+    hint_mountain: str | None = None
+    hint_any: str | None = None
+    for pl in world.plots.values():
+        if pl.owner is not None:
+            continue
+        pid_s = str(pl.plot_id)
+        if hint_any is None:
+            hint_any = pid_s
+        if pl.terrain == Terrain.MOUNTAIN and hint_mountain is None:
+            hint_mountain = pid_s
+
+    settler_n = sum(1 for p in world.parties if str(p).startswith("settler_"))
+    ask_mats = len(world.market_asks_by_material)
+    ask_lots = sum(len(v) for v in world.market_asks_by_material.values())
+
+    def _trim_event(row: dict[str, Any]) -> dict[str, Any]:
+        out = dict(row)
+        msg = out.get("message")
+        if isinstance(msg, str) and len(msg) > 220:
+            out["message"] = msg[:220] + "…"
+        return out
+
+    scen = world.scenario_state
+    scen_preview: dict[str, Any] = {}
+    if isinstance(scen, dict):
+        for k in sorted(scen.keys())[:14]:
+            v = scen[k]
+            if isinstance(v, (int, float, bool)) or v is None:
+                scen_preview[k] = v
+            else:
+                s = str(v)
+                scen_preview[k] = s if len(s) <= 100 else s[:100] + "…"
+
+    return {
+        "compact": True,
+        "seed": world.seed,
+        "tick": world.tick,
+        "ticks_per_game_day": TICKS_PER_GAME_DAY,
+        "scenario_id": world.scenario_id,
+        "plot_counts": {
+            "total": len(world.plots),
+            "claimed": sum(1 for pl in world.plots.values() if pl.owner is not None),
+            "player_owned": len(player_plot_entries),
+        },
+        "claim_hint_mountain_plot_id": hint_mountain,
+        "claim_hint_any_plot_id": hint_any,
+        "settler_party_count": settler_n,
+        "party_count": len(world.parties),
+        "balances_sample_cents": bal_sample,
+        "player": {
+            "balance_cents": balances.get(player_acct, 0),
+            "inventory_top": inv_top,
+            "plots": player_plot_entries,
+            "buildings": [
+                {**b, "maintenance": _building_maintenance_view(world, b)}
+                for b in world.plot_buildings
+                if b.get("party") == str(player)
+            ],
+        },
+        "active_production": [
+            {
+                "run_id": a.run_id,
+                "party": str(a.party),
+                "plot_id": str(a.plot_id),
+                "recipe_id": a.recipe_id,
+                "ticks_remaining": a.ticks_remaining,
+            }
+            for a in world.active_production
+            if a.party == player
+        ][:24],
+        "in_transit": [
+            {
+                "shipment_id": s.shipment_id,
+                "party": str(s.party),
+                "material": str(s.material),
+                "qty": s.qty,
+                "dest_plot_id": str(s.dest_plot_id),
+                "arrive_tick": s.arrive_tick,
+            }
+            for s in world.in_transit
+            if s.party == player
+        ][:16],
+        "market_asks_summary": {"materials_with_asks": ask_mats, "total_lots": ask_lots},
+        "event_log_tail": [_trim_event(e) for e in world.event_log[-36:]],
+        "world_feed_tail": [_trim_event(e) for e in world.world_feed_log[-48:]],
+        "npc_messages_tail": list(world.npc_messages_to_player[-12:]),
+        "scenario_state_preview": scen_preview,
+    }

@@ -6,15 +6,18 @@ realm.world import World`` (the legacy import path that ~63 files still use)
 continues to work.
 
 Submodules:
-  * ``realm.world.world``        — World dataclass, plot/building dataclasses,
-                                    bootstrap_* functions, public-dict helpers
-  * ``realm.world.terrain``      — Terrain enum
-  * ``realm.world.biome_noise``  — Procedural biome generator
-  * ``realm.world.geo``          — Manhattan distance, plot coords
-  * ``realm.world.islands``      — Island worldgen helpers
+  * ``realm.world.world``         — World dataclass, plot/building dataclasses,
+                                     bootstrap_* functions
+  * ``realm.world.subsurface``    — ``SubsurfaceRoll`` + terrain-correlated roll
+  * ``realm.world.serialization`` — ``world_public_dict`` / ``world_compact_dict``
+                                     / ``world_summary_dict`` (read-only DTOs)
+  * ``realm.world.terrain``       — Terrain enum
+  * ``realm.world.biome_noise``   — Procedural biome generator
+  * ``realm.world.geo``           — Manhattan distance, plot coords
+  * ``realm.world.islands``       — Island worldgen helpers
   * ``realm.world.geo_clustering`` — Cluster nearby plots into regions
-  * ``realm.world.regions``      — 3x3 region grid for shipping market
-  * ``realm.world.tick``         — advance_tick() simulation loop
+  * ``realm.world.regions``       — 3x3 region grid for shipping market
+  * ``realm.world.tick``          — advance_tick() simulation loop
 """
 
 from realm.world.world import (  # noqa: F401
