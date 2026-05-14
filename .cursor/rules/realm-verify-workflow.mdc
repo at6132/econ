@@ -1,5 +1,5 @@
 ---
-description: After engine or web changes, verify with tests, logs, and Browser MCP smoke.
+description: After engine or web changes, verify with tests, logs, and Browser MCP smoke
 alwaysApply: true
 ---
 

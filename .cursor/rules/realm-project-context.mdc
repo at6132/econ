@@ -5,6 +5,11 @@ alwaysApply: true
 
 # Realm — project context for the agent
 
+> Sibling rules:
+> - `realm-engine-best-practices.mdc` — how engine code must be written (transactions, RNG, ActionResult, types, conservation tests, layering)
+> - `realm-verify-workflow.mdc` — what to verify after a slice touching `engine/` or `web/`
+> - `git-incremental-commits.mdc` + `git-push-to-github.mdc` — commit/push cadence
+
 You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic civilization sim where the **whole economy** — businesses, prices, currency, **contracts**, and **services** — is **player-run** (AI agents play those roles in solo). Advanced play includes **Lua-style programmable services** others subscribe to (in-game SaaS). No quests, no levels, no win condition — only an emergent economy. **Three modes share one engine:** solo (pausable existence test), public persistent multiplayer (slow real-time; mobile companion), competitive seasons.
 
 **Solo-mode-first.** Solo (Python sim + Next.js/TS frontend) is the existence test of the design. Multiplayer and mobile companion are **later products on the same engine**, not v1 solo requirements.
@@ -55,15 +60,17 @@ Adding a new primitive is a major design event — flag it, do not silently add 
 
 Don't introduce new tech without justification. Don't propose Rust/Go for the sim core in v1.
 
-## Coding conventions
+## Coding conventions (summary)
+
+High-level only — full rules with examples in `realm-engine-best-practices.mdc`.
 
 - TypeScript strict on frontend; Python type hints everywhere on backend.
 - Functions over classes where reasonable.
-- Names that describe what something *is*, not how it's implemented.
-- All state mutations go through the simulation's transaction layer. Never mutate state directly.
-- All randomness is seeded by `(world.tick, purpose)`. Never `random.random()` or `Date.now()` in game logic.
-- Tests for any function that touches conservation laws (every code path that moves money or matter).
-- All actions return a result object: `{ ok: true, ... } | { ok: false, reason: '...' }`. No throwing for expected rejections.
+- Names describe what something *is*, not how it's implemented.
+- All state mutations go through the transaction layer (`ledger.transfer`, `inventory.transfer` / `add`). Never mutate `balances` or `stock` directly.
+- All randomness is seeded — `world.rng("purpose")` in tick logic, `make_rng(seed, *parts)` during bootstrap. Never `random.random()` or `Date.now()` in game logic.
+- Tests for every code path that moves money or matter (`ConservationSnapshot.of(...)` + `assert_money_conserved` / `assert_matter_conserved`).
+- All actions return `{ ok: true, ... } | { ok: false, reason: '...' }`. No throwing for expected rejections.
 
 ## How to behave when Avi asks for something
 
