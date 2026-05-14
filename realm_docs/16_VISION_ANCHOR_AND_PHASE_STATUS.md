@@ -26,7 +26,15 @@ The design rests on **9 economic primitives** (land, matter, labor, time/distanc
 
 **Official phase doc:** `13_PHASED_TODO.md`.
 
-**Current phase:** **Phase 2 — Solo Polish & Visual Identity** (see `13_PHASED_TODO.md`). Phase 2 **engineering** is closed per **`18_PHASE_2_COMPLETION_CHECKLIST.md`** (Pixi, schematic, Tier 2, decay, information costs, scenarios, polish). **A1** ($30 stranger playtest gate) is deferred.
+**Current phase:** **post-Phase 8 — headless API testing.** Phases 2, 7, and 8 are all **engineering-closed**:
+
+| Phase | What it shipped | Closed on |
+|------|-----------------|-----------|
+| **2 — Solo Polish & Visual Identity** | Pixi, schematic, Tier 2, decay, info costs, scenarios, polish | 2026-05-10 (`18_PHASE_2_COMPLETION_CHECKLIST.md`) |
+| **7 — Real population economy** | Four-island worldgen, `LaborerNPC` lifecycle, towns + residences, stores + consumer spending, employment market with real wage transfers | 2026-05-13 |
+| **8 — The Volatility Engine** | Seasonal calendar, natural disasters (drought / blight / mine collapse / storm / seismic / flood), epidemics with herbs+medicine+apothecary supply chain, market cycles (price panic, credit crunch, route blockage, boom, depletion), event-driven analytics products, Margaux event beats, **30-assertion integration gate** | 2026-05-14 |
+
+**A1** ($30 stranger playtest gate) remains deferred. The next work phase is **headless API testing** — not feature development.
 
 **Sprints 1–6 are complete.** Sprint 6 (Infrastructure & Completeness — transport roads, production throughput scaling, supply-chain visibility, final polish) closed on 2026-05-13. The `tests/test_full_solo_game.py` integration gate runs all 20 assertions and resolves cleanly (13 hard passes, 7 conditional skips for behaviors that require a larger map or a longer time horizon than the 3-game-day test window).
 
@@ -124,4 +132,60 @@ All four phases shipped and committed:
 
 ---
 
-**Last updated:** 2026-05-13 (Sprint 6 closed; A1 stranger playtest gate still open)
+## Phase 7 — Real population economy (2026-05-13)
+
+The "static demand" stack (`pop_hub` demand topups, fixed `population_density`, exchange-liquidity bumps) was deleted and replaced with a real bottom-up consumer economy.
+
+| Slice | Engine module | Tests |
+|-------|--------------|-------|
+| **7A** Four-island worldgen, impassable ocean, 2× inter-island move cost | `realm/world/worldgen_islands.py` | `tests/world/test_island_worldgen.py` |
+| **7B** `LaborerNPC` dataclass + lifecycle (needs decay, health, death, migration) + `tick_laborer_births` stub | `realm/population/laborers.py` | `tests/population/test_laborers.py` |
+| **7C** `Town` dataclass + `detect_towns` clustering + residential building + housing assignment | `realm/population/towns.py` | `tests/population/test_towns.py` |
+| **7D** Store building + stock/price/withdraw actions + `tick_laborer_spending` + NPC-seeded stores; exchange liquidity top-up + hub `market_buy` hooks deleted | `realm/population/stores.py` | `tests/population/test_stores.py` |
+| **7E** `post_job_opening` + `tick_job_market` + real wage transfers via `ledger.transfer`; unemployment + insolvency consequences | `realm/population/employment.py` | `tests/population/test_employment.py` |
+
+Demand is now driven by laborers consuming food, fuel, and shelter at stores; wages are paid through the ledger; conservation is invariant. Phase 7F (cross-island specialisation) and Phase 7G (the standalone Phase 7 integration test) are deferred — the **Phase 8 integration gate exercises every Phase 7 system** as part of its 30 assertions (wage transfers, store purchases, town survival, ledger conservation).
+
+---
+
+## Phase 8 — The Volatility Engine (2026-05-14)
+
+Phase 8 turned a correct-but-static economy into a **living** one. Every sub-phase committed green:
+
+| Slice | Engine module | Tests | Commit |
+|-------|--------------|-------|--------|
+| **8A** Seasonal calendar (4 seasons), grain blocking in winter, seasonal yield/fuel modifiers, season transition feed entries | `realm/events/seasons.py` | `tests/events/test_seasons.py` (5) | seasonal calendar |
+| **8B** `WorldEvent` system + drought / blight / mine collapse / storm / seismic / flood, pre-disaster signals, force majeure on supply contracts, subsurface depletion via `dataclasses.replace` | `realm/events/world_events.py` | `tests/events/test_natural_events.py` (13) | natural disasters |
+| **8C** `wild_herb` + `medicine` + `apothecary` building/recipes, epidemic events with 3× health decay, medicine treatment, inter-town spread via migration | `realm/events/world_events.py` + `realm/production/recipes.py` | `tests/events/test_epidemics.py` (11) | epidemic system |
+| **8D** Market panic (3-day MA + NPC sell-off), credit crunch on `apply_bank_loan`, trade route blockage from severe storms, boom-town entrepreneur migration, mining-driven subsurface depletion | `realm/economy/market_events.py` | `tests/economy/test_market_events.py` (12) | market cycles |
+| **8E** Analytics products `regional_risk` + `market_cycle`, event log persistence in Chronicle | `realm/economy/analytics.py` | `tests/events/test_event_intelligence.py` (9) | event intelligence |
+| **8F** Tuning + the final integration gate | — | `tests/integration/test_phase8_integration.py` (**30 assertions, all passing**) | 30-assertion final test |
+
+The Phase 8F integration test is the definitive pre-launch gate. It runs `bootstrap_genesis(seed=42, settler_count=8)`, drives a daily-heartbeat loop across 730 game-days (2 game-years), nudges the rare events with their public `trigger_*` helpers, and asserts:
+
+- **Seasons (1-4):** grain blocking in winter, seasonal fuel-decay differential, ≥4 season-transition feed rows, winter > summer grain prices.
+- **Natural events (5-10):** ≥2 droughts, drought pre-announcement, mine collapse, storm-induced transit delay, seismic damage, subsurface depletion.
+- **Epidemic (11-14):** epidemic fires, medicine demand visible on market, ≥1 epidemic death, resolved within 20 days.
+- **Market cycles (15-18):** price panic, credit crunch, boom event, route blockage.
+- **Stability (19-22):** post-drought recovery, post-epidemic town recovery ≥50% within 30 days, no island extinct, ≥5 distinct sellers active.
+- **Circular flow (23-25):** ≥100 wage payments, ≥200 store purchases, `ledger.total_cents()` invariant **exactly**.
+- **Information (26-28):** >100 world-feed rows, ≥10 distinct event types, ≥5 Margaux messages.
+- **Intel products (29-30):** `regional_risk` surfaces active events, `market_cycle` flags a spiked material.
+
+**Regression suite:** `cd engine && python -m pytest tests/events/ tests/economy/ tests/contracts/ tests/integration/test_phase8_integration.py` → **130 passed in ~178 s**, including the 30-assertion gate.
+
+### What Phase 8 completes
+
+- A real **seasonal calendar** that drives predictable annual market cycles.
+- **Natural disasters** with advance warning signals — observable, not predictable.
+- **Epidemics** that reshape labor supply and create medicine demand spikes.
+- **Market panics** that produce boom-bust commodity cycles.
+- **Credit cycles** that gate access to bank capital.
+- **Resource depletion** that forces geographic expansion over time.
+- Event-driven **analytics products** that monetise foresight (Law 6 — information has cost).
+
+The economy is no longer in static equilibrium. It is a living system that surprises, rewards preparation, punishes complacency, and generates stories. Everything after Phase 8 is **testing, polish, and multiplayer** — no further solo feature development is required by the design.
+
+---
+
+**Last updated:** 2026-05-14 (Phase 8 closed; 30-assertion volatility-engine gate green; next phase is headless API testing)
