@@ -30,7 +30,7 @@ from typing import Final
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
-from realm.core.ledger import MoneyErr, party_cash_account
+from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.world import World
 
 
@@ -78,6 +78,10 @@ NPC_STORE_GRAIN_QTY: Final[int] = 250
 NPC_STORE_COAL_QTY: Final[int] = 200
 """Initial stock per NPC store. Enough to feed a town for a few days but not
 so much that laborers never need new entrants — designed to compress."""
+
+NPC_STOREKEEPER_STARTING_CASH_CENTS: Final[int] = 20_000 * 100
+"""Phase 7F: starting cash for the settlement storekeeper NPC so they can
+restock their stores via real B2B buy orders (including across islands)."""
 
 
 __all__ = [
@@ -525,7 +529,17 @@ def seed_genesis_npc_stores(world: World) -> list[PlotId]:
         world.parties.add(storekeeper)
         world.reputation[str(storekeeper)] = {"honored": 0, "breached": 0}
         world.party_display_names[str(storekeeper)] = "Settlement Storekeeper"
-        world.ledger.ensure_account(party_cash_account(storekeeper))
+        sk_acct = party_cash_account(storekeeper)
+        world.ledger.ensure_account(sk_acct)
+        # Phase 7F: fund the storekeeper so they can post real B2B grain
+        # buy orders when their store runs low (cross-island demand).
+        tr = world.ledger.transfer(
+            debit=system_reserve_account(),
+            credit=sk_acct,
+            amount_cents=NPC_STOREKEEPER_STARTING_CASH_CENTS,
+        )
+        if isinstance(tr, MoneyErr):
+            raise ValueError(tr.reason)
 
     plot_islands = world.scenario_state.get("plot_islands") or {}
     seeded: list[PlotId] = []

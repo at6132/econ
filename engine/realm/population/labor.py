@@ -132,8 +132,42 @@ def ensure_labor_state(world: World) -> dict[str, Any]:
 
 
 def labor_pool_for_region(world: World, region_id: str) -> int:
+    """Available workers in ``region_id``.
+
+    Phase 7B/7E: when the world has live :class:`LaborerNPC` records
+    (Genesis four-island scenario), the pool reports the number of
+    *unemployed* laborers whose home plot sits inside the region. The
+    Sprint-3 cached ``state["pools"]`` is kept as a fallback for Frontier
+    and minimal-testbed worlds without a laborer population.
+    """
+    if world.laborers:
+        return _live_unemployed_in_region(world, region_id)
     state = ensure_labor_state(world)
     return int(state["pools"].get(region_id, 0))
+
+
+def _live_unemployed_in_region(world: World, region_id: str) -> int:
+    """Phase 7B replacement for the static labor pool: count unemployed
+    :class:`LaborerNPC`s whose home plot falls inside ``region_id``.
+
+    The Sprint-3 region grid (``REGION_GRID_DIM × REGION_GRID_DIM``) sits on
+    top of the world plot grid; a laborer's home plot maps to exactly one
+    region via :func:`region_for_coords`.
+    """
+    if not world.plots:
+        return 0
+    max_x = max(p.x for p in world.plots.values()) + 1
+    max_y = max(p.y for p in world.plots.values()) + 1
+    n = 0
+    for lab in world.laborers.values():
+        if lab.employer is not None:
+            continue
+        plot = world.plots.get(lab.home_plot_id)
+        if plot is None:
+            continue
+        if region_for_coords(plot.x, plot.y, max_x, max_y) == region_id:
+            n += 1
+    return n
 
 
 def decrement_pool(world: World, region_id: str, qty: int = 1) -> bool:

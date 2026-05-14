@@ -79,11 +79,17 @@ def test_labor_pool_initialized_by_region() -> None:
 
 
 def test_hire_premium_in_scarce_region() -> None:
-    """Drain the player's region pool below the thin threshold and observe a wage premium."""
+    """Drain the player's region of unemployed laborers and observe a wage premium.
+
+    Phase 7B: ``labor_pool_for_region`` now derives from live
+    :class:`LaborerNPC` counts, so scarcity is driven by removing
+    laborers (or marking them employed), not by overwriting a static
+    pool. We delete enough laborers in the player's region to drop
+    below the thin / critical thresholds and assert the scarcity
+    multiplier kicks in.
+    """
     w = _bootstrap()
     player = PartyId("player")
-    # Phase 7A: pop_hubs are gone. Just claim any unowned land plot; the test
-    # drives scarcity directly through scenario_state["labor"]["pools"].
     frontier_pid: PlotId | None = None
     for p in w.plots.values():
         if p.owner is not None:
@@ -96,18 +102,58 @@ def test_hire_premium_in_scarce_region() -> None:
     assert claim_plot(w, player, frontier_pid)["ok"]
     region = region_for_party_home(w, player)
     assert region is not None
-    pool = labor_pool_for_region(w, region)
-    # Drain pool to just under thin threshold.
-    state = w.scenario_state["labor"]["pools"]
-    state[region] = LABOR_SCARCITY_THIN_THRESHOLD - 5
+
+    def _laborers_in_region(region_id: str) -> list[str]:
+        from realm.world.regions import region_for_coords
+
+        max_x = max(p.x for p in w.plots.values()) + 1
+        max_y = max(p.y for p in w.plots.values()) + 1
+        out: list[str] = []
+        for lid, lab in w.laborers.items():
+            plot = w.plots.get(lab.home_plot_id)
+            if plot is None:
+                continue
+            if region_for_coords(plot.x, plot.y, max_x, max_y) == region_id:
+                out.append(lid)
+        return out
+
+    in_region = _laborers_in_region(region)
+    # Drain to just under the thin threshold (50).
+    target_below_thin = LABOR_SCARCITY_THIN_THRESHOLD - 5
+    to_remove = max(0, len(in_region) - target_below_thin)
+    for lid in in_region[:to_remove]:
+        w.laborers.pop(lid, None)
     bps = hire_cost_multiplier_bps(w, region)
-    assert bps == 12_500
-    # Drain further to critical.
-    state[region] = LABOR_SCARCITY_CRITICAL_THRESHOLD - 5
+    assert bps == 12_500, f"thin scarcity multiplier expected 12500, got {bps}"
+    # Drain further to critical (under 20).
+    in_region_now = _laborers_in_region(region)
+    target_below_crit = LABOR_SCARCITY_CRITICAL_THRESHOLD - 5
+    to_remove2 = max(0, len(in_region_now) - target_below_crit)
+    for lid in in_region_now[:to_remove2]:
+        w.laborers.pop(lid, None)
     bps = hire_cost_multiplier_bps(w, region)
-    assert bps == 16_000
-    # Bring it back so we can hire.
-    state[region] = LABOR_SCARCITY_THIN_THRESHOLD - 5
+    assert bps == 16_000, f"critical scarcity multiplier expected 16000, got {bps}"
+    # Bring count back up to "thin" (~45) so the hire isn't blocked by the
+    # critical-region batch cap (capped at 20% of pool when critical).
+    while len(_laborers_in_region(region)) < LABOR_SCARCITY_THIN_THRESHOLD - 5:
+        # Seed one synthetic unemployed laborer on the same plot.
+        from realm.population.laborers import (
+            LaborerNPC,
+            laborer_cash_account,
+        )
+
+        next_seq = int(w.scenario_state.setdefault("next_laborer_seq", 1))
+        lid = f"lab_test_{next_seq:05d}"
+        w.scenario_state["next_laborer_seq"] = next_seq + 1
+        w.laborers[lid] = LaborerNPC(
+            laborer_id=lid,
+            display_name=f"Test {next_seq}",
+            island_id=0,
+            home_plot_id=frontier_pid,
+            last_needs_tick=int(w.tick),
+        )
+        w.ledger.ensure_account(laborer_cash_account(lid))
+
     # Genesis bootstrap doesn't seed the Tier-1 npc_grain_vendor; spawn it now.
     w.parties.add(PartyId("npc_grain_vendor"))
     w.ledger.ensure_account(party_cash_account(PartyId("npc_grain_vendor")))
