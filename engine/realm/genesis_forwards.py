@@ -113,7 +113,18 @@ def tick_settler_forward_proposals(world: World) -> None:
             continue
         spot = best_resting_ask_cents(world, MaterialId(material_s))
         if spot is None or spot <= 0:
-            continue
+            # Phase 7D: with the exchange backstop removed, a material can
+            # have no resting ask if no producer has yet listed. Fall back
+            # to the markup-baseline so settlers can still propose forwards
+            # for genuinely thin-market staples.
+            try:
+                from realm.genesis_pricing import _baseline_exchange_ask_cents
+
+                spot = int(_baseline_exchange_ask_cents(MaterialId(material_s)))
+            except Exception:
+                continue
+            if spot <= 0:
+                continue
         price = max(2, (int(spot) * (10_000 + SETTLER_FORWARD_PREMIUM_BPS)) // 10_000)
         qty = min(SETTLER_FORWARD_QTY, max(8, available // 2))
         delivery = int(world.tick) + SETTLER_FORWARD_HORIZON_TICKS

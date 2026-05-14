@@ -1,10 +1,14 @@
 """Genesis scenario agents — algorithmic settlers + entrepreneur NPCs.
 
-Phase 7 removes the artificial ``pop_hub_*`` demand layer entirely. There is no
-periodic money top-up, no aggregate basket buyer, and no hub-supply contract
-proposer. Real demand will be supplied by ``LaborerNPC`` consumers (Phase 7B+)
-spending wages at entrepreneur-run stores (Phase 7D); for the duration of 7A
-the economy runs without an artificial demand floor.
+Phase 7 removes the artificial demand layer entirely:
+
+- Phase 7A: ``pop_hub_*`` parties + the periodic money top-up are gone.
+- Phase 7D: the genesis-exchange backstop (``tick_genesis_exchange_quoting``
+  and its managed/unmanaged reserves) is *no longer ticked*. The exchange
+  keeps its bootstrap inventory but stops auto-listing — it becomes just
+  another party. Real demand now comes from ``LaborerNPC`` consumers
+  spending wages at entrepreneur-run stores (``tick_laborer_spending``,
+  wired in ``tick.advance_tick``).
 
 No Tier-1 timer NPCs: ``advance_tick`` skips ``tick_tier1/tier2`` when
 ``scenario_id == genesis``.
@@ -13,7 +17,6 @@ No Tier-1 timer NPCs: ``advance_tick`` skips ``tick_tier1/tier2`` when
 from __future__ import annotations
 
 from realm.agents_genesis_settlers import tick_settler_business
-from realm.genesis_exchange_liquidity import tick_genesis_exchange_quoting
 from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
 from realm.genesis_broker import tick_survey_broker
@@ -34,7 +37,6 @@ from realm.world import World
 
 
 def tick_genesis_agents(world: World) -> None:
-    tick_genesis_exchange_quoting(world)
     tick_npc_shippers(world)
     tick_npc_energy(world)
     tick_genesis_settler_lifecycle(world)
@@ -51,5 +53,4 @@ def tick_genesis_agents(world: World) -> None:
     tick_archetype_agents(world)
     tick_labor_transport_arrivals(world)
     tick_labor_migration(world)
-    tick_genesis_exchange_quoting(world)
     tick_genesis_margaux_scripts(world)

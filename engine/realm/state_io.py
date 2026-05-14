@@ -242,6 +242,17 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for tid, t in world.towns.items()
         },
+        "store_inventories": {
+            pid: {mid: int(qty) for mid, qty in inv.items()}
+            for pid, inv in world.store_inventories.items()
+        },
+        "store_prices": {
+            pid: {mid: int(px) for mid, px in prices.items()}
+            for pid, prices in world.store_prices.items()
+        },
+        "store_revenue_today": {
+            pid: int(c) for pid, c in world.store_revenue_today.items()
+        },
     }
 
 
@@ -478,6 +489,18 @@ def load_world(d: dict[str, Any]) -> World:
                 )
             )
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
+    for store_field in ("store_inventories", "store_prices"):
+        raw_store = d.get(store_field) or {}
+        if isinstance(raw_store, dict):
+            target = getattr(world, store_field)
+            for pid, inner in raw_store.items():
+                if not isinstance(inner, dict):
+                    continue
+                target[str(pid)] = {str(k): int(v) for k, v in inner.items()}
+    raw_rev = d.get("store_revenue_today") or {}
+    if isinstance(raw_rev, dict):
+        for pid, c in raw_rev.items():
+            world.store_revenue_today[str(pid)] = int(c)
     raw_towns = d.get("towns") or {}
     if isinstance(raw_towns, dict):
         from realm.towns import Town

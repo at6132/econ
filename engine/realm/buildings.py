@@ -263,6 +263,18 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "turnkey_total_cents": 140_000,
         "capacity": 8,
     },
+    # Phase 7D — store. Sells goods to laborers in the surrounding town.
+    # Inventory + prices are tracked separately in ``world.store_inventories``
+    # and ``world.store_prices``; ``tick_laborer_spending`` drains stock as
+    # laborers buy food / fuel each game-day.
+    "store": {
+        "kind": "contracted",
+        "label": "General store (sell goods to town laborers)",
+        "self_shell_cents": 45_000,
+        "self_contractor_fee_cents": 18_000,
+        "self_materials": {"lumber": 6, "timber": 4, "brick": 2},
+        "turnkey_total_cents": 95_000,
+    },
     # Sprint 3 — Phase D.4: coastal renewable power. Half the throughput of a
     # coal power_shed but zero ongoing fuel cost.
     "tidal_mill": {
@@ -464,6 +476,14 @@ def build_on_plot(
         from realm.towns import on_residence_built
 
         on_residence_built(world, plot_id)
+    if building_id == "store":
+        # Phase 7D — register this plot with its town's store list so
+        # ``tick_laborer_spending`` can find it. Town must already exist
+        # (build a residence first); otherwise the registration is deferred
+        # until the next ``detect_towns`` rebuild that includes this area.
+        from realm.stores import _register_store_with_town
+
+        _register_store_with_town(world, plot_id)
     return {
         "ok": True,
         "building_id": building_id,

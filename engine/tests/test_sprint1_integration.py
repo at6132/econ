@@ -103,13 +103,20 @@ def test_sprint1_multi_agent_slice() -> None:
         "ledger total must be conserved across one game-day"
     )
 
-    # ── (1) Exchange withdrawal ──────────────────────────────────────────────
-    ex_state = (w.scenario_state or {}).get("exchange") or {}
-    managed = ex_state.get("managed") or {}
-    withdrawn = [m for m, v in managed.items() if v is False]
-    assert len(withdrawn) >= 2, (
-        f"expected >= 2 materials withdrawn (managed=False) after 1 day with 50 settlers; "
-        f"got {len(withdrawn)}: {withdrawn[:6]}"
+    # ── (1) Exchange withdrawal — Phase 7D ───────────────────────────────────
+    # The managed/unmanaged exchange backstop is removed in Phase 7D — the
+    # exchange is no longer an automatic market-maker. The closest
+    # equivalent assertion now is that settlers have actually posted
+    # asks across multiple materials (real producers on the book).
+    distinct_settler_materials: set[str] = set()
+    for mat_s, asks in w.market_asks_by_material.items():
+        for ask in asks:
+            if str(ask.party).startswith("settler_"):
+                distinct_settler_materials.add(mat_s)
+                break
+    assert len(distinct_settler_materials) >= 2, (
+        f"expected >= 2 materials with settler-posted asks after 1 day with 50 settlers; "
+        f"got {len(distinct_settler_materials)}: {sorted(distinct_settler_materials)[:6]}"
     )
 
     # ── (4) Maintenance ──────────────────────────────────────────────────────

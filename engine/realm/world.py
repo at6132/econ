@@ -355,6 +355,16 @@ class World:
     is auto-detected by ``realm.towns.detect_towns`` whenever three or more
     residences sit within 5 tiles of one another. Towns are the catchment
     for laborer spending (7D) and the anchor for store placement."""
+    store_inventories: dict[str, dict[str, int]] = field(default_factory=dict)
+    """Phase 7D: per-store inventory keyed by ``plot_id_str -> material_id_str -> qty``.
+    The store owner stocks the building via ``stock_store``; laborer spending
+    drains stock each game-day."""
+    store_prices: dict[str, dict[str, int]] = field(default_factory=dict)
+    """Phase 7D: per-store retail prices in cents, set by the store owner."""
+    store_revenue_today: dict[str, int] = field(default_factory=dict)
+    """Phase 7D: cents earned at each store on the current game-day. Reset by
+    ``tick_laborer_spending`` at the day boundary so the UI can show a daily
+    summary."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -703,6 +713,15 @@ def bootstrap_genesis(
         world.scenario_state["starting_towns_by_island"] = {
             str(k): str(v) for k, v in starting_towns.items()
         }
+    # Phase 7D — seed one NPC-operated general store per starting town so
+    # laborers can buy food/fuel from day 1 (at a generous markup). The first
+    # player to undercut these training-wheels stores captures real market
+    # share.
+    from realm.stores import seed_genesis_npc_stores
+
+    npc_stores = seed_genesis_npc_stores(world)
+    if npc_stores:
+        world.scenario_state["starting_npc_store_plots"] = [str(p) for p in npc_stores]
     # Phase 7A: pop hubs are removed. Population density (Sprint 3 — Phase B.2)
     # no longer derives from hub coordinates; it is set to the frontier
     # baseline everywhere so the per-plot field stays well-defined for
