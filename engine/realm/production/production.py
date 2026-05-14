@@ -11,7 +11,12 @@ from realm.production.decay import (
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
-from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.core.ledger import (
+    AccountId,
+    MoneyErr,
+    party_cash_account,
+    system_reserve_account,
+)
 from realm.infrastructure.plot_logistics import (
     PLOT_OUTPUT_STORAGE_CAP_UNITS,
     plot_output_qty,
@@ -217,24 +222,137 @@ def _distinct_employees_for_employer(world: World, employer: PartyId) -> list[Pa
     return out
 
 
+def _find_local_laborer_for_wage(
+    world: World, plot_id: PlotId, employer: PartyId
+) -> "LaborerNPC | None":
+    """Phase 9C — pick a deterministic real laborer to receive the recipe wage.
+
+    Preference order (closer to the workplace and not already engaged):
+
+      1. Laborers whose ``home_town`` is on the same island as the plot AND
+         whose ``employer`` is the requesting party or unset.
+      2. Same-island laborers regardless of employer (including unemployed).
+      3. Anyone with a ``home_town`` (cross-island fallback).
+
+    Selection within each tier is deterministic (sort by laborer_id, then
+    advance via a stable rotation index so the same employer doesn't always
+    pay the same person). Returns ``None`` if the world has no housed
+    laborers — caller falls back to system:reserve in that frontier case.
+    """
+    from realm.population.laborers import LaborerNPC
+
+    laborers = list(world.laborers.values())
+    if not laborers:
+        return None
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return None
+    plot_islands = world.scenario_state.get("plot_islands") or {}
+    plot_island_raw = plot_islands.get(str(plot_id))
+    target_island = int(plot_island_raw) if plot_island_raw is not None else None
+
+    def _housed(lab: LaborerNPC) -> bool:
+        return lab.home_town is not None
+
+    same_island_friendly: list[LaborerNPC] = []
+    same_island_any: list[LaborerNPC] = []
+    other_housed: list[LaborerNPC] = []
+    for lab in laborers:
+        if not _housed(lab):
+            continue
+        if target_island is not None and int(lab.island_id) == target_island:
+            same_island_any.append(lab)
+            if lab.employer is None or lab.employer == employer:
+                same_island_friendly.append(lab)
+        else:
+            other_housed.append(lab)
+    tier = (
+        same_island_friendly
+        if same_island_friendly
+        else same_island_any
+        if same_island_any
+        else other_housed
+    )
+    if not tier:
+        return None
+    tier.sort(key=lambda lab: lab.laborer_id)
+    # Rotation index keeps the same employer from always paying the same person.
+    rotation = world.scenario_state.setdefault("wage_rotation", {})
+    key = f"{employer}|{target_island}"
+    idx = int(rotation.get(key, 0)) % len(tier)
+    rotation[key] = idx + 1
+    return tier[idx]
+
+
+def _credit_real_laborer_or_reserve(
+    world: World,
+    plot_id: PlotId,
+    employer: PartyId,
+    debit_account: AccountId,
+    amount_cents: int,
+) -> MoneyErr | None:
+    """Credit a real laborer's cash account when one is reachable, else fall
+    back to ``system:reserve`` (genuinely frontier — no housed population on
+    or near the plot). Updates the laborer's ``cash_cents`` mirror so the
+    next ``tick_laborer_spending`` cycle sees the new balance.
+    """
+    if amount_cents <= 0:
+        return None
+    lab = _find_local_laborer_for_wage(world, plot_id, employer)
+    if lab is None:
+        return _ensure_money_err(
+            world.ledger.transfer(
+                debit=debit_account,
+                credit=system_reserve_account(),
+                amount_cents=amount_cents,
+            )
+        )
+    from realm.population.laborers import laborer_cash_account
+
+    acct = laborer_cash_account(lab.laborer_id)
+    world.ledger.ensure_account(acct)
+    tr = world.ledger.transfer(
+        debit=debit_account, credit=acct, amount_cents=amount_cents
+    )
+    if isinstance(tr, MoneyErr):
+        return tr
+    lab.cash_cents = world.ledger.balance(acct)
+    log_event(
+        world,
+        "laborer_wage_paid",
+        f"{employer} paid laborer {lab.laborer_id} ${amount_cents / 100:.2f} for work on {plot_id}",
+        employer=str(employer),
+        laborer_id=lab.laborer_id,
+        plot_id=str(plot_id),
+        amount_cents=int(amount_cents),
+    )
+    return None
+
+
+def _ensure_money_err(res) -> MoneyErr | None:
+    return res if isinstance(res, MoneyErr) else None
+
+
 def _pay_recipe_labor(
-    world: World, party: PartyId, recipe_labor_cents: int
+    world: World,
+    party: PartyId,
+    recipe_labor_cents: int,
+    plot_id: PlotId,
 ) -> MoneyErr | None:
     """
-    Pay recipe labor from employer cash. With stub hires, split part to employees; rest to reserve.
-    Returns MoneyErr on failure (caller rolls back inputs).
+    Pay recipe labor from employer cash. Phase 9C: instead of sinking the
+    leftover to ``system:reserve``, route it to a real local laborer so the
+    money stays in the consumer economy. With ``stub_hires`` employees we
+    split per existing rules and still re-route the residual.
     """
     cash = party_cash_account(party)
     if world.ledger.balance(cash) < recipe_labor_cents:
         return MoneyErr(reason="insufficient cash for labor")
     employees = _distinct_employees_for_employer(world, party)
     if not employees:
-        pay = world.ledger.transfer(
-            debit=cash,
-            credit=system_reserve_account(),
-            amount_cents=recipe_labor_cents,
+        return _credit_real_laborer_or_reserve(
+            world, plot_id, party, cash, recipe_labor_cents
         )
-        return pay if isinstance(pay, MoneyErr) else None
     worker_pool = recipe_labor_cents * EMPLOYMENT_LABOR_TO_WORKERS_BPS // 10_000
     to_reserve = recipe_labor_cents - worker_pool
     n = len(employees)
@@ -253,15 +371,15 @@ def _pay_recipe_labor(
             return tr
         paid.append((emp, per))
     if to_reserve > 0:
-        tr2 = world.ledger.transfer(
-            debit=cash,
-            credit=system_reserve_account(),
-            amount_cents=to_reserve,
+        err = _credit_real_laborer_or_reserve(
+            world, plot_id, party, cash, to_reserve
         )
-        if isinstance(tr2, MoneyErr):
+        if err is not None:
             for emp2, amt in paid:
-                world.ledger.transfer(debit=party_cash_account(emp2), credit=cash, amount_cents=amt)
-            return tr2
+                world.ledger.transfer(
+                    debit=party_cash_account(emp2), credit=cash, amount_cents=amt
+                )
+            return err
     return None
 
 
@@ -427,7 +545,7 @@ def start_production(
             _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
             return {"ok": False, "reason": rm.reason}
         consumed_inv[mid] = consumed_inv.get(mid, 0) + int(qty)
-    labor_err = _pay_recipe_labor(world, party, labor_cents)
+    labor_err = _pay_recipe_labor(world, party, labor_cents, plot_id)
     if labor_err is not None:
         _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
         return {"ok": False, "reason": labor_err.reason}
