@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from realm.agents.genesis import tick_genesis_agents
-from realm.assay import tick_assay_jobs
-from realm.deep_survey import tick_deep_survey_jobs
+from realm.actions.assay_actions import tick_assay_jobs
+from realm.actions.deep_survey_actions import tick_deep_survey_jobs
 from realm.genesis.digest import tick_genesis_world_feed
 from realm.genesis.feed_hooks import tick_genesis_feed_tick_scan
 from realm.agents.tier1 import tick_tier1_agents

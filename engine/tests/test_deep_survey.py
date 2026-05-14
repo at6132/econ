@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
 from realm.production.buildings import BUILDINGS, build_on_plot
-from realm.deep_survey import (
+from realm.actions.deep_survey_actions import (
     DEEP_SURVEY_COST_CENTS,
     DEEP_SURVEY_DURATION_TICKS,
     deep_survey,

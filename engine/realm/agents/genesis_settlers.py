@@ -269,7 +269,7 @@ def _settler_probabilistic_discovery(world: World, party: PartyId) -> None:
     but settlers self-research at a glacial pace so half the economy isn't permanently locked out
     of Tier-2 industry).
     """
-    from realm.assay import (
+    from realm.actions.assay_actions import (
         ASSAY_MAX_STAGE,
         ASSAY_MINERAL_RECIPE_UNLOCKS,
         ASSAY_STAGE_HINTS,

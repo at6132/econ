@@ -10,7 +10,7 @@ from realm.agents.genesis_settlers import (
     SETTLER_DISCOVERY_PROB_PER_GAME_DAY,
     _settler_probabilistic_discovery,
 )
-from realm.assay import ASSAY_MAX_STAGE, get_assay_stage
+from realm.actions.assay_actions import ASSAY_MAX_STAGE, get_assay_stage
 from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr

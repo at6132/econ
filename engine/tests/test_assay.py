@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
-from realm.assay import (
+from realm.actions.assay_actions import (
     ASSAY_COST_CENTS,
     ASSAY_DURATION_TICKS,
     ASSAY_MAX_STAGE,
