@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Final
 
 from realm.recipes import RECIPES, Recipe
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import Plot
 
 T = Terrain

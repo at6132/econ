@@ -28,7 +28,7 @@ from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_reci
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units
 from realm.core.time_scale import legacy_scaled
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import ActiveProduction, World
 
 _TURNKEY_CENTS: dict[str, int] = {

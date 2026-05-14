@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 
 from realm.core.ids import PlotId
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import World
 
 

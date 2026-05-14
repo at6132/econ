@@ -13,7 +13,7 @@ from realm.genesis_pricing import (
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.recipe_sites import recipe_allowed_on_plot
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import SubsurfaceRoll, bootstrap_genesis, bootstrap_frontier
 
 

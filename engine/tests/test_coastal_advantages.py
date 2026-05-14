@@ -27,7 +27,7 @@ from realm.movement import (
     dispatch_shipment,
 )
 from realm.production import start_production, tick_production
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import Plot, SubsurfaceRoll, World
 
 

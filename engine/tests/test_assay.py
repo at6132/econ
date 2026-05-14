@@ -14,8 +14,8 @@ from realm.assay import (
 from realm.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier
 from turnkey_fixtures import grant_turnkey_self_materials
 

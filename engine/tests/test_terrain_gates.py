@@ -14,7 +14,7 @@ from realm.recipe_sites import (
     recipe_terrain_bonus_bps,
 )
 from realm.recipes import RECIPES
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import ActiveProduction, SubsurfaceRoll, bootstrap_frontier
 
 

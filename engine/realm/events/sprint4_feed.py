@@ -352,7 +352,7 @@ def _scan_deep_survey_tier3(world: World) -> None:
     s4 = _sprint4(world)
     if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
-    from realm.regions import _world_bounds, region_for_coords
+    from realm.world.regions import _world_bounds, region_for_coords
 
     w, h = _world_bounds(world)
     already = set(s4.get("deep_survey_regions_seen", []))
@@ -449,7 +449,7 @@ def _scan_region_power_changes(world: World) -> None:
         return
     if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
-    from realm.regions import _world_bounds, region_for_coords
+    from realm.world.regions import _world_bounds, region_for_coords
     from realm.core.time_scale import building_operational
 
     s4 = _sprint4(world)

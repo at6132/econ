@@ -22,7 +22,7 @@ from realm.laborers import (
     laborer_cash_account,
 )
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import bootstrap_genesis
 
 

@@ -27,7 +27,7 @@ from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.regions import (
+from realm.world.regions import (
     REGION_GRID_DIM,
     all_region_ids,
     region_for_coords,
@@ -71,7 +71,7 @@ def _pick_coastal_plot_in_region(
     world: World, region_id: str, exclude_plots: set[str]
 ) -> PlotId | None:
     """First unowned coastal plot in ``region_id`` not in ``exclude_plots``."""
-    from realm.regions import _world_bounds
+    from realm.world.regions import _world_bounds
 
     w, h = _world_bounds(world)
     candidates: list[tuple[int, int, PlotId]] = []
@@ -88,7 +88,7 @@ def _pick_coastal_plot_in_region(
     if not candidates:
         return None
     # Deterministic pick: closest to the region centre, then lex-smallest id.
-    from realm.regions import region_centre_coords
+    from realm.world.regions import region_centre_coords
 
     cx, cy = region_centre_coords(region_id, w, h)
     candidates.sort(key=lambda t: (abs(t[0] - cx) + abs(t[1] - cy), str(t[2])))
@@ -97,7 +97,7 @@ def _pick_coastal_plot_in_region(
 
 def _coastal_regions(world: World) -> list[str]:
     """Region ids that contain at least one coastal plot (deterministic order)."""
-    from realm.regions import _world_bounds
+    from realm.world.regions import _world_bounds
 
     w, h = _world_bounds(world)
     counts: dict[str, int] = {r: 0 for r in all_region_ids()}

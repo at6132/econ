@@ -25,8 +25,8 @@ from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.markets import market_buy, place_sell_order
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_genesis
 
 

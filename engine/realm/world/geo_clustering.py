@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from typing import Final
 
-from realm.biome_noise import fbm
+from realm.world.biome_noise import fbm
 
 
 __all__ = [

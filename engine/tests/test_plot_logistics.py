@@ -12,7 +12,7 @@ from realm.actions import claim_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.movement import dispatch_shipment
 from realm.plot_logistics import plot_output_qty
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 
@@ -51,7 +51,7 @@ def test_player_can_list_freshly_produced_goods_from_inventory() -> None:
     from realm.actions import survey_plot
     from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.production import start_production
-    from realm.terrain import Terrain
+    from realm.world.terrain import Terrain
 
     w = bootstrap_genesis(seed=42, grid_width=12, grid_height=10, settler_count=2)
     party = PartyId("player")

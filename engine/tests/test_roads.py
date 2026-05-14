@@ -14,7 +14,7 @@ from realm.roads import (
     find_segment_between,
     set_road_toll,
 )
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 

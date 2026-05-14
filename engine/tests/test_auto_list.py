@@ -14,8 +14,8 @@ from realm.production import (
     set_building_auto_list,
     start_production,
 )
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 

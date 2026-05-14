@@ -19,10 +19,10 @@ from __future__ import annotations
 from typing import Any
 
 from realm.events.event_log import log_event
-from realm.geo import manhattan
+from realm.world.geo import manhattan
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.regions import all_region_ids, region_centre_coords, region_for_plot, route_key
+from realm.world.regions import all_region_ids, region_centre_coords, region_for_plot, route_key
 from realm.roads import (
     BUILD_COST_CENTS,
     BUILD_MATERIALS,

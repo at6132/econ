@@ -44,8 +44,8 @@ from realm.plot_logistics import (
 )
 from realm.production import tick_production
 from realm.actions import start_production_on_plot
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_genesis
 
 

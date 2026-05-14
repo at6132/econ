@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.islands import (
+from realm.world.islands import (
     compute_plot_islands,
     is_inter_island_shipment,
     is_ocean_plot,
@@ -25,7 +25,7 @@ from realm.islands import (
 )
 from realm.markets import place_sell_order
 from realm.movement import dispatch_shipment
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import bootstrap_genesis
 
 
@@ -125,7 +125,7 @@ def test_inter_island_shipping_pays_2x_per_tile() -> None:
 
     # Two plots on island 0 a fixed Manhattan distance apart.
     def _pick_pair_distance(plot_ids: list[str], target_dist: int) -> tuple[PlotId, PlotId] | None:
-        from realm.geo import manhattan as _manhattan
+        from realm.world.geo import manhattan as _manhattan
 
         for a in plot_ids[:50]:
             for b in plot_ids[:50]:

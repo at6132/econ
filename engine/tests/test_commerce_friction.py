@@ -9,7 +9,7 @@ from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_accou
 from realm.markets import MARKET_SELLER_REGISTRATION_CENTS, place_sell_order
 from realm.movement import dispatch_shipment, receiving_fee_cents
 from realm.plot_logistics import try_add_plot_output
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 

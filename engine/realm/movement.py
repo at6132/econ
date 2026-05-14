@@ -19,12 +19,12 @@ per tile) plus ``TRANSIT_BASE_TICKS`` handling.
 from __future__ import annotations
 
 from realm.events.event_log import log_event
-from realm.geo import manhattan
+from realm.world.geo import manhattan
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
-from realm.regions import region_for_plot, route_key
+from realm.world.regions import region_for_plot, route_key
 from realm.route_operators import find_cheapest_operator, record_route_fee_collected
 from realm.storage_caps import try_add_inventory
 from realm.core.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
@@ -81,7 +81,7 @@ def dispatch_shipment(
     from_region = region_for_plot(world, from_plot_id)
     to_region = region_for_plot(world, to_plot_id)
     # Phase 7A: inter-island shipments cost 2× per-tile (open-ocean modifier).
-    from realm.islands import is_inter_island_shipment
+    from realm.world.islands import is_inter_island_shipment
 
     inter_island = is_inter_island_shipment(world, from_plot_id, to_plot_id)
     ocean_mult = 2 if inter_island else 1

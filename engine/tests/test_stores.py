@@ -30,7 +30,7 @@ from realm.stores import (
     tick_laborer_spending,
     withdraw_store_stock,
 )
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.towns import town_for_plot
 from realm.world import bootstrap_genesis
 from turnkey_fixtures import grant_turnkey_self_materials

@@ -7,7 +7,7 @@ import pytest
 from realm.actions import claim_plot
 from realm.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import PartyId, PlotId
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.towns import (
     RESIDENCE_BUILDING_ID,
     SETTLEMENT_PARTY_ID,

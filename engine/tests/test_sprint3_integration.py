@@ -32,8 +32,8 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.labor import labor_pool_for_region
 from realm.movement import dispatch_shipment
 from realm.recipe_sites import plot_is_coastal
-from realm.regions import _world_bounds, region_for_coords, region_for_plot
-from realm.tick import advance_tick
+from realm.world.regions import _world_bounds, region_for_coords, region_for_plot
+from realm.world.tick import advance_tick
 from realm.world import World, bootstrap_genesis
 
 

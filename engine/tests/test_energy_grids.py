@@ -28,7 +28,7 @@ from realm.core.ledger import (
 from realm.materials import MATERIALS
 from realm.production import start_production
 from realm.spoilage import tick_material_spoilage
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import Plot, SubsurfaceRoll, World, bootstrap_genesis
 
 

@@ -60,7 +60,7 @@ from realm.contract_stubs import (
 from realm.genesis_analytics import purchase_analytics_product
 from realm.schematic import validate_linear_recipe_chain
 from realm.code.lua_sandbox import eval_user_lua_chunk
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.code.user_code import code_layer_public_status, validate_user_source
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_compact_dict, world_public_dict
 
@@ -488,7 +488,7 @@ def post_ship(
 def get_routes() -> dict:
     """Shipping market: registered operators per route, per-region partitioning,
     and the player's own revenue/spend totals for today and yesterday."""
-    from realm.regions import all_region_ids, region_for_plot
+    from realm.world.regions import all_region_ids, region_for_plot
     from realm.route_operators import (
         list_route_operators,
         route_revenue_by_party_previous_day,

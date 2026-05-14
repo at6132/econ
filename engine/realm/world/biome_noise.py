@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 
 from realm.core.rng import make_rng
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 
 
 def _n01(seed: int, ix: int, iy: int) -> float:

@@ -35,7 +35,7 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.markets import place_sell_order
-from realm.regions import all_region_ids, region_for_plot, route_key
+from realm.world.regions import all_region_ids, region_for_plot, route_key
 from realm.route_operators import (
     list_route_operators,
     register_route,

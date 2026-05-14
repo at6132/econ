@@ -25,7 +25,7 @@ from typing import Any
 
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
-from realm.regions import region_for_plot
+from realm.world.regions import region_for_plot
 from realm.world import World
 
 # Thresholds (game-design knobs).

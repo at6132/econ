@@ -16,9 +16,9 @@ from realm.genesis_archetypes import (
 from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.regions import all_region_ids, route_key
+from realm.world.regions import all_region_ids, route_key
 from realm.route_operators import list_route_operators
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 

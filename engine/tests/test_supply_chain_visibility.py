@@ -117,7 +117,7 @@ def test_region_activity_matches_seller_locations(gen_world):
         for pid, plot in w.plots.items():
             if plot.owner is not None:
                 continue
-            from realm.regions import region_for_plot
+            from realm.world.regions import region_for_plot
 
             if region_for_plot(w, pid) == region:
                 chosen[region] = pid

@@ -12,7 +12,7 @@ from realm.production import (
     start_production,
     throughput_breakdown,
 )
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 
@@ -31,7 +31,7 @@ def _stock(w, party: PartyId, mat: str, qty: int) -> None:
 def _find_hand_mine_coal_plot(w, party: PartyId) -> PlotId:
     """Claim and survey a plot with sufficient coal_grade for hand_mine_coal."""
     from realm.actions import survey_plot
-    from realm.terrain import Terrain
+    from realm.world.terrain import Terrain
 
     for pid, plot in w.plots.items():
         if plot.owner is not None:
@@ -126,7 +126,7 @@ def test_production_stalls_without_input():
     )
     party = PartyId("player")
     from realm.actions import survey_plot
-    from realm.terrain import Terrain
+    from realm.world.terrain import Terrain
 
     pid = None
     for plot_id, plot in w.plots.items():
@@ -190,7 +190,7 @@ def test_throughput_multiplier_combines_factors():
     party = PartyId("player")
     from realm.actions import survey_plot
     from realm.buildings import build_on_plot
-    from realm.terrain import Terrain
+    from realm.world.terrain import Terrain
 
     pid = None
     for plot_id, plot in w.plots.items():

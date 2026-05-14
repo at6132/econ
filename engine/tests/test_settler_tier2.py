@@ -15,8 +15,8 @@ from realm.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import party_cash_account
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.world import SubsurfaceRoll, bootstrap_genesis
 from turnkey_fixtures import grant_turnkey_self_materials

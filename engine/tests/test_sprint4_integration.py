@@ -40,7 +40,7 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.markets import cancel_party_asks_for_material, place_sell_order
 from realm.events.price_alerts import add_price_alert, tick_price_alerts
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import World, bootstrap_genesis
 
 

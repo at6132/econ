@@ -11,9 +11,9 @@ from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
 from realm.materials import MaterialId
 from realm.recipes import recipe_public_list
-from realm.biome_noise import terrain_for_cell
+from realm.world.biome_noise import terrain_for_cell
 from realm.core.rng import make_rng
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from realm.employment import JobOpening
@@ -99,7 +99,7 @@ def _subsurface_roll(
         # Sprint 3 — Phase B.1: layered low-frequency noise creates mineral belts.
         # The bias blends with the iid roll so within a belt the average grade
         # lands at ~0.55–0.65 while neighbouring tiles still vary plot-to-plot.
-        from realm.geo_clustering import (
+        from realm.world.geo_clustering import (
             mineral_bias_clay,
             mineral_bias_coal,
             mineral_bias_copper,
@@ -434,7 +434,7 @@ def population_density_for(world: "World", plot_id: PlotId) -> float:
 
 def claim_cost_cents_for_plot(world: "World", plot_id: PlotId) -> int:
     """How much it costs to claim ``plot_id`` (Sprint 3 — Phase B.2)."""
-    from realm.geo_clustering import claim_cost_cents_from_density
+    from realm.world.geo_clustering import claim_cost_cents_from_density
 
     return claim_cost_cents_from_density(population_density_for(world, plot_id))
 
@@ -460,8 +460,8 @@ def generate_plots(
     """Grid of width x height plots; terrain from coherent biome fields; subsurface rolled per plot.
 
     ``terrain_fn`` is an optional callable ``(seed, x, y) -> Terrain`` that overrides the
-    default :func:`realm.biome_noise.terrain_for_cell`. Genesis bootstraps the four-island
-    layout by passing a closure that wraps :func:`realm.biome_noise.terrain_for_genesis_island_cell`
+    default :func:`realm.world.biome_noise.terrain_for_cell`. Genesis bootstraps the four-island
+    layout by passing a closure that wraps :func:`realm.world.biome_noise.terrain_for_genesis_island_cell`
     with the active map width/height.
     """
     plots: dict[PlotId, Plot] = {}
@@ -601,7 +601,7 @@ def bootstrap_genesis(
     ``settler_count`` is the default 250, cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (1000) so random
     arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
     """
-    from realm.biome_noise import (
+    from realm.world.biome_noise import (
         genesis_island_layout_supported,
         terrain_for_genesis_island_cell,
     )
@@ -692,7 +692,7 @@ def bootstrap_genesis(
     # detect inter-island shipments (2× per-tile cost) and by future phases
     # for town/island scoping.
     if effective_layout == "islands":
-        from realm.islands import compute_plot_islands
+        from realm.world.islands import compute_plot_islands
 
         world.scenario_state["plot_islands"] = compute_plot_islands(world)
     else:
@@ -732,7 +732,7 @@ def bootstrap_genesis(
     # baseline everywhere so the per-plot field stays well-defined for
     # legacy readers (claim cost, flipper, UI overlay) until the real
     # laborer-derived density signal lands in Phase 7B/7D.
-    from realm.geo_clustering import POPULATION_FRONTIER_DENSITY_BASELINE
+    from realm.world.geo_clustering import POPULATION_FRONTIER_DENSITY_BASELINE
 
     density_map: dict[str, float] = {
         str(pid): POPULATION_FRONTIER_DENSITY_BASELINE for pid in world.plots

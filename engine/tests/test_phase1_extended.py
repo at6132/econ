@@ -10,7 +10,7 @@ from realm.movement import dispatch_shipment
 from realm.markets import market_buy, p2p_trade, place_buy_order, place_sell_order
 from realm.persistence import load_snapshot, save_snapshot
 from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.social import honor_contract_stub, propose_contract_stub
 from realm.world import bootstrap_frontier
 

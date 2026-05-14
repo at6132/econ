@@ -245,7 +245,7 @@ def test_cost_basis_state_persists_through_ledger_invariance() -> None:
     """A full game-day of activity with cost-basis tracking conserves the ledger."""
     w = bootstrap_genesis(seed=23, settler_count=4, grid_width=12, grid_height=10)
     starting = w.ledger.total_cents()
-    from realm.tick import advance_tick
+    from realm.world.tick import advance_tick
 
     for _ in range(800):
         advance_tick(w)

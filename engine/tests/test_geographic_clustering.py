@@ -13,7 +13,7 @@ from __future__ import annotations
 import statistics
 
 from realm.actions import claim_plot
-from realm.geo_clustering import (
+from realm.world.geo_clustering import (
     CLAIM_COST_PEAK_CENTS,
     claim_cost_cents_from_density,
     population_density_for_cell,
@@ -27,7 +27,7 @@ from realm.core.ledger import (
     system_reserve_account,
 )
 from realm.markets import market_buy, place_sell_order
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import (
     Plot,
     SubsurfaceRoll,
@@ -81,7 +81,7 @@ def test_population_density_uniform_baseline_phase_7a() -> None:
     ``population_density_for_cell`` still works for callers passing an
     explicit ``hubs`` list (e.g. tests).
     """
-    from realm.geo_clustering import (
+    from realm.world.geo_clustering import (
         POPULATION_FRONTIER_DENSITY_BASELINE,
         POPULATION_HUB_DENSITY_PEAK,
         population_density_for_cell,

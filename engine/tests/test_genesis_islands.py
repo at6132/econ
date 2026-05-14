@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from realm.biome_noise import (
+from realm.world.biome_noise import (
     GENESIS_ISLAND_MIN_HEIGHT,
     GENESIS_ISLAND_MIN_WIDTH,
     genesis_island_centers,
@@ -19,8 +19,8 @@ from realm.biome_noise import (
     terrain_for_genesis_island_cell,
 )
 from realm.core.ids import PartyId, PlotId
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
 

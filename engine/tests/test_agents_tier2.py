@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
 from realm.markets import place_buy_order, place_sell_order
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
 

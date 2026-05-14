@@ -8,7 +8,7 @@ from realm.social import (
     fulfill_supply_contract,
     propose_supply_contract,
 )
-from realm.tick import advance_tick
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
 

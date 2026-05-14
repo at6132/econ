@@ -1,5 +1,5 @@
-from realm.biome_noise import terrain_for_cell
-from realm.terrain import Terrain
+from realm.world.biome_noise import terrain_for_cell
+from realm.world.terrain import Terrain
 
 
 def test_terrain_for_cell_deterministic() -> None:

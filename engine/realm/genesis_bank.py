@@ -144,7 +144,7 @@ def _place_bank_building(world: World) -> None:
     we anchor it on a deterministic point (median land coordinate) so it lands
     in the middle of the populated region without depending on any party.
     """
-    from realm.islands import is_ocean_plot
+    from realm.world.islands import is_ocean_plot
 
     land_plots = [
         (int(p.x), int(p.y), pid)

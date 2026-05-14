@@ -191,7 +191,7 @@ def test_distinct_feed_kinds_after_warmup() -> None:
     """Sanity: bootstrap genesis, tick a small window + a couple manual triggers,
     expect several distinct feed sources (the catalogue is wide on purpose)."""
     w = bootstrap_genesis(seed=58, grid_width=24, grid_height=18, settler_count=10)
-    from realm.tick import advance_tick
+    from realm.world.tick import advance_tick
 
     for _ in range(200):
         advance_tick(w)

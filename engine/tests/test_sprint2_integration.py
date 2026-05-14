@@ -78,14 +78,14 @@ def test_sprint2_integration_end_to_end() -> None:
     # already credits the cheapest registered operator.
     route_key_str, operator_id = shipper_routes[0]
     # Grab one of the regions from the route key.
-    from realm.regions import split_route_key
+    from realm.world.regions import split_route_key
 
     from_region, to_region = split_route_key(route_key_str)
     # The player needs cash and inventory; bootstrap already gave them cash.
     player = PartyId("player")
     w.inventory.add(player, MaterialId("coal"), 5)
     # Find a player-owned plot to ship from, or any plot in `from_region`.
-    from realm.regions import region_for_coords, _world_bounds
+    from realm.world.regions import region_for_coords, _world_bounds
 
     ww, hh = _world_bounds(w)
     src_plot = next(
@@ -131,7 +131,7 @@ def test_sprint2_integration_end_to_end() -> None:
     # math fires deterministically inside the integration window.
     settlers_to_seed = ["settler_001", "settler_002", "settler_003"]
     # Find unowned plots on a sane terrain for the seeded strip_mines.
-    from realm.terrain import Terrain
+    from realm.world.terrain import Terrain
 
     upgrade_plot_ids: list[str] = []
     free_plots = [

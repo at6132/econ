@@ -30,7 +30,7 @@ from __future__ import annotations
 from typing import Any, Final
 
 from realm.core.ids import PartyId
-from realm.regions import REGION_GRID_DIM, all_region_ids, region_for_coords
+from realm.world.regions import REGION_GRID_DIM, all_region_ids, region_for_coords
 from realm.world import World
 
 

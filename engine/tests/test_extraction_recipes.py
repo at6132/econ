@@ -7,8 +7,8 @@ from realm.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.production import start_production
 from realm.recipes import RECIPES
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier
 
 from turnkey_fixtures import grant_turnkey_self_materials
@@ -92,7 +92,7 @@ def test_chop_timber_on_forest_plot() -> None:
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     # Sprint 1: chop_timber is strict forest only — force the terrain after the claim.
-    from realm.terrain import Terrain
+    from realm.world.terrain import Terrain
 
     w.plots[pid].terrain = Terrain.FOREST
     assert survey_plot(w, player, pid)["ok"] is True

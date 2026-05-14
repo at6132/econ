@@ -28,7 +28,7 @@ from realm.world import (
     World,
     generate_plots,
 )
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
 SNAPSHOT_VERSION = 12

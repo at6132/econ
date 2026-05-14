@@ -28,7 +28,7 @@ from realm.movement import (
     PER_TILE_SHIP_CENTS,
     dispatch_shipment,
 )
-from realm.regions import (
+from realm.world.regions import (
     REGION_GRID_DIM,
     all_region_ids,
     region_for_coords,
@@ -40,7 +40,7 @@ from realm.route_operators import (
     list_route_operators,
     register_route as register_route_lowlevel,
 )
-from realm.terrain import Terrain
+from realm.world.terrain import Terrain
 from realm.world import Plot, World, bootstrap_genesis
 
 
@@ -380,7 +380,7 @@ def test_no_operator_falls_back_to_system_reserve() -> None:
     fee = int(ship["fee_cents"])
     # Default PER_TILE rate applies. ``pa``/``pb`` sit on the coastal strip in
     # this fixture, so Sprint 3 Phase D.2 applies the 40 % coastal discount.
-    from realm.geo import manhattan
+    from realm.world.geo import manhattan
     from realm.movement import COASTAL_ROUTE_DISCOUNT_BPS
 
     dist = manhattan(w, pa, pb)
@@ -419,7 +419,7 @@ def test_shipping_market_conserves_ledger_under_competition() -> None:
     # Walk one game-day of normal genesis activity (which includes shipper AI even
     # though shipping volume from settlers is currently 0 — the AI must be a no-op
     # when there's no revenue pressure, not a money creator/destroyer).
-    from realm.tick import advance_tick
+    from realm.world.tick import advance_tick
 
     for _ in range(1500):
         advance_tick(w)

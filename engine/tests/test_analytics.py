@@ -19,7 +19,7 @@ from realm.genesis_analytics import (
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.markets import cancel_party_asks_for_material, place_sell_order
-from realm.regions import _world_bounds, region_for_coords
+from realm.world.regions import _world_bounds, region_for_coords
 from realm.world import World, bootstrap_frontier, bootstrap_genesis
 
 
@@ -94,7 +94,7 @@ def test_regional_survey_aggregate_accuracy() -> None:
     _give_cash(w, player, 100_000)
     width, height = _world_bounds(w)
     # Pick the first region that has at least 4 plots.
-    from realm.regions import all_region_ids
+    from realm.world.regions import all_region_ids
 
     region_id: str | None = None
     region_grades: list[float] = []

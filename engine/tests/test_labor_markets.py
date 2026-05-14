@@ -47,8 +47,8 @@ from realm.core.ledger import (
     system_reserve_account,
 )
 from realm.production import start_production, tick_production
-from realm.regions import region_for_plot
-from realm.terrain import Terrain
+from realm.world.regions import region_for_plot
+from realm.world.terrain import Terrain
 from realm.world import (
     Plot,
     SubsurfaceRoll,

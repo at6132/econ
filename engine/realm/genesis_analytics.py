@@ -27,7 +27,7 @@ from typing import Any, Final
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.regions import _world_bounds, region_for_coords
+from realm.world.regions import _world_bounds, region_for_coords
 from realm.world import World
 
 
@@ -257,7 +257,7 @@ def _party_volume_signal(
         if sold >= SIGNIFICANT_VOLUME_THRESHOLD:
             profile.append({"material": mat, "side": "seller", "signal": _classify_volume(sold)})
     # Regions where the party has plots.
-    from realm.regions import region_for_plot
+    from realm.world.regions import region_for_plot
 
     region_counts: dict[str, int] = {}
     for plot_id, plot in world.plots.items():

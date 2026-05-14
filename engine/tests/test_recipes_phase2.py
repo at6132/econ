@@ -8,8 +8,8 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.materials import MATERIALS, all_material_ids
 from realm.production import start_production
 from realm.recipes import RECIPES
-from realm.terrain import Terrain
-from realm.tick import advance_tick
+from realm.world.terrain import Terrain
+from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
 from turnkey_fixtures import grant_turnkey_self_materials
