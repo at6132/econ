@@ -34,9 +34,10 @@ State (JSON-safe; lives under ``scenario_state["tenders"]``):
         ],
     }
 
-Hubs post tenders every ``HUB_TENDER_INTERVAL_TICKS``. Settlers consult the
-open tenders each game-day and bid on any whose implied price beats their
-own cost basis by ``SETTLER_TENDER_BID_RATIO_BPS``.
+Settlers consult the open tenders each game-day and bid on any whose implied
+price beats their own cost basis by ``SETTLER_TENDER_BID_RATIO_BPS``. (Phase 7
+removed the automated ``tick_hub_tender_posting`` that used the deleted
+``pop_hub_e/w`` parties; tenders are now posted directly by entrepreneurs.)
 """
 
 from __future__ import annotations
@@ -58,13 +59,13 @@ __all__ = [
     "post_tender",
     "submit_tender_bid",
     "tick_tender_lifecycle",
-    "tick_hub_tender_posting",
     "tick_settler_tender_bidding",
     "list_open_tenders",
     "list_all_tenders",
     "tender_by_id",
-    "HUB_TENDER_INTERVAL_TICKS",
-    "HUB_TENDER_BID_WINDOW_TICKS",
+    "TENDER_BID_WINDOW_TICKS",
+    "TENDER_DURATION_CYCLES",
+    "TENDER_INTERVAL_PER_CYCLE_TICKS",
     "SETTLER_TENDER_BID_THRESHOLD_BPS",
     "SETTLER_TENDER_BID_MARGIN_BPS",
 ]
@@ -73,28 +74,17 @@ __all__ = [
 # ───────────────────────── tunables ─────────────────────────
 
 
-HUB_TENDER_INTERVAL_TICKS: int = 14 * 1440  # 14 game-days
-HUB_TENDER_BID_WINDOW_TICKS: int = 1440  # 24 game-hours open for bidding
-HUB_TENDER_DURATION_CYCLES: int = 30  # 30 cycles per awarded contract
-HUB_TENDER_INTERVAL_PER_CYCLE_TICKS: int = 1440  # 1 game-day per cycle
+TENDER_BID_WINDOW_TICKS: int = 1440  # default 24 game-hours open for bidding
+TENDER_DURATION_CYCLES: int = 30  # default 30 cycles per awarded contract
+TENDER_INTERVAL_PER_CYCLE_TICKS: int = 1440  # default 1 game-day per cycle
 
 # Settler bidding heuristics.
 SETTLER_TENDER_BID_THRESHOLD_BPS: int = 13_500  # bid when implied price > basis × 1.35
 SETTLER_TENDER_BID_MARGIN_BPS: int = 12_500  # bid at basis × 1.25
 
-# Per-hub tender baskets — what each hub asks for, with per-cycle quantity.
-_HUB_TENDER_BASKET: dict[str, tuple[tuple[str, int], ...]] = {
-    "pop_hub_e": (
-        ("coal", 30),
-        ("electricity", 24),
-        ("iron_ingot", 6),
-    ),
-    "pop_hub_w": (
-        ("grain", 25),
-        ("lumber", 18),
-        ("flour", 10),
-    ),
-}
+# Phase 7: ``_HUB_TENDER_BASKET`` and ``tick_hub_tender_posting`` were removed
+# along with ``pop_hub_e/w``. Entrepreneur NPCs and the player post tenders
+# directly via ``post_tender`` when they need a multi-cycle supply commitment.
 
 
 # ───────────────────────── state ─────────────────────────
@@ -254,7 +244,7 @@ def _award_tender(world: World, record: dict[str, Any]) -> None:
     price = int(winner["price_per_unit_cents"])
     qty_per_cycle = int(record.get("qty_per_cycle", 0))
     duration_cycles = int(record.get("duration_cycles", 1))
-    interval = int(record.get("interval_ticks", HUB_TENDER_INTERVAL_PER_CYCLE_TICKS))
+    interval = int(record.get("interval_ticks", TENDER_INTERVAL_PER_CYCLE_TICKS))
     total_qty = qty_per_cycle * duration_cycles
     total_price = price * total_qty
     deliver_in_ticks = max(1, interval * duration_cycles)
@@ -318,35 +308,7 @@ def tick_tender_lifecycle(world: World) -> None:
         _award_tender(world, record)
 
 
-# ───────────────────────── hub posting / settler bidding ─────────────────────────
-
-
-def tick_hub_tender_posting(world: World) -> None:
-    """Each hub posts a fresh batch of tenders every ``HUB_TENDER_INTERVAL_TICKS``.
-
-    Hubs are still allowed to ``market_buy`` for immediate shortfalls — tenders
-    are for the slow ongoing supply, not the spot top-up.
-    """
-    if world.scenario_id != "genesis":
-        return
-    if int(world.tick) <= 0:
-        return
-    if int(world.tick) % HUB_TENDER_INTERVAL_TICKS != 0:
-        return
-    for hub_name, basket in _HUB_TENDER_BASKET.items():
-        hub = PartyId(hub_name)
-        if hub not in world.parties:
-            continue
-        for mat_s, qty in basket:
-            post_tender(
-                world,
-                posted_by=hub,
-                material=MaterialId(mat_s),
-                qty_per_cycle=int(qty),
-                interval_ticks=HUB_TENDER_INTERVAL_PER_CYCLE_TICKS,
-                duration_cycles=HUB_TENDER_DURATION_CYCLES,
-                bid_window_ticks=HUB_TENDER_BID_WINDOW_TICKS,
-            )
+# ───────────────────────── settler bidding ─────────────────────────
 
 
 def _settler_implied_tender_price(world: World, material: MaterialId) -> int:

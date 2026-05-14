@@ -15,8 +15,6 @@ FIELD_STOCKADE_BONUS_UNITS = 5_000
 
 def party_storage_cap_units(world: World, party: PartyId) -> int:
     cap = BASE_PARTY_STORAGE_UNITS
-    if world.scenario_id == "genesis" and str(party).startswith("pop_hub_"):
-        cap += 250_000
     for b in world.plot_buildings:
         if b.get("party") != str(party):
             continue

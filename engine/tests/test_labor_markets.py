@@ -8,9 +8,16 @@ Covers:
 - Skilled workers raise effective output (cap at 120 %).
 - Poaching moves a worker and preserves skill.
 - Daily migration moves workers toward higher-wage regions.
+
+Phase 7A note: ``pop_hub_e/w`` were removed and ``population_density`` is now
+a uniform frontier baseline (until laborer NPCs replace it in Phase 7B). Tests
+that previously asserted hub-vs-frontier variance are now interim-skipped or
+rewritten to drive the relevant state directly via ``scenario_state["labor"]``.
 """
 
 from __future__ import annotations
+
+import pytest
 
 from realm.actions import (
     claim_plot,
@@ -19,7 +26,7 @@ from realm.actions import (
     survey_plot,
 )
 from realm.buildings import build_on_plot
-from tests.turnkey_fixtures import grant_turnkey_self_materials
+from turnkey_fixtures import grant_turnkey_self_materials
 from realm.ids import MaterialId, PartyId, PlotId
 from realm.inventory import Inventory, MatterErr
 from realm.labor import (
@@ -60,48 +67,31 @@ def _bootstrap() -> World:
     )
 
 
+@pytest.mark.skip(
+    reason=(
+        "Phase 7A: pop_hubs removed; population_density is uniform until "
+        "Phase 7B introduces LaborerNPC counts. Density-based variance will be "
+        "re-validated against live laborer populations in test_laborers.py."
+    )
+)
 def test_labor_pool_initialized_by_region() -> None:
-    w = _bootstrap()
-    # Find one hub-adjacent region (mean density high) and one frontier region.
-    hubs = [tuple(c) for c in w.scenario_state["pop_hub_coords"].values()]
-    # Plot near a hub — its region should be busy.
-    near_pid: PlotId | None = None
-    far_pid: PlotId | None = None
-    for p in w.plots.values():
-        if p.terrain in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP):
-            continue
-        nearest = min(abs(p.x - hx) + abs(p.y - hy) for hx, hy in hubs)
-        if nearest <= 3 and near_pid is None:
-            near_pid = p.plot_id
-        elif nearest >= 50 and far_pid is None:
-            far_pid = p.plot_id
-        if near_pid is not None and far_pid is not None:
-            break
-    assert near_pid is not None and far_pid is not None
-    near_region = region_for_plot(w, near_pid)
-    far_region = region_for_plot(w, far_pid)
-    assert near_region is not None and far_region is not None
-    pool_near = labor_pool_for_region(w, near_region)
-    pool_far = labor_pool_for_region(w, far_region)
-    assert pool_near > pool_far
+    pass
 
 
 def test_hire_premium_in_scarce_region() -> None:
     """Drain the player's region pool below the thin threshold and observe a wage premium."""
     w = _bootstrap()
     player = PartyId("player")
-    # Claim a frontier plot and drain its region pool to the "thin" band.
-    hubs = [tuple(c) for c in w.scenario_state["pop_hub_coords"].values()]
+    # Phase 7A: pop_hubs are gone. Just claim any unowned land plot; the test
+    # drives scarcity directly through scenario_state["labor"]["pools"].
     frontier_pid: PlotId | None = None
     for p in w.plots.values():
         if p.owner is not None:
             continue
         if p.terrain in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP):
             continue
-        nearest = min(abs(p.x - hx) + abs(p.y - hy) for hx, hy in hubs)
-        if nearest >= 60:
-            frontier_pid = p.plot_id
-            break
+        frontier_pid = p.plot_id
+        break
     assert frontier_pid is not None
     assert claim_plot(w, player, frontier_pid)["ok"]
     region = region_for_party_home(w, player)
@@ -133,23 +123,18 @@ def test_hire_premium_in_scarce_region() -> None:
 
 def _setup_player_workshop(world: World, region_density_high: bool) -> tuple[PartyId, PlotId]:
     player = PartyId("player")
-    # Pick a plot owned by the player to host the wood_shop. Use the world's
-    # auto-genesis seeding — for testing we just claim a brand-new tile and
-    # build there.
-    hubs = [tuple(c) for c in world.scenario_state["pop_hub_coords"].values()]
+    # Phase 7A: pop_hubs removed; "density region" no longer varies. Pick the
+    # first unowned plains/forest plot — these tests drive labor pool state
+    # directly via scenario_state["labor"]["pools"].
+    _ = region_density_high  # retained for signature compatibility
     target: PlotId | None = None
     for p in world.plots.values():
         if p.owner is not None:
             continue
         if p.terrain not in (Terrain.PLAINS, Terrain.FOREST):
             continue
-        nearest = min(abs(p.x - hx) + abs(p.y - hy) for hx, hy in hubs)
-        if region_density_high and nearest <= 5:
-            target = p.plot_id
-            break
-        if (not region_density_high) and nearest >= 50:
-            target = p.plot_id
-            break
+        target = p.plot_id
+        break
     assert target is not None
     assert claim_plot(world, player, target)["ok"]
     assert survey_plot(world, player, target)["ok"]

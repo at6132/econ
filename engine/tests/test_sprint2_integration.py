@@ -27,10 +27,12 @@ from realm.settler_cost_basis import (
 )
 from realm.settler_upgrades import _UPGRADE_PATHS, tick_settler_margin_review
 from realm.tenders import (
-    HUB_TENDER_INTERVAL_TICKS,
+    TENDER_BID_WINDOW_TICKS,
+    TENDER_DURATION_CYCLES,
+    TENDER_INTERVAL_PER_CYCLE_TICKS,
     list_open_tenders,
+    post_tender,
     submit_tender_bid,
-    tick_hub_tender_posting,
     tick_settler_tender_bidding,
 )
 from realm.world import World, bootstrap_genesis
@@ -202,11 +204,22 @@ def test_sprint2_integration_end_to_end() -> None:
                 break
     assert upgrade_observed, "expected ≥1 settler to initiate a vertical upgrade by day 7"
 
-    # ─── 4. At least one tender has been posted by a hub ─────────────────────
-    w.tick = HUB_TENDER_INTERVAL_TICKS
-    tick_hub_tender_posting(w)
+    # ─── 4. At least one tender has been posted (Phase 7A: player-posted) ────
+    # Pre-Phase 7 hubs auto-posted tenders every 14 game-days. With hubs gone,
+    # the player or any entrepreneur posts directly via ``post_tender``.
+    w.tick = 14 * 1440
+    pres = post_tender(
+        w,
+        posted_by=PartyId("player"),
+        material=MaterialId("coal"),
+        qty_per_cycle=30,
+        interval_ticks=TENDER_INTERVAL_PER_CYCLE_TICKS,
+        duration_cycles=TENDER_DURATION_CYCLES,
+        bid_window_ticks=TENDER_BID_WINDOW_TICKS,
+    )
+    assert pres["ok"], pres
     open_tenders = list_open_tenders(w)
-    assert open_tenders, "expected hubs to post at least one tender on the 14-day boundary"
+    assert open_tenders, "expected at least one tender after manual post"
 
     # ─── 5. At least one settler has submitted a tender bid ──────────────────
     # Plant a low cost basis for coal on a settler so the auto-bid loop fires.
@@ -215,7 +228,7 @@ def test_sprint2_integration_end_to_end() -> None:
     blob = ensure_cost_basis_state(w).setdefault(str(bidder), {})
     blob.setdefault("output_basis", {})["coal"] = 25
     blob.setdefault("output_qty_produced", {})["coal"] = 50
-    w.tick = HUB_TENDER_INTERVAL_TICKS + 1440  # next game-day after posting
+    w.tick = 14 * 1440 + 1440  # next game-day after posting
     tick_settler_tender_bidding(w)
     settler_bids = []
     for t in list_open_tenders(w):

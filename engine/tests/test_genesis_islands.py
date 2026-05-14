@@ -119,41 +119,47 @@ def test_genesis_islands_have_real_ocean_between_them() -> None:
     assert v_water / max(1, len(v_strip)) >= 0.35
 
 
-def test_genesis_islands_pop_hubs_on_diagonally_opposite_islands() -> None:
-    """pop_hub_w → NW island; pop_hub_e → SE island. Both land, in different components."""
+def test_genesis_islands_centers_are_each_on_distinct_landmass() -> None:
+    """Phase 7A: each of the four island centres sits on land, in its own component.
+
+    Pre-Phase 7 this was tested via ``pop_hub_w / pop_hub_e`` coords. With
+    hubs removed the same structural invariant is asserted directly against
+    ``genesis_island_centers``: four centres → four distinct landmasses.
+    """
     world = bootstrap_genesis(seed=42, settler_count=0)
-    coords = world.scenario_state["pop_hub_coords"]
-    hub_w = tuple(coords["pop_hub_w"])
-    hub_e = tuple(coords["pop_hub_e"])
-    assert hub_w != hub_e
-    # Hub coords must each be on a land tile (centre of an island).
-    pw = world.plots[PlotId(f"p-{hub_w[0]}-{hub_w[1]}")]
-    pe = world.plots[PlotId(f"p-{hub_e[0]}-{hub_e[1]}")]
-    assert pw.terrain not in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP)
-    assert pe.terrain not in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP)
-    # They must sit on **different** land components.
+    centers = genesis_island_centers(96, 72)
     comps = _flood_fill_land_components(world)
-    comp_of_w = next((i for i, c in enumerate(comps) if hub_w in c), -1)
-    comp_of_e = next((i for i, c in enumerate(comps) if hub_e in c), -1)
-    assert comp_of_w >= 0 and comp_of_e >= 0
-    assert comp_of_w != comp_of_e, "pop hubs landed on the same island — shipping demand would collapse"
+    seen_components: set[int] = set()
+    for cx, cy in centers:
+        p = world.plots[PlotId(f"p-{cx}-{cy}")]
+        assert p.terrain not in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP), (
+            f"island centre ({cx},{cy}) must be land"
+        )
+        idx = next((i for i, comp in enumerate(comps) if (cx, cy) in comp), -1)
+        assert idx >= 0, f"island centre ({cx},{cy}) is not inside any land component"
+        seen_components.add(idx)
+    assert len(seen_components) == 4, (
+        f"expected the four centres to belong to four distinct landmasses, "
+        f"got {len(seen_components)} distinct components"
+    )
 
 
 def test_genesis_islands_force_continent_layout_when_requested() -> None:
-    """Caller can opt out of islands with map_layout='continent' even on a large grid."""
+    """Caller can opt out of islands with map_layout='continent' even on a large grid.
+
+    Phase 7A: the continent layout has no ``plot_islands`` cache (it's a single
+    landmass), so we just assert the bootstrap succeeds and produces plots.
+    """
     world = bootstrap_genesis(seed=42, settler_count=0, map_layout="continent")
-    coords = world.scenario_state["pop_hub_coords"]
-    # Continent layout puts hubs on the mid-row (legacy placement).
-    assert tuple(coords["pop_hub_w"]) == (96 // 4, 72 // 2)
-    assert tuple(coords["pop_hub_e"]) == (3 * 96 // 4, 72 // 2)
+    assert len(world.plots) == 96 * 72
+    assert world.scenario_state.get("plot_islands") == {}
 
 
 def test_genesis_islands_small_grid_auto_falls_back_to_continent() -> None:
     """Tiny grids skip the island mask so legacy tiny-grid tests keep their shape."""
     world = bootstrap_genesis(seed=42, grid_width=12, grid_height=10, settler_count=0)
-    coords = world.scenario_state["pop_hub_coords"]
-    assert tuple(coords["pop_hub_w"]) == (12 // 4, 10 // 2)
-    assert tuple(coords["pop_hub_e"]) == (3 * 12 // 4, 10 // 2)
+    # No island layout on tiny grids → no plot_islands cache.
+    assert world.scenario_state.get("plot_islands") == {}
 
 
 def test_genesis_islands_ledger_conserved_through_a_real_day() -> None:

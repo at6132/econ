@@ -4,8 +4,11 @@ Two agent behaviours sit on top of the forward-contract primitives in
 ``contract_stubs``:
 
 1. **Settlers** with a consistent production surplus occasionally propose a
-   forward contract to a hub buyer at +5 % over current spot. Probability is
-   10 % per game-day per qualifying settler.
+   forward contract to **Kessler Industrial (the consolidator)** at +5 %
+   over current spot. (Pre-Phase 7 this used to target ``pop_hub_e``;
+   with hubs removed Kessler is the natural counter-party — they're
+   the entrepreneur NPC that already accumulates raw materials.)
+   Probability is 10 % per game-day per qualifying settler.
 2. **Kessler Industrial** proposes forward contracts to *buy* its key input
    below current spot — offering certainty of payment in exchange for a small
    discount. Used to lock in supply chains.
@@ -84,8 +87,15 @@ def tick_settler_forward_proposals(world: World) -> None:
         return
     if int(world.tick) <= 0 or int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
-    hub = PartyId("pop_hub_e") if PartyId("pop_hub_e") in world.parties else None
-    if hub is None:
+    # Phase 7A: target the consolidator (Kessler Industrial) instead of the
+    # removed pop_hub_e. The consolidator already accumulates raw materials
+    # at scale — they're the natural buyer for settler surplus.
+    try:
+        from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
+    except ImportError:
+        return
+    buyer = CONSOLIDATOR_PARTY_ID if CONSOLIDATOR_PARTY_ID in world.parties else None
+    if buyer is None:
         return
     settlers = sorted(
         (p for p in world.parties if str(p).startswith("settler_")),
@@ -110,7 +120,7 @@ def tick_settler_forward_proposals(world: World) -> None:
         prop = propose_forward_contract(
             world,
             settler,
-            hub,
+            buyer,
             MaterialId(material_s),
             int(qty),
             int(price),
@@ -118,10 +128,10 @@ def tick_settler_forward_proposals(world: World) -> None:
         )
         if not prop.get("ok"):
             continue
-        # Hubs auto-accept settler forward proposals — they value the supply
-        # commitment more than the small premium (and they have the cash).
+        # The consolidator auto-accepts settler forwards — they value the
+        # supply commitment more than the small premium.
         cid = str(prop.get("contract_id", ""))
-        accept_forward_contract(world, hub, cid)
+        accept_forward_contract(world, buyer, cid)
 
 
 # ─────────────────── consolidator ───────────────────

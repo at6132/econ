@@ -72,7 +72,26 @@ def test_mineral_belts_exist() -> None:
     )
 
 
-def test_population_density_highest_near_hubs() -> None:
+def test_population_density_uniform_baseline_phase_7a() -> None:
+    """Phase 7A — pop hubs removed → density is the frontier baseline everywhere.
+
+    Pre-Phase 7 this asserted density falls off from the hub coordinate; with
+    hubs gone the genesis bootstrap fills the per-plot map with the baseline
+    until the laborer-derived signal lands in 7B/7D. The pure helper
+    ``population_density_for_cell`` still works for callers passing an
+    explicit ``hubs`` list (e.g. tests).
+    """
+    from realm.geo_clustering import (
+        POPULATION_FRONTIER_DENSITY_BASELINE,
+        POPULATION_HUB_DENSITY_PEAK,
+        population_density_for_cell,
+    )
+
+    # Pure function: still hub-aware when callers pass explicit hubs.
+    assert population_density_for_cell(0, 0, [(0, 0)]) > 0.9
+    assert population_density_for_cell(40, 40, [(0, 0)]) < 0.25
+    assert population_density_for_cell(0, 0, []) == POPULATION_FRONTIER_DENSITY_BASELINE
+
     w = bootstrap_genesis(
         seed=42,
         grid_width=96,
@@ -80,21 +99,10 @@ def test_population_density_highest_near_hubs() -> None:
         settler_count=4,
         starting_cash_cents=100,
     )
-    hubs = w.scenario_state["pop_hub_coords"]
-    hub_coords = [tuple(c) for c in hubs.values()]
-    # "Near" = within 6 tiles of any hub; "far" = ≥50 tiles from every hub.
-    near: list[float] = []
-    far: list[float] = []
-    for p in w.plots.values():
-        nearest = min(abs(p.x - hx) + abs(p.y - hy) for hx, hy in hub_coords)
-        density = population_density_for(w, p.plot_id)
-        if nearest <= 6:
-            near.append(density)
-        elif nearest >= 50:
-            far.append(density)
-    assert near and far
-    assert min(near) > 0.55, f"near-hub density too low: min={min(near):.3f}"
-    assert max(far) < 0.25, f"far-from-hub density too high: max={max(far):.3f}"
+    densities = [population_density_for(w, p.plot_id) for p in w.plots.values()]
+    # Every plot is at the frontier baseline; nothing is at the hub peak.
+    assert max(densities) == POPULATION_FRONTIER_DENSITY_BASELINE
+    assert max(densities) < POPULATION_HUB_DENSITY_PEAK
 
 
 def test_claim_cost_scales_with_density() -> None:
@@ -112,35 +120,22 @@ def test_claim_cost_scales_with_density() -> None:
         settler_count=4,
         starting_cash_cents=10_000_000,
     )
-    hub_coords = [tuple(c) for c in w.scenario_state["pop_hub_coords"].values()]
-    # Find the densest (closest-to-hub) and most-frontier (lowest density) dry
-    # unowned plots. The exact Manhattan distance that counts as "frontier"
-    # depends on map layout (the island Genesis map caps max-to-nearest-hub
-    # around half the diagonal), so we filter by **density** itself — that's
-    # what the claim-cost function actually keys off.
-    density_map: dict[str, float] = w.scenario_state.get("population_density", {})  # type: ignore[assignment]
+    # Phase 7A: pop hubs are gone so every plot has the same baseline density;
+    # the bootstrap-side claim cost is therefore the *uniform* frontier cost
+    # for every land plot. We assert the pure pricing function still scales
+    # monotonically (above) and that the world's frontier-baseline plot costs
+    # land in the expected low band.
     candidates = [
         p
         for p in w.plots.values()
         if p.owner is None and p.terrain not in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP)
     ]
-    candidates_by_density = sorted(
-        candidates,
-        key=lambda p: density_map.get(str(p.plot_id), 0.0),
-    )
-    dense_plot: PlotId | None = (
-        candidates_by_density[-1].plot_id if candidates_by_density else None
-    )
-    frontier_plot: PlotId | None = (
-        candidates_by_density[0].plot_id if candidates_by_density else None
-    )
-    assert dense_plot is not None and frontier_plot is not None
-    assert claim_cost_cents_for_plot(w, dense_plot) > claim_cost_cents_for_plot(
-        w, frontier_plot
-    )
-    # Sprint 6 — Phase D.3: frontier density (≈0.0) costs ~500¢; allow up to
-    # ~1100¢ (covers density-creep up to ~0.3 in mid-frontier).
-    assert claim_cost_cents_for_plot(w, frontier_plot) <= 1100
+    assert candidates
+    sample = candidates[0].plot_id
+    cost = claim_cost_cents_for_plot(w, sample)
+    # Frontier density (~0.05) costs ~500¢; allow up to ~1100¢ for any creep.
+    assert cost <= 1100, f"unexpected high baseline claim cost: {cost}¢"
+    assert cost >= 500, f"unexpected low baseline claim cost: {cost}¢"
 
 
 def test_regional_buyer_preference() -> None:

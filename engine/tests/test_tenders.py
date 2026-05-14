@@ -2,27 +2,31 @@
 
 Covers the full tender pipeline: posting, bidding (including bid revision),
 deadline-based awarding to the lowest bidder, SupplyContract creation on
-award, hub posting on the 14-day cadence, settler bidding behaviour, and
-the "bid without inventory" semantics (commitment to future delivery).
+award, settler bidding behaviour, and the "bid without inventory" semantics
+(commitment to future delivery).
+
+Phase 7A: ``pop_hub_e/w`` were removed. Tests post tenders directly from
+``player`` (or another entrepreneur) — the test coverage is for the tender
+*mechanism*, not for who posts.
 """
 
 from __future__ import annotations
 
 from realm.ids import MaterialId, PartyId
-from realm.ledger import party_cash_account, system_reserve_account
 from realm.settler_cost_basis import record_settler_production
 from realm.tenders import (
-    HUB_TENDER_INTERVAL_TICKS,
     list_all_tenders,
     list_open_tenders,
     post_tender,
     submit_tender_bid,
     tender_by_id,
-    tick_hub_tender_posting,
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
 )
 from realm.world import World, bootstrap_genesis
+
+
+_POSTER = PartyId("player")
 
 
 def _world() -> World:
@@ -32,23 +36,11 @@ def _world() -> World:
 # ───────────────────────── unit tests ─────────────────────────
 
 
-def test_hub_posts_tender_on_14_day_cadence() -> None:
-    """At a 14-game-day boundary the hubs publish their tender basket."""
-    w = _world()
-    # Tick forward exactly one cycle.
-    w.tick = HUB_TENDER_INTERVAL_TICKS
-    tick_hub_tender_posting(w)
-    tenders = list_open_tenders(w)
-    assert len(tenders) >= 1, tenders
-    hubs = {str(t["posted_by"]) for t in tenders}
-    assert hubs & {"pop_hub_e", "pop_hub_w"}, hubs
-
-
 def test_post_tender_validates_arguments() -> None:
     w = _world()
     bad = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=0,
         interval_ticks=1440,
@@ -58,11 +50,26 @@ def test_post_tender_validates_arguments() -> None:
     assert bad["ok"] is False
 
 
+def test_post_tender_rejects_unknown_poster() -> None:
+    w = _world()
+    bad = post_tender(
+        w,
+        posted_by=PartyId("not_a_real_party"),
+        material=MaterialId("coal"),
+        qty_per_cycle=4,
+        interval_ticks=1440,
+        duration_cycles=2,
+        bid_window_ticks=1440,
+    )
+    assert bad["ok"] is False
+    assert "party" in bad["reason"].lower()
+
+
 def test_bid_submission_and_revision() -> None:
     w = _world()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=10,
         interval_ticks=1440,
@@ -87,7 +94,7 @@ def test_bid_does_not_require_current_inventory() -> None:
     w = _world()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,
@@ -104,7 +111,7 @@ def test_bid_rejected_after_deadline() -> None:
     w = _world()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,
@@ -121,14 +128,14 @@ def test_self_bid_rejected() -> None:
     w = _world()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,
         duration_cycles=3,
         bid_window_ticks=2000,
     )
-    b = submit_tender_bid(w, PartyId("pop_hub_e"), r["tender_id"], 80)
+    b = submit_tender_bid(w, _POSTER, r["tender_id"], 80)
     assert b["ok"] is False
 
 
@@ -136,7 +143,7 @@ def test_tender_awards_to_lowest_bidder_and_creates_supply_contract() -> None:
     w = _world()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,
@@ -162,7 +169,7 @@ def test_tender_awards_to_lowest_bidder_and_creates_supply_contract() -> None:
     supply = new_contracts[0]
     assert supply["kind"] == "supply"
     assert supply["supplier"] == "settler_002"
-    assert supply["buyer"] == "pop_hub_e"
+    assert supply["buyer"] == str(_POSTER)
     assert supply["material"] == "coal"
     assert supply["qty"] == 8  # 4/cycle × 2 cycles
     assert supply["total_price_cents"] == 70 * 8
@@ -172,7 +179,7 @@ def test_tender_with_no_bids_expires() -> None:
     w = _world()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("copper_ingot"),
         qty_per_cycle=2,
         interval_ticks=1440,
@@ -189,7 +196,7 @@ def test_settlers_bid_on_tenders_when_basis_is_low_enough() -> None:
     """Plant a low cost basis for coal and verify settlers submit a tender bid."""
     w = _world()
     settler = PartyId("settler_001")
-    # Plant a low basis: 30c per coal (well below the hub's implied price of ~80c).
+    # Plant a low basis: 30c per coal (well below the implied price of ~80c).
     record_settler_production(w, settler, "mine_coal", MaterialId("coal"), 100)
     # Override basis directly for determinism (the recorded value depends on labor).
     from realm.settler_cost_basis import ensure_cost_basis_state
@@ -200,7 +207,7 @@ def test_settlers_bid_on_tenders_when_basis_is_low_enough() -> None:
     # Post a tender; round the tick to a game-day boundary so the daily ticker fires.
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,
@@ -221,7 +228,7 @@ def test_tenders_state_survives_round_trip_through_state_io() -> None:
     w = _world()
     post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,
@@ -239,7 +246,7 @@ def test_tender_pipeline_ledger_conservation() -> None:
     pre_total = w.ledger.total_cents()
     r = post_tender(
         w,
-        posted_by=PartyId("pop_hub_e"),
+        posted_by=_POSTER,
         material=MaterialId("coal"),
         qty_per_cycle=4,
         interval_ticks=1440,

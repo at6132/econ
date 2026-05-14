@@ -579,7 +579,9 @@ function ForwardsSection({
   apiBase: ApiBase;
   onMutate: () => void;
 }) {
-  const [buyer, setBuyer] = useState("pop_hub_e");
+  // Phase 7A: pop hubs are gone — default to Kessler (consolidator) as a
+  // common forward-buyer counterparty; the input still accepts any party id.
+  const [buyer, setBuyer] = useState("genesis_consolidator");
   const [material, setMaterial] = useState("coal");
   const [qty, setQty] = useState("20");
   const [price, setPrice] = useState("80");

@@ -19,8 +19,6 @@ from realm.world import World
 GENESIS_DIGEST_INTERVAL_TICKS = 60
 
 _PLAYER = PartyId("player")
-_HUB_E = PartyId("pop_hub_e")
-_HUB_W = PartyId("pop_hub_w")
 
 
 def _genesis_st(world: World) -> dict[str, Any]:
@@ -107,22 +105,10 @@ def tick_genesis_world_feed(world: World) -> None:
         gst["coal_ask_empty_streak"] = streak
         if streak >= 2 and streak % 2 == 0:
             headlines.append(
-                f"Coal book still empty for {streak * interval} ticks — check exchange relists and hub lifts."
+                f"Coal book still empty for {streak * interval} ticks — check exchange relists and entrepreneur asks."
             )
     else:
         gst["coal_ask_empty_streak"] = 0
-
-    for hub, hlabel, mid in (
-        (_HUB_E, "Eastern pop hub", MaterialId("grain")),
-        (_HUB_W, "Western pop hub", MaterialId("grain")),
-        (_HUB_E, "Eastern pop hub", MaterialId("coal")),
-    ):
-        if hub not in world.parties:
-            continue
-        q = world.inventory.qty(hub, mid)
-        pq = int(prev.get(f"hubinv:{hub}:{mid}", q))
-        if q != pq:
-            headlines.append(f"{hlabel} {mid} stock {pq} → {q} u.")
 
     pqcoal = party_material_held(world, _PLAYER, MaterialId("coal"))
     prev_pc = int(prev.get("player_coal", pqcoal))
@@ -147,9 +133,6 @@ def tick_genesis_world_feed(world: World) -> None:
         "grain_ask": grain_ask,
         "elec_ask": elec_ask,
         "player_coal": pqcoal,
-        "hubinv:pop_hub_e:grain": world.inventory.qty(_HUB_E, MaterialId("grain")),
-        "hubinv:pop_hub_w:grain": world.inventory.qty(_HUB_W, MaterialId("grain")),
-        "hubinv:pop_hub_e:coal": world.inventory.qty(_HUB_E, MaterialId("coal")),
         "tick": world.tick,
     }
 

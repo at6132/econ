@@ -15,9 +15,6 @@ from realm.biome_noise import terrain_for_cell
 from realm.rng import make_rng
 from realm.terrain import Terrain
 
-# Population-side wallets (genesis scenario) — funded from system reserve at bootstrap.
-GENESIS_POP_HUB_CASH_CENTS = 5_000_000  # $50,000 each — aggregate staple demand.
-
 
 def _subsurface_roll(
     rng: random.Random,
@@ -551,18 +548,24 @@ def bootstrap_genesis(
 ) -> World:
     """
     Empty-world / co-founder scenario: large map, cash-only player + algorithmic settlers,
-    population demand wallets, neutral exchange listing (no Tier-1 / Tier-2 NPC bootstrap).
+    neutral exchange listing (no Tier-1 / Tier-2 NPC bootstrap).
 
     Map layout (``map_layout``):
-      * ``"islands"`` — four landmasses in the four quadrants, separated by a
-        cross-shaped ocean. Pop hubs sit on the NW and SE islands; the other two
-        islands have to **export to reach demand**, which forces inter-island
-        shipping and creates regional supply/demand asymmetry.
+      * ``"islands"`` — four landmasses (NW / NE / SW / SE) separated by a
+        cross-shaped deep-ocean gap. Phase 7A: ocean tiles are impassable by
+        land movement and inter-island shipments pay ``2×`` per-tile shipping
+        cost (open-ocean modifier).
       * ``"continent"`` — legacy single-continent map (whatever ``terrain_for_cell``
-        produces for the seed).
+        produces for the seed); kept for backward compat in tiny-grid tests.
       * ``"auto"`` (default) — use ``"islands"`` if the grid is large enough
         (≥ ``GENESIS_ISLAND_MIN_WIDTH × GENESIS_ISLAND_MIN_HEIGHT``), otherwise
-        fall back to ``"continent"``. Keeps tiny-grid tests intact.
+        fall back to ``"continent"``.
+
+    Phase 7: there are no ``pop_hub_*`` parties anymore. Demand will be supplied
+    by real ``LaborerNPC`` agents (Phase 7B) buying from entrepreneur-run stores
+    (Phase 7D). For 7A the world simply has no artificial demand layer beyond
+    the cold-start ``genesis_exchange`` listings — entrepreneurs trade with each
+    other on the open book.
 
     Settlers: **all** ``settler_count`` parties are funded at tick 0 (no random partial wave).
     Optional ``settler_spawn_cap`` (≥ ``settler_count``) sets ``settler_cap``; when omitted and
@@ -570,7 +573,6 @@ def bootstrap_genesis(
     arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
     """
     from realm.biome_noise import (
-        genesis_island_centers,
         genesis_island_layout_supported,
         terrain_for_genesis_island_cell,
     )
@@ -656,42 +658,31 @@ def bootstrap_genesis(
     gst["next_settler_seq"] = initial_n + 1
     gst["starting_settler_cents"] = starting_cash_cents
     gst["broke_ticks"] = {}
-    # Pop hubs (anchors for the demand layer + Sprint 3 population density).
-    # Island layout puts hubs on diagonally opposite islands (NW + SE) so the
-    # other two islands (NE + SW) must export to reach demand → forces real
-    # inter-island shipping. Continent layout keeps the legacy E/W mid-row
-    # placement.
+    # Phase 7A — cache per-plot island membership (connected components of
+    # non-ocean plots). Ocean plots have no entry. Used by movement.py to
+    # detect inter-island shipments (2× per-tile cost) and by future phases
+    # for town/island scoping.
     if effective_layout == "islands":
-        island_centers = genesis_island_centers(grid_width, grid_height)
-        # genesis_island_centers returns [NW, NE, SW, SE].
-        hub_w = island_centers[0]  # NW island → pop_hub_w
-        hub_e = island_centers[3]  # SE island → pop_hub_e
-    else:
-        hub_w = (grid_width // 4, grid_height // 2)
-        hub_e = (3 * grid_width // 4, grid_height // 2)
-    pop_hub_coords = {"pop_hub_w": list(hub_w), "pop_hub_e": list(hub_e)}
-    world.scenario_state["pop_hub_coords"] = pop_hub_coords
-    for name in ("pop_hub_e", "pop_hub_w"):
-        ph = PartyId(name)
-        world.parties.add(ph)
-        world.reputation[str(ph)] = {"honored": 0, "breached": 0}
-        acct = party_cash_account(ph)
-        world.ledger.ensure_account(acct)
-        trp = world.ledger.transfer(
-            debit=system_reserve_account(),
-            credit=acct,
-            amount_cents=GENESIS_POP_HUB_CASH_CENTS,
-        )
-        if isinstance(trp, MoneyErr):
-            raise ValueError(trp.reason)
-    # Sprint 3 — Phase B.2: cache per-plot population density.
-    from realm.geo_clustering import population_density_for_cell
+        from realm.islands import compute_plot_islands
 
-    density_map: dict[str, float] = {}
-    for pid, p in world.plots.items():
-        density_map[str(pid)] = population_density_for_cell(p.x, p.y, [hub_w, hub_e])
+        world.scenario_state["plot_islands"] = compute_plot_islands(world)
+    else:
+        world.scenario_state["plot_islands"] = {}
+    # Phase 7A: pop hubs are removed. Population density (Sprint 3 — Phase B.2)
+    # no longer derives from hub coordinates; it is set to the frontier
+    # baseline everywhere so the per-plot field stays well-defined for
+    # legacy readers (claim cost, flipper, UI overlay) until the real
+    # laborer-derived density signal lands in Phase 7B/7D.
+    from realm.geo_clustering import POPULATION_FRONTIER_DENSITY_BASELINE
+
+    density_map: dict[str, float] = {
+        str(pid): POPULATION_FRONTIER_DENSITY_BASELINE for pid in world.plots
+    }
     world.scenario_state["population_density"] = density_map
-    # Sprint 3 — Phase C.1: seed per-region labor pools from population density.
+    # Phase 7A: keep regional labor pools seeded for legacy callers
+    # (``hire_worker_stub`` scarcity branch); 7B replaces this entirely with
+    # live LaborerNPC counts. With uniform low density every region gets the
+    # ``REGION_LABOR_FRONTIER_POOL`` baseline.
     from realm.labor import bootstrap_labor_pools
 
     bootstrap_labor_pools(world)

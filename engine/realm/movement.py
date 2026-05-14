@@ -7,6 +7,11 @@ When a registered route operator exists for the two regions the shipment crosses
 entire fee is credited to them. Otherwise the fee falls back to the legacy
 ``PER_TILE_SHIP_CENTS`` and is credited to ``system:reserve`` (sink).
 
+Phase 7A — inter-island shipments (origin and destination on *different*
+landmasses in the genesis four-island layout) pay a ``2×`` open-ocean
+modifier on the per-tile portion of the fee. Land movement across ocean
+tiles is impassable (``tile_movement_cost == math.inf``).
+
 Arrival tick uses Manhattan distance × ``TRANSIT_TICKS_PER_TILE`` (game-minutes
 per tile) plus ``TRANSIT_BASE_TICKS`` handling.
 """
@@ -75,6 +80,11 @@ def dispatch_shipment(
     dist = manhattan(world, from_plot_id, to_plot_id)
     from_region = region_for_plot(world, from_plot_id)
     to_region = region_for_plot(world, to_plot_id)
+    # Phase 7A: inter-island shipments cost 2× per-tile (open-ocean modifier).
+    from realm.islands import is_inter_island_shipment
+
+    inter_island = is_inter_island_shipment(world, from_plot_id, to_plot_id)
+    ocean_mult = 2 if inter_island else 1
     operator_payee: PartyId | None = None
     op_route_key: str | None = None
     if from_region and to_region and from_region != to_region:
@@ -84,12 +94,12 @@ def dispatch_shipment(
         if op is not None and str(op.get("operator_party")) != str(party):
             # An operator other than the shipper themselves: credit them the fee.
             operator_payee = PartyId(str(op["operator_party"]))
-            per_tile = max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS)))
+            per_tile = max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS))) * ocean_mult
             fee = BASE_SHIP_FEE_CENTS + dist * per_tile
         else:
-            fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+            fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS * ocean_mult
     else:
-        fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+        fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS * ocean_mult
     # Sprint 3 — Phase D.2: 40 % discount for coastal → coastal lanes.
     from realm.recipe_sites import plot_is_coastal
 
@@ -111,6 +121,7 @@ def dispatch_shipment(
         if operator_payee is not None
         else PER_TILE_SHIP_CENTS
     )
+    per_tile_effective *= ocean_mult
     if coastal_route:
         per_tile_effective = (
             per_tile_effective * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000
@@ -264,6 +275,8 @@ def dispatch_shipment(
         "road_savings_cents": int(road_savings),
         "road_tolls_paid_cents": int(total_toll_cents),
         "road_segments_used": [s for _, s, _ in tolls_paid],
+        "inter_island": bool(inter_island),
+        "ocean_modifier_mult": int(ocean_mult),
     }
 
 

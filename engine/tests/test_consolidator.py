@@ -117,14 +117,23 @@ def test_consolidator_grows_share_over_multi_day_run() -> None:
     w.inventory.add(CONSOLIDATOR_PARTY_ID, MaterialId("electricity"), 200)
     # Seed some initial iron_ingot inventory so first-day listing has product.
     w.inventory.add(CONSOLIDATOR_PARTY_ID, MaterialId("iron_ingot"), 40)
-    # Simulate a buyer that takes Kessler's asks: pop_hub does market_buy via tick_population_demands.
+    # Simulate a buyer that takes Kessler's asks. Phase 7A: pop_hub is gone;
+    # any funded party can play the role of the iron_ingot offtaker. We use
+    # the player (already funded at bootstrap).
+    from realm.ledger import party_cash_account, system_reserve_account
     from realm.markets import market_buy
 
+    buyer = PartyId("player")
+    # Top up the player so they can absorb 5 days of ingot lifts.
+    w.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=party_cash_account(buyer),
+        amount_cents=200_000,
+    )
     for day in range(1, 6):
         w.tick = 1440 * day
         tick_consolidator(w)
-        # A buyer consumes some of Kessler's listings each day.
-        market_buy(w, PartyId("pop_hub_e"), MaterialId("iron_ingot"), 6)
+        market_buy(w, buyer, MaterialId("iron_ingot"), 6)
     share = consolidator_market_share_bps(w, MaterialId("iron_ingot"))
     assert share > 0, f"expected positive market share, got {share}bps"
 

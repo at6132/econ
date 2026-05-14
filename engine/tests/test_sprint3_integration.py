@@ -120,17 +120,14 @@ def test_sprint3_integration_end_to_end() -> None:
         f"should clearly exceed avg within-region variance {mean_within:.4f}"
     )
 
-    # ─── 4. Labor: frontier regions have a smaller pool than hub-adjacent ──
-    # Pools are seeded from mean population density per region: hub-tier 300,
-    # mid-tier 110, frontier 35. We assert the spread exists.
+    # ─── 4. Labor: every region has a seeded labor pool ─────────────────────
+    # Phase 7A removed the pop_hub-derived population density signal, so every
+    # region now receives the frontier baseline pool (uniform). The variance
+    # assertion will return once real ``LaborerNPC`` counts replace the static
+    # pool in Phase 7B. For now we just assert pools exist and are positive.
     all_pools = {rid: labor_pool_for_region(w, rid) for rid in region_buckets}
     assert all_pools, "labor pools must be initialised on every region"
-    max_pool = max(all_pools.values())
-    min_pool = min(all_pools.values())
-    assert max_pool > min_pool, (
-        f"expected at least one frontier region with a smaller pool than the "
-        f"hub-adjacent ones; pools={all_pools}"
-    )
+    assert min(all_pools.values()) > 0, all_pools
 
     # ─── 5. Coastal parties — ≥ 3 with coastal plots engaged in fishing/ship ─
     coastal_actors: set[str] = set()

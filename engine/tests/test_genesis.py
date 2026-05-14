@@ -6,7 +6,7 @@ from realm.ids import MaterialId, PartyId
 from realm.markets import MARKET_SELLER_REGISTRATION_CENTS
 from realm.ledger import party_cash_account, system_reserve_account
 from realm.tick import advance_tick
-from realm.world import GENESIS_POP_HUB_CASH_CENTS, bootstrap_genesis
+from realm.world import bootstrap_genesis
 
 
 def test_genesis_bootstrap_ledger_conserved() -> None:
@@ -74,7 +74,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
-        + 2 * GENESIS_POP_HUB_CASH_CENTS  # pop hubs
+        # Phase 7A: pop_hub_e/w are removed — no more $50k × 2 cash injections.
         + 88_000  # Tier-3 Margaux (Genesis)
         + 25_000_000  # genesis_exchange operating cash (from reserve)
         + n_shippers * NPC_SHIPPER_STARTING_CASH_CENTS  # Sprint 2 NPC shippers
@@ -105,13 +105,26 @@ def test_genesis_settlers_start_production_after_workshops() -> None:
     assert n >= 1, "expected at least one settler production_start after workshops complete"
 
 
-def test_genesis_hub_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
-    """Aggressive buy must not trust in-memory list order; shuffle then verify cheapest clip wins."""
+def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
+    """Aggressive buy must not trust in-memory list order; shuffle then verify cheapest clip wins.
+
+    Phase 7A: the original variant used ``pop_hub_e`` as the buyer; with hubs
+    removed we use ``settler_001`` (any registered party works — the test is
+    about the market-matching engine, not about who buys).
+    """
     from realm.inventory import MatterErr
+    from realm.ledger import party_cash_account, system_reserve_account
     from realm.markets import cancel_sell_order, market_buy, place_sell_order
 
-    w = bootstrap_genesis(seed=77, grid_width=4, grid_height=4, settler_count=0)
-    hub = PartyId("pop_hub_e")
+    w = bootstrap_genesis(seed=77, grid_width=4, grid_height=4, settler_count=2)
+    buyer = PartyId("settler_001")
+    # Fund the buyer so it can pay for the clip — drawn from system reserve so
+    # ledger total stays conserved.
+    w.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=party_cash_account(buyer),
+        amount_cents=10_000,
+    )
     p = PartyId("player")
     ex = PartyId("genesis_exchange")
     mid = MaterialId("coal")
@@ -126,7 +139,7 @@ def test_genesis_hub_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> N
     assert place_sell_order(w, ex, mid, 14, 70)["ok"] is True
     lst = w.market_asks_by_material[key]
     lst.reverse()
-    r = market_buy(w, hub, mid, 8)
+    r = market_buy(w, buyer, mid, 8)
     assert r.get("ok") is True
     assert int(r["filled"]) == 8
     assert int(r["spent_cents"]) == 8 * 44
@@ -254,26 +267,10 @@ def test_settler_strip_mine_requires_exchange_materials() -> None:
     assert mines >= 1
 
 
-def test_genesis_supply_contract_triggers_with_listed_coal() -> None:
-    from realm.inventory import MatterErr
-    from realm.markets import place_sell_order
-
-    w = bootstrap_genesis(seed=414, grid_width=8, grid_height=6, settler_count=2)
-    p = PartyId("player")
-    coal = MaterialId("coal")
-    ad = w.inventory.add(p, coal, 20)
-    assert not isinstance(ad, MatterErr)
-    assert place_sell_order(w, p, coal, 12, 58)["ok"] is True
-    for _ in range(1600):
-        advance_tick(w)
-    proposed = [
-        c
-        for c in w.contracts
-        if c.get("kind") == "supply"
-        and c.get("status") == "proposed"
-        and str(c.get("supplier")) == "player"
-    ]
-    assert len(proposed) >= 1
+# Phase 7A — removed `test_genesis_supply_contract_triggers_with_listed_coal`.
+# It exercised `tick_genesis_pop_hub_contracts` (hubs proposing supply pacts to
+# the player), which was deleted with the pop_hub parties. Hub-proposed pacts
+# will be replaced by laborer/entrepreneur-driven demand in Phase 7B/7D.
 
 
 def test_genesis_settlers_build_secondary_workshops() -> None:

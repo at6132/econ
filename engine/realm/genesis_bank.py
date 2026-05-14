@@ -1,10 +1,12 @@
 """First Bank of the Frontier — NPC bank with reputation-tiered loans.
 
 Sprint 5 — Phase C. The bank is a physical entity on the map: a plot near
-``pop_hub_e`` with a pre-built ``bank_building``. It never messages the
-player, never proposes anything; the player clicks the bank and gets a
-rates table. Defaults are the only NPC-initiated action in the whole game
-and only happen because the player signed a contract that said so.
+the median land coordinate (Phase 7A; was previously anchored near
+``pop_hub_e`` before hubs were removed) with a pre-built ``bank_building``.
+It never messages the player, never proposes anything; the player clicks
+the bank and gets a rates table. Defaults are the only NPC-initiated
+action in the whole game and only happen because the player signed a
+contract that said so.
 
 Loans are stored as standard contract rows on ``world.contracts`` with
 ``kind="bank_loan"``. The same data shape is used by Meridian Capital (Phase
@@ -107,7 +109,7 @@ def bank_rates_view(world: World, party: PartyId | None = None) -> dict:
 
 
 def seed_first_bank(world: World) -> bool:
-    """Spawn the bank party + pre-built bank_building near pop_hub_e."""
+    """Spawn the bank party + pre-built bank_building near the median land coord."""
     if world.scenario_id != "genesis":
         return False
     if FIRST_BANK_PARTY_ID in world.parties:
@@ -136,18 +138,32 @@ def seed_first_bank(world: World) -> bool:
 
 
 def _place_bank_building(world: World) -> None:
-    """Claim an unowned plot near ``pop_hub_e`` for the bank and place its building."""
-    pop_hub_coords = world.scenario_state.get("pop_hub_coords") or {}
-    hub_e = pop_hub_coords.get("pop_hub_e")
-    if not hub_e or not isinstance(hub_e, (list, tuple)) or len(hub_e) < 2:
+    """Claim an unowned land plot for the bank near the map's geometric centre.
+
+    Phase 7A: the bank used to be placed near ``pop_hub_e``; with hubs removed
+    we anchor it on a deterministic point (median land coordinate) so it lands
+    in the middle of the populated region without depending on any party.
+    """
+    from realm.islands import is_ocean_plot
+
+    land_plots = [
+        (int(p.x), int(p.y), pid)
+        for pid, p in world.plots.items()
+        if not is_ocean_plot(world, pid)
+    ]
+    if not land_plots:
         return
-    hx, hy = int(hub_e[0]), int(hub_e[1])
+    xs = sorted(c[0] for c in land_plots)
+    ys = sorted(c[1] for c in land_plots)
+    cx = xs[len(xs) // 2]
+    cy = ys[len(ys) // 2]
     nearest: PlotId | None = None
     best_d = 10**9
-    for pid, p in world.plots.items():
+    for x, y, pid in land_plots:
+        p = world.plots[pid]
         if p.owner is not None:
             continue
-        d = abs(int(p.x) - hx) + abs(int(p.y) - hy)
+        d = abs(x - cx) + abs(y - cy)
         if d < best_d:
             best_d = d
             nearest = pid

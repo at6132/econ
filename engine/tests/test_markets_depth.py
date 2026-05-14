@@ -54,10 +54,23 @@ def test_market_buy_skips_rep_blocked_cheapest_ask() -> None:
     from realm.markets import cancel_sell_order
     from realm.world import bootstrap_genesis
 
+    # Phase 7A: the buyer used to be ``pop_hub_e`` (which had 0 honored rep).
+    # With hubs removed we use a fresh, low-rep buyer — same semantics, the
+    # test is about the rep-gate skip in the market walker.
+    from realm.ledger import party_cash_account, system_reserve_account
+
     w = bootstrap_genesis(seed=808, grid_width=4, grid_height=4, settler_count=0)
     p = PartyId("player")
     ex = PartyId("genesis_exchange")
-    hub = PartyId("pop_hub_e")
+    buyer = PartyId("low_rep_buyer")
+    w.parties.add(buyer)
+    w.reputation[str(buyer)] = {"honored": 0, "breached": 0}
+    w.ledger.ensure_account(party_cash_account(buyer))
+    w.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=party_cash_account(buyer),
+        amount_cents=100_000,
+    )
     mid = MaterialId("coal")
     key = str(mid)
     for o in list(w.market_asks_by_material.get(key, [])):
@@ -68,8 +81,8 @@ def test_market_buy_skips_rep_blocked_cheapest_ask() -> None:
     ad2 = w.inventory.add(ex, mid, 40)
     assert not isinstance(ad2, MatterErr)
     assert place_sell_order(w, ex, mid, 12, 72)["ok"] is True
-    assert w.reputation[str(hub)].get("honored", 0) == 0
-    r = market_buy(w, hub, mid, 4)
+    assert w.reputation[str(buyer)].get("honored", 0) == 0
+    r = market_buy(w, buyer, mid, 4)
     assert r.get("ok") is True
     assert int(r.get("filled", 0)) == 4
-    assert w.inventory.qty(hub, mid) >= 4
+    assert w.inventory.qty(buyer, mid) >= 4

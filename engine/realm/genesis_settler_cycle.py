@@ -36,7 +36,7 @@ def _count_settlers(world: World) -> int:
 
 def _party_eligible_for_bankruptcy(party: PartyId) -> bool:
     s = str(party)
-    if s in ("player", "genesis_exchange", "llm_margaux") or s.startswith("pop_hub"):
+    if s in ("player", "genesis_exchange", "llm_margaux"):
         return False
     return s.startswith("settler_") or (s.startswith("llm_") and s != "llm_margaux")
 

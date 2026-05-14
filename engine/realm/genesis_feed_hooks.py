@@ -10,7 +10,6 @@ from realm.markets import best_resting_ask_cents
 from realm.time_scale import building_operational
 from realm.world import World
 
-_HUB_IDS = frozenset({"pop_hub_e", "pop_hub_w"})
 _PRICE_MATERIALS: tuple[str, ...] = ("timber", "lumber", "coal", "grain", "electricity")
 _PRICE_HEADLINE_COOLDOWN_TICKS = 120
 
@@ -84,45 +83,6 @@ def note_genesis_first_building_operational(world: World, party: PartyId, buildi
 
 def label_party(world: World, party: PartyId) -> str:
     return world.party_display_names.get(str(party), str(party))
-
-
-def note_genesis_hub_market_buy(
-    world: World,
-    *,
-    buyer: PartyId,
-    material: MaterialId,
-    filled: int,
-    sellers_csv: str,
-) -> None:
-    """Record first time a settler's ask is lifted by a population hub (aggressive buy)."""
-    if world.scenario_id != "genesis" or filled <= 0:
-        return
-    if str(buyer) not in _HUB_IDS:
-        return
-    sellers = [s for s in sellers_csv.split(",") if s and s.startswith("settler_")]
-    if not sellers:
-        return
-    gst = _gst(world)
-    first_map = gst.setdefault("settler_first_hub_sale", {})
-    if not isinstance(first_map, dict):
-        first_map = {}
-        gst["settler_first_hub_sale"] = first_map
-    hub = str(buyer)
-    for sid in sellers:
-        key = f"{sid}|{hub}"
-        if key in first_map:
-            continue
-        first_map[key] = world.tick
-        nm = world.party_display_names.get(sid, sid)
-        log_event(
-            world,
-            "world_feed",
-            f"{nm} sold into {hub} for the first time ({material} ×{filled} this clip).",
-            feed_source="settler_hub_first",
-            seller=sid,
-            buyer=hub,
-            material=str(material),
-        )
 
 
 def _maybe_player_coal_board_headline(world: World, gst: dict[str, Any]) -> None:

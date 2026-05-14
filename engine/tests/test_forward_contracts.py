@@ -150,13 +150,25 @@ def test_forward_price_locked_regardless_of_spot() -> None:
 
 
 def test_settler_proposes_forward_with_surplus() -> None:
-    """Run a few game-days; check that at least one settler eventually proposes a forward."""
+    """Run a few game-days; check that at least one settler eventually proposes a forward.
+
+    Phase 7A: settler forwards now target the consolidator (Kessler Industrial)
+    rather than the removed ``pop_hub_e``. The consolidator only seeds on
+    coastal plots, so this test uses a grid large enough to have coastal land
+    (the default ``map_layout="auto"`` will pick continent at this size and
+    still produce coastal tiles via the elev<0.24 water threshold).
+    """
+    from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
     from realm.genesis_forwards import tick_settler_forward_proposals
     from realm.ids import MaterialId
     from realm.inventory import MatterErr
     from realm.world import bootstrap_genesis
 
-    w = bootstrap_genesis(seed=99, grid_width=12, grid_height=10, settler_count=6)
+    w = bootstrap_genesis(seed=99, grid_width=48, grid_height=36, settler_count=6)
+    assert CONSOLIDATOR_PARTY_ID in w.parties, (
+        "consolidator must be seeded for settler forwards to find a buyer; "
+        "increase grid size if test world lacks coastal plots"
+    )
     # Stuff every settler with surplus coal so the surplus check passes.
     for p in list(w.parties):
         if not str(p).startswith("settler_"):

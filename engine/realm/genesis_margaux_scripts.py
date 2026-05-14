@@ -13,8 +13,6 @@ from realm.world import World
 
 _MARGAUX = PartyId("llm_margaux")
 _PLAYER = PartyId("player")
-_HUB_E = PartyId("pop_hub_e")
-_HUB_W = PartyId("pop_hub_w")
 
 # Poll auxiliary beats (~12 windows per game-day); at most one line per poll when a trigger hits.
 _AUX_POLL_TICKS = 120
@@ -219,35 +217,6 @@ def _aux_player_float_strong(world: World, mx: dict[str, Any]) -> str | None:
     )
 
 
-def _aux_hub_grain_stress(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_hubgrain_{d}"):
-        return None
-    qe = world.inventory.qty(_HUB_E, MaterialId("grain"))
-    qw = world.inventory.qty(_HUB_W, MaterialId("grain"))
-    if qe + qw > 1_300:
-        return None
-    mx[f"aux_hubgrain_{d}"] = True
-    return (
-        f"Eastern hub grain {qe}u, western {qw}u — that's a thin pantry for the basket program. "
-        "If you're long grain, this is when hubs pay attention."
-    )
-
-
-def _aux_hub_coal_draw(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_hubcoal_{d}"):
-        return None
-    q = world.inventory.qty(_HUB_E, MaterialId("coal"))
-    if q > 300:
-        return None
-    mx[f"aux_hubcoal_{d}"] = True
-    return (
-        f"Eastern hub coal on-hand is ~{q}u — they'll keep lifting asks if someone feeds the clips. "
-        "Strip operators should feel that suction."
-    )
-
-
 def _aux_grain_rich_pressed(world: World, mx: dict[str, Any]) -> str | None:
     d = _game_day(world)
     if mx.get(f"aux_grainpx_{d}"):
@@ -326,8 +295,6 @@ def _run_margaux_aux_beats(world: World, mx: dict[str, Any]) -> None:
         _aux_settler_net_pulse,
         _aux_player_cash_pinch,
         _aux_player_float_strong,
-        _aux_hub_grain_stress,
-        _aux_hub_coal_draw,
         _aux_grain_rich_pressed,
         _aux_thin_book,
         _aux_ele_stress,
