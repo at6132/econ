@@ -123,6 +123,15 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
         )
         if labour_bps != 10_000:
             out = {k: max(0, (int(v) * int(labour_bps)) // 10_000) for k, v in out.items()}
+    # Phase 8 — Sub-phase 8A: seasonal yield modifier composes multiplicatively
+    # on top of all the above. Winter ``grow_grain`` returns 0 (recipe is also
+    # blocked at start-time on non-tropical islands). Autumn harvest window
+    # surges to 1.5×; winter timber chops at 0.6×; northern fishing freezes.
+    from realm.events.seasons import yield_modifier
+
+    season_mod = yield_modifier(world, recipe.recipe_id, plot)
+    if season_mod != 1.0:
+        out = {k: max(0, int(round(int(v) * float(season_mod)))) for k, v in out.items()}
     return out
 
 
@@ -344,6 +353,15 @@ def start_production(
             return {"ok": False, "reason": "building stopped — maintenance required"}
     if not subsurface_allows_recipe(plot, recipe):
         return {"ok": False, "reason": "subsurface below threshold for this recipe"}
+    # Phase 8 — Sub-phase 8A: refuse to start recipes whose seasonal modifier is
+    # zero (e.g. ``grow_grain`` in winter on non-tropical islands, ``fishing``
+    # in winter on northern islands). Recipes with a reduced but non-zero
+    # seasonal multiplier are still allowed to start — they just produce less.
+    from realm.events.seasons import recipe_blocked_by_season
+
+    blocked, season_reason = recipe_blocked_by_season(world, recipe_id, plot)
+    if blocked:
+        return {"ok": False, "reason": season_reason}
     # Sprint 3 — Phase A: electricity-requiring recipes need either a grid
     # source within coverage or staged electricity to draw from.
     electricity_mid = MaterialId("electricity")

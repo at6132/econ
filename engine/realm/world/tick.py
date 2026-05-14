@@ -15,6 +15,7 @@ from realm.production.decay import tick_building_decay, tick_building_maintenanc
 from realm.economy.market_history import record_market_snapshot
 from realm.infrastructure.movement import deliver_transit
 from realm.events.price_alerts import tick_price_alerts
+from realm.events.seasons import tick_seasons
 from realm.production import tick_production, tick_production_auto_restart
 from realm.production.spoilage import tick_material_spoilage
 from realm.contracts.social import tick_supply_contract_breaches
@@ -52,6 +53,10 @@ def advance_tick(world: World) -> None:
         tick_tier2_agents(world)
     tick_tier3_llm_agents(world)
     world.tick += 1
+    # Phase 8 — Sub-phase 8A: seasonal narration fires on day boundaries.
+    # Cheap no-op on every tick except the few days a year that announce
+    # spring/summer/autumn/harvest-decline/winter to the world feed.
+    tick_seasons(world)
     if world.scenario_id == "genesis":
         tick_genesis_feed_tick_scan(world)
         tick_genesis_world_feed(world)

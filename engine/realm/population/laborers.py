@@ -261,10 +261,17 @@ def productivity_multiplier(lab: LaborerNPC) -> float:
     return 1.0
 
 
-def _apply_needs_decay(lab: LaborerNPC, days_elapsed: float) -> None:
-    """Decay the three needs proportional to days elapsed."""
+def _apply_needs_decay(
+    lab: LaborerNPC, days_elapsed: float, *, fuel_decay_rate: float = FUEL_DECAY_PER_DAY
+) -> None:
+    """Decay the three needs proportional to days elapsed.
+
+    ``fuel_decay_rate`` defaults to ``FUEL_DECAY_PER_DAY`` (the Phase 7
+    constant) but the caller can pass a season-modulated rate per Phase 8.A3
+    — winter fuel decay is ~2× the summer rate.
+    """
     lab.needs["food"] = max(0.0, lab.needs.get("food", 1.0) - FOOD_DECAY_PER_DAY * days_elapsed)
-    lab.needs["fuel"] = max(0.0, lab.needs.get("fuel", 1.0) - FUEL_DECAY_PER_DAY * days_elapsed)
+    lab.needs["fuel"] = max(0.0, lab.needs.get("fuel", 1.0) - fuel_decay_rate * days_elapsed)
     lab.needs["shelter"] = max(
         0.0, lab.needs.get("shelter", 1.0) - SHELTER_DECAY_PER_DAY * days_elapsed
     )
@@ -344,7 +351,14 @@ def tick_laborers(world: World) -> dict[str, int]:
     repeated invocation within the same day.
 
     Returns a small status dict useful for tests and digest writeups.
+
+    Phase 8.A3: fuel-need decay is season-modulated — the rate is computed
+    once per tick (same season for every laborer) and threaded into
+    ``_apply_needs_decay``.
     """
+    from realm.events.seasons import current_season, fuel_decay_per_day_for_season
+
+    fuel_rate = fuel_decay_per_day_for_season(current_season(world))
     stats = {"died": 0, "retired": 0, "ticked": 0}
     if not world.laborers:
         return stats
@@ -361,7 +375,7 @@ def tick_laborers(world: World) -> dict[str, int]:
             # smooth progression; "every game-day" in the spec means the
             # rate, not the granularity.
             pass
-        _apply_needs_decay(lab, days_elapsed)
+        _apply_needs_decay(lab, days_elapsed, fuel_decay_rate=fuel_rate)
         _apply_health_pressure(lab, days_elapsed)
         lab.age_ticks += elapsed_ticks
         lab.last_needs_tick = now
