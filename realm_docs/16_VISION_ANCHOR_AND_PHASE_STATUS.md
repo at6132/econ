@@ -31,7 +31,7 @@ The design rests on **9 economic primitives** (land, matter, labor, time/distanc
 | Phase | What it shipped | Closed on |
 |------|-----------------|-----------|
 | **2 — Solo Polish & Visual Identity** | Pixi, schematic, Tier 2, decay, info costs, scenarios, polish | 2026-05-10 (`18_PHASE_2_COMPLETION_CHECKLIST.md`) |
-| **7 — Real population economy** | Four-island worldgen, `LaborerNPC` lifecycle, towns + residences, stores + consumer spending, employment market with real wage transfers | 2026-05-13 |
+| **7 — Real population economy** | Four-island worldgen, `LaborerNPC` lifecycle, towns + residences, stores + consumer spending, employment market with real wage transfers, **inter-island trade with NPC cross-island buy orders**, **25-assertion Phase 7 integration gate** | 2026-05-14 |
 | **8 — The Volatility Engine** | Seasonal calendar, natural disasters (drought / blight / mine collapse / storm / seismic / flood), epidemics with herbs+medicine+apothecary supply chain, market cycles (price panic, credit crunch, route blockage, boom, depletion), event-driven analytics products, Margaux event beats, **30-assertion integration gate** | 2026-05-14 |
 
 **A1** ($30 stranger playtest gate) remains deferred. The next work phase is **headless API testing** — not feature development.
@@ -138,13 +138,15 @@ The "static demand" stack (`pop_hub` demand topups, fixed `population_density`, 
 
 | Slice | Engine module | Tests |
 |-------|--------------|-------|
-| **7A** Four-island worldgen, impassable ocean, 2× inter-island move cost | `realm/world/worldgen_islands.py` | `tests/world/test_island_worldgen.py` |
+| **7A** Four-island worldgen, impassable ocean, 2× inter-island move cost | `realm/world/islands.py` | `tests/world/test_island_worldgen.py` |
 | **7B** `LaborerNPC` dataclass + lifecycle (needs decay, health, death, migration) + `tick_laborer_births` stub | `realm/population/laborers.py` | `tests/population/test_laborers.py` |
 | **7C** `Town` dataclass + `detect_towns` clustering + residential building + housing assignment | `realm/population/towns.py` | `tests/population/test_towns.py` |
 | **7D** Store building + stock/price/withdraw actions + `tick_laborer_spending` + NPC-seeded stores; exchange liquidity top-up + hub `market_buy` hooks deleted | `realm/population/stores.py` | `tests/population/test_stores.py` |
 | **7E** `post_job_opening` + `tick_job_market` + real wage transfers via `ledger.transfer`; unemployment + insolvency consequences | `realm/population/employment.py` | `tests/population/test_employment.py` |
+| **7F** NPC cross-island B2B grain buy orders on deficit islands; market book / bids filterable by island; `genesis_storekeeper` funded so it acts as a real buyer; `labor_pool_for_region` now returns live unemployed `LaborerNPC` counts in Genesis | `realm/economy/inter_island.py` (+ `realm/population/labor.py`) | `tests/economy/test_inter_island_trade.py` (11) |
+| **7G** 25-assertion integration gate: 4-island world, 3 game-days of real `advance_tick`; covers world structure, laborer lifecycle, towns/stores, entrepreneurial economy, inter-island trade, circular flow, information feed, conservation | — | `tests/integration/test_phase7_integration.py` (**25 assertions, all passing**) |
 
-Demand is now driven by laborers consuming food, fuel, and shelter at stores; wages are paid through the ledger; conservation is invariant. Phase 7F (cross-island specialisation) and Phase 7G (the standalone Phase 7 integration test) are deferred — the **Phase 8 integration gate exercises every Phase 7 system** as part of its 30 assertions (wage transfers, store purchases, town survival, ledger conservation).
+Demand is now driven by laborers consuming food, fuel, and shelter at stores; wages are paid through the ledger; conservation is invariant. Cross-island specialisation is in via NPC entrepreneurs posting cross-island grain bids when their own island runs short — the 4-island map is now a real trading network, not 4 isolated economies. The Phase 7 integration gate covers every system end-to-end; the Phase 8 integration gate continues to exercise them all under volatility.
 
 ---
 
@@ -188,4 +190,4 @@ The economy is no longer in static equilibrium. It is a living system that surpr
 
 ---
 
-**Last updated:** 2026-05-14 (Phase 8 closed; 30-assertion volatility-engine gate green; next phase is headless API testing)
+**Last updated:** 2026-05-14 (Phase 7 fully closed — 7F inter-island trade + 7G 25-assertion gate landed; Phase 8 closed — 30-assertion volatility-engine gate green; next phase is headless API testing)
