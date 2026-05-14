@@ -251,6 +251,18 @@ BUILDINGS: dict[str, dict[str, Any]] = {
             "grace_ticks": 1_440,
         },
     },
+    # Phase 7C — residential building. Laborers live here; meets their
+    # shelter need. Up to 8 occupants per residence. Three residences within
+    # 5 tiles of one another form a town (see realm/towns.py).
+    "residence": {
+        "kind": "contracted",
+        "label": "Residential building (houses up to 8 laborers)",
+        "self_shell_cents": 60_000,
+        "self_contractor_fee_cents": 20_000,
+        "self_materials": {"lumber": 8, "brick": 6, "timber": 4},
+        "turnkey_total_cents": 140_000,
+        "capacity": 8,
+    },
     # Sprint 3 — Phase D.4: coastal renewable power. Half the throughput of a
     # coal power_shed but zero ongoing fuel cost.
     "tidal_mill": {
@@ -308,6 +320,9 @@ def building_catalog_public() -> list[dict]:
                 row["terrain_required"] = (
                     list(terrain_req) if not isinstance(terrain_req, str) else [terrain_req]
                 )
+            cap = spec.get("capacity")
+            if cap is not None:
+                row["capacity"] = int(cap)
             out.append(row)
     return out
 
@@ -443,6 +458,12 @@ def build_on_plot(
         cost_cents=total_cents,
         build_mode=mode_out,
     )
+    if building_id == "residence":
+        # Phase 7C — residences are town nodes. Refresh the town cluster map
+        # immediately (idempotent + cheap; runs once per residence build).
+        from realm.towns import on_residence_built
+
+        on_residence_built(world, plot_id)
     return {
         "ok": True,
         "building_id": building_id,

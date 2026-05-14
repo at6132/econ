@@ -17,6 +17,7 @@ from realm.terrain import Terrain
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from realm.laborers import LaborerNPC
+    from realm.towns import Town
 
 
 def _subsurface_roll(
@@ -349,6 +350,11 @@ class World:
     static ``population_density``/``labor_pool`` maps. Each laborer has a
     real ledger account (``cash:lab:<id>``) so wage / spend transfers
     obey conservation. Mortal, needs-driven, employed by entrepreneurs."""
+    towns: dict[str, "Town"] = field(default_factory=dict)
+    """Phase 7C: emergent residential clusters keyed by ``town_id``. A town
+    is auto-detected by ``realm.towns.detect_towns`` whenever three or more
+    residences sit within 5 tiles of one another. Towns are the catchment
+    for laborer spending (7D) and the anchor for store placement."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -686,6 +692,16 @@ def bootstrap_genesis(
     if laborer_seeds:
         world.scenario_state["laborer_seeds_by_island"] = {
             str(k): int(v) for k, v in laborer_seeds.items()
+        }
+    # Phase 7C — seed one starting town per island so laborers have somewhere
+    # to live on day 1. Residences are owned by a synthetic ``genesis_settlement``
+    # placeholder so players + entrepreneur NPCs build their own on top.
+    from realm.towns import seed_genesis_starting_towns
+
+    starting_towns = seed_genesis_starting_towns(world)
+    if starting_towns:
+        world.scenario_state["starting_towns_by_island"] = {
+            str(k): str(v) for k, v in starting_towns.items()
         }
     # Phase 7A: pop hubs are removed. Population density (Sprint 3 — Phase B.2)
     # no longer derives from hub coordinates; it is set to the frontier

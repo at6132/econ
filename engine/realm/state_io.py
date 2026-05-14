@@ -230,6 +230,18 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for lid, lab in world.laborers.items()
         },
+        "towns": {
+            tid: {
+                "town_id": t.town_id,
+                "name": t.name,
+                "island_id": int(t.island_id),
+                "center_plot": str(t.center_plot),
+                "residential_plots": [str(p) for p in t.residential_plots],
+                "laborer_count": int(t.laborer_count),
+                "store_plots": [str(p) for p in t.store_plots],
+            }
+            for tid, t in world.towns.items()
+        },
     }
 
 
@@ -466,6 +478,26 @@ def load_world(d: dict[str, Any]) -> World:
                 )
             )
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
+    raw_towns = d.get("towns") or {}
+    if isinstance(raw_towns, dict):
+        from realm.towns import Town
+
+        for tid, payload in raw_towns.items():
+            if not isinstance(payload, dict):
+                continue
+            world.towns[str(tid)] = Town(
+                town_id=str(payload.get("town_id", tid)),
+                name=str(payload.get("name", "")),
+                island_id=int(payload.get("island_id", 0)),
+                center_plot=PlotId(str(payload.get("center_plot", ""))),
+                residential_plots=[
+                    PlotId(str(p)) for p in (payload.get("residential_plots") or [])
+                ],
+                laborer_count=int(payload.get("laborer_count", 0)),
+                store_plots=[
+                    PlotId(str(p)) for p in (payload.get("store_plots") or [])
+                ],
+            )
     raw_laborers = d.get("laborers") or {}
     if isinstance(raw_laborers, dict):
         from realm.laborers import LaborerNPC
