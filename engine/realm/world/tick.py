@@ -23,6 +23,8 @@ from realm.events.world_events import tick_world_events
 from realm.production import tick_production, tick_production_auto_restart
 from realm.production.spoilage import tick_material_spoilage
 from realm.contracts.social import tick_liens, tick_supply_contract_breaches
+from realm.genesis.home_builders import tick_home_builders
+from realm.population.towns import tick_assign_homeless_laborers
 from realm.contracts.stubs import tick_phase2_financial_contracts
 from realm.infrastructure.energy import ensure_powered_plots_fresh
 from realm.genesis.bank import tick_bank_loans
@@ -72,6 +74,8 @@ def advance_tick(world: World) -> None:
     tick_phase2_financial_contracts(world)
     tick_bank_loans(world)
     tick_liens(world)
+    tick_home_builders(world)
+    tick_assign_homeless_laborers(world)
     if world.scenario_id == "genesis":
         tick_frontier_roads(world)
         tick_laborers(world)

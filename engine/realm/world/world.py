@@ -667,6 +667,13 @@ def bootstrap_genesis(
     from realm.genesis.archetypes import seed_archetype_agents
 
     seed_archetype_agents(world)
+    # Phase 9G — seed a residential-developer NPC per starting town. This
+    # NPC plus the expanded starting-residence count (12 per island) house
+    # ~40 % of laborers at bootstrap, and tick_home_builders extends that
+    # over time so the homeless pool drains naturally.
+    from realm.genesis.home_builders import seed_home_builders
+
+    seed_home_builders(world)
     from realm.genesis.road_builders import seed_frontier_roads
 
     seed_frontier_roads(world)

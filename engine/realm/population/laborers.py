@@ -162,6 +162,17 @@ def laborer_cash_account(laborer_id: str) -> AccountId:
     return AccountId(f"cash:lab:{laborer_id}")
 
 
+def town_treasury_account(town_id: str) -> AccountId:
+    """Phase 9G — per-town treasury for sweeping orphan cash.
+
+    When a laborer dies or retires their remaining cash flows to the
+    town treasury instead of evaporating to system:reserve. This keeps
+    spending power circulating inside the town (eventually Phase 11+
+    will spend the treasury on civic maintenance / new residences).
+    """
+    return AccountId(f"cash:town:{town_id}")
+
+
 def _ensure_laborer_cash_invariant(world: World, lab: LaborerNPC) -> None:
     """Re-sync the dataclass mirror to the ledger balance.
 
@@ -305,19 +316,29 @@ def _apply_health_pressure(
 def _kill_laborer(world: World, lab: LaborerNPC, cause: str) -> None:
     """Remove a laborer from the simulation.
 
-    Their remaining cash is swept back to the system reserve so the
-    ledger total stays constant — there's no inheritance economy yet
-    and money should not leak. The death is recorded as a world_feed
-    event.
+    Phase 9G — remaining cash is swept to the laborer's town treasury
+    (``cash:town:<town_id>``) so spending power stays inside the local
+    economy instead of evaporating to system:reserve. Laborers with no
+    home_town still sink to system:reserve (true frontier orphan case).
+    The death is recorded as a world_feed event.
     """
     acct = laborer_cash_account(lab.laborer_id)
     remaining = world.ledger.balance(acct)
     if remaining > 0:
-        world.ledger.transfer(
-            debit=acct,
-            credit=system_reserve_account(),
-            amount_cents=remaining,
-        )
+        if lab.home_town:
+            tre = town_treasury_account(lab.home_town)
+            world.ledger.ensure_account(tre)
+            world.ledger.transfer(
+                debit=acct,
+                credit=tre,
+                amount_cents=remaining,
+            )
+        else:
+            world.ledger.transfer(
+                debit=acct,
+                credit=system_reserve_account(),
+                amount_cents=remaining,
+            )
     world.laborers.pop(lab.laborer_id, None)
     log_event(
         world,
@@ -331,18 +352,28 @@ def _kill_laborer(world: World, lab: LaborerNPC, cause: str) -> None:
 
 
 def _retire_laborer(world: World, lab: LaborerNPC) -> None:
-    """Retired laborer leaves the workforce. Cash returns to reserve.
+    """Retired laborer leaves the workforce.
 
-    No retirement economy yet — simplified per the Phase 7 spec.
+    Phase 9G — cash flows to the town treasury (same as death) so it
+    stays inside the local economy rather than sinking to system:reserve.
     """
     acct = laborer_cash_account(lab.laborer_id)
     remaining = world.ledger.balance(acct)
     if remaining > 0:
-        world.ledger.transfer(
-            debit=acct,
-            credit=system_reserve_account(),
-            amount_cents=remaining,
-        )
+        if lab.home_town:
+            tre = town_treasury_account(lab.home_town)
+            world.ledger.ensure_account(tre)
+            world.ledger.transfer(
+                debit=acct,
+                credit=tre,
+                amount_cents=remaining,
+            )
+        else:
+            world.ledger.transfer(
+                debit=acct,
+                credit=system_reserve_account(),
+                amount_cents=remaining,
+            )
     world.laborers.pop(lab.laborer_id, None)
     log_event(
         world,

@@ -57,8 +57,11 @@ synthetic placeholder so the four starting towns exist on day 1, before
 any player has built anything. Players + entrepreneur NPCs build their
 own residences on top of this baseline."""
 
-STARTING_RESIDENCES_PER_ISLAND: Final[int] = 3
-"""Just enough to constitute a town (TOWN_MIN_RESIDENCES) per island."""
+STARTING_RESIDENCES_PER_ISLAND: Final[int] = 12
+"""Phase 9G — bootstrap with enough residences to seat ~40 % of every
+island's laborers under a roof on day 1. The home_builder archetype
+(``realm/genesis/home_builders.py``) extends this over time, and players
+will compete in the residential market starting in Phase 11."""
 
 
 # ───────────────────────── dataclass ─────────────────────────
@@ -513,3 +516,71 @@ def _assign_initial_laborers_to_towns(
             lab.home_town = town_id
             lab.needs["shelter"] = 1.0
         town.laborer_count = min(len(laborers), len(residence_slots))
+
+
+# ─────────────────── Phase 9G — homeless laborer assignment ───────────────────
+
+
+_TICKS_PER_GAME_DAY: Final[int] = 1_440
+
+
+def tick_assign_homeless_laborers(world: World) -> int:
+    """Phase 9G — once per game-day, pull homeless laborers into towns
+    with spare residence capacity.
+
+    The new ``home_builder`` archetype steadily produces residences, but
+    those rooms sat empty without a matching mover. This pass walks every
+    town, counts free slots, and assigns the closest homeless laborers on
+    the same island until either runs out. Sorting is by laborer_id so
+    the choice is deterministic across runs.
+
+    Returns the number of laborers newly housed this game-day.
+    """
+    if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
+        return 0
+    if not world.towns or not world.laborers:
+        return 0
+    # Build homeless-by-island index once.
+    homeless_by_island: dict[int, list[str]] = {}
+    for lid, lab in world.laborers.items():
+        if lab.home_town is None:
+            homeless_by_island.setdefault(int(lab.island_id), []).append(lid)
+    if not homeless_by_island:
+        return 0
+    housed = 0
+    for town in world.towns.values():
+        free_slots: list[PlotId] = []
+        for pid in town.residential_plots:
+            cap = residence_capacity(world, pid)
+            occ = sum(
+                1
+                for lab in world.laborers.values()
+                if lab.home_plot_id == pid and lab.home_town is not None
+            )
+            for _ in range(max(0, cap - occ)):
+                free_slots.append(pid)
+        if not free_slots:
+            continue
+        pool = sorted(homeless_by_island.get(int(town.island_id), []))
+        for lid, slot_pid in zip(pool, free_slots):
+            lab = world.laborers.get(lid)
+            if lab is None:
+                continue
+            lab.home_plot_id = slot_pid
+            lab.home_town = town.town_id
+            lab.needs["shelter"] = 1.0
+            town.laborer_count = int(town.laborer_count) + 1
+            housed += 1
+            homeless_by_island[int(town.island_id)].remove(lid)
+        if housed:
+            from realm.events.event_log import log_event
+
+            log_event(
+                world,
+                "homeless_assigned",
+                f"{housed} laborer(s) moved into {town.town_id} on island {town.island_id}",
+                town_id=town.town_id,
+                island_id=int(town.island_id),
+                housed=int(housed),
+            )
+    return housed
