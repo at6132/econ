@@ -24,7 +24,7 @@ from __future__ import annotations
 import statistics
 from typing import Any, Final
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.regions import _world_bounds, region_for_coords

@@ -26,7 +26,7 @@ from realm.actions import (
     list_survey_report,
     survey_plot,
 )
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.genesis_bank import (
     LOAN_CYCLE_TICKS,
     apply_bank_loan,

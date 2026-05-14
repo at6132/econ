@@ -493,7 +493,7 @@ def generate_plots(
 
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
     from realm.genesis_exchange_liquidity import ensure_exchange_state_initialised
     from realm.genesis_pricing import exchange_ask_cents
     from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
@@ -605,7 +605,7 @@ def bootstrap_genesis(
         genesis_island_layout_supported,
         terrain_for_genesis_island_cell,
     )
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
     from realm.market_history import record_market_snapshot
 
     human = PartyId("player")
@@ -927,7 +927,7 @@ def _seed_cartel_grain_overlay(
     pr_lo = place_sell_order(world, grain_vendor, MaterialId("grain"), 4, 118)
     if not pr_lo.get("ok"):
         raise ValueError(str(pr_lo.get("reason")))
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
 
     log_event(
         world,
@@ -1009,7 +1009,7 @@ def bootstrap_frontier(
     )
     if isinstance(tr_c, MoneyErr):
         raise ValueError(tr_c.reason)
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
     from realm.markets import place_sell_order
 
     pr = place_sell_order(world, vendor, MaterialId("grain"), 10, 120)

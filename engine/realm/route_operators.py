@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import PartyId, PlotId
 from realm.regions import region_for_plot, route_key
 from realm.world import World

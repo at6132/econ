@@ -14,7 +14,7 @@ from realm.actions import tick_stub_employment
 from realm.decay import tick_building_decay, tick_building_maintenance
 from realm.market_history import record_market_snapshot
 from realm.movement import deliver_transit
-from realm.price_alerts import tick_price_alerts
+from realm.events.price_alerts import tick_price_alerts
 from realm.production import tick_production, tick_production_auto_restart
 from realm.spoilage import tick_material_spoilage
 from realm.social import tick_supply_contract_breaches
@@ -28,7 +28,7 @@ from realm.genesis_margaux_sprint5 import (
 )
 from realm.employment import tick_job_market, tick_laborer_wages
 from realm.laborers import tick_laborer_births, tick_laborers
-from realm.sprint4_feed import tick_sprint4_feed
+from realm.events.sprint4_feed import tick_sprint4_feed
 from realm.stores import tick_laborer_spending
 from realm.world import World
 

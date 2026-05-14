@@ -332,7 +332,7 @@ def tick_labor_migration(world: World) -> None:
         pools[best_region] = int(pools.get(best_region, 0)) + share
         moved_log.append((src, share))
     if moved_log:
-        from realm.event_log import log_event
+        from realm.events.event_log import log_event
 
         log_event(
             world,
@@ -400,7 +400,7 @@ def request_labor_transport(
             "arrive_tick": int(arrive_tick),
         }
     )
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
 
     log_event(
         world,
@@ -433,7 +433,7 @@ def tick_labor_transport_arrivals(world: World) -> None:
         else:
             remaining.append(t)
     if arrived:
-        from realm.event_log import log_event
+        from realm.events.event_log import log_event
 
         for t in arrived:
             increment_pool(world, str(t["dst_region"]), int(t["workers"]))

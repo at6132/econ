@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from realm.lua_runtime import lua_runtime_detail
-from realm.lua_sandbox import MAX_EVAL_BYTES
+from realm.code.lua_runtime import lua_runtime_detail
+from realm.code.lua_sandbox import MAX_EVAL_BYTES
 
 MAX_SOURCE_BYTES = 256_000
 

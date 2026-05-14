@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr, MatterOk, MatterResult
 from realm.storage_caps import try_add_inventory

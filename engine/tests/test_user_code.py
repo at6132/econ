@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.user_code import code_layer_public_status, validate_user_source
+from realm.code.user_code import code_layer_public_status, validate_user_source
 
 
 def test_validate_empty_source_ok() -> None:

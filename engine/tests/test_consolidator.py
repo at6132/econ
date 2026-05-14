@@ -158,7 +158,7 @@ def test_own_supply_insulates_from_consolidator() -> None:
 
 def test_world_feed_dominance_line_uses_redacted_language() -> None:
     """When share crosses 30 %, the feed entry is anonymous — never names Kessler."""
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
 
     w = _world()
     # Force a synthetic trade history where Kessler owns >30 % of iron_ingot volume.

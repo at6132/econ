@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Final
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import PartyId, PlotId
 from realm.laborers import (
     TICKS_PER_GAME_DAY,

@@ -59,9 +59,9 @@ from realm.contract_stubs import (
 )
 from realm.genesis_analytics import purchase_analytics_product
 from realm.schematic import validate_linear_recipe_chain
-from realm.lua_sandbox import eval_user_lua_chunk
+from realm.code.lua_sandbox import eval_user_lua_chunk
 from realm.tick import advance_tick
-from realm.user_code import code_layer_public_status, validate_user_source
+from realm.code.user_code import code_layer_public_status, validate_user_source
 from realm.world import bootstrap_by_scenario, bootstrap_frontier, world_compact_dict, world_public_dict
 
 app = FastAPI(title="Realm Engine", version="0.1.0")
@@ -1293,7 +1293,7 @@ def get_price_alerts(party: Annotated[str, Query()] = "player") -> dict:
 
 @app.post("/alerts/price")
 def post_price_alert(body: Annotated[dict, Body()]) -> dict:
-    from realm.price_alerts import add_price_alert
+    from realm.events.price_alerts import add_price_alert
 
     material = body.get("material")
     condition = body.get("condition")
@@ -1312,7 +1312,7 @@ def post_price_alert(body: Annotated[dict, Body()]) -> dict:
 
 @app.delete("/alerts/price/{alert_id}")
 def delete_price_alert(alert_id: str) -> dict:
-    from realm.price_alerts import remove_price_alert
+    from realm.events.price_alerts import remove_price_alert
 
     r = remove_price_alert(_world, alert_id)
     if not r.get("ok"):

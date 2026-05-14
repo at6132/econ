@@ -7,7 +7,7 @@ electricity to dissipate when held off-grid past its spoilage window.
 
 from __future__ import annotations
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.materials import MATERIALS

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.genesis_pricing import (
     exchange_ask_cents,
     fair_value_cents,

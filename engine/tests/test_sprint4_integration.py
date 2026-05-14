@@ -39,7 +39,7 @@ from realm.genesis_broker import (
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.markets import cancel_party_asks_for_material, place_sell_order
-from realm.price_alerts import add_price_alert, tick_price_alerts
+from realm.events.price_alerts import add_price_alert, tick_price_alerts
 from realm.tick import advance_tick
 from realm.world import World, bootstrap_genesis
 
@@ -170,7 +170,7 @@ def test_sprint4_integration_end_to_end() -> None:
     # The catalogue has 25+ triggers; many fire only on multi-day cadences
     # (e.g. weekly digest, rank changes). We exercise a handful directly so
     # the assertion is deterministic in a 1-game-day window.
-    from realm.sprint4_feed import tick_sprint4_feed
+    from realm.events.sprint4_feed import tick_sprint4_feed
 
     if "coal" in w.market_asks_by_material:
         del w.market_asks_by_material["coal"]

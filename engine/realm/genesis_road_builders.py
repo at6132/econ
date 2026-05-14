@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.geo import manhattan
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account

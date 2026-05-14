@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from realm.lua_sandbox import eval_user_lua_chunk
+from realm.code.lua_sandbox import eval_user_lua_chunk
 
 
 def test_eval_disabled_without_env() -> None:

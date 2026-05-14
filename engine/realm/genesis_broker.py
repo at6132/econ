@@ -24,7 +24,7 @@ from realm.actions import (
     list_survey_report,
     transfer_survey_report,
 )
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import PartyId
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.world import SurveyReport, World

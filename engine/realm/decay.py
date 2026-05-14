@@ -21,7 +21,7 @@ real materials and are mandatory to keep the plant running at full output.
 
 from __future__ import annotations
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account

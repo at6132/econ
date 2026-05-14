@@ -276,7 +276,7 @@ def _settler_probabilistic_discovery(world: World, party: PartyId) -> None:
         get_assay_stage,
         _set_assay_stage,
     )
-    from realm.event_log import log_event
+    from realm.events.event_log import log_event
     from realm.core.time_scale import TICKS_PER_GAME_DAY
 
     if world.tick % TICKS_PER_GAME_DAY != 0:

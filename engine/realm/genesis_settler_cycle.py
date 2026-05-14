@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.event_log import log_event
+from realm.events.event_log import log_event
 from realm.genesis_settler_names import assign_display_name_for_new_settler
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr

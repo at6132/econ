@@ -32,7 +32,7 @@ def main() -> int:
     args = p.parse_args()
 
     if args.code_status:
-        from realm.user_code import code_layer_public_status
+        from realm.code.user_code import code_layer_public_status
 
         print(json.dumps(code_layer_public_status(), indent=2))
         return 0
