@@ -57,11 +57,11 @@ synthetic placeholder so the four starting towns exist on day 1, before
 any player has built anything. Players + entrepreneur NPCs build their
 own residences on top of this baseline."""
 
-STARTING_RESIDENCES_PER_ISLAND: Final[int] = 12
-"""Phase 9G — bootstrap with enough residences to seat ~40 % of every
-island's laborers under a roof on day 1. The home_builder archetype
-(``realm/genesis/home_builders.py``) extends this over time, and players
-will compete in the residential market starting in Phase 11."""
+STARTING_RESIDENCES_PER_ISLAND: Final[int] = 22
+"""Phase 9 closure - bootstrap with enough residences to seat at least
+60% of each island's laborers under a roof on day 1. The home_builder
+archetype (``realm/genesis/home_builders.py``) extends this over time,
+and players will compete in the residential market starting in Phase 11."""
 
 
 # ───────────────────────── dataclass ─────────────────────────

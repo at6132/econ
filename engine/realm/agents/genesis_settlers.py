@@ -17,6 +17,11 @@ from realm.economy.markets import (
     place_sell_order,
     sell_into_bids,
 )
+from realm.agents.requote_dampener import (
+    charge_cancel_fee,
+    record_requote,
+    should_requote,
+)
 from realm.infrastructure.plot_logistics import (
     ensure_inventory_from_stash,
     party_material_held,
@@ -900,9 +905,14 @@ def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_un
     q = world.inventory.qty(party, mid)
     if q <= 0:
         return
-    cancel_party_asks_for_material(world, party, mid)
     px = _list_price_cents(world, mid, party=party)
-    place_sell_order(world, party, mid, min(q, max_units), px)
+    if not should_requote(world, party, mid, "ask", px):
+        return
+    cancels = cancel_party_asks_for_material(world, party, mid)
+    charge_cancel_fee(world, party, cancels)
+    res = place_sell_order(world, party, mid, min(q, max_units), px)
+    if res.get("ok"):
+        record_requote(world, party, mid, "ask", px)
 
 
 _TICKS_PER_GAME_DAY = 1440

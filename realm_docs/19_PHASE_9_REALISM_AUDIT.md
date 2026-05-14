@@ -2,7 +2,7 @@
 
 > **Purpose:** before we touch the UI, walk the entire engine against the 7 design pillars (doc 02), the 9 primitives (doc 03), and the 10 laws (doc 04) and write down every place where the simulation lets you do something the design says you shouldn't be able to do. Avi flagged "you can dock and unload your boat anywhere — should require a port"; this doc finds the rest.
 >
-> **Status:** draft audit, written from a code review of `engine/realm/` + a 30 game-day headless probe (`engine/_phase9_headless.py`). Numbered findings below — each has **severity**, **what the spec says**, **what the engine does**, **suggested fix**, and **rough effort**. Phase 9 work picks from this list. Phase 10 follows; scope at the bottom.
+> **Status:** Phase 9 implemented and closed in slices 9A-9I. The original audit remains below for traceability; the closure summary is in section C.
 >
 > **Severity scale:**
 > - **P0** — breaks a pillar or a law (e.g. free money, geography ignored, conservation hole). Must fix.
@@ -277,7 +277,32 @@ below explain why.
 
 ---
 
-## C. Phase 9 — what to actually do
+## C. Phase 9 — closure summary
+
+Phase 9 is closed. Implemented slices:
+
+- **9A - Geography gates + vessels-as-assets:** inter-island shipments require origin/destination docks, shipper-owned vessel, and fuel; destination dock owner receives handling fees; shipyards can build vessels.
+- **9B - Plot trading + speculative surveying:** plot transfer/list/cancel/buy flow plus authorized survey access.
+- **9C - Real labor wages:** production labor payments route to real laborers when possible, with deterministic local selection and reserve fallback.
+- **9D - Bank loan correctness:** due payments auto-deduct when cash exists; trusted tier requires collateral.
+- **9E - Force majeure + liens:** supply contracts get generalized disaster grace; unpaid damages create liens that drain future cash flow.
+- **9F - Wear and decay:** tool wear, road condition decay, and road maintenance.
+- **9G - Housing developer + treasury sweep:** bootstrap has more basic homes, home-builder NPCs expand residences, homeless laborers fill new slots, and dead/retired laborer cash flows to town treasuries.
+- **9H - Order-book sanity:** Tier 2 cancel/repost behavior is gated by a quote cooldown and material price movement, with a microfee on cancels.
+- **9I - Realism polish:** mass-weighted shipping, progressive claim fees, and staggered starting laborer ages.
+
+Deferred out of Phase 9 by design: water material/daily thirst, public order-book information delay, market-maker rebates, full employment notice mechanics, richer reputation statistics, and birth/child modeling. These are Phase 10+ candidates because Phase 9's closure target was final realism correction without introducing new primitives.
+
+Final headless probe (`python _phase9_headless.py`, seed 42, 30 game-days):
+
+- Ledger conservation held: `ledger_delta = 0`.
+- Population stayed alive: `final_laborers = 950`.
+- Housing target cleared at bootstrap after final tuning: `602 / 950 = 63.4%` housed.
+- Production is live: `production_done = 589`, `production_start = 264`, `laborer_wage_paid = 318`.
+- Order-book churn is controlled: `market_list = 66` over 30 game-days, down from the original audit's 2,021 in the same window.
+- Inter-island economy is visible: `inter_island_buy = 4`, route operators registered/repriced, and the new dock/vessel/fuel gates are covered by tests.
+
+## C0. Original Phase 9 plan
 
 Sort the above by severity, group into shippable slices:
 

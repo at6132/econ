@@ -43,6 +43,7 @@ from realm.infrastructure.plot_logistics import (
     uses_plot_logistics,
 )
 from realm.production import tick_production
+from realm.production.recipe_sites import recipe_allowed_on_terrain
 from realm.actions import start_production_on_plot
 from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
@@ -149,7 +150,7 @@ def test_sprint1_multi_agent_slice() -> None:
         if pl is None:
             continue
         # Allowed terrains for grow_grain (per recipe_sites RECIPE_ALLOWED_TERRAINS).
-        if pl.terrain not in (Terrain.PLAINS, Terrain.GRASSLAND):
+        if not recipe_allowed_on_terrain(pl.terrain, "grow_grain"):
             grain_done_offplot.append((pid, pl.terrain.name))
     assert not grain_done_offplot, (
         f"no grain production should complete on non-plains plots; offenders: {grain_done_offplot[:5]}"

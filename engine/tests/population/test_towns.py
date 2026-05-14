@@ -74,15 +74,17 @@ def test_initial_laborers_housed_up_to_capacity():
                 assert lab.needs["shelter"] == pytest.approx(1.0)
 
 
-def test_unhoused_laborers_exceed_housed_at_bootstrap():
-    """The starting house stock is intentionally small — surplus drives demand."""
+def test_bootstrap_houses_phase9_target_majority():
+    """Phase 9 closure seeds enough homes for a majority, with surplus demand left."""
     w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
     housed = sum(1 for lab in w.laborers.values() if lab.home_town)
     unhoused = sum(1 for lab in w.laborers.values() if not lab.home_town)
-    assert unhoused > housed, (
-        f"expected surplus of unhoused laborers driving demand for residences, "
+    total = housed + unhoused
+    assert housed * 10 >= total * 6, (
+        f"expected at least 60% of laborers housed after Phase 9 closure, "
         f"got housed={housed}, unhoused={unhoused}"
     )
+    assert unhoused > 0, "home_builder market should still have surplus demand"
 
 
 # ───────────────────────── detect_towns clustering ─────────────────────────
