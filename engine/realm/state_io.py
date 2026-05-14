@@ -31,7 +31,7 @@ from realm.world import (
 from realm.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 11
+SNAPSHOT_VERSION = 12
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -210,12 +210,32 @@ def dump_world(world: World) -> dict[str, Any]:
             for s in world.road_segments
         ],
         "next_road_segment_seq": int(world.next_road_segment_seq),
+        "laborers": {
+            lid: {
+                "laborer_id": lab.laborer_id,
+                "display_name": lab.display_name,
+                "island_id": int(lab.island_id),
+                "home_plot_id": str(lab.home_plot_id),
+                "home_town": lab.home_town,
+                "employer": str(lab.employer) if lab.employer is not None else None,
+                "skill_level": int(lab.skill_level),
+                "age_ticks": int(lab.age_ticks),
+                "health": float(lab.health),
+                "cash_cents": int(lab.cash_cents),
+                "needs": {k: float(v) for k, v in lab.needs.items()},
+                "employment_contract": lab.employment_contract,
+                "migrating_to": lab.migrating_to,
+                "migration_arrives_tick": int(lab.migration_arrives_tick),
+                "last_needs_tick": int(lab.last_needs_tick),
+            }
+            for lid, lab in world.laborers.items()
+        },
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -446,6 +466,42 @@ def load_world(d: dict[str, Any]) -> World:
                 )
             )
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
+    raw_laborers = d.get("laborers") or {}
+    if isinstance(raw_laborers, dict):
+        from realm.laborers import LaborerNPC
+
+        for lid, payload in raw_laborers.items():
+            if not isinstance(payload, dict):
+                continue
+            employer_raw = payload.get("employer")
+            world.laborers[str(lid)] = LaborerNPC(
+                laborer_id=str(payload.get("laborer_id", lid)),
+                display_name=str(payload.get("display_name", "")),
+                island_id=int(payload.get("island_id", 0)),
+                home_plot_id=PlotId(str(payload.get("home_plot_id", ""))),
+                home_town=(
+                    str(payload["home_town"]) if payload.get("home_town") else None
+                ),
+                employer=PartyId(str(employer_raw)) if employer_raw else None,
+                skill_level=int(payload.get("skill_level", 0)),
+                age_ticks=int(payload.get("age_ticks", 0)),
+                health=float(payload.get("health", 1.0)),
+                cash_cents=int(payload.get("cash_cents", 0)),
+                needs={
+                    str(k): float(v)
+                    for k, v in (payload.get("needs") or {}).items()
+                },
+                employment_contract=(
+                    str(payload["employment_contract"])
+                    if payload.get("employment_contract")
+                    else None
+                ),
+                migrating_to=(
+                    str(payload["migrating_to"]) if payload.get("migrating_to") else None
+                ),
+                migration_arrives_tick=int(payload.get("migration_arrives_tick", 0)),
+                last_needs_tick=int(payload.get("last_needs_tick", 0)),
+            )
     # Sprint 6 — Phase D.1: matter no longer lives in ``plot_output_stock``.
     # Migrate any staged output from old snapshots (version ≤ 10) into the
     # plot owner's inventory and reset the per-plot dict to a fresh display log.

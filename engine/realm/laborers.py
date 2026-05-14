@@ -1,0 +1,423 @@
+"""Phase 7B — laborer NPCs: the real population economy.
+
+LaborerNPCs are mortal, needs-driven agents. They are NOT entrepreneurs:
+they cannot claim plots, cannot operate businesses, cannot make capital
+decisions. They work, they spend, they age, they die, and their migration
+sends powerful demand signals across the four islands.
+
+Money flow under Phase 7:
+
+  entrepreneur → wages → laborer.cash → store → store owner (entrepreneur)
+                                                       ↓
+                                                  reinvestment
+
+The bootstrap is the only injection: each laborer gets a $200 subsistence
+stake at birth (real money in the ledger). After that, the only way
+laborers acquire cash is wages from an employer; the only way they spend
+it is through stores. Conservation must hold.
+
+Phase 7B scope (this file):
+- ``LaborerNPC`` dataclass + ledger account per laborer.
+- ``seed_island_laborers`` bootstrap (deterministic per seed).
+- ``tick_laborers`` lifecycle: need decay, health pressure, death,
+  retirement, aging.
+- ``tick_laborer_births`` per-town spawn loop.
+- ``tick_laborer_migration`` minimal placeholder (full town-vs-town
+  migration logic lands in 7C/7E once towns and jobs exist).
+
+Phase 7D wires consumption into stores; Phase 7E wires wages and real
+employment. This module defines the surface those phases plug into.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Final
+
+from realm.event_log import log_event
+from realm.ids import PartyId, PlotId
+from realm.ledger import (
+    AccountId,
+    MoneyErr,
+    party_cash_account,
+    system_reserve_account,
+)
+from realm.world import World
+
+
+# ───────────────────────────── tunables ─────────────────────────────
+
+
+TICKS_PER_GAME_DAY: Final[int] = 1440
+"""One game-day = 1,440 ticks (matches the rest of the simulation)."""
+
+RETIREMENT_AGE_GAME_DAYS: Final[int] = 100
+RETIREMENT_AGE_TICKS: Final[int] = RETIREMENT_AGE_GAME_DAYS * TICKS_PER_GAME_DAY
+
+LABORER_STARTING_CASH_CENTS: Final[int] = 20_000
+"""$200 subsistence stake. The only money injection on the laborer side."""
+
+# Per game-day decay rates (units = need fraction lost per day).
+FOOD_DECAY_PER_DAY: Final[float] = 0.05
+FUEL_DECAY_PER_DAY: Final[float] = 0.03
+SHELTER_DECAY_PER_DAY: Final[float] = 0.01
+
+# Need thresholds: below these, the corresponding health pressure kicks in.
+FOOD_LOW_THRESHOLD: Final[float] = 0.30
+FUEL_LOW_THRESHOLD: Final[float] = 0.20
+SHELTER_LOW_THRESHOLD: Final[float] = 0.50
+
+# Per-day health decay when needs are critical.
+FOOD_HEALTH_DECAY_PER_DAY: Final[float] = 0.02
+FUEL_HEALTH_DECAY_PER_DAY: Final[float] = 0.01
+SHELTER_HEALTH_DECAY_PER_DAY: Final[float] = 0.005
+
+# Health bands.
+PRODUCTIVITY_REDUCED_THRESHOLD: Final[float] = 0.30
+"""Below 0.30 health → 30% productivity (sick worker)."""
+
+DEATH_THRESHOLD: Final[float] = 0.10
+"""At or below 0.10 health → laborer dies (logged as a world_feed event)."""
+
+# Phase 7B per-island default seeded population (matches the spec).
+DEFAULT_ISLAND_LABORER_COUNTS: Final[dict[int, int]] = {
+    0: 300,  # Industrial
+    1: 400,  # Agricultural
+    2: 150,  # Frontier
+    3: 100,  # Resource-rich
+}
+
+# Birth control (Phase 7C/7D will revisit once towns exist).
+BIRTH_CHECK_INTERVAL_GAME_DAYS: Final[int] = 7
+BIRTH_TOWN_HEALTH_THRESHOLD: Final[float] = 0.60
+
+
+__all__ = [
+    "LaborerNPC",
+    "TICKS_PER_GAME_DAY",
+    "RETIREMENT_AGE_GAME_DAYS",
+    "RETIREMENT_AGE_TICKS",
+    "LABORER_STARTING_CASH_CENTS",
+    "FOOD_DECAY_PER_DAY",
+    "FUEL_DECAY_PER_DAY",
+    "SHELTER_DECAY_PER_DAY",
+    "FOOD_LOW_THRESHOLD",
+    "FUEL_LOW_THRESHOLD",
+    "SHELTER_LOW_THRESHOLD",
+    "FOOD_HEALTH_DECAY_PER_DAY",
+    "FUEL_HEALTH_DECAY_PER_DAY",
+    "SHELTER_HEALTH_DECAY_PER_DAY",
+    "PRODUCTIVITY_REDUCED_THRESHOLD",
+    "DEATH_THRESHOLD",
+    "DEFAULT_ISLAND_LABORER_COUNTS",
+    "laborer_cash_account",
+    "seed_island_laborers",
+    "tick_laborers",
+    "tick_laborer_births",
+    "laborer_count_for_island",
+    "unemployed_laborer_count_for_island",
+    "productivity_multiplier",
+]
+
+
+# ───────────────────────────── dataclass ─────────────────────────────
+
+
+@dataclass
+class LaborerNPC:
+    """A mortal, needs-driven NPC. Lives in a town, works for an entrepreneur."""
+
+    laborer_id: str
+    display_name: str
+    island_id: int
+    home_plot_id: PlotId
+    home_town: str | None = None
+    employer: PartyId | None = None
+    skill_level: int = 0
+    age_ticks: int = 0
+    health: float = 1.0
+    cash_cents: int = 0
+    needs: dict[str, float] = field(
+        default_factory=lambda: {"food": 1.0, "fuel": 1.0, "shelter": 1.0}
+    )
+    employment_contract: str | None = None
+    migrating_to: str | None = None
+    migration_arrives_tick: int = 0
+    last_needs_tick: int = 0
+    """Last simulation tick at which need-decay was applied — used to keep
+    decay deterministic regardless of how often ``tick_laborers`` is called."""
+
+
+# ───────────────────────────── accounts ─────────────────────────────
+
+
+def laborer_cash_account(laborer_id: str) -> AccountId:
+    """Ledger account holding this laborer's cash.
+
+    Laborers are NOT in ``world.parties`` (they don't participate in
+    actions, contracts, or order books directly). They have their own
+    ``cash:lab:<laborer_id>`` account so wage/spend transfers are real
+    ledger movements and conservation holds exactly.
+    """
+    return AccountId(f"cash:lab:{laborer_id}")
+
+
+def _ensure_laborer_cash_invariant(world: World, lab: LaborerNPC) -> None:
+    """Re-sync the dataclass mirror to the ledger balance.
+
+    The ledger is the source of truth. ``lab.cash_cents`` is a cached
+    mirror updated by every transfer for fast reads — this helper exists
+    for tests and snapshot-load paths.
+    """
+    lab.cash_cents = world.ledger.balance(laborer_cash_account(lab.laborer_id))
+
+
+# ───────────────────────────── bootstrap ─────────────────────────────
+
+
+def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
+    """Spawn ``count`` laborers on ``island_id``, distributed across land plots.
+
+    Each laborer receives a real ledger account funded with
+    ``LABORER_STARTING_CASH_CENTS`` from the system reserve — this is the
+    one-and-only injection for laborer cash. Returns the list of newly
+    created ``laborer_id``s in deterministic seed order.
+    """
+    plot_islands = world.scenario_state.get("plot_islands") or {}
+    if not plot_islands:
+        return []
+    candidate_plots = sorted(
+        pid_s for pid_s, isl in plot_islands.items() if int(isl) == int(island_id)
+    )
+    if not candidate_plots:
+        return []
+    from realm.laborer_names import generate_laborer_name
+
+    rng = world.rng(f"seed_laborers:{island_id}:{count}")
+    seeded: list[str] = []
+    next_seq = int(world.scenario_state.setdefault("next_laborer_seq", 1))
+    for _ in range(count):
+        home_plot = PlotId(rng.choice(candidate_plots))
+        lid = f"lab_{next_seq:05d}"
+        next_seq += 1
+        name = generate_laborer_name(rng)
+        lab = LaborerNPC(
+            laborer_id=lid,
+            display_name=name,
+            island_id=int(island_id),
+            home_plot_id=home_plot,
+            last_needs_tick=int(world.tick),
+        )
+        acct = laborer_cash_account(lid)
+        world.ledger.ensure_account(acct)
+        tr = world.ledger.transfer(
+            debit=system_reserve_account(),
+            credit=acct,
+            amount_cents=LABORER_STARTING_CASH_CENTS,
+        )
+        if isinstance(tr, MoneyErr):
+            # Out of reserve — skip this laborer rather than crash bootstrap.
+            continue
+        lab.cash_cents = LABORER_STARTING_CASH_CENTS
+        world.laborers[lid] = lab
+        seeded.append(lid)
+    world.scenario_state["next_laborer_seq"] = next_seq
+    return seeded
+
+
+def bootstrap_island_laborer_populations(world: World) -> dict[int, int]:
+    """Seed every detected island with its default starting laborer count.
+
+    Returns ``{island_id: laborers_seeded}`` for the caller to log.
+    """
+    plot_islands = world.scenario_state.get("plot_islands") or {}
+    if not plot_islands:
+        return {}
+    distinct_islands = sorted({int(isl) for isl in plot_islands.values()})
+    out: dict[int, int] = {}
+    for isl in distinct_islands:
+        count = DEFAULT_ISLAND_LABORER_COUNTS.get(isl)
+        if count is None:
+            # Extra islands beyond the canonical four get a small seed so
+            # they aren't completely empty if world gen produces them.
+            count = 100
+        ids = seed_island_laborers(world, isl, count)
+        out[isl] = len(ids)
+    return out
+
+
+# ───────────────────────────── tick ─────────────────────────────
+
+
+def productivity_multiplier(lab: LaborerNPC) -> float:
+    """Production-line throughput multiplier for this laborer.
+
+    Healthy laborers contribute 1.0; sick laborers (``health < 0.30``)
+    drop to 0.30. Used by 7E employment integration; defined here so
+    tests can exercise it without dragging in the production module.
+    """
+    if lab.health < PRODUCTIVITY_REDUCED_THRESHOLD:
+        return 0.30
+    return 1.0
+
+
+def _apply_needs_decay(lab: LaborerNPC, days_elapsed: float) -> None:
+    """Decay the three needs proportional to days elapsed."""
+    lab.needs["food"] = max(0.0, lab.needs.get("food", 1.0) - FOOD_DECAY_PER_DAY * days_elapsed)
+    lab.needs["fuel"] = max(0.0, lab.needs.get("fuel", 1.0) - FUEL_DECAY_PER_DAY * days_elapsed)
+    lab.needs["shelter"] = max(
+        0.0, lab.needs.get("shelter", 1.0) - SHELTER_DECAY_PER_DAY * days_elapsed
+    )
+
+
+def _apply_health_pressure(lab: LaborerNPC, days_elapsed: float) -> None:
+    """Drop health when needs are below their critical thresholds."""
+    drop = 0.0
+    if lab.needs.get("food", 1.0) < FOOD_LOW_THRESHOLD:
+        drop += FOOD_HEALTH_DECAY_PER_DAY * days_elapsed
+    if lab.needs.get("fuel", 1.0) < FUEL_LOW_THRESHOLD:
+        drop += FUEL_HEALTH_DECAY_PER_DAY * days_elapsed
+    if lab.needs.get("shelter", 1.0) < SHELTER_LOW_THRESHOLD:
+        drop += SHELTER_HEALTH_DECAY_PER_DAY * days_elapsed
+    if drop > 0.0:
+        lab.health = max(0.0, lab.health - drop)
+
+
+def _kill_laborer(world: World, lab: LaborerNPC, cause: str) -> None:
+    """Remove a laborer from the simulation.
+
+    Their remaining cash is swept back to the system reserve so the
+    ledger total stays constant — there's no inheritance economy yet
+    and money should not leak. The death is recorded as a world_feed
+    event.
+    """
+    acct = laborer_cash_account(lab.laborer_id)
+    remaining = world.ledger.balance(acct)
+    if remaining > 0:
+        world.ledger.transfer(
+            debit=acct,
+            credit=system_reserve_account(),
+            amount_cents=remaining,
+        )
+    world.laborers.pop(lab.laborer_id, None)
+    log_event(
+        world,
+        "world_feed",
+        f"A laborer ({lab.display_name}) on island {lab.island_id} {cause}.",
+        laborer_id=lab.laborer_id,
+        island_id=lab.island_id,
+        cause=cause,
+        age_ticks=lab.age_ticks,
+    )
+
+
+def _retire_laborer(world: World, lab: LaborerNPC) -> None:
+    """Retired laborer leaves the workforce. Cash returns to reserve.
+
+    No retirement economy yet — simplified per the Phase 7 spec.
+    """
+    acct = laborer_cash_account(lab.laborer_id)
+    remaining = world.ledger.balance(acct)
+    if remaining > 0:
+        world.ledger.transfer(
+            debit=acct,
+            credit=system_reserve_account(),
+            amount_cents=remaining,
+        )
+    world.laborers.pop(lab.laborer_id, None)
+    log_event(
+        world,
+        "laborer_retired",
+        f"{lab.display_name} retired after {lab.age_ticks // TICKS_PER_GAME_DAY} game-days.",
+        laborer_id=lab.laborer_id,
+        island_id=lab.island_id,
+    )
+
+
+def tick_laborers(world: World) -> dict[str, int]:
+    """Per-tick laborer lifecycle pass.
+
+    Decay, health pressure, death, retirement, and aging are recomputed
+    on every game-day boundary (every 1,440 ticks) by comparing the
+    laborer's ``last_needs_tick`` with the current ``world.tick``. This
+    keeps the pass cheap (most calls are no-ops) and idempotent under
+    repeated invocation within the same day.
+
+    Returns a small status dict useful for tests and digest writeups.
+    """
+    stats = {"died": 0, "retired": 0, "ticked": 0}
+    if not world.laborers:
+        return stats
+    now = int(world.tick)
+    dead_ids: list[str] = []
+    retired_ids: list[str] = []
+    for lab in world.laborers.values():
+        elapsed_ticks = now - int(lab.last_needs_tick)
+        if elapsed_ticks <= 0:
+            continue
+        days_elapsed = elapsed_ticks / TICKS_PER_GAME_DAY
+        if days_elapsed < 1.0:
+            # Apply fractional decay too so tests with sub-day ticks see
+            # smooth progression; "every game-day" in the spec means the
+            # rate, not the granularity.
+            pass
+        _apply_needs_decay(lab, days_elapsed)
+        _apply_health_pressure(lab, days_elapsed)
+        lab.age_ticks += elapsed_ticks
+        lab.last_needs_tick = now
+        stats["ticked"] += 1
+        if lab.health <= DEATH_THRESHOLD:
+            dead_ids.append(lab.laborer_id)
+        elif lab.age_ticks >= RETIREMENT_AGE_TICKS:
+            retired_ids.append(lab.laborer_id)
+    for lid in dead_ids:
+        lab = world.laborers.get(lid)
+        if lab is None:
+            continue
+        # Cause heuristic for the world_feed message.
+        if lab.needs.get("food", 1.0) < FOOD_LOW_THRESHOLD:
+            cause = "died from hunger"
+        elif lab.needs.get("fuel", 1.0) < FUEL_LOW_THRESHOLD:
+            cause = "died from exposure"
+        elif lab.needs.get("shelter", 1.0) < SHELTER_LOW_THRESHOLD:
+            cause = "died from exposure"
+        else:
+            cause = "died"
+        _kill_laborer(world, lab, cause)
+        stats["died"] += 1
+    for lid in retired_ids:
+        lab = world.laborers.get(lid)
+        if lab is None:
+            continue
+        _retire_laborer(world, lab)
+        stats["retired"] += 1
+    return stats
+
+
+def tick_laborer_births(world: World) -> int:
+    """Phase 7B placeholder — full birth logic lands in 7C alongside towns.
+
+    Births require: a town with abundant food (a store with grain stock),
+    residential capacity, and town health > 0.60. Towns don't exist yet
+    in this sub-phase, so this function is wired but inert until 7C
+    populates ``world.towns``. Returns the number of births that fired
+    this tick (always 0 for now).
+    """
+    return 0
+
+
+# ───────────────────────────── analytics ─────────────────────────────
+
+
+def laborer_count_for_island(world: World, island_id: int) -> int:
+    """Live laborer count on ``island_id`` — replaces the static density map."""
+    return sum(1 for lab in world.laborers.values() if int(lab.island_id) == int(island_id))
+
+
+def unemployed_laborer_count_for_island(world: World, island_id: int) -> int:
+    """Unemployed laborer count — drives scarcity premiums in 7E."""
+    return sum(
+        1
+        for lab in world.laborers.values()
+        if int(lab.island_id) == int(island_id) and lab.employer is None
+    )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from realm.ids import PartyId, PlotId
 from realm.inventory import Inventory, MatterErr
@@ -14,6 +14,9 @@ from realm.recipes import recipe_public_list
 from realm.biome_noise import terrain_for_cell
 from realm.rng import make_rng
 from realm.terrain import Terrain
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from realm.laborers import LaborerNPC
 
 
 def _subsurface_roll(
@@ -341,6 +344,11 @@ class World:
     its owner collect a 0–10% ad-valorem toll on goods value transiting it."""
     next_road_segment_seq: int = 0
     """Monotonic id generator for ``RoadSegment.segment_id``."""
+    laborers: dict[str, "LaborerNPC"] = field(default_factory=dict)
+    """Phase 7B: live laborer NPCs keyed by ``laborer_id``. Replaces the
+    static ``population_density``/``labor_pool`` maps. Each laborer has a
+    real ledger account (``cash:lab:<id>``) so wage / spend transfers
+    obey conservation. Mortal, needs-driven, employed by entrepreneurs."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -668,6 +676,17 @@ def bootstrap_genesis(
         world.scenario_state["plot_islands"] = compute_plot_islands(world)
     else:
         world.scenario_state["plot_islands"] = {}
+    # Phase 7B — seed LaborerNPCs per island. Each laborer gets a real
+    # ledger account funded with the subsistence stake from the system
+    # reserve. Non-island worlds (small grids in tests) get no laborer
+    # population — those tests target older sprint mechanics.
+    from realm.laborers import bootstrap_island_laborer_populations
+
+    laborer_seeds = bootstrap_island_laborer_populations(world)
+    if laborer_seeds:
+        world.scenario_state["laborer_seeds_by_island"] = {
+            str(k): int(v) for k, v in laborer_seeds.items()
+        }
     # Phase 7A: pop hubs are removed. Population density (Sprint 3 — Phase B.2)
     # no longer derives from hub coordinates; it is set to the frontier
     # baseline everywhere so the per-plot field stays well-defined for
