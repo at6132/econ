@@ -35,6 +35,11 @@ from realm.economy.markets import (
     place_buy_order,
     place_sell_order,
 )
+from realm.agents.requote_dampener import (
+    charge_cancel_fee,
+    record_requote,
+    should_requote,
+)
 from realm.world import World
 
 
@@ -59,14 +64,20 @@ def _ele_bidstack(world: World) -> None:
     if party not in world.parties:
         return
     mat = MaterialId("electricity")
-    cancel_party_bids_for_material(world, party, mat)
     best_ask = _best_resting_ask(world, mat)
     if best_ask is None:
         limit = 22
     else:
         jitter = world.rng("tier2:ele:lim").randint(0, 4)
         limit = max(18, best_ask - 10 + jitter)
+    # Phase 9H — dampener: only churn the book when the new quote
+    # actually differs from the old one and the cooldown has elapsed.
+    if not should_requote(world, party, mat, "bid", limit):
+        return
+    n = cancel_party_bids_for_material(world, party, mat)
+    charge_cancel_fee(world, party, n)
     place_buy_order(world, party, mat, 2, limit)
+    record_requote(world, party, mat, "bid", limit)
 
 
 def _lumber_bid_improver(world: World) -> None:
@@ -85,8 +96,13 @@ def _lumber_bid_improver(world: World) -> None:
     new_px = best_bid + 1
     if new_px >= best_ask:
         return
-    cancel_party_bids_for_material(world, party, mat)
+    # Phase 9H — dampener gate before churning the book.
+    if not should_requote(world, party, mat, "bid", new_px):
+        return
+    n = cancel_party_bids_for_material(world, party, mat)
+    charge_cancel_fee(world, party, n)
     place_buy_order(world, party, mat, 1, new_px)
+    record_requote(world, party, mat, "bid", new_px)
 
 
 def _timber_spread_trader(world: World) -> None:
@@ -98,7 +114,6 @@ def _timber_spread_trader(world: World) -> None:
     mat = MaterialId("timber")
     if world.inventory.qty(party, mat) < 1:
         return
-    cancel_party_asks_for_material(world, party, mat)
     best_bid = _best_resting_bid(world, mat)
     best_ask = _best_resting_ask(world, mat)
     if best_bid is None:
@@ -109,7 +124,14 @@ def _timber_spread_trader(world: World) -> None:
         px = min(px, best_ask - 1)
     if px < 12:
         return
+    # Phase 9H — dampener: only re-post when the desired ask is materially
+    # different from the last one.
+    if not should_requote(world, party, mat, "ask", px):
+        return
+    n = cancel_party_asks_for_material(world, party, mat)
+    charge_cancel_fee(world, party, n)
     place_sell_order(world, party, mat, 1, px)
+    record_requote(world, party, mat, "ask", px)
 
 
 def _clay_sweep(world: World) -> None:
@@ -134,7 +156,6 @@ def _coal_spread_trader(world: World) -> None:
     mat = MaterialId("coal")
     if world.inventory.qty(party, mat) < 1:
         return
-    cancel_party_asks_for_material(world, party, mat)
     best_bid = _best_resting_bid(world, mat)
     best_ask = _best_resting_ask(world, mat)
     if best_bid is None:
@@ -145,7 +166,13 @@ def _coal_spread_trader(world: World) -> None:
         px = min(px, best_ask - 1)
     if px < 8:
         return
+    # Phase 9H — dampener gate before re-posting.
+    if not should_requote(world, party, mat, "ask", px):
+        return
+    n = cancel_party_asks_for_material(world, party, mat)
+    charge_cancel_fee(world, party, n)
     place_sell_order(world, party, mat, 1, px)
+    record_requote(world, party, mat, "ask", px)
 
 
 def tick_tier2_agents(world: World) -> None:
