@@ -801,6 +801,30 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         requires_building_id="chemical_works",
         requires_discovery=True,
     ),
+    # Phase 8C — epidemic supply chain.
+    "gather_herbs": Recipe(
+        recipe_id="gather_herbs",
+        display_name="Gather wild herbs (forest — no building)",
+        inputs={},
+        outputs={MaterialId("wild_herb"): 2},
+        duration_ticks=3 * _TICKS_PER_GAME_HOUR,
+        labor_cents=1_50,
+        requires_building_id="",
+        requires_tool=MaterialId("spade"),
+    ),
+    "make_medicine": Recipe(
+        recipe_id="make_medicine",
+        display_name="Make medicine (apothecary — herbs + coal + power)",
+        inputs={
+            MaterialId("wild_herb"): 3,
+            MaterialId("coal"): 1,
+            MaterialId("electricity"): 1,
+        },
+        outputs={MaterialId("medicine"): 2},
+        duration_ticks=4 * _TICKS_PER_GAME_HOUR,
+        labor_cents=4_00,
+        requires_building_id="apothecary",
+    ),
 }
 
 

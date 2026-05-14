@@ -275,6 +275,17 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"lumber": 6, "timber": 4, "brick": 2},
         "turnkey_total_cents": 95_000,
     },
+    # Phase 8C — apothecary. Converts wild_herb + coal + electricity into
+    # medicine. Outside of epidemics medicine has near-zero demand; during
+    # an epidemic it becomes the most valuable good on the affected island.
+    "apothecary": {
+        "kind": "contracted",
+        "label": "Apothecary (produces medicine from wild herbs)",
+        "self_shell_cents": 55_000,
+        "self_contractor_fee_cents": 22_000,
+        "self_materials": {"lumber": 4, "brick": 2, "glass": 2, "timber": 2},
+        "turnkey_total_cents": 120_000,
+    },
     # Sprint 3 — Phase D.4: coastal renewable power. Half the throughput of a
     # coal power_shed but zero ongoing fuel cost.
     "tidal_mill": {

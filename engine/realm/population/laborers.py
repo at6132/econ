@@ -277,8 +277,14 @@ def _apply_needs_decay(
     )
 
 
-def _apply_health_pressure(lab: LaborerNPC, days_elapsed: float) -> None:
-    """Drop health when needs are below their critical thresholds."""
+def _apply_health_pressure(
+    lab: LaborerNPC, days_elapsed: float, *, epidemic_mult: float = 1.0
+) -> None:
+    """Drop health when needs are below their critical thresholds.
+
+    Phase 8C: ``epidemic_mult`` accelerates the decay (typically ×3.0)
+    for laborers in towns with an active epidemic outbreak.
+    """
     drop = 0.0
     if lab.needs.get("food", 1.0) < FOOD_LOW_THRESHOLD:
         drop += FOOD_HEALTH_DECAY_PER_DAY * days_elapsed
@@ -286,6 +292,12 @@ def _apply_health_pressure(lab: LaborerNPC, days_elapsed: float) -> None:
         drop += FUEL_HEALTH_DECAY_PER_DAY * days_elapsed
     if lab.needs.get("shelter", 1.0) < SHELTER_LOW_THRESHOLD:
         drop += SHELTER_HEALTH_DECAY_PER_DAY * days_elapsed
+    # Phase 8C: epidemic adds a baseline health decay even when needs are
+    # met (people get sick regardless of food and shelter), and accelerates
+    # any existing decay. Tuned so a 0.6-severity epidemic strips ~0.06 hp
+    # per day from a fully-supplied laborer over its 10-20 day window.
+    if epidemic_mult > 1.0:
+        drop = drop * epidemic_mult + 0.02 * days_elapsed * (epidemic_mult - 1.0)
     if drop > 0.0:
         lab.health = max(0.0, lab.health - drop)
 
@@ -357,9 +369,13 @@ def tick_laborers(world: World) -> dict[str, int]:
     ``_apply_needs_decay``.
     """
     from realm.events.seasons import current_season, fuel_decay_per_day_for_season
+    from realm.events.world_events import (
+        active_epidemic_for_town,
+        epidemic_health_decay_multiplier,
+    )
 
     fuel_rate = fuel_decay_per_day_for_season(current_season(world))
-    stats = {"died": 0, "retired": 0, "ticked": 0}
+    stats = {"died": 0, "retired": 0, "ticked": 0, "epidemic_deaths": 0}
     if not world.laborers:
         return stats
     now = int(world.tick)
@@ -370,13 +386,10 @@ def tick_laborers(world: World) -> dict[str, int]:
         if elapsed_ticks <= 0:
             continue
         days_elapsed = elapsed_ticks / TICKS_PER_GAME_DAY
-        if days_elapsed < 1.0:
-            # Apply fractional decay too so tests with sub-day ticks see
-            # smooth progression; "every game-day" in the spec means the
-            # rate, not the granularity.
-            pass
         _apply_needs_decay(lab, days_elapsed, fuel_decay_rate=fuel_rate)
-        _apply_health_pressure(lab, days_elapsed)
+        # Phase 8C: epidemic accelerates health decay in affected towns.
+        epidemic_mult = epidemic_health_decay_multiplier(world, lab.home_town)
+        _apply_health_pressure(lab, days_elapsed, epidemic_mult=epidemic_mult)
         lab.age_ticks += elapsed_ticks
         lab.last_needs_tick = now
         stats["ticked"] += 1
@@ -389,7 +402,12 @@ def tick_laborers(world: World) -> dict[str, int]:
         if lab is None:
             continue
         # Cause heuristic for the world_feed message.
-        if lab.needs.get("food", 1.0) < FOOD_LOW_THRESHOLD:
+        ep = active_epidemic_for_town(world, lab.home_town) if lab.home_town else None
+        if ep is not None:
+            cause = "died in the epidemic"
+            ep.payload["deaths"] = int(ep.payload.get("deaths", 0)) + 1
+            stats["epidemic_deaths"] += 1
+        elif lab.needs.get("food", 1.0) < FOOD_LOW_THRESHOLD:
             cause = "died from hunger"
         elif lab.needs.get("fuel", 1.0) < FUEL_LOW_THRESHOLD:
             cause = "died from exposure"

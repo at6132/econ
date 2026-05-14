@@ -408,6 +408,12 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
         return stats
     world.scenario_state["store_last_spend_tick"] = now
     world.store_revenue_today.clear()
+    from realm.events.world_events import (
+        EPIDEMIC_MEDICINE_HEAL_AMOUNT,
+        active_epidemic_for_town,
+        consume_medicine_for_treatment,
+    )
+
     for lid, lab in list(world.laborers.items()):
         if not lab.home_town:
             continue
@@ -438,9 +444,43 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
                 )
                 stats["purchases"] += 1
                 any_purchase = True
+        # Phase 8C: if an epidemic is active in this town and a store sells
+        # medicine, the laborer buys one unit to treat themselves. Price is
+        # whatever the store owner set (5-10× normal during an outbreak,
+        # which is the market signal apothecaries respond to).
+        if active_epidemic_for_town(world, lab.home_town) is not None:
+            med_offer = _cheapest_store_for_material(
+                world, lab.home_town, MaterialId("medicine")
+            )
+            if med_offer is not None:
+                plot_id, _price = med_offer
+                res = _execute_purchase(world, lid, plot_id, MaterialId("medicine"), 1)
+                if res.get("ok") and int(res.get("units", 0)) >= 1:
+                    if consume_medicine_for_treatment(world, lab.home_town, lid):
+                        lab.health = min(1.0, lab.health + EPIDEMIC_MEDICINE_HEAL_AMOUNT)
+                    stats["purchases"] += 1
+                    any_purchase = True
         if any_purchase:
             stats["laborers_serviced"] += 1
     return stats
+
+
+def _cheapest_store_for_material(
+    world: World, town_id: str, material: MaterialId
+) -> tuple[PlotId, int] | None:
+    """Return ``(plot_id, unit_price)`` for the cheapest in-stock listing of
+    ``material`` in this town's stores."""
+    cheapest: tuple[PlotId, int] | None = None
+    for pid in stores_for_town(world, town_id):
+        qty = store_inventory_qty(world, pid, material)
+        if qty <= 0:
+            continue
+        price = store_price_cents(world, pid, material)
+        if price is None or price <= 0:
+            continue
+        if cheapest is None or price < cheapest[1]:
+            cheapest = (pid, int(price))
+    return cheapest
 
 
 # ───────────────────────── seeded NPC stores ─────────────────────────

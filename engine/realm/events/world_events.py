@@ -229,6 +229,15 @@ FLOOD_BLOCKED_RECIPES: frozenset[str] = frozenset(
     {"grow_grain", "hand_dig_clay"}
 )
 
+# Epidemic (per town per game-month, scaled by town health).
+EPIDEMIC_MONTHLY_PROB: float = 0.02
+EPIDEMIC_HEALTH_DECAY_MULT: float = 3.0
+EPIDEMIC_MIN_DAYS: int = 10
+EPIDEMIC_MAX_DAYS: int = 20
+EPIDEMIC_SPREAD_PROB: float = 0.20  # per migration carrier
+EPIDEMIC_MEDICINE_HEAL_AMOUNT: float = 0.30
+TICKS_PER_GAME_MONTH: int = TICKS_PER_GAME_DAY * 30
+
 # Master kill-switch (mostly for tests that need a quiet world).
 ENABLED_FLAG_KEY: str = "world_events_enabled"
 
@@ -884,6 +893,143 @@ def _roll_seismic(world: "World") -> None:
             trigger_seismic(world, plot.plot_id, severity=0.5)
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 8C — Epidemic system
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def trigger_epidemic(
+    world: "World",
+    town_id: str,
+    *,
+    severity: float = 0.6,
+    duration_days: int | None = None,
+) -> WorldEvent | None:
+    """Open an epidemic event in ``town_id``.
+
+    Returns the event or ``None`` if the town is unknown / already infected.
+    """
+    if town_id not in world.towns:
+        return None
+    # Don't double-fire on a town that already has an active epidemic.
+    for ev in active_events(world):
+        if ev.event_type == "epidemic" and ev.payload.get("town_id") == town_id:
+            return ev
+    if duration_days is None:
+        rng = world.rng(f"epidemic-duration:{town_id}")
+        duration_days = rng.randint(EPIDEMIC_MIN_DAYS, EPIDEMIC_MAX_DAYS)
+    town = world.towns[town_id]
+    isl = int(town.island_id) if str(town.island_id).lstrip("-").isdigit() else None
+    ev = _create_event(
+        world,
+        event_type="epidemic",
+        severity=severity,
+        duration_ticks=duration_days * TICKS_PER_GAME_DAY,
+        island_id=isl,
+        payload={
+            "town_id": town_id,
+            "deaths": 0,
+            "treated": [],
+        },
+    )
+    _announce_start(
+        world,
+        ev,
+        f"Epidemic reported in {town.name} on island {town.island_id}. "
+        f"Laborers falling ill.",
+        town_id=town_id,
+        duration_days=int(duration_days),
+    )
+    return ev
+
+
+def active_epidemic_for_town(world: "World", town_id: str) -> WorldEvent | None:
+    """Return the active epidemic affecting ``town_id``, if any."""
+    for ev in active_events(world):
+        if ev.event_type == "epidemic" and ev.payload.get("town_id") == town_id:
+            return ev
+    return None
+
+
+def epidemic_health_decay_multiplier(world: "World", town_id: str | None) -> float:
+    """Health-decay multiplier for laborers in a town with an active epidemic.
+
+    Laborers who have been treated this epidemic (``treated`` list in
+    ``ev.payload``) decay at the normal rate; everyone else decays 3× faster.
+    """
+    if town_id is None:
+        return 1.0
+    ev = active_epidemic_for_town(world, town_id)
+    if ev is None:
+        return 1.0
+    return EPIDEMIC_HEALTH_DECAY_MULT
+
+
+def consume_medicine_for_treatment(
+    world: "World", town_id: str, laborer_id: str
+) -> bool:
+    """Mark a laborer as treated for the active epidemic in their town.
+
+    Called by ``stores.tick_laborer_spending`` after the laborer pays for
+    medicine. Returns ``True`` if treatment was applied (i.e. epidemic
+    active + laborer not yet treated this round); the caller is then
+    responsible for the +0.30 health bump.
+    """
+    ev = active_epidemic_for_town(world, town_id)
+    if ev is None:
+        return False
+    treated = ev.payload.setdefault("treated", [])
+    if laborer_id in treated:
+        return False
+    treated.append(laborer_id)
+    _flush_events_store(world)
+    return True
+
+
+def _roll_epidemics(world: "World") -> None:
+    """Once per game-month per town: stochastic outbreak weighted by town health."""
+    if not world.towns:
+        return
+    if int(world.tick) % TICKS_PER_GAME_MONTH != 0:
+        return
+    if int(world.tick) <= 0:
+        return
+    for town_id, town in list(world.towns.items()):
+        if active_epidemic_for_town(world, town_id) is not None:
+            continue
+        # Town health = mean laborer health, defaulting to 1.0 if empty.
+        residents = [
+            lab for lab in world.laborers.values() if lab.home_town == town_id
+        ]
+        if not residents:
+            continue
+        town_health = sum(float(lab.health) for lab in residents) / len(residents)
+        prob = EPIDEMIC_MONTHLY_PROB * max(0.0, 1.0 - town_health)
+        if prob <= 0.0:
+            continue
+        rng = world.rng(f"epidemic-roll:m{int(world.tick) // TICKS_PER_GAME_MONTH}:t{town_id}")
+        if rng.random() < prob:
+            severity = 0.4 + world.rng(f"epidemic-sev:{town_id}:t{world.tick}").random() * 0.6
+            trigger_epidemic(world, town_id, severity=severity)
+
+
+def _kill_epidemic_victims(world: "World", ev: WorldEvent) -> None:
+    """Apply death rolls to seriously ill laborers in the epidemic town.
+
+    Called daily while the epidemic is active. Laborers with health <= 0.1
+    die at the normal laborer-tick path; this helper is purely a no-op
+    accounting hook for ``ev.payload["deaths"]`` so the end-of-epidemic
+    feed entry can summarise.
+    """
+    town_id = ev.payload.get("town_id")
+    if not town_id:
+        return
+    count_before = sum(
+        1 for lab in world.laborers.values() if lab.home_town == town_id
+    )
+    ev.payload["last_count"] = int(count_before)
+
+
 def _expire_finished_events(world: "World") -> None:
     """Close out events whose ``end_tick`` has passed."""
     for ev in active_events(world):
@@ -927,6 +1073,19 @@ def _expire_finished_events(world: "World") -> None:
                 f"Rubble cleared at {ev.affected_plots[0] if ev.affected_plots else '?'}. "
                 f"Site may be rebuilt.",
             )
+        elif ev.event_type == "epidemic":
+            town_id = str(ev.payload.get("town_id", ""))
+            deaths = int(ev.payload.get("deaths", 0))
+            town_name = town_id
+            if town_id and town_id in world.towns:
+                town_name = world.towns[town_id].name
+            _announce_end(
+                world,
+                ev,
+                f"Epidemic in {town_name} has subsided. {deaths} laborer(s) lost.",
+                town_id=town_id,
+                deaths=int(deaths),
+            )
         else:
             ev.resolved = True
             _flush_events_store(world)
@@ -945,6 +1104,7 @@ def tick_world_events(world: "World") -> None:
         _roll_mine_collapses(world)
         _roll_storms(world)
         _roll_seismic(world)
+        _roll_epidemics(world)
     _expire_finished_events(world)
 
 

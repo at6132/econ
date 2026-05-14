@@ -111,6 +111,9 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "mine_rare_earth": frozenset({T.MOUNTAIN, T.DESERT, T.TUNDRA}),
     "refine_platinum": frozenset({T.MOUNTAIN}),
     "process_shale": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    # Phase 8C — herbalism + apothecary chain.
+    "gather_herbs": frozenset({T.FOREST}),
+    "make_medicine": frozenset({T.PLAINS, T.FOREST, T.MOUNTAIN, T.SWAMP, T.TUNDRA, T.DESERT}),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})

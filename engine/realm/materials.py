@@ -226,6 +226,21 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("shale_oil"): MaterialDef(
         MaterialId("shale_oil"), "Shale oil", 870.0, "processed"
     ),
+    # Phase 8C — epidemic system. ``wild_herb`` is a Tier-0 forest gather;
+    # ``medicine`` is the processed good produced at an apothecary.
+    # Outside of epidemics medicine sits at near-zero demand; during
+    # epidemics it becomes the most valuable good on the affected island.
+    MaterialId("wild_herb"): MaterialDef(
+        MaterialId("wild_herb"),
+        "Wild herbs",
+        80.0,
+        "organic",
+        spoils_to=MaterialId("spoiled_grain"),
+        spoilage_interval_ticks=14_400,  # 10 game-days
+    ),
+    MaterialId("medicine"): MaterialDef(
+        MaterialId("medicine"), "Medicine", 90.0, "processed"
+    ),
 }
 
 DURABLE_MATERIAL_IDS: frozenset[MaterialId] = frozenset(
