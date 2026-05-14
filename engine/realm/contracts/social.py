@@ -234,14 +234,52 @@ def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -
 
 
 def tick_supply_contract_breaches(world: World) -> None:
-    """After ``world.tick`` advances: active supply past ``deliver_by_tick`` becomes breached (supplier only)."""
+    """After ``world.tick`` advances: active supply past ``deliver_by_tick`` becomes breached (supplier only).
+
+    Phase 8 — Sub-phase 8B (B5/D3): contracts are NOT auto-breached while
+    an active storm is delaying global shipping. The supplier gets a
+    ``force_majeure_extension_tick`` grace period equal to the storm's
+    remaining duration plus one game-day. This avoids unfair breaches
+    when ocean weather suspends the player's ability to ship.
+    """
+    from realm.events.world_events import (
+        active_events as _active_events,
+        storm_force_majeure_extension_ticks,
+    )
+
     t = world.tick
+    # Cache the global storm extension once per tick — supply contracts
+    # don't carry island info so we apply the longest active storm grace
+    # period to any contract that would otherwise breach right now.
+    active_storms = [ev for ev in _active_events(world) if ev.event_type == "storm"]
+    storm_grace = 0
+    if active_storms:
+        storm_grace = max(
+            storm_force_majeure_extension_ticks(world, ev.island_id)
+            for ev in active_storms
+        )
     for c in world.contracts:
         if c.get("kind") != "supply":
             continue
         if c.get("status") != "active":
             continue
         if t <= int(c["deliver_by_tick"]):
+            continue
+        if storm_grace > 0:
+            # Extend the deadline rather than breach. Mark the contract so
+            # the player can see force-majeure was applied.
+            new_deadline = int(c["deliver_by_tick"]) + int(storm_grace)
+            c["deliver_by_tick"] = new_deadline
+            ext_log = c.setdefault("force_majeure_extensions", [])
+            ext_log.append({"tick": int(t), "extra_ticks": int(storm_grace)})
+            log_event(
+                world,
+                "contract_force_majeure",
+                f"Supply {c['id']}: deadline extended by storm "
+                f"(+{storm_grace} ticks → new deadline {new_deadline})",
+                contract_id=c["id"],
+                extra_ticks=int(storm_grace),
+            )
             continue
         c["status"] = "breached"
         sup = PartyId(c["supplier"])

@@ -16,6 +16,7 @@ from realm.economy.market_history import record_market_snapshot
 from realm.infrastructure.movement import deliver_transit
 from realm.events.price_alerts import tick_price_alerts
 from realm.events.seasons import tick_seasons
+from realm.events.world_events import tick_world_events
 from realm.production import tick_production, tick_production_auto_restart
 from realm.production.spoilage import tick_material_spoilage
 from realm.contracts.social import tick_supply_contract_breaches
@@ -57,6 +58,9 @@ def advance_tick(world: World) -> None:
     # Cheap no-op on every tick except the few days a year that announce
     # spring/summer/autumn/harvest-decline/winter to the world feed.
     tick_seasons(world)
+    # Phase 8 — Sub-phase 8B: roll natural disasters (drought, blight, storm,
+    # mine collapse, seismic) once per game-day, age + expire active events.
+    tick_world_events(world)
     if world.scenario_id == "genesis":
         tick_genesis_feed_tick_scan(world)
         tick_genesis_world_feed(world)

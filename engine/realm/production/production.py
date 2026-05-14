@@ -132,6 +132,20 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
     season_mod = yield_modifier(world, recipe.recipe_id, plot)
     if season_mod != 1.0:
         out = {k: max(0, int(round(int(v) * float(season_mod)))) for k, v in out.items()}
+    # Phase 8 — Sub-phase 8B: active world events (drought, blight, flood)
+    # compose on top of the seasonal multiplier. Drought reduces output
+    # proportionally; blight zeros the affected recipe; flood blocks ground
+    # recipes on flooded plots.
+    from realm.events.world_events import yield_modifier_for_plot
+
+    event_mod = yield_modifier_for_plot(world, recipe.recipe_id, plot)
+    if event_mod != 1.0:
+        out = {k: max(0, int(round(int(v) * float(event_mod)))) for k, v in out.items()}
+    # Phase 8 — Sub-phase 8D: resource depletion. Mining recipes draw down
+    # the relevant subsurface grade by a tiny amount per completion (handled
+    # at the run-completion site in ``_apply_subsurface_depletion`` below,
+    # not here — output is computed BEFORE the depletion charge so a single
+    # run sees the pre-depletion grade).
     return out
 
 
@@ -362,6 +376,13 @@ def start_production(
     blocked, season_reason = recipe_blocked_by_season(world, recipe_id, plot)
     if blocked:
         return {"ok": False, "reason": season_reason}
+    # Phase 8 — Sub-phase 8B: refuse to start recipes that an active world
+    # event (drought, blight, flood) has zeroed for this plot.
+    from realm.events.world_events import recipe_blocked_by_active_event
+
+    ev_blocked, ev_reason = recipe_blocked_by_active_event(world, recipe_id, plot)
+    if ev_blocked:
+        return {"ok": False, "reason": ev_reason}
     # Sprint 3 — Phase A: electricity-requiring recipes need either a grid
     # source within coverage or staged electricity to draw from.
     electricity_mid = MaterialId("electricity")
@@ -528,6 +549,11 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        # Phase 8 — Sub-phase 8D: resource depletion. Mining recipes draw down
+        # the relevant subsurface grade by a tiny amount per completion (a
+        # ``mine_ore`` run at 100% efficiency depletes the grade by 0.001;
+        # ~500 runs takes a healthy plot below the recipe's min_grade gate).
+        _apply_subsurface_depletion(world, run, recipe)
         # Sprint 6 — Phase D.2: optional auto-listing of fresh output.
         if eff_out:
             _maybe_auto_list_outputs(world, run, eff_out)
@@ -555,6 +581,80 @@ def tick_production(world: World) -> None:
     world.active_production = still
     for completed in completed_for_auto_restart:
         _maybe_schedule_auto_restart(world, completed)
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Phase 8 — Sub-phase 8D: resource depletion
+# ────────────────────────────────────────────────────────────────────────
+
+
+SUBSURFACE_DEPLETION_PER_RUN: float = 0.001
+"""Per-run subsurface grade decrement at 100% efficiency. Scales linearly
+with workshop efficiency_pct so a degraded plant depletes slower (it
+extracts less). Tuned so a healthy plot at grade 0.80 stays viable for
+~500 game-days of continuous mining before the recipe gate closes."""
+
+DEPLETION_WARNING_GRADE: float = 0.35
+"""Below this, the world feed emits a one-shot near-depletion warning."""
+
+DEPLETION_FLOOR_GRADE: float = 0.30
+"""Below this, the recipe's start-time min-grade gate refuses new runs."""
+
+
+def _apply_subsurface_depletion(world: World, run: ActiveProduction, recipe) -> None:
+    """Reduce the relevant subsurface grade on the run's plot.
+
+    Mining recipes target ``recipe.scaled_output`` (the (field, material)
+    tuple that says "this recipe scales output by ``plot.subsurface.<field>``").
+    Non-extractive recipes have ``scaled_output is None`` and are skipped.
+
+    Conservation note: subsurface grades are world-gen state, not matter or
+    money. Depleting a grade does NOT affect ``world.ledger.total_cents``
+    or ``world.inventory`` totals. The depletion model represents geological
+    finiteness, which sits below the conservation invariants.
+    """
+    import dataclasses
+
+    scaled = getattr(recipe, "scaled_output", None)
+    if scaled is None:
+        return
+    field_name = scaled[0]
+    plot = world.plots.get(run.plot_id)
+    if plot is None:
+        return
+    sub = plot.subsurface
+    current = float(getattr(sub, field_name, 0.0) or 0.0)
+    if current <= 0.0:
+        return
+    eff = _workshop_efficiency_pct_for_run(world, run, recipe) or EFFICIENCY_HEALTHY
+    decrement = SUBSURFACE_DEPLETION_PER_RUN * (eff / 100.0)
+    new_val = max(0.0, current - decrement)
+    # SubsurfaceRoll is frozen — rebuild via dataclasses.replace.
+    plot.subsurface = dataclasses.replace(sub, **{field_name: new_val})
+    # One-shot warning when the grade crosses the warning threshold.
+    if current >= DEPLETION_WARNING_GRADE > new_val:
+        log_event(
+            world,
+            "world_feed",
+            f"Survey data indicates {field_name.replace('_', ' ')} deposit at {run.plot_id} "
+            f"is approaching depletion. Grade currently at {new_val:.2f}.",
+            event_class="depletion_warning",
+            plot_id=str(run.plot_id),
+            field=field_name,
+            grade=round(new_val, 4),
+        )
+    # Exhaustion (recipe gate closes at min_grade = 0.30 for most extracts).
+    if current >= DEPLETION_FLOOR_GRADE > new_val:
+        log_event(
+            world,
+            "world_feed",
+            f"The {field_name.replace('_', ' ')} deposit at {run.plot_id} has been exhausted. "
+            f"Mining is no longer viable here.",
+            event_class="depletion_exhausted",
+            plot_id=str(run.plot_id),
+            field=field_name,
+            grade=round(new_val, 4),
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────
