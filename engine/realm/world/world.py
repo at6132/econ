@@ -103,6 +103,12 @@ class RoadSegment:
     owner: PartyId
     built_at_tick: int
     toll_rate_pct: int = 0  # 0-10%, applied to value of goods transiting
+    # Phase 9F — road condition. Decays once per game-day until the owner
+    # pays maintenance; below ROAD_MIN_EFFECTIVE_BPS the segment stops
+    # granting the cost discount and the owner can no longer collect tolls
+    # until it's repaired (the road is gravel + ruts again).
+    condition_bps: int = 10_000
+    last_maintenance_tick: int = 0
 
 
 @dataclass

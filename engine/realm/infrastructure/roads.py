@@ -27,6 +27,21 @@ BUILD_MATERIALS: dict[MaterialId, int] = {
 }
 MAX_TOLL_PCT: int = 10
 
+# Phase 9F — roads decay (Law 5). Without maintenance a fresh road falls to
+# disrepair after a few game-months. ``maintain_road`` consumes lumber + stone
+# and resets the condition. Below MIN_EFFECTIVE_BPS the road loses its
+# discount and the owner can't charge tolls on it (the road is gravel + ruts).
+ROAD_FULL_CONDITION_BPS: int = 10_000
+ROAD_MIN_EFFECTIVE_BPS: int = 4_000
+# Decay rate: 50 bps per game-day → 200 game-days from full to zero, or
+# ~3 game-weeks of total neglect before the discount disappears.
+ROAD_DECAY_BPS_PER_GAME_DAY: int = 50
+ROAD_MAINT_MATERIALS: dict[MaterialId, int] = {
+    MaterialId("lumber"): 1,
+    MaterialId("stone"): 1,
+}
+ROAD_MAINT_CASH_CENTS: int = 2_000
+
 
 # ────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -117,6 +132,8 @@ def build_road(
         owner=PartyId(str(party)),
         built_at_tick=int(world.tick),
         toll_rate_pct=0,
+        condition_bps=ROAD_FULL_CONDITION_BPS,
+        last_maintenance_tick=int(world.tick),
     )
     world.road_segments.append(seg)
     log_event(
@@ -226,6 +243,11 @@ def road_path_summary(
     }
 
 
+def _segment_in_good_repair(seg: RoadSegment) -> bool:
+    """Phase 9F — only well-maintained roads grant the discount + toll right."""
+    return int(getattr(seg, "condition_bps", ROAD_FULL_CONDITION_BPS)) >= ROAD_MIN_EFFECTIVE_BPS
+
+
 def compute_road_savings_and_tolls(
     world: World,
     *,
@@ -245,14 +267,18 @@ def compute_road_savings_and_tolls(
         owners only. Self-owned roads still grant the savings but no toll is
         moved.
       - ``segments``: the segments along the path (informational).
+
+    Phase 9F — only road segments at or above ``ROAD_MIN_EFFECTIVE_BPS``
+    condition count for savings or tolls.
     """
     summary = road_path_summary(world, from_plot_id, to_plot_id)
     segments: list[RoadSegment] = summary["segments"]
-    # Savings: 50% off per-tile cost for each tile covered by a road.
-    savings_cents = (per_tile_cents * len(segments)) // 2
+    effective_segs = [s for s in segments if _segment_in_good_repair(s)]
+    # Savings: 50% off per-tile cost for each tile covered by an in-repair road.
+    savings_cents = (per_tile_cents * len(effective_segs)) // 2
     tolls: list[tuple[PartyId, str, int]] = []
     shipper_s = str(shipper)
-    for seg in segments:
+    for seg in effective_segs:
         if int(seg.toll_rate_pct) <= 0:
             continue
         if str(seg.owner) == shipper_s:
@@ -269,6 +295,78 @@ def compute_road_savings_and_tolls(
 
 
 # ────────────────────────────────────────────────────────────────────────
+# Phase 9F — decay + maintenance
+# ────────────────────────────────────────────────────────────────────────
+
+
+def maintain_road(world: World, party: PartyId, segment_id: str) -> dict[str, Any]:
+    """Repair one road segment: pay cash + consume materials, reset condition.
+
+    The owner is the only party who may maintain a segment in v1 (a player-
+    owned road; eventually third-party maintenance contracts may exist).
+    """
+    seg = next((s for s in world.road_segments if s.segment_id == segment_id), None)
+    if seg is None:
+        return {"ok": False, "reason": "unknown road segment"}
+    if str(seg.owner) != str(party):
+        return {"ok": False, "reason": "not the road owner"}
+    cash = party_cash_account(party)
+    world.ledger.ensure_account(cash)
+    if world.ledger.balance(cash) < ROAD_MAINT_CASH_CENTS:
+        return {"ok": False, "reason": "insufficient cash for road maintenance"}
+    for mat, need in ROAD_MAINT_MATERIALS.items():
+        if world.inventory.qty(party, mat) < need:
+            return {"ok": False, "reason": f"insufficient {mat} (need {need})"}
+    tr = world.ledger.transfer(
+        debit=cash, credit=system_reserve_account(), amount_cents=ROAD_MAINT_CASH_CENTS
+    )
+    if isinstance(tr, MoneyErr):
+        return {"ok": False, "reason": tr.reason}
+    consumed: list[tuple[MaterialId, int]] = []
+    for mat, need in ROAD_MAINT_MATERIALS.items():
+        rm = world.inventory.remove(party, mat, need)
+        if isinstance(rm, MatterErr):
+            for cm, cq in consumed:
+                world.inventory.add(party, cm, cq)
+            world.ledger.transfer(
+                debit=system_reserve_account(), credit=cash, amount_cents=ROAD_MAINT_CASH_CENTS
+            )
+            return {"ok": False, "reason": rm.reason}
+        consumed.append((mat, need))
+    seg.condition_bps = ROAD_FULL_CONDITION_BPS
+    seg.last_maintenance_tick = int(world.tick)
+    log_event(
+        world,
+        "road_maintained",
+        f"{party} maintained road {segment_id} — condition restored",
+        party=str(party),
+        segment_id=segment_id,
+    )
+    return {
+        "ok": True,
+        "segment_id": segment_id,
+        "condition_bps": int(seg.condition_bps),
+    }
+
+
+_TICKS_PER_GAME_DAY: int = 1_440
+
+
+def tick_road_decay(world: World) -> None:
+    """Phase 9F — once per game-day, drop every segment's condition by the
+    decay rate. Segments at zero stay at zero (they're effectively gone for
+    discount + toll purposes but still occupy the edge until rebuilt).
+    """
+    if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
+        return
+    for seg in world.road_segments:
+        cur = int(getattr(seg, "condition_bps", ROAD_FULL_CONDITION_BPS))
+        if cur <= 0:
+            continue
+        seg.condition_bps = max(0, cur - ROAD_DECAY_BPS_PER_GAME_DAY)
+
+
+# ────────────────────────────────────────────────────────────────────────
 # Public-view helpers (for /world and /roads endpoints)
 # ────────────────────────────────────────────────────────────────────────
 
@@ -281,6 +379,8 @@ def road_segment_public_dict(seg: RoadSegment) -> dict[str, Any]:
         "owner": str(seg.owner),
         "built_at_tick": int(seg.built_at_tick),
         "toll_rate_pct": int(seg.toll_rate_pct),
+        "condition_bps": int(getattr(seg, "condition_bps", ROAD_FULL_CONDITION_BPS)),
+        "in_good_repair": _segment_in_good_repair(seg),
     }
 
 

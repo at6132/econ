@@ -13,6 +13,7 @@ from realm.agents.tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
 from realm.production.decay import tick_building_decay, tick_building_maintenance
 from realm.economy.inter_island import tick_inter_island_buy_orders
+from realm.infrastructure.roads import tick_road_decay
 from realm.economy.market_events import tick_market_events
 from realm.economy.market_history import record_market_snapshot
 from realm.infrastructure.movement import deliver_transit
@@ -42,6 +43,7 @@ def advance_tick(world: World) -> None:
     deliver_transit(world)
     tick_building_decay(world)
     tick_building_maintenance(world)
+    tick_road_decay(world)
     ensure_powered_plots_fresh(world)
     tick_production(world)
     tick_production_auto_restart(world)

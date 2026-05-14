@@ -387,6 +387,12 @@ CONTINUOUS_RUN_COUNT: int = -1
 """Sentinel for ``start_production(run_count=-1)`` — keep restarting until the
 workshop degrades or inputs disappear."""
 
+# Phase 9F — tool wear. Probability (in bps) that a hand-tool recipe breaks
+# its required tool on production-start. 250 bps = 2.5 % per run. Tools cost
+# $20-$35 to buy and a hand-mine_ore recipe nets ~$200 of ore, so the wear
+# rate adds a small but visible recurring cost (~$0.50 per recipe on average).
+TOOL_WEAR_BREAK_BPS: int = 250
+
 MIN_EFFICIENCY_FOR_AUTO_RESTART: int = 60
 """Auto-restart stops once efficiency drops below this percent."""
 
@@ -464,6 +470,24 @@ def start_production(
         tool = recipe.requires_tool
         if world.inventory.qty(party, tool) < 1:
             return {"ok": False, "reason": f"missing tool: {tool}"}
+        # Phase 9F — tool wear (Law 5). Each hand-tool recipe rolls
+        # against TOOL_WEAR_BREAK_BPS; on hit the tool is consumed and the
+        # event is logged so the player notices the recurring cost. The
+        # purpose key bakes in tick + plot so two simultaneous recipes don't
+        # share an RNG draw.
+        wear_rng = world.rng(f"tool_wear|{world.tick}|{recipe_id}|{plot_id}")
+        if wear_rng.randint(0, 9_999) < TOOL_WEAR_BREAK_BPS:
+            rm_tool = world.inventory.remove(party, tool, 1)
+            if not isinstance(rm_tool, MatterErr):
+                log_event(
+                    world,
+                    "tool_wear_broke",
+                    f"{party}'s {tool} broke during {recipe_id} on {plot_id}",
+                    party=str(party),
+                    plot_id=str(plot_id),
+                    recipe_id=recipe_id,
+                    tool=str(tool),
+                )
     elif not plot_has_workshop_for_recipe(world, party, plot_id, recipe_id):
         req = recipe.requires_building_id
         return {"ok": False, "reason": f"missing workshop: {req}"}

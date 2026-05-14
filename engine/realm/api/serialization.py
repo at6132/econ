@@ -215,6 +215,8 @@ def dump_world(world: World) -> dict[str, Any]:
                 "owner": str(s.owner),
                 "built_at_tick": int(s.built_at_tick),
                 "toll_rate_pct": int(s.toll_rate_pct),
+                "condition_bps": int(getattr(s, "condition_bps", 10_000)),
+                "last_maintenance_tick": int(getattr(s, "last_maintenance_tick", 0)),
             }
             for s in world.road_segments
         ],
@@ -516,6 +518,8 @@ def load_world(d: dict[str, Any]) -> World:
                     owner=PartyId(str(payload.get("owner", ""))),
                     built_at_tick=int(payload.get("built_at_tick", 0)),
                     toll_rate_pct=int(payload.get("toll_rate_pct", 0)),
+                    condition_bps=int(payload.get("condition_bps", 10_000)),
+                    last_maintenance_tick=int(payload.get("last_maintenance_tick", 0)),
                 )
             )
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
