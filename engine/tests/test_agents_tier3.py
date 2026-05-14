@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from realm.agents_tier3 import (
+from realm.agents.tier3 import (
     build_observation_json,
     execute_llm_tool,
     plan_llm_party_once,
@@ -56,7 +56,7 @@ def test_plan_with_mocked_haiku_updates_memory(monkeypatch: pytest.MonkeyPatch) 
         usage = {"input_tokens": 10, "output_tokens": 5, "cost_micro_usd": 42}
         return ([{"event": "tool", "name": "sim_noop", "result": out}], "done", usage)
 
-    monkeypatch.setattr("realm.agents_tier3.run_haiku_tool_session", fake_run)
+    monkeypatch.setattr("realm.agents.tier3.run_haiku_tool_session", fake_run)
     party = PartyId("llm_margaux")
     before = str(w.llm_agents[str(party)]["memory_summary"])
     r = plan_llm_party_once(w, party)
@@ -85,7 +85,7 @@ def test_execute_sim_message_player() -> None:
 
 def test_plan_blocked_when_session_cap_reached(monkeypatch: pytest.MonkeyPatch) -> None:
     w = bootstrap_frontier(seed=32, grid_width=2, grid_height=2)
-    monkeypatch.setattr("realm.agents_tier3.session_cap_micro_usd", lambda: 10)
+    monkeypatch.setattr("realm.agents.tier3.session_cap_micro_usd", lambda: 10)
     w.llm_session_cost_micro_usd = 10
     r = plan_llm_party_once(w, PartyId("llm_margaux"))
     assert r.get("ok") is False

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from realm.agents_genesis import tick_genesis_agents
+from realm.agents.genesis import tick_genesis_agents
 from realm.assay import tick_assay_jobs
 from realm.deep_survey import tick_deep_survey_jobs
 from realm.genesis_digest import tick_genesis_world_feed
 from realm.genesis_feed_hooks import tick_genesis_feed_tick_scan
-from realm.agents_tier1 import tick_tier1_agents
-from realm.agents_tier2 import tick_tier2_agents
-from realm.agents_tier3 import tick_tier3_llm_agents
+from realm.agents.tier1 import tick_tier1_agents
+from realm.agents.tier2 import tick_tier2_agents
+from realm.agents.tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
 from realm.production.decay import tick_building_decay, tick_building_maintenance
 from realm.economy.market_history import record_market_snapshot

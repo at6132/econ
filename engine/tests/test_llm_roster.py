@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.core.ids import PartyId
-from realm.llm_roster import SCENARIO_TIER3_PARTY
+from realm.agents.llm_roster import SCENARIO_TIER3_PARTY
 from realm.world import bootstrap_by_scenario
 
 

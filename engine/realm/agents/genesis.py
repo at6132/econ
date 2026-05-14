@@ -16,7 +16,7 @@ No Tier-1 timer NPCs: ``advance_tick`` skips ``tick_tier1/tier2`` when
 
 from __future__ import annotations
 
-from realm.agents_genesis_settlers import tick_settler_business
+from realm.agents.genesis_settlers import tick_settler_business
 from realm.genesis_margaux_scripts import tick_genesis_margaux_scripts
 from realm.genesis_settler_cycle import tick_genesis_settler_lifecycle
 from realm.genesis_broker import tick_survey_broker

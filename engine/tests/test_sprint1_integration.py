@@ -24,7 +24,7 @@ operator math).
 
 from __future__ import annotations
 
-from realm.agents_genesis import tick_genesis_agents
+from realm.agents.genesis import tick_genesis_agents
 from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.production.decay import (
     EFFICIENCY_HEALTHY,

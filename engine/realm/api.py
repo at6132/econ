@@ -200,7 +200,7 @@ def post_tick_batch(
 
 @app.get("/llm/status")
 def get_llm_status() -> dict:
-    from realm.llm_haiku import default_model, make_client, session_cap_micro_usd
+    from realm.agents.llm_haiku import default_model, make_client, session_cap_micro_usd
 
     cap = session_cap_micro_usd()
     spend = _world.llm_session_cost_micro_usd
@@ -226,7 +226,7 @@ def get_llm_status() -> dict:
 
 @app.post("/llm/step")
 def post_llm_step(party: Annotated[str, Query()]) -> dict:
-    from realm.agents_tier3 import plan_llm_party_once
+    from realm.agents.tier3 import plan_llm_party_once
 
     r = plan_llm_party_once(_world, PartyId(party))
     if not r.get("ok"):

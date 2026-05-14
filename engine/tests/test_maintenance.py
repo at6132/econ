@@ -196,7 +196,7 @@ def test_start_production_refused_when_building_stopped() -> None:
 def test_settler_buys_materials_and_maintains_before_deadline() -> None:
     """A settler whose strip_mine's ``due_at_tick`` is in <1 game-day buys timber/rope
     from the exchange and runs maintenance before efficiency drops."""
-    from realm.agents_genesis_settlers import _settler_maintain_buildings
+    from realm.agents.genesis_settlers import _settler_maintain_buildings
 
     w = bootstrap_genesis(seed=11, settler_count=4, grid_width=18, grid_height=12)
     party = PartyId("settler_000")

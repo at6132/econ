@@ -293,7 +293,7 @@ def test_no_pop_hub_market_buy_events_during_real_demand_cycle():
 def test_exchange_quoting_tick_is_no_longer_called():
     """Phase 7D removed the managed/unmanaged exchange backstop. Confirm
     the exchange is *not* in tick_genesis_agents anymore."""
-    import realm.agents_genesis as ag
+    import realm.agents.genesis as ag
     import inspect
 
     src = inspect.getsource(ag.tick_genesis_agents)

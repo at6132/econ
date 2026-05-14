@@ -6,7 +6,7 @@ import random
 from unittest.mock import patch
 
 from realm.actions import claim_plot, survey_plot
-from realm.agents_genesis_settlers import (
+from realm.agents.genesis_settlers import (
     SETTLER_DISCOVERY_PROB_PER_GAME_DAY,
     _settler_probabilistic_discovery,
 )
@@ -69,7 +69,7 @@ def test_settler_probabilistic_discovery_advances_stage_on_hit() -> None:
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
     w.tick = TICKS_PER_GAME_DAY  # align with the game-day boundary the helper checks
     assert get_assay_stage(w, settler, MaterialId("sulfur_ore")) == 0
-    with patch("realm.agents_genesis_settlers.world.rng") if False else patch.object(w, "rng") as rng_mock:
+    with patch("realm.agents.genesis_settlers.world.rng") if False else patch.object(w, "rng") as rng_mock:
         rng_mock.return_value = random.Random()
         rng_mock.return_value.random = lambda: SETTLER_DISCOVERY_PROB_PER_GAME_DAY / 2  # below threshold
         _settler_probabilistic_discovery(w, settler)
@@ -134,7 +134,7 @@ def test_settler_probabilistic_discovery_requires_lab() -> None:
 
 def test_settler_assay_lab_build_decision() -> None:
     """A settler with sulfur_grade ≥ 0.3 and the cash buffer chooses an assay_lab as Tier-2 build."""
-    from realm.agents_genesis_settlers import _maybe_build_tier2_workshop
+    from realm.agents.genesis_settlers import _maybe_build_tier2_workshop
     from realm.core.ledger import system_reserve_account
     from realm.core.time_scale import legacy_scaled
 

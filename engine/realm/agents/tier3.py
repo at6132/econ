@@ -16,7 +16,7 @@ from realm.actions import claim_plot, start_production_on_plot, survey_plot
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account
-from realm.llm_haiku import run_haiku_tool_session, session_cap_micro_usd
+from realm.agents.llm_haiku import run_haiku_tool_session, session_cap_micro_usd
 from realm.economy.markets import market_buy, place_buy_order, place_sell_order
 from realm.materials import MATERIALS
 from realm.movement import dispatch_shipment
@@ -252,7 +252,7 @@ def _append_memory(blob: dict[str, Any], line: str) -> None:
 
 def tick_tier3_llm_agents(world: World) -> list[dict[str, Any]]:
     """Run due Tier-3 planners (in world tick order, before ``world.tick`` increments)."""
-    from realm.llm_haiku import make_client
+    from realm.agents.llm_haiku import make_client
 
     if make_client() is None:
         return []

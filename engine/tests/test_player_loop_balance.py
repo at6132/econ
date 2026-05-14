@@ -262,7 +262,7 @@ def test_coal_strategy_cash_positive_after_24_game_hours() -> None:
 
 def test_genesis_bootstrap_with_phase_a_d_conserves() -> None:
     """Full bootstrap + 50 ticks of genesis agents leaves the ledger total constant."""
-    from realm.agents_genesis import tick_genesis_agents
+    from realm.agents.genesis import tick_genesis_agents
 
     w = bootstrap_genesis(seed=17, settler_count=8, grid_width=18, grid_height=12)
     starting_total = w.ledger.total_cents()

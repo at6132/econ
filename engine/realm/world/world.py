@@ -801,7 +801,7 @@ def bootstrap_genesis(
 
 def _seed_tier3_character(world: World, inv: Inventory, scenario_id: str) -> None:
     """Seed the scenario's named Tier-3 rival from ``realm.llm_roster``."""
-    from realm.llm_roster import opening_memory, persona_for_scenario
+    from realm.agents.llm_roster import opening_memory, persona_for_scenario
 
     try:
         persona = persona_for_scenario(scenario_id)
