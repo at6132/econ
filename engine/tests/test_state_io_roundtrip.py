@@ -9,7 +9,7 @@ from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.events.event_log import log_event
-from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
+from realm.api.serialization import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_by_scenario, bootstrap_genesis
 

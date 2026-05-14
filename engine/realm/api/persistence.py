@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from realm.state_io import dumps_json, loads_json
+from realm.api.serialization import dumps_json, loads_json
 from realm.world import World
 
 

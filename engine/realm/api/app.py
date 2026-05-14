@@ -37,7 +37,7 @@ from realm.economy.markets import (
 from realm.infrastructure.movement import dispatch_shipment
 from realm.infrastructure.roads import all_roads_public, build_road, set_road_toll
 from realm.economy.supply_signals import all_region_activity, trade_flows_overlay
-from realm.persistence import load_snapshot, save_snapshot
+from realm.api.persistence import load_snapshot, save_snapshot
 from realm.contracts.social import (
     accept_supply_contract,
     fulfill_supply_contract,

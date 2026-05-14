@@ -223,7 +223,7 @@ def test_settlers_bid_on_tenders_when_basis_is_low_enough() -> None:
 
 def test_tenders_state_survives_round_trip_through_state_io() -> None:
     """Tenders live in scenario_state — verify they serialize cleanly."""
-    from realm.state_io import dump_world, load_world
+    from realm.api.serialization import dump_world, load_world
 
     w = _world()
     post_tender(

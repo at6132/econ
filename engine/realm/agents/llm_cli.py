@@ -39,7 +39,7 @@ def main() -> int:
 
     from realm.agents.tier3 import plan_llm_party_once
     from realm.core.ids import PartyId
-    from realm.persistence import load_snapshot, save_snapshot
+    from realm.api.persistence import load_snapshot, save_snapshot
     from realm.world import bootstrap_by_scenario
 
     if args.load is not None:
