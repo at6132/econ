@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.production import effective_outputs_for_completion
-from realm.recipe_sites import (
+from realm.production.recipe_sites import (
     plot_is_coastal,
     recipe_allowed_on_plot,
     recipe_allowed_on_terrain,
     recipe_terrain_bonus_bps,
 )
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 from realm.world.terrain import Terrain
 from realm.world import ActiveProduction, SubsurfaceRoll, bootstrap_frontier
 

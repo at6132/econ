@@ -25,7 +25,7 @@ from realm.actions import (
     poach_worker,
     survey_plot,
 )
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from turnkey_fixtures import grant_turnkey_self_materials
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr

@@ -11,12 +11,12 @@ from realm.agents_tier1 import tick_tier1_agents
 from realm.agents_tier2 import tick_tier2_agents
 from realm.agents_tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
-from realm.decay import tick_building_decay, tick_building_maintenance
+from realm.production.decay import tick_building_decay, tick_building_maintenance
 from realm.economy.market_history import record_market_snapshot
 from realm.movement import deliver_transit
 from realm.events.price_alerts import tick_price_alerts
 from realm.production import tick_production, tick_production_auto_restart
-from realm.spoilage import tick_material_spoilage
+from realm.production.spoilage import tick_material_spoilage
 from realm.social import tick_supply_contract_breaches
 from realm.contract_stubs import tick_phase2_financial_contracts
 from realm.energy import ensure_powered_plots_fresh

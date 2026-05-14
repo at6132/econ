@@ -20,10 +20,10 @@ from realm.actions import (
     survey_plot,
     transfer_survey_report,
 )
-from realm.buildings import build_on_plot
-from realm.decay import maintain_building
+from realm.production.buildings import build_on_plot
+from realm.production.decay import maintain_building
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.recipe_workshops import recipe_ids_on_plot_for_owner
+from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.economy.intel import purchase_market_intel
 from realm.economy.markets import (
     cancel_buy_order,
@@ -58,7 +58,7 @@ from realm.contract_stubs import (
     repay_loan_contract,
 )
 from realm.economy.analytics import purchase_analytics_product
-from realm.schematic import validate_linear_recipe_chain
+from realm.production.schematic import validate_linear_recipe_chain
 from realm.code.lua_sandbox import eval_user_lua_chunk
 from realm.world.tick import advance_tick
 from realm.code.user_code import code_layer_public_status, validate_user_source

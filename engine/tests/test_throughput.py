@@ -118,8 +118,8 @@ def test_continuous_production_auto_restarts():
 def test_production_stalls_without_input():
     """Continuous production stalls with `production_input_stall` when input
     material is exhausted, then resumes when the input is restocked."""
-    from realm.buildings import build_on_plot
-    from realm.recipes import RECIPES
+    from realm.production.buildings import build_on_plot
+    from realm.production.recipes import RECIPES
 
     w = bootstrap_genesis(
         seed=42, grid_width=12, grid_height=10, settler_count=2, map_layout="continent"
@@ -189,7 +189,7 @@ def test_throughput_multiplier_combines_factors():
     )
     party = PartyId("player")
     from realm.actions import survey_plot
-    from realm.buildings import build_on_plot
+    from realm.production.buildings import build_on_plot
     from realm.world.terrain import Terrain
 
     pid = None

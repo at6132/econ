@@ -26,7 +26,7 @@ from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_accou
 from realm.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
 from realm.world.regions import region_for_plot, route_key
 from realm.route_operators import find_cheapest_operator, record_route_fee_collected
-from realm.storage_caps import try_add_inventory
+from realm.production.storage_caps import try_add_inventory
 from realm.core.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
 from realm.world import InTransit, World
 
@@ -101,7 +101,7 @@ def dispatch_shipment(
     else:
         fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS * ocean_mult
     # Sprint 3 — Phase D.2: 40 % discount for coastal → coastal lanes.
-    from realm.recipe_sites import plot_is_coastal
+    from realm.production.recipe_sites import plot_is_coastal
 
     coastal_route = False
     from_plot = world.plots.get(from_plot_id)

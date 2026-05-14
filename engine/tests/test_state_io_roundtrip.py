@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import claim_plot
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.events.event_log import log_event

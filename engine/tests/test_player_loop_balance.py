@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
-from realm.buildings import BUILDINGS, build_on_plot
-from realm.decay import maintenance_schedule_for
+from realm.production.buildings import BUILDINGS, build_on_plot
+from realm.production.decay import maintenance_schedule_for
 from realm.economy.pricing import (
     exchange_ask_cents,
     hub_max_bid_cents,
@@ -12,7 +12,7 @@ from realm.economy.pricing import (
 )
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.recipe_sites import recipe_allowed_on_plot
+from realm.production.recipe_sites import recipe_allowed_on_plot
 from realm.world.terrain import Terrain
 from realm.world import SubsurfaceRoll, bootstrap_genesis, bootstrap_frontier
 
@@ -130,7 +130,7 @@ def test_coal_strategy_cash_positive_after_24_game_hours() -> None:
         market_buy,
         place_sell_order,
     )
-    from realm.decay import tick_building_decay, tick_building_maintenance
+    from realm.production.decay import tick_building_decay, tick_building_maintenance
     from realm.production import tick_production
 
     w = bootstrap_genesis(seed=42, settler_count=12, grid_width=20, grid_height=14)

@@ -6,7 +6,7 @@ from realm.actions import claim_plot, survey_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.production import start_production
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 from realm.world.terrain import Terrain
 from realm.world import (
     SubsurfaceRoll,

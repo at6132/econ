@@ -167,7 +167,7 @@ def _set_assay_stage(world: World, party: PartyId, mineral: MaterialId, stage: i
 
 def _party_has_operational_lab(world: World, party: PartyId, plot_id: PlotId | None = None) -> bool:
     """True if the party has an ``assay_lab`` building on ``plot_id`` (or anywhere if ``plot_id`` is None)."""
-    from realm.decay import building_effective_for_bonuses
+    from realm.production.decay import building_effective_for_bonuses
     from realm.core.time_scale import building_operational
 
     for b in world.plot_buildings:
@@ -378,7 +378,7 @@ def _complete_assay_job(world: World, job: dict[str, Any]) -> None:
         stage=new_stage,
     )
     if new_stage >= ASSAY_MAX_STAGE:
-        from realm.recipes import RECIPES
+        from realm.production.recipes import RECIPES
 
         unlocked = [
             rid

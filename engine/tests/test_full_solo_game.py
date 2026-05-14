@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
-from realm.buildings import BUILDINGS, build_on_plot
+from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.genesis_archetypes import (
     FINANCIER_PARTY_ID,
     FLIPPER_PARTY_ID,
@@ -308,7 +308,7 @@ def test_05_frontier_plots_are_mostly_unpowered(solo_world):
 def test_06_fishing_is_available_to_coastal_settlers(solo_world):
     """At least one settler owns a coastal plot AND fishing has either
     happened or is happening on the map — proving the coastal path runs."""
-    from realm.recipe_sites import recipe_allowed_on_plot
+    from realm.production.recipe_sites import recipe_allowed_on_plot
 
     w = solo_world["world"]
     metrics = solo_world["metrics"]
@@ -409,7 +409,7 @@ def test_10_maintenance_system_active(solo_world):
     """At least one building is on a maintenance schedule (the system is
     functional). A 3-day window is generally too short to see degradation
     below 100% because maintenance intervals are multi-day."""
-    from realm.decay import building_efficiency_pct
+    from realm.production.decay import building_efficiency_pct
 
     w = solo_world["world"]
     scheduled = 0

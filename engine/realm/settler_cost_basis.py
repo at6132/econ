@@ -33,7 +33,7 @@ from typing import Any
 
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 from realm.world import World
 
 

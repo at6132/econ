@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
-from realm.buildings import BUILDINGS, build_on_plot
-from realm.decay import (
+from realm.production.buildings import BUILDINGS, build_on_plot
+from realm.production.decay import (
     EFFICIENCY_FIRST_MISS,
     EFFICIENCY_HEALTHY,
     EFFICIENCY_SECOND_MISS,
@@ -17,7 +17,7 @@ from realm.economy.exchange import _GENESIS_EXCHANGE
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.production import effective_outputs_for_completion
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 from realm.world.terrain import Terrain
 from realm.world import ActiveProduction, SubsurfaceRoll, bootstrap_frontier, bootstrap_genesis
 

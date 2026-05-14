@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from realm.decay import BUILDING_CONDITION_FULL_BPS
+from realm.production.decay import BUILDING_CONDITION_FULL_BPS
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
@@ -364,7 +364,7 @@ def build_on_plot(
         req_tuple = (terrain_req,) if isinstance(terrain_req, str) else tuple(terrain_req)
         req_names = tuple(str(t) for t in req_tuple)
         if "coastal" in req_names:
-            from realm.recipe_sites import plot_is_coastal
+            from realm.production.recipe_sites import plot_is_coastal
 
             allowed = plot_is_coastal(world, plot)
         else:

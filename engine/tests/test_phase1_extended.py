@@ -117,7 +117,7 @@ def test_market_buy_from_listed_ask() -> None:
 
 def test_build_and_hire_emit_events_and_move_cash() -> None:
     from realm.actions import claim_plot, hire_worker_stub, survey_plot
-    from realm.buildings import build_on_plot
+    from realm.production.buildings import build_on_plot
     from realm.core.ledger import party_cash_account
 
     w = bootstrap_frontier(seed=17, grid_width=3, grid_height=2)

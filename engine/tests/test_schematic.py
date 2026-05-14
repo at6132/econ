@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from realm.decay import BUILDING_CONDITION_FULL_BPS
+from realm.production.decay import BUILDING_CONDITION_FULL_BPS
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.schematic import validate_linear_recipe_chain
+from realm.production.schematic import validate_linear_recipe_chain
 from realm.world.terrain import Terrain
 from realm.world import bootstrap_frontier
 

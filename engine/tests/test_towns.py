@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import claim_plot
-from realm.buildings import BUILDINGS, build_on_plot
+from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import PartyId, PlotId
 from realm.world.terrain import Terrain
 from realm.towns import (

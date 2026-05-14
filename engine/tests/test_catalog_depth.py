@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.materials import MATERIALS
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 
 
 def test_material_catalog_meets_phase2_bar() -> None:

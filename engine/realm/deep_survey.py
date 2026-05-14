@@ -37,7 +37,7 @@ def _scen_deep(world: World) -> dict[str, Any]:
 
 
 def _party_has_operational_drill_rig(world: World, party: PartyId, plot_id: PlotId) -> bool:
-    from realm.decay import building_effective_for_bonuses
+    from realm.production.decay import building_effective_for_bonuses
     from realm.core.time_scale import building_operational
 
     for b in world.plot_buildings:

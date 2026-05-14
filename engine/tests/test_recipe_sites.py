@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.production import start_production
-from realm.recipe_sites import assert_recipe_site_catalog_complete, recipe_allowed_on_terrain
-from realm.recipe_workshops import recipe_ids_on_plot_for_owner
+from realm.production.recipe_sites import assert_recipe_site_catalog_complete, recipe_allowed_on_terrain
+from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier

@@ -477,8 +477,8 @@ def seed_genesis_npc_stores(world: World) -> list[PlotId]:
         return []
     from realm.core.ids import PartyId
     from realm.core.ledger import party_cash_account, system_reserve_account
-    from realm.decay import BUILDING_CONDITION_FULL_BPS
-    from realm.buildings import BUILDINGS
+    from realm.production.decay import BUILDING_CONDITION_FULL_BPS
+    from realm.production.buildings import BUILDINGS
 
     storekeeper = PartyId("genesis_storekeeper")
     if storekeeper not in world.parties:

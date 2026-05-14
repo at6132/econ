@@ -11,7 +11,7 @@ from realm.agents_genesis_settlers import (
     _settler_probabilistic_discovery,
 )
 from realm.assay import ASSAY_MAX_STAGE, get_assay_stage
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import party_cash_account

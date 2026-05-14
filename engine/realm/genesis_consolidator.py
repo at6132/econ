@@ -43,8 +43,8 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.economy.markets import market_buy, place_sell_order
-from realm.recipe_sites import plot_is_coastal
-from realm.recipes import RECIPES
+from realm.production.recipe_sites import plot_is_coastal
+from realm.production.recipes import RECIPES
 from realm.world.regions import _world_bounds, region_for_coords
 from realm.world import World
 

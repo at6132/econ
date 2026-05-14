@@ -279,7 +279,7 @@ def town_for_laborer(world: World, laborer_id: str) -> Town | None:
 
 def residence_capacity(world: World, plot_id: PlotId) -> int:
     """Total capacity of all completed residences on this plot (usually one)."""
-    from realm.buildings import BUILDINGS
+    from realm.production.buildings import BUILDINGS
 
     cap = 0
     now = int(world.tick)
@@ -424,8 +424,8 @@ def _seed_residence_on_plot(world: World, owner_party_id: str, plot_id: PlotId) 
     pre-existing settlements at world bootstrap, not in-game constructions.
     No cash leaves the ledger; the building exists at tick 0.
     """
-    from realm.buildings import BUILDINGS
-    from realm.decay import BUILDING_CONDITION_FULL_BPS
+    from realm.production.buildings import BUILDINGS
+    from realm.production.decay import BUILDING_CONDITION_FULL_BPS
 
     spec = BUILDINGS[RESIDENCE_BUILDING_ID]
     world.next_building_instance_seq += 1

@@ -145,7 +145,7 @@ def register_route(
     # the plot is inland a waystation suffices (but a dock at an inland endpoint is also
     # fine — docks are strictly more capable). A pure inland-only operator never needs a
     # vessel.
-    from realm.recipe_sites import plot_is_coastal
+    from realm.production.recipe_sites import plot_is_coastal
 
     plot_coastal = plot_is_coastal(world, plot)
     if plot_coastal:

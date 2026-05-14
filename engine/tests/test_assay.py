@@ -11,7 +11,7 @@ from realm.assay import (
     get_assay_stage,
     party_recipe_book_summary,
 )
-from realm.buildings import BUILDINGS, build_on_plot
+from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account
 from realm.world.terrain import Terrain

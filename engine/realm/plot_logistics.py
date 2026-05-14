@@ -5,7 +5,7 @@ from __future__ import annotations
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr, MatterOk, MatterResult
-from realm.storage_caps import try_add_inventory
+from realm.production.storage_caps import try_add_inventory
 from realm.world import World
 
 # Per-plot cap on total units staged (all materials); separate from party inventory cap.

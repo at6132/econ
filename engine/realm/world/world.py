@@ -10,7 +10,7 @@ from realm.core.ids import PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
 from realm.materials import MaterialId
-from realm.recipes import recipe_public_list
+from realm.production.recipes import recipe_public_list
 from realm.world.biome_noise import terrain_for_cell
 from realm.core.rng import make_rng
 from realm.world.terrain import Terrain
@@ -403,7 +403,7 @@ class World:
         - If the recipe has ``requires_discovery=False`` → always ``True``.
         - If the recipe has ``requires_discovery=True`` → must be in the party's book.
         """
-        from realm.recipes import RECIPES
+        from realm.production.recipes import RECIPES
 
         recipe = RECIPES.get(recipe_id)
         if recipe is None:
@@ -415,7 +415,7 @@ class World:
 
 def tier1_recipe_ids() -> set[str]:
     """All ``requires_discovery=False`` recipe ids — the starter book for every fresh party."""
-    from realm.recipes import RECIPES
+    from realm.production.recipes import RECIPES
 
     return {rid for rid, r in RECIPES.items() if not bool(getattr(r, "requires_discovery", False))}
 
@@ -1132,17 +1132,17 @@ def bootstrap_by_scenario(*, seed: int, scenario: str) -> World:
 
 def _building_maintenance_view(world: World, row: dict) -> dict:
     """Public DTO for a single building's maintenance state (forwarded to API/UI)."""
-    from realm.decay import building_maintenance_status
+    from realm.production.decay import building_maintenance_status
 
     return building_maintenance_status(world, row)
 
 
 def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
-    from realm.buildings import building_catalog_public
+    from realm.production.buildings import building_catalog_public
     from realm.energy import ensure_powered_plots_fresh
     from realm.economy.markets import market_book_public, market_bids_public
-    from realm.recipe_workshops import recipe_ids_on_plot_for_owner
+    from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
 
     powered_set = ensure_powered_plots_fresh(world)
     density_map = world.scenario_state.get("population_density") or {}
@@ -1499,7 +1499,7 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
 
 def world_compact_dict(world: World) -> dict[str, Any]:
     """Small JSON snapshot for dev/automation: player + aggregates, no full ``plots`` grid."""
-    from realm.recipe_workshops import recipe_ids_on_plot_for_owner
+    from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
     from realm.core.time_scale import TICKS_PER_GAME_DAY
 
     player = PartyId("player")

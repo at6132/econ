@@ -13,7 +13,7 @@ Covers the route-operator pipeline end-to-end:
 from __future__ import annotations
 
 from realm.actions import register_route
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from realm.genesis_shippers import NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS, NPC_SHIPPER_IDS
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
@@ -323,7 +323,7 @@ def test_player_can_undercut_npc() -> None:
     w = bootstrap_genesis(seed=21, settler_count=2, grid_width=18, grid_height=14)
     player = PartyId("player")
     # Find a coastal plot in a region with an NPC route and claim it for the player.
-    from realm.recipe_sites import plot_is_coastal
+    from realm.production.recipe_sites import plot_is_coastal
 
     npc_party = next(iter(NPC_SHIPPER_IDS))
     # Use any registered route involving the NPC's region; pick one with the NPC as operator.

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
-from realm.buildings import build_on_plot
-from realm.decay import (
+from realm.production.buildings import build_on_plot
+from realm.production.decay import (
     BUILDING_CONDITION_FULL_BPS,
     MAINTENANCE_COST_DIVISOR,
     maintain_building,

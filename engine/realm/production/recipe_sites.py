@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from realm.recipes import RECIPES, Recipe
+from realm.production.recipes import RECIPES, Recipe
 from realm.world.terrain import Terrain
 from realm.world import Plot
 

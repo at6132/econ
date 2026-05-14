@@ -38,7 +38,7 @@ def _record_genesis_fill(
         return
     record_market_fill(world, material, int(qty), int(unit_px), seller)
 from realm.social import bump_spot_exchange_honored
-from realm.storage_caps import try_add_inventory
+from realm.production.storage_caps import try_add_inventory
 from realm.world import World
 
 # Genesis clearinghouse: one-time seller registration per party+material before first resting ask.

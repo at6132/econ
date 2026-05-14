@@ -30,7 +30,7 @@ from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.economy.markets import market_buy, place_sell_order
-from realm.recipe_sites import terrain_allows_workshop
+from realm.production.recipe_sites import terrain_allows_workshop
 from realm.world import World
 
 

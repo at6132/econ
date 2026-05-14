@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot
-from realm.buildings import build_on_plot
+from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
-from realm.spoilage import tick_material_spoilage
-from realm.storage_caps import party_storage_cap_units, try_add_inventory
+from realm.production.spoilage import tick_material_spoilage
+from realm.production.storage_caps import party_storage_cap_units, try_add_inventory
 from realm.world import bootstrap_frontier
 
 
 def test_try_add_respects_low_storage_cap(monkeypatch) -> None:
-    from realm import storage_caps
+    from realm.production import storage_caps
 
     monkeypatch.setattr(storage_caps, "BASE_PARTY_STORAGE_UNITS", 10)
     w = bootstrap_frontier(seed=90, grid_width=2, grid_height=2)
@@ -23,7 +23,7 @@ def test_try_add_respects_low_storage_cap(monkeypatch) -> None:
 
 
 def test_field_stockade_increases_cap(monkeypatch) -> None:
-    from realm import storage_caps
+    from realm.production import storage_caps
 
     monkeypatch.setattr(storage_caps, "BASE_PARTY_STORAGE_UNITS", 50)
     w = bootstrap_frontier(seed=91, grid_width=2, grid_height=2)

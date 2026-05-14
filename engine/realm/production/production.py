@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.decay import (
+from realm.production.decay import (
     EFFICIENCY_HEALTHY,
     EFFICIENCY_STOPPED,
     building_effective_for_bonuses,
@@ -20,16 +20,16 @@ from realm.plot_logistics import (
     try_add_plot_output,
     uses_plot_logistics,
 )
-from realm.recipe_workshops import plot_has_workshop_for_recipe
-from realm.recipe_sites import (
+from realm.production.recipe_workshops import plot_has_workshop_for_recipe
+from realm.production.recipe_sites import (
     recipe_allowed_on_plot,
     recipe_allowed_on_terrain,
     recipe_terrain_bonus_bps,
     subsurface_allows_recipe,
     terrain_allows_workshop,
 )
-from realm.recipes import RECIPES
-from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
+from realm.production.recipes import RECIPES
+from realm.production.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
 from realm.core.time_scale import building_operational
 from realm.world import ActiveProduction, World
 
@@ -782,7 +782,7 @@ def throughput_breakdown(
     basis points (10_000 = 100%). The combined value is the integer product
     divided down to a single ``bps`` number.
     """
-    from realm.decay import EFFICIENCY_HEALTHY
+    from realm.production.decay import EFFICIENCY_HEALTHY
     from realm.labor import effective_output_bps_for_run
 
     plot = world.plots.get(plot_id)

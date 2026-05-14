@@ -16,7 +16,7 @@ from realm.plot_logistics import (
     remove_plot_output,
     try_add_plot_output,
 )
-from realm.storage_caps import try_add_inventory
+from realm.production.storage_caps import try_add_inventory
 from realm.world import World
 
 

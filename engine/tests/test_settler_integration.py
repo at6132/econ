@@ -22,7 +22,7 @@ from realm.core.ledger import (
     party_cash_account,
     system_reserve_account,
 )
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 from realm.settler_cost_basis import (
     SETTLER_LIST_MARGIN_BPS,
     record_settler_buy,

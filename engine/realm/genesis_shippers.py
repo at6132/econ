@@ -41,7 +41,7 @@ from realm.route_operators import (
     route_revenue_by_party_previous_day,
     set_operator_fee,
 )
-from realm.recipe_sites import plot_is_coastal
+from realm.production.recipe_sites import plot_is_coastal
 from realm.world import World
 
 

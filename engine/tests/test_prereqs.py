@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
-from realm.buildings import BUILDINGS, build_on_plot
+from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import party_cash_account
 from realm.production import start_production
-from realm.recipes import RECIPES
+from realm.production.recipes import RECIPES
 from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_genesis, bootstrap_frontier

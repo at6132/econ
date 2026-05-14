@@ -7,7 +7,7 @@ from realm.core.ids import MaterialId, PartyId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, contract_escrow_account, party_cash_account
 from realm.plot_logistics import ensure_inventory_from_stash, plot_logistics_enabled
-from realm.storage_caps import try_add_inventory
+from realm.production.storage_caps import try_add_inventory
 from realm.world import World
 
 

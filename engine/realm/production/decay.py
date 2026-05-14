@@ -76,7 +76,7 @@ def tick_building_decay(world: World) -> None:
 def maintenance_schedule_for(building_id: str) -> dict | None:
     """Return the schedule blob for ``building_id`` or ``None`` if not scheduled."""
     # Local import to avoid a circular load: ``buildings`` imports ``BUILDING_CONDITION_FULL_BPS``.
-    from realm.buildings import BUILDINGS
+    from realm.production.buildings import BUILDINGS
 
     spec = BUILDINGS.get(building_id)
     if spec is None:

@@ -6,7 +6,7 @@ import random
 from collections import Counter
 
 from realm.actions import SURVEY_COST_CENTS, claim_plot, start_production_on_plot, survey_plot
-from realm.buildings import BUILDINGS, build_on_plot
+from realm.production.buildings import BUILDINGS, build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account
 from realm.economy.pricing import settler_ask_cents
@@ -23,10 +23,10 @@ from realm.plot_logistics import (
     party_material_on_plot,
 )
 from realm.production import plot_has_active_production
-from realm.recipe_workshops import recipe_ids_on_plot_for_owner
-from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
-from realm.recipes import RECIPES
-from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units
+from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
+from realm.production.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
+from realm.production.recipes import RECIPES
+from realm.production.storage_caps import party_inventory_unit_total, party_storage_cap_units
 from realm.core.time_scale import legacy_scaled
 from realm.world.terrain import Terrain
 from realm.world import ActiveProduction, World
@@ -248,7 +248,7 @@ def _settler_richest_tier2_on_plot(plot) -> tuple[str, float] | None:
 
 def _settler_assay_lab_plot(world: World, party: PartyId) -> PlotId | None:
     """The settler's first plot containing an operational assay_lab they own (or None)."""
-    from realm.decay import building_effective_for_bonuses
+    from realm.production.decay import building_effective_for_bonuses
     from realm.core.time_scale import building_operational
 
     for b in world.plot_buildings:
@@ -310,7 +310,7 @@ def _settler_probabilistic_discovery(world: World, party: PartyId) -> None:
         source="settler_self_research",
     )
     if new_stage >= ASSAY_MAX_STAGE:
-        from realm.recipes import RECIPES
+        from realm.production.recipes import RECIPES
         from realm.world import ensure_party_recipe_book
 
         unlocked = [
@@ -350,7 +350,7 @@ def _settler_has_book_recipe(world: World, party: PartyId, recipe_id: str) -> bo
 
 def _settler_has_any_tier2_discovery(world: World, party: PartyId) -> bool:
     """Any Tier-2 recipe in the party's book counts as a discovery."""
-    from realm.recipes import RECIPES
+    from realm.production.recipes import RECIPES
 
     tier2_ids = {rid for rid, r in RECIPES.items() if r.requires_discovery}
     book = world.party_recipe_books.get(str(party), set())
@@ -915,7 +915,7 @@ def _settler_maintain_buildings(world: World, party: PartyId) -> None:
     Settlers prioritise maintenance over new construction — degraded plants destroy
     margin faster than a missed expansion.
     """
-    from realm.decay import maintain_building, maintenance_schedule_for
+    from realm.production.decay import maintain_building, maintenance_schedule_for
 
     threshold = int(world.tick) + _TICKS_PER_GAME_DAY
     for row in list(world.plot_buildings):

@@ -13,7 +13,7 @@ import copy
 import json
 from typing import Any
 
-from realm.decay import BUILDING_CONDITION_FULL_BPS
+from realm.production.decay import BUILDING_CONDITION_FULL_BPS
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory
 from realm.core.ledger import Ledger
