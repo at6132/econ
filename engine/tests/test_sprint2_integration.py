@@ -26,7 +26,7 @@ from realm.genesis.settler_cost_basis import (
     settler_listing_price_cents,
 )
 from realm.genesis.settler_upgrades import _UPGRADE_PATHS, tick_settler_margin_review
-from realm.tenders import (
+from realm.contracts.tenders import (
     TENDER_BID_WINDOW_TICKS,
     TENDER_DURATION_CYCLES,
     TENDER_INTERVAL_PER_CYCLE_TICKS,

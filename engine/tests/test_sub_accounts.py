@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.core.ids import PartyId
 from realm.core.ledger import party_cash_account
-from realm.sub_accounts import (
+from realm.core.sub_accounts import (
     PNL_WINDOW_TICKS,
     PRIMARY_LABEL,
     account_id_for,

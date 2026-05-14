@@ -38,14 +38,14 @@ from realm.movement import dispatch_shipment
 from realm.roads import all_roads_public, build_road, set_road_toll
 from realm.economy.supply_signals import all_region_activity, trade_flows_overlay
 from realm.persistence import load_snapshot, save_snapshot
-from realm.social import (
+from realm.contracts.social import (
     accept_supply_contract,
     fulfill_supply_contract,
     honor_contract_stub,
     propose_contract_stub,
     propose_supply_contract,
 )
-from realm.contract_stubs import (
+from realm.contracts.stubs import (
     accept_equity_stub,
     accept_forward_contract,
     accept_loan_contract,
@@ -596,7 +596,7 @@ def post_revise_route_fee(
 def get_tenders() -> dict:
     """List every tender (open and historical). UI groups by status."""
     from realm.genesis.settler_cost_basis import settler_output_basis_cents
-    from realm.tenders import list_all_tenders
+    from realm.contracts.tenders import list_all_tenders
 
     player = PartyId("player")
     tenders_out = []
@@ -660,7 +660,7 @@ def post_tender_bid(
     tender_id: Annotated[str, Query()],
     price_per_unit_cents: Annotated[int, Query()],
 ) -> dict:
-    from realm.tenders import submit_tender_bid
+    from realm.contracts.tenders import submit_tender_bid
 
     r = submit_tender_bid(_world, PartyId(party), tender_id, price_per_unit_cents)
     if not r.get("ok"):
@@ -1074,7 +1074,7 @@ def post_business_register(body: Annotated[dict, Body()]) -> dict:
 
 @app.get("/accounts")
 def get_accounts(party: Annotated[str, Query()] = "player") -> dict:
-    from realm.sub_accounts import party_accounts_view
+    from realm.core.sub_accounts import party_accounts_view
 
     return {
         "ok": True,
@@ -1090,7 +1090,7 @@ def get_account_history(
     party: Annotated[str, Query()] = "player",
     limit: Annotated[int, Query()] = 20,
 ) -> dict:
-    from realm.sub_accounts import sub_account_history
+    from realm.core.sub_accounts import sub_account_history
 
     return {
         "ok": True,
@@ -1103,7 +1103,7 @@ def get_account_history(
 
 @app.post("/accounts/create")
 def post_account_create(body: Annotated[dict, Body()]) -> dict:
-    from realm.sub_accounts import create_sub_account
+    from realm.core.sub_accounts import create_sub_account
 
     party_raw = body.get("party", "player")
     label_raw = body.get("label")
@@ -1174,7 +1174,7 @@ def post_bank_loan_repay(
 
 @app.post("/accounts/transfer")
 def post_account_transfer(body: Annotated[dict, Body()]) -> dict:
-    from realm.sub_accounts import transfer_own
+    from realm.core.sub_accounts import transfer_own
 
     party_raw = body.get("party", "player")
     from_label = body.get("from_label") or body.get("from")

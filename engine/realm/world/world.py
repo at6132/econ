@@ -1291,7 +1291,7 @@ def world_public_dict(world: World) -> dict:
 def _player_accounts_public(world: "World") -> list[dict]:
     """Public view of the player's accounts (Sprint 5 — Phase B)."""
     try:
-        from realm.sub_accounts import party_accounts_view
+        from realm.core.sub_accounts import party_accounts_view
     except Exception:
         return []
     return party_accounts_view(world, PartyId("player"))

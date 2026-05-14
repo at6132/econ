@@ -178,7 +178,7 @@ def solo_world():
                 if mb.get("ok"):
                     metrics["coal_sold_by_player"] += int(mb.get("filled") or 0)
         _snapshot_pertick()
-        from realm.tenders import list_all_tenders
+        from realm.contracts.tenders import list_all_tenders
         metrics["tenders_seen"] = max(metrics["tenders_seen"], len(list_all_tenders(w)))
 
     return {
@@ -392,7 +392,7 @@ def test_09_tender_system_is_alive(solo_world):
     """At least one tender existed during the run OR exists right now. Tenders
     can be awarded and aged off (the post-award lifecycle could clear them),
     so we accept "ever seen in-flight" or "still present."""
-    from realm.tenders import list_all_tenders
+    from realm.contracts.tenders import list_all_tenders
 
     w = solo_world["world"]
     metrics = solo_world["metrics"]

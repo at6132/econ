@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
-from realm.social import (
+from realm.contracts.social import (
     accept_supply_contract,
     fulfill_supply_contract,
     propose_supply_contract,

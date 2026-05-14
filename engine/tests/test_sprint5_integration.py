@@ -22,7 +22,7 @@ from realm.economy.exchange import exchange_price_for_party
 from realm.core.ids import PartyId
 from realm.core.ledger import party_cash_account
 from realm.economy.markets import place_sell_order
-from realm.sub_accounts import create_sub_account, party_accounts_view
+from realm.core.sub_accounts import create_sub_account, party_accounts_view
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 

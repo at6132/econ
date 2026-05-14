@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.contract_stubs import (
+from realm.contracts.stubs import (
     FORWARD_DEPOSIT_BPS,
     accept_forward_contract,
     deliver_forward_contract,
@@ -159,7 +159,7 @@ def test_settler_proposes_forward_with_surplus() -> None:
     still produce coastal tiles via the elev<0.24 water threshold).
     """
     from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
-    from realm.genesis_forwards import tick_settler_forward_proposals
+    from realm.contracts.forward import tick_settler_forward_proposals
     from realm.core.ids import MaterialId
     from realm.core.inventory import MatterErr
     from realm.world import bootstrap_genesis

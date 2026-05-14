@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from realm.contract_stubs import propose_forward_contract, accept_forward_contract
+from realm.contracts.stubs import propose_forward_contract, accept_forward_contract
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account

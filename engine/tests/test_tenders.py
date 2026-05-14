@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
 from realm.genesis.settler_cost_basis import record_settler_production
-from realm.tenders import (
+from realm.contracts.tenders import (
     list_all_tenders,
     list_open_tenders,
     post_tender,

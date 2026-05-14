@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.contract_stubs import (
+from realm.contracts.stubs import (
     accept_equity_stub,
     accept_loan_contract,
     accept_service_sub,
@@ -12,7 +12,7 @@ from realm.contract_stubs import (
     repay_loan_contract,
 )
 from realm.core.ids import PartyId
-from realm.social import propose_contract_stub
+from realm.contracts.social import propose_contract_stub
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 

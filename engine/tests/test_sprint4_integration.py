@@ -20,7 +20,7 @@ The single bootstrap is reused across assertions so the test stays cheap.
 from __future__ import annotations
 
 from realm.actions import create_survey_report
-from realm.contract_stubs import (
+from realm.contracts.stubs import (
     accept_forward_contract,
     propose_forward_contract,
 )

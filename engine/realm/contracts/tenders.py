@@ -50,7 +50,7 @@ from realm.core.ids import MaterialId, PartyId
 from realm.genesis.settler_cost_basis import (
     settler_output_basis_cents,
 )
-from realm.social import propose_supply_contract, accept_supply_contract
+from realm.contracts.social import propose_supply_contract, accept_supply_contract
 from realm.world import World
 
 
