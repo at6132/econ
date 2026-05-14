@@ -169,13 +169,21 @@ def test_productivity_drops_when_health_is_low():
 # ───────────────────────── analytics ─────────────────────────
 
 
-def test_unemployed_count_equals_laborer_count_at_bootstrap():
-    """Phase 7B: nobody is employed yet (jobs land in 7E)."""
+def test_most_laborers_unemployed_at_bootstrap():
+    """Phase 7E seeds a small batch of day-1 hires for NPC entrepreneurs
+    so the labor market isn't completely cold, but the overwhelming
+    majority of laborers still start unemployed. This is the pressure
+    that makes hiring economically interesting for the player."""
     w = bootstrap_genesis(seed=11, grid_width=64, grid_height=48, settler_count=4)
     for isl in sorted({int(v) for v in w.scenario_state["plot_islands"].values()}):
         n_lab = laborer_count_for_island(w, isl)
         n_un = unemployed_laborer_count_for_island(w, isl)
-        assert n_un == n_lab, f"island {isl}: {n_un} unemployed of {n_lab} laborers"
+        # Strictly: 7E hires never push unemployment below 90% on any
+        # island — there are too few NPC-owned plots vs. laborers.
+        assert n_un >= int(0.9 * n_lab), (
+            f"island {isl}: only {n_un} unemployed of {n_lab} — bootstrap "
+            f"hires should not exceed 10% of any island"
+        )
 
 
 # ───────────────────────── seed_island_laborers direct API ─────────────────────────

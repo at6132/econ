@@ -26,6 +26,7 @@ from realm.genesis_margaux_sprint5 import (
     tick_margaux_sprint5_beats,
     update_margaux_player_profile,
 )
+from realm.employment import tick_job_market, tick_laborer_wages
 from realm.laborers import tick_laborer_births, tick_laborers
 from realm.sprint4_feed import tick_sprint4_feed
 from realm.stores import tick_laborer_spending
@@ -60,6 +61,8 @@ def advance_tick(world: World) -> None:
     if world.scenario_id == "genesis":
         tick_frontier_roads(world)
         tick_laborers(world)
+        tick_job_market(world)
+        tick_laborer_wages(world)
         tick_laborer_spending(world)
         tick_laborer_births(world)
     record_market_snapshot(world)

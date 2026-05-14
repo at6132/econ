@@ -253,6 +253,18 @@ def dump_world(world: World) -> dict[str, Any]:
         "store_revenue_today": {
             pid: int(c) for pid, c in world.store_revenue_today.items()
         },
+        "job_openings": [
+            {
+                "opening_id": op.opening_id,
+                "employer": str(op.employer),
+                "plot_id": str(op.plot_id),
+                "skill_min": int(op.skill_min),
+                "wage_per_day_cents": int(op.wage_per_day_cents),
+                "posted_at_tick": int(op.posted_at_tick),
+                "filled_by": op.filled_by,
+            }
+            for op in world.job_openings
+        ],
     }
 
 
@@ -489,6 +501,26 @@ def load_world(d: dict[str, Any]) -> World:
                 )
             )
     world.next_road_segment_seq = int(d.get("next_road_segment_seq", 0))
+    raw_jobs = d.get("job_openings") or []
+    if isinstance(raw_jobs, list):
+        from realm.employment import JobOpening
+
+        for payload in raw_jobs:
+            if not isinstance(payload, dict):
+                continue
+            world.job_openings.append(
+                JobOpening(
+                    opening_id=str(payload.get("opening_id", "")),
+                    employer=PartyId(str(payload.get("employer", ""))),
+                    plot_id=PlotId(str(payload.get("plot_id", ""))),
+                    skill_min=int(payload.get("skill_min", 0)),
+                    wage_per_day_cents=int(payload.get("wage_per_day_cents", 0)),
+                    posted_at_tick=int(payload.get("posted_at_tick", 0)),
+                    filled_by=(
+                        str(payload["filled_by"]) if payload.get("filled_by") else None
+                    ),
+                )
+            )
     for store_field in ("store_inventories", "store_prices"):
         raw_store = d.get(store_field) or {}
         if isinstance(raw_store, dict):

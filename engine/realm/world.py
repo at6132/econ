@@ -16,6 +16,7 @@ from realm.rng import make_rng
 from realm.terrain import Terrain
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from realm.employment import JobOpening
     from realm.laborers import LaborerNPC
     from realm.towns import Town
 
@@ -365,6 +366,10 @@ class World:
     """Phase 7D: cents earned at each store on the current game-day. Reset by
     ``tick_laborer_spending`` at the day boundary so the UI can show a daily
     summary."""
+    job_openings: list["JobOpening"] = field(default_factory=list)
+    """Phase 7E: active job postings from entrepreneurs. ``tick_job_market``
+    matches unemployed laborers to openings once per game-day; wages flow
+    employer → laborer via ``tick_laborer_wages``."""
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -769,6 +774,17 @@ def bootstrap_genesis(
     from realm.genesis_road_builders import seed_frontier_roads
 
     seed_frontier_roads(world)
+    # Phase 7E — seed the day-1 job market so laborers have somewhere to
+    # earn wages immediately. Runs AFTER every entrepreneur NPC is seated
+    # (consolidator, archetypes, shippers, energy, bank) so their owned
+    # plots are eligible to host openings.
+    from realm.employment import seed_genesis_npc_job_market
+
+    employment_seed = seed_genesis_npc_job_market(world)
+    if employment_seed:
+        world.scenario_state["starting_job_market"] = {
+            str(k): int(v) for k, v in employment_seed.items()
+        }
     log_event(
         world,
         "world",
