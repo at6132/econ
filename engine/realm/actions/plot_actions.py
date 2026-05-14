@@ -61,6 +61,17 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
     from realm.world import claim_cost_cents_for_plot
 
     cost = int(claim_cost_cents_for_plot(world, plot_id))
+    # Phase 9I - progressive ownership tax. Every plot the party already
+    # owns multiplies the next claim fee by +20%, capped at 5x. This
+    # makes large land-grabs strategically expensive (anti-monopoly)
+    # without blocking honest expansion. Frontier plots (density 0) are
+    # still free at any quantity; we only mark up the densest-zone fee.
+    owned_count = sum(
+        1 for p in world.plots.values() if p.owner == party
+    )
+    if cost > 0 and owned_count > 0:
+        multiplier_bps = min(10_000 + owned_count * 2_000, 50_000)
+        cost = cost * multiplier_bps // 10_000
     if cost > 0:
         cash = party_cash_account(party)
         world.ledger.ensure_account(cash)

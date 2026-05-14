@@ -17,7 +17,14 @@ def test_dispatch_fee_matches_distance_formula() -> None:
     assert claim_plot(w, p, b)["ok"] is True
     dist = manhattan(w, a, b)
     assert dist == 3
-    expected = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
+    # Phase 9I - fee = base + dist*per_tile + mass_surcharge. Timber is
+    # 450 kg/unit -> 1 unit * 3 tiles * 1c/(ton*tile) = 1.35c -> int 1.
+    from realm.infrastructure.movement import MASS_SHIP_TON_TILE_CENTS
+    from realm.materials import MATERIALS
+
+    timber_kg = MATERIALS[MaterialId("timber")].mass_per_unit_kg
+    mass_surcharge = int((timber_kg * 1 / 1000.0) * dist * MASS_SHIP_TON_TILE_CENTS)
+    expected = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS + mass_surcharge
     r = dispatch_shipment(w, p, MaterialId("timber"), 1, a, b)
     assert r["ok"] is True
     assert r["fee_cents"] == expected

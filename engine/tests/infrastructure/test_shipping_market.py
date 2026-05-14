@@ -380,8 +380,13 @@ def test_no_operator_falls_back_to_system_reserve() -> None:
     fee = int(ship["fee_cents"])
     # Default PER_TILE rate applies. ``pa``/``pb`` sit on the coastal strip in
     # this fixture, so Sprint 3 Phase D.2 applies the 40 % coastal discount.
+    # Phase 9I adds a mass-weighted surcharge: 2 units grain * 0.78 t * dist.
     from realm.world.geo import manhattan
-    from realm.infrastructure.movement import COASTAL_ROUTE_DISCOUNT_BPS
+    from realm.infrastructure.movement import (
+        COASTAL_ROUTE_DISCOUNT_BPS,
+        MASS_SHIP_TON_TILE_CENTS,
+    )
+    from realm.materials import MATERIALS
 
     dist = manhattan(w, pa, pb)
     raw = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
@@ -391,6 +396,9 @@ def test_no_operator_falls_back_to_system_reserve() -> None:
         )
     else:
         expected = raw
+    grain_kg = MATERIALS[MaterialId("grain")].mass_per_unit_kg
+    mass_surcharge = int((grain_kg * 2 / 1000.0) * dist * MASS_SHIP_TON_TILE_CENTS)
+    expected += mass_surcharge
     assert fee == expected
     assert ship["operator_party"] is None
     assert w.ledger.balance(party_cash_account(alice)) == pre_alice - fee

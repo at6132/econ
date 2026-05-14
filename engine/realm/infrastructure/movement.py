@@ -18,6 +18,8 @@ per tile) plus ``TRANSIT_BASE_TICKS`` handling.
 
 from __future__ import annotations
 
+from typing import Final
+
 from realm.events.event_log import log_event
 from realm.world.geo import manhattan
 from realm.core.ids import MaterialId, PartyId, PlotId
@@ -53,6 +55,16 @@ RECEIVING_FEE_CHUNK_UNITS = 20  # +1¢ per this many units after the first
 # origin plot. Coal preferred; electricity falls back.
 MOVEMENT_FUEL_TILES_PER_UNIT: int = 20
 INTER_ISLAND_FUEL_MATERIALS: tuple[str, ...] = ("coal", "electricity")
+
+# Phase 9I - mass-weighted shipping surcharge.
+# Before: a 1-unit grain shipment cost the same as a 100-unit stone
+# shipment, which broke Law 3 (distance has cost) for heavy cargo. The
+# surcharge is tons * tiles * MASS_SHIP_TON_TILE_CENTS, so:
+#   - 10 units grain over 20 tiles -> about 8t * 20 * 1 = 160c surcharge
+#   - 10 units stone over 20 tiles -> about 26t * 20 * 1 = 520c surcharge
+# Light cargo (grain/fish) is barely affected; bulk minerals get a
+# real freight cost that makes local sourcing matter.
+MASS_SHIP_TON_TILE_CENTS: Final[int] = 1
 
 
 def receiving_fee_cents(qty: int) -> int:
@@ -269,6 +281,18 @@ def dispatch_shipment(
     road_savings: int = int(road_calc["savings_cents"])
     tolls: list[tuple[PartyId, str, int]] = list(road_calc["tolls"])
     fee = max(BASE_SHIP_FEE_CENTS, fee - road_savings)
+    # Phase 9I - mass-weighted surcharge (Law 3: distance has cost,
+    # *and* hauling 26 tons of stone should cost more than 8 tons of
+    # grain). Looks up the material's mass_per_unit_kg from MATERIALS
+    # and adds tons * tiles * MASS_SHIP_TON_TILE_CENTS to the fee.
+    from realm.materials import MATERIALS
+
+    mat_def = MATERIALS.get(material)
+    if mat_def is not None and mat_def.mass_per_unit_kg > 0:
+        total_kg = mat_def.mass_per_unit_kg * float(qty)
+        total_tons = total_kg / 1000.0
+        mass_surcharge_cents = int(total_tons * dist * MASS_SHIP_TON_TILE_CENTS)
+        fee += mass_surcharge_cents
     total_toll_cents = sum(amt for _, _, amt in tolls)
     cash = party_cash_account(party)
     if world.ledger.balance(cash) < fee + total_toll_cents:
