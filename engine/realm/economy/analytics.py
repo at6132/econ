@@ -57,6 +57,9 @@ PRICE_HISTORY_COST_CENTS: Final[int] = 300
 REGIONAL_SURVEY_COST_CENTS: Final[int] = 500
 PARTY_VOLUME_COST_CENTS: Final[int] = 800
 SUPPLY_SHORTAGE_COST_CENTS: Final[int] = 400
+# Phase 8E intelligence products.
+REGIONAL_RISK_COST_CENTS: Final[int] = 1_000
+MARKET_CYCLE_COST_CENTS: Final[int] = 800
 
 # Categorical thresholds.
 SIGNIFICANT_VOLUME_THRESHOLD: Final[int] = 50
@@ -67,7 +70,14 @@ PRICE_HISTORY_WINDOW_DAYS: Final[int] = 30
 _TICKS_PER_GAME_DAY: Final[int] = 1440
 
 _VALID_PRODUCTS: Final[frozenset[str]] = frozenset(
-    {"price_history", "regional_survey", "party_volume", "supply_shortage"}
+    {
+        "price_history",
+        "regional_survey",
+        "party_volume",
+        "supply_shortage",
+        "regional_risk",
+        "market_cycle",
+    }
 )
 
 _PRODUCT_COSTS: Final[dict[str, int]] = {
@@ -75,6 +85,8 @@ _PRODUCT_COSTS: Final[dict[str, int]] = {
     "regional_survey": REGIONAL_SURVEY_COST_CENTS,
     "party_volume": PARTY_VOLUME_COST_CENTS,
     "supply_shortage": SUPPLY_SHORTAGE_COST_CENTS,
+    "regional_risk": REGIONAL_RISK_COST_CENTS,
+    "market_cycle": MARKET_CYCLE_COST_CENTS,
 }
 
 
@@ -326,6 +338,137 @@ def _supply_shortage_materials(world: World) -> list[str]:
     return short
 
 
+# ───────────────────────── Phase 8E intelligence products ─────────────────────────
+
+
+def _regional_risk_report(world: World) -> dict[str, Any]:
+    """Per-island risk roll-up of active world events + historical frequencies.
+
+    Read-only: never moves money/matter on its own. The vendor fee is the
+    only cash side-effect (charged in ``purchase_analytics_product``).
+    """
+    from realm.events.world_events import (
+        DROUGHT_ARID_DAILY_PROB,
+        DROUGHT_BASE_DAILY_PROB,
+        active_events as _active_events,
+        all_events as _all_events,
+    )
+    from realm.events.seasons import Season, current_season
+
+    season = current_season(world)
+    mapping = world.scenario_state.get("plot_islands") or {}
+    islands = sorted({int(v) for v in mapping.values()}) if mapping else [0]
+    active = _active_events(world)
+    recent_window = max(0, int(world.tick) - 30 * _TICKS_PER_GAME_DAY)
+    recent_events = [
+        ev for ev in _all_events(world) if int(ev.started_tick) >= recent_window
+    ]
+    out: list[dict[str, Any]] = []
+    for isl in islands:
+        island_active = [
+            {
+                "event_type": ev.event_type,
+                "event_id": ev.event_id,
+                "severity": round(float(ev.severity), 3),
+                "started_tick": int(ev.started_tick),
+                "end_tick": int(ev.end_tick),
+                "payload": dict(ev.payload),
+            }
+            for ev in active
+            if ev.island_id is not None and int(ev.island_id) == int(isl)
+        ]
+        island_recent = [
+            ev for ev in recent_events
+            if ev.island_id is not None and int(ev.island_id) == int(isl)
+        ]
+        freq: dict[str, int] = {}
+        for ev in island_recent:
+            freq[ev.event_type] = freq.get(ev.event_type, 0) + 1
+        risk_notes: list[str] = []
+        drought_prob = DROUGHT_ARID_DAILY_PROB if isl == 3 else DROUGHT_BASE_DAILY_PROB
+        if season in (Season.SUMMER, Season.AUTUMN):
+            label = "elevated" if isl == 3 else "moderate"
+            risk_notes.append(
+                f"Island {isl}: {label} drought risk "
+                f"({season.value}, base prob {drought_prob:.3f}/day)"
+            )
+        if season in (Season.AUTUMN, Season.WINTER):
+            risk_notes.append(f"Island {isl}: elevated storm risk ({season.value})")
+        out.append(
+            {
+                "island_id": int(isl),
+                "active_events": island_active,
+                "events_last_30_days": freq,
+                "risk_assessment": risk_notes,
+            }
+        )
+    return {
+        "season": season.value,
+        "tick": int(world.tick),
+        "islands": out,
+    }
+
+
+def _market_cycle_report(world: World) -> dict[str, Any]:
+    """Flag materials trading meaningfully above their 30-day average, and
+    summarise the bank credit posture + any active route blockages."""
+    from realm.economy.market_events import _three_day_moving_average
+
+    cutoff = max(0, int(world.tick) - 30 * _TICKS_PER_GAME_DAY)
+    materials: set[str] = set()
+    for row in world.market_history:
+        if int(row.get("tick", 0)) < cutoff:
+            continue
+        asks = row.get("best_asks_cents") or {}
+        materials.update(str(k) for k in asks)
+    flagged: list[dict[str, Any]] = []
+    for mat in sorted(materials):
+        ma = _three_day_moving_average(world, mat)
+        if ma is None:
+            continue
+        current = None
+        lst = world.market_asks_by_material.get(mat)
+        if lst:
+            current = min(int(o.price_per_unit_cents) for o in lst)
+        if current is None or ma <= 0:
+            continue
+        ratio = current / ma
+        if ratio >= 1.10:
+            flagged.append(
+                {
+                    "material": mat,
+                    "current_cents": int(current),
+                    "moving_avg_cents": int(ma),
+                    "ratio": round(ratio, 3),
+                    "label": (
+                        "panic_risk" if ratio >= 1.40 else
+                        "elevated" if ratio >= 1.25 else
+                        "moderate"
+                    ),
+                }
+            )
+    # Bank credit status.
+    from realm.economy.market_events import _bank_loan_outstanding_principal
+    from realm.genesis.bank import BANK_STARTING_CASH_CENTS
+
+    outstanding = _bank_loan_outstanding_principal(world)
+    util_pct = (outstanding * 100.0 / max(1, BANK_STARTING_CASH_CENTS))
+    crunch = bool(world.scenario_state.get("bank_credit_crunch"))
+    blocked_routes = sorted(
+        (world.scenario_state.get("blocked_routes") or {}).keys()
+    )
+    return {
+        "tick": int(world.tick),
+        "flagged_materials": flagged,
+        "bank_credit": {
+            "outstanding_cents": int(outstanding),
+            "utilisation_pct": round(util_pct, 2),
+            "crunch_active": crunch,
+        },
+        "blocked_routes": blocked_routes,
+    }
+
+
 # ───────────────────────── public entry point ─────────────────────────
 
 
@@ -392,6 +535,10 @@ def purchase_analytics_product(
         )
     elif product == "party_volume":
         data = _party_volume_signal(world, str(params["party_id"]))
+    elif product == "regional_risk":
+        data = _regional_risk_report(world)
+    elif product == "market_cycle":
+        data = _market_cycle_report(world)
     else:  # supply_shortage
         materials = _supply_shortage_materials(world)
         data = {"materials_in_shortage": materials, "threshold_units": SHORTAGE_UNIT_THRESHOLD}
@@ -408,6 +555,20 @@ def purchase_analytics_product(
             f"{p['material']} ({p['side']})" for p in data.get("profile", [])
         )
         summary_bits.append(f"party_volume {data['party']} — {sigs or 'no significant flows'}")
+    elif product == "regional_risk":
+        active_count = sum(
+            len(i.get("active_events", [])) for i in data.get("islands", [])
+        )
+        summary_bits.append(
+            f"regional_risk — season {data.get('season')}, "
+            f"{active_count} active world event(s)"
+        )
+    elif product == "market_cycle":
+        crunch = data.get("bank_credit", {}).get("crunch_active")
+        summary_bits.append(
+            f"market_cycle — {len(data.get('flagged_materials', []))} flagged material(s); "
+            f"credit_crunch={'on' if crunch else 'off'}"
+        )
     else:
         summary_bits.append(
             f"supply_shortage — {len(data.get('materials_in_shortage', []))} material(s) "
