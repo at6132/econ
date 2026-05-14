@@ -182,11 +182,14 @@ def seed_npc_shippers(world: World, *, starting_cash_cents: int | None = None) -
         ad = world.inventory.add(shipper_id, MaterialId("vessel"), 1)
         if isinstance(ad, MatterErr):
             continue
+        # Phase 9A — bunker fuel for inter-island voyages. 200 units of coal
+        # is roughly 30-40 cross-island trips for a 48x36 world.
+        world.inventory.add(shipper_id, MaterialId("coal"), 200)
         created.append(str(shipper_id))
         log_event(
             world,
             "npc_shipper_seeded",
-            f"NPC shipper {shipper_id} placed on {plot_id} (region {region}) with dock + 1 vessel",
+            f"NPC shipper {shipper_id} placed on {plot_id} (region {region}) with dock + 1 vessel + bunker fuel",
             party=str(shipper_id),
             plot_id=str(plot_id),
             region=region,

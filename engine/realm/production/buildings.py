@@ -286,6 +286,30 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"lumber": 4, "brick": 2, "glass": 2, "timber": 2},
         "turnkey_total_cents": 120_000,
     },
+    # Phase 9A — Shipyard. Coastal-only; runs the build_cargo_vessel recipe.
+    # Without a shipyard the only path to vessels is the bootstrap stockpile
+    # at genesis_exchange (Sprint 2 seeded 20 vessels) — a real economy needs
+    # a way to manufacture them. Steel + lumber + rope + pump_unit.
+    "shipyard": {
+        "kind": "contracted",
+        "label": "Shipyard (coastal — builds cargo vessels)",
+        "self_shell_cents": 220_000,
+        "self_contractor_fee_cents": 60_000,
+        "self_materials": {
+            "lumber": 16,
+            "timber": 10,
+            "rope": 6,
+            "brick": 8,
+            "iron_ingot": 4,
+        },
+        "turnkey_total_cents": 360_000,
+        "terrain_required": ("coastal",),
+        "maintenance_schedule": {
+            "interval_ticks": 10_080,  # 7 game-days
+            "materials": {"lumber": 2, "rope": 1},
+            "grace_ticks": 2_880,
+        },
+    },
     # Sprint 3 — Phase D.4: coastal renewable power. Half the throughput of a
     # coal power_shed but zero ongoing fuel cost.
     "tidal_mill": {

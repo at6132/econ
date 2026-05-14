@@ -801,6 +801,25 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         requires_building_id="chemical_works",
         requires_discovery=True,
     ),
+    # Phase 9A — Shipyard builds the durable cargo vessel that gates inter-island
+    # shipping. Big bill of materials so a shipyard is a real investment, not a
+    # button to spam: 8 lumber + 6 timber + 4 iron + 2 rope + electricity in,
+    # 1 vessel out (4,800 kg durable asset).
+    "build_cargo_vessel": Recipe(
+        recipe_id="build_cargo_vessel",
+        display_name="Build cargo vessel (shipyard — lumber + timber + iron + rope + power)",
+        inputs={
+            MaterialId("lumber"): 8,
+            MaterialId("timber"): 6,
+            MaterialId("iron_ingot"): 4,
+            MaterialId("rope"): 2,
+            MaterialId("electricity"): 3,
+        },
+        outputs={MaterialId("vessel"): 1},
+        duration_ticks=12 * _TICKS_PER_GAME_HOUR,
+        labor_cents=40_00,
+        requires_building_id="shipyard",
+    ),
     # Phase 8C — epidemic supply chain.
     "gather_herbs": Recipe(
         recipe_id="gather_herbs",

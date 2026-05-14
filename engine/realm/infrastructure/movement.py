@@ -42,6 +42,18 @@ RECEIVING_FEE_BASE_CENTS = 25
 RECEIVING_FEE_EXTRA_PER_CHUNK_CENTS = 1
 RECEIVING_FEE_CHUNK_UNITS = 20  # +1¢ per this many units after the first
 
+# Phase 9A — geography gates for inter-island shipping.
+# Inter-island shipments must originate at a completed ``dock`` plot the
+# shipper owns AND deliver to a completed ``dock`` plot owned by some party
+# (delivery dock owner gets the receiving fee — incentive to build coastal
+# infrastructure). The shipper must also own at least one ``vessel`` material
+# unit at dispatch time (Primitive 4 — vessels are real transport assets).
+# Fuel: every voyage burns ``MOVEMENT_FUEL_TILES_PER_UNIT`` tiles of distance
+# per unit of energy material consumed from the shipper's stockpile at the
+# origin plot. Coal preferred; electricity falls back.
+MOVEMENT_FUEL_TILES_PER_UNIT: int = 20
+INTER_ISLAND_FUEL_MATERIALS: tuple[str, ...] = ("coal", "electricity")
+
 
 def receiving_fee_cents(qty: int) -> int:
     """Deterministic handling fee for a delivered shipment size."""
@@ -53,6 +65,63 @@ def receiving_fee_cents(qty: int) -> int:
 def _plot_owned(world: World, party: PartyId, plot_id: PlotId) -> bool:
     p = world.plots.get(plot_id)
     return p is not None and p.owner == party
+
+
+def _plot_has_completed_building(
+    world: World, plot_id: PlotId, building_id: str, *, owner: PartyId | None = None
+) -> bool:
+    """True if the plot has a *completed* building of the given kind.
+
+    When ``owner`` is supplied, also require the building to be owned by that
+    party (used for the origin-dock check). Destination docks may be owned by
+    anyone — the receiving-fee credit goes to whoever does own it.
+    """
+    pid_str = str(plot_id)
+    for b in world.plot_buildings:
+        if str(b.get("plot_id")) != pid_str:
+            continue
+        if str(b.get("building_id")) != building_id:
+            continue
+        if int(b.get("completes_at_tick", 0)) > int(world.tick):
+            continue
+        if owner is not None and str(b.get("party")) != str(owner):
+            continue
+        return True
+    return False
+
+
+def _plot_building_owner(
+    world: World, plot_id: PlotId, building_id: str
+) -> PartyId | None:
+    """Owner of a completed building on the plot (None if not built / unfinished)."""
+    pid_str = str(plot_id)
+    for b in world.plot_buildings:
+        if str(b.get("plot_id")) != pid_str:
+            continue
+        if str(b.get("building_id")) != building_id:
+            continue
+        if int(b.get("completes_at_tick", 0)) > int(world.tick):
+            continue
+        owner = b.get("party")
+        return PartyId(str(owner)) if owner else None
+    return None
+
+
+def _inter_island_fuel_plan(
+    world: World, party: PartyId, distance_tiles: int
+) -> tuple[MaterialId, int] | None:
+    """Pick a fuel material the party has enough of for an inter-island voyage.
+
+    Returns ``(material_id, units_required)`` or ``None`` when neither coal
+    nor electricity is on hand in sufficient quantity. Coal is preferred
+    (cheaper, denser); electricity is the fallback (modern dockside power).
+    """
+    needed = max(1, distance_tiles // MOVEMENT_FUEL_TILES_PER_UNIT)
+    for fuel in INTER_ISLAND_FUEL_MATERIALS:
+        mid = MaterialId(fuel)
+        if world.inventory.qty(party, mid) >= needed:
+            return (mid, needed)
+    return None
 
 
 def dispatch_shipment(
@@ -70,8 +139,19 @@ def dispatch_shipment(
     """
     if qty <= 0:
         return {"ok": False, "reason": "quantity must be positive"}
-    if not _plot_owned(world, party, from_plot_id) or not _plot_owned(world, party, to_plot_id):
-        return {"ok": False, "reason": "must own both plots"}
+    # Phase 9A — inter-island shipping is "merchant-to-port": the shipper
+    # must own the origin plot, but the destination only needs to have a
+    # completed dock (any owner). This unlocks shipping-as-a-service: you
+    # can deliver to a customer's port without owning their land. Intra-
+    # island still requires both endpoints to be the shipper's (door-to-
+    # door wagon analog — no port to take consignment).
+    from realm.world.islands import is_inter_island_shipment as _is_inter
+
+    inter_island_preview = _is_inter(world, from_plot_id, to_plot_id)
+    if not _plot_owned(world, party, from_plot_id):
+        return {"ok": False, "reason": "must own origin plot"}
+    if not inter_island_preview and not _plot_owned(world, party, to_plot_id):
+        return {"ok": False, "reason": "intra-island shipping requires owning both plots"}
     if from_plot_id == to_plot_id:
         return {"ok": False, "reason": "same plot"}
     inv_q = world.inventory.qty(party, material)
@@ -81,9 +161,40 @@ def dispatch_shipment(
     from_region = region_for_plot(world, from_plot_id)
     to_region = region_for_plot(world, to_plot_id)
     # Phase 7A: inter-island shipments cost 2× per-tile (open-ocean modifier).
-    from realm.world.islands import is_inter_island_shipment
-
-    inter_island = is_inter_island_shipment(world, from_plot_id, to_plot_id)
+    inter_island = inter_island_preview
+    # Phase 9A: inter-island shipping requires real coastal infrastructure.
+    # - Origin plot must have a completed dock owned by the shipper.
+    # - Destination plot must have a completed dock owned by *someone* (the
+    #   dock owner gets the receiving fee on arrival).
+    # - Shipper must own at least one cargo vessel (Primitive 4 — vessels are
+    #   real assets; without one the open ocean is impassable).
+    # - The voyage burns fuel: 1 unit of coal or electricity per
+    #   ``MOVEMENT_FUEL_TILES_PER_UNIT`` tiles (Law 4 — energy required).
+    inter_island_fuel: tuple[MaterialId, int] | None = None
+    dest_dock_owner: PartyId | None = None
+    if inter_island:
+        if not _plot_has_completed_building(world, from_plot_id, "dock", owner=party):
+            return {
+                "ok": False,
+                "reason": "inter-island shipping requires a completed dock at the origin plot",
+            }
+        dest_dock_owner = _plot_building_owner(world, to_plot_id, "dock")
+        if dest_dock_owner is None:
+            return {
+                "ok": False,
+                "reason": "inter-island shipping requires a completed dock at the destination plot",
+            }
+        if world.inventory.qty(party, MaterialId("vessel")) < 1:
+            return {
+                "ok": False,
+                "reason": "inter-island shipping requires the shipper to own a cargo vessel",
+            }
+        inter_island_fuel = _inter_island_fuel_plan(world, party, dist)
+        if inter_island_fuel is None:
+            return {
+                "ok": False,
+                "reason": "inter-island voyage requires coal or electricity for fuel",
+            }
     # Phase 8D: refuse dispatch on a route that's currently blockaded by a storm.
     if inter_island:
         from realm.economy.market_events import is_route_blocked
@@ -231,8 +342,27 @@ def dispatch_shipment(
         _refund_fee()
         return {"ok": False, "reason": "toll payment failed"}
 
+    # Phase 9A: burn fuel for inter-island voyages (Law 4). Refund the fee
+    # bundle if the inventory pull fails — we shouldn't have charged the
+    # shipper without consuming the fuel.
+    fuel_consumed: tuple[MaterialId, int] | None = None
+    if inter_island_fuel is not None:
+        fuel_mid, fuel_units = inter_island_fuel
+        rm_fuel = world.inventory.remove(party, fuel_mid, fuel_units)
+        if isinstance(rm_fuel, MatterErr):
+            _refund_fee()
+            return {"ok": False, "reason": rm_fuel.reason}
+        fuel_consumed = (fuel_mid, fuel_units)
+
+    def _refund_fuel() -> None:
+        if fuel_consumed is None:
+            return
+        fmid, fqty = fuel_consumed
+        world.inventory.add(party, fmid, fqty)
+
     rm = world.inventory.remove(party, material, qty)
     if isinstance(rm, MatterErr):
+        _refund_fuel()
         _refund_fee()
         return {"ok": False, "reason": rm.reason}
     # Sprint 3 — Phase D.3: harbor speed bonus. A dispatch from a coastal plot
@@ -250,6 +380,8 @@ def dispatch_shipment(
     arrive = world.tick + transit_ticks
     world.next_shipment_seq += 1
     sid = f"ship-{world.next_shipment_seq}"
+    # Phase 9A — stash inter-island metadata onto the InTransit row so
+    # ``deliver_transit`` knows where to credit the receiving fee.
     world.in_transit.append(
         InTransit(
             shipment_id=sid,
@@ -259,13 +391,27 @@ def dispatch_shipment(
             dest_plot_id=to_plot_id,
             arrive_tick=arrive,
             from_plot_id=from_plot_id,
+            dest_dock_owner=(
+                str(dest_dock_owner) if dest_dock_owner is not None else None
+            ),
+            inter_island=bool(inter_island),
         )
+    )
+    fuel_log = (
+        {"material": str(fuel_consumed[0]), "units": int(fuel_consumed[1])}
+        if fuel_consumed is not None
+        else None
     )
     log_event(
         world,
         "ship_dispatch",
         f"{party} shipped {qty}×{material} → {to_plot_id} (arrive tick {arrive}, fee ${fee / 100:.2f}"
         + (f", route {op_route_key} → {operator_payee}" if operator_payee is not None else "")
+        + (
+            f", fuel {fuel_log['units']} {fuel_log['material']}"
+            if fuel_log is not None
+            else ""
+        )
         + ")",
         party=str(party),
         material=str(material),
@@ -275,6 +421,10 @@ def dispatch_shipment(
         fee_cents=fee,
         route_key=op_route_key,
         operator_party=str(operator_payee) if operator_payee is not None else None,
+        inter_island=bool(inter_island),
+        dest_dock_owner=str(dest_dock_owner) if dest_dock_owner is not None else None,
+        fuel_material=fuel_log["material"] if fuel_log is not None else None,
+        fuel_units=fuel_log["units"] if fuel_log is not None else 0,
     )
     return {
         "ok": True,
@@ -292,6 +442,9 @@ def dispatch_shipment(
         "road_segments_used": [s for _, s, _ in tolls_paid],
         "inter_island": bool(inter_island),
         "ocean_modifier_mult": int(ocean_mult),
+        "dest_dock_owner": str(dest_dock_owner) if dest_dock_owner is not None else None,
+        "fuel_material": fuel_log["material"] if fuel_log is not None else None,
+        "fuel_units": fuel_log["units"] if fuel_log is not None else 0,
     }
 
 
@@ -324,11 +477,28 @@ def deliver_transit(world: World) -> None:
             keep.append(s)
             continue
         if recv_fee > 0:
-            pay_recv = world.ledger.transfer(
-                debit=cash,
-                credit=system_reserve_account(),
-                amount_cents=recv_fee,
-            )
+            # Phase 9A — inter-island receiving fee credits the destination
+            # dock owner. Intra-island shipments still sink to system_reserve
+            # because they don't dock (door-to-door wagon analog). The dock
+            # owner falls back to system_reserve if the destination dock
+            # owner is absent (defensive — should never happen because we
+            # gated dispatch on a completed dock).
+            dock_owner_str = getattr(s, "dest_dock_owner", None)
+            inter_island_flag = bool(getattr(s, "inter_island", False))
+            if inter_island_flag and dock_owner_str:
+                receiver_acct = party_cash_account(PartyId(str(dock_owner_str)))
+                world.ledger.ensure_account(receiver_acct)
+                pay_recv = world.ledger.transfer(
+                    debit=cash,
+                    credit=receiver_acct,
+                    amount_cents=recv_fee,
+                )
+            else:
+                pay_recv = world.ledger.transfer(
+                    debit=cash,
+                    credit=system_reserve_account(),
+                    amount_cents=recv_fee,
+                )
             if isinstance(pay_recv, MoneyErr):
                 rb2 = world.inventory.remove(s.party, s.material, s.qty)
                 assert not isinstance(rb2, MatterErr)

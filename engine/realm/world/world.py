@@ -54,6 +54,11 @@ class InTransit:
     dest_plot_id: PlotId
     arrive_tick: int
     from_plot_id: PlotId | None = None
+    # Phase 9A — inter-island shipments record the destination dock owner so
+    # the receiving fee credits coastal infrastructure on arrival. ``None``
+    # for intra-island shipments (door-to-door, no port).
+    dest_dock_owner: str | None = None
+    inter_island: bool = False
 
 
 @dataclass

@@ -114,6 +114,13 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     # Phase 8C — herbalism + apothecary chain.
     "gather_herbs": frozenset({T.FOREST}),
     "make_medicine": frozenset({T.PLAINS, T.FOREST, T.MOUNTAIN, T.SWAMP, T.TUNDRA, T.DESERT}),
+    # Phase 9A — shipyard (coastal-only; same plot_is_coastal gate as the dock).
+    # Terrain envelope mirrors tidal_power: any land-terrain that *can* be
+    # water-adjacent is surfaced; ``COASTAL_ONLY_RECIPES`` enforces the actual
+    # water-adjacency check at production start.
+    "build_cargo_vessel": frozenset(
+        {T.PLAINS, T.FOREST, T.SWAMP, T.TUNDRA, T.DESERT, T.MOUNTAIN}
+    ),
 }
 
 _WATER: Final[frozenset[Terrain]] = frozenset({T.WATER_SHALLOW, T.WATER_DEEP})
@@ -132,7 +139,9 @@ RECIPE_TERRAIN_BONUS_BPS: Final[dict[str, dict[Terrain, int]]] = {
 # ``recipe_allowed_on_plot``; ``recipe_allowed_on_terrain`` is permissive so the
 # API and UI can still surface the recipe on potentially-coastal terrains, with
 # the plot-level check rejecting inland tries at production start.
-COASTAL_ONLY_RECIPES: Final[frozenset[str]] = frozenset({"fishing", "tidal_power"})
+COASTAL_ONLY_RECIPES: Final[frozenset[str]] = frozenset(
+    {"fishing", "tidal_power", "build_cargo_vessel"}
+)
 
 
 def terrain_allows_workshop(terrain: Terrain) -> bool:

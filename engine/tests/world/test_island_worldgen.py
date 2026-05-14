@@ -146,9 +146,21 @@ def test_inter_island_shipping_pays_2x_per_tile() -> None:
     # Claim those plots for the player and seed inventory.
     for pid in (intra_a, intra_b, inter_a, inter_b):
         w.plots[pid].owner = player
-    w.inventory.add(player, MaterialId("coal"), 8)
+    w.inventory.add(player, MaterialId("coal"), 20)
     # Place a resting ask so unit value is non-zero (movement uses ask to bound tolls).
     place_sell_order(w, player, MaterialId("coal"), 1, 100)
+    # Phase 9A — seed dock + vessel at the inter-island endpoints so the
+    # geography gate doesn't fail the dispatch before the fee can be measured.
+    for endpoint in (inter_a, inter_b):
+        w.plot_buildings.append(
+            {
+                "plot_id": str(endpoint),
+                "building_id": "dock",
+                "party": str(player),
+                "completes_at_tick": int(w.tick),
+            }
+        )
+    w.inventory.add(player, MaterialId("vessel"), 1)
     intra_res = dispatch_shipment(w, player, MaterialId("coal"), 1, intra_a, intra_b)
     assert intra_res["ok"], intra_res
     assert intra_res["inter_island"] is False

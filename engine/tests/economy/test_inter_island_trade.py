@@ -419,6 +419,23 @@ def test_inter_island_arbitrage_round_trip_conserves(genesis_world) -> None:
         amount_cents=50_000,
     )
     assert not isinstance(top, _MoneyErr)
+    # Phase 9A — inter-island shipping requires real coastal infrastructure.
+    # Force a completed dock at both endpoints, a vessel in the shipper's
+    # inventory, and enough coal to fuel the voyage. (Test plots may be
+    # inland; the geography gate at production-start would normally block
+    # building a dock, but here we're seeding the post-build state directly
+    # so the dispatch path can be exercised end-to-end.)
+    for endpoint in (src_plot, dst_plot):
+        genesis_world.plot_buildings.append(
+            {
+                "plot_id": str(endpoint),
+                "building_id": "dock",
+                "party": str(buyer),
+                "completes_at_tick": int(genesis_world.tick),
+            }
+        )
+    genesis_world.inventory.add(buyer, MaterialId("vessel"), 1)
+    genesis_world.inventory.add(buyer, MaterialId("coal"), 20)
     snap = ConservationSnapshot.of(genesis_world.ledger, genesis_world.inventory)
     res = dispatch_shipment(
         genesis_world, buyer, MaterialId("grain"), 3, src_plot, dst_plot

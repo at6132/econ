@@ -174,6 +174,24 @@ def test_sprint3_integration_end_to_end() -> None:
     src.owner = player
     dst.owner = player
     w.inventory.add(player, MaterialId("grain"), 10)
+    # Phase 9A — coastal route still applies to intra-island coastal shipping
+    # (no dock or vessel required door-to-door). If src and dst landed on
+    # different islands, seed the dock/vessel/fuel so the test exercises the
+    # coastal discount specifically.
+    from realm.world.islands import is_inter_island_shipment as _is_inter
+
+    if _is_inter(w, src.plot_id, dst.plot_id):
+        for endpoint in (src.plot_id, dst.plot_id):
+            w.plot_buildings.append(
+                {
+                    "plot_id": str(endpoint),
+                    "building_id": "dock",
+                    "party": str(player),
+                    "completes_at_tick": int(w.tick),
+                }
+            )
+        w.inventory.add(player, MaterialId("vessel"), 1)
+        w.inventory.add(player, MaterialId("coal"), 20)
     ship = dispatch_shipment(
         w, player, MaterialId("grain"), 2, src.plot_id, dst.plot_id
     )

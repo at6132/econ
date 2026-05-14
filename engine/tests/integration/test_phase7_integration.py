@@ -125,6 +125,20 @@ def _seed_cross_island_shipment(world) -> dict:
                 credit=party_cash_account(owner),
                 amount_cents=50_000,
             )
+            # Phase 9A — seed completed docks at both endpoints plus a vessel
+            # and fuel for the shipper, so the geography gate doesn't kill
+            # this test-only cross-island shipment.
+            for endpoint in (src_plot, dst_plot):
+                world.plot_buildings.append(
+                    {
+                        "plot_id": str(endpoint),
+                        "building_id": "dock",
+                        "party": str(owner),
+                        "completes_at_tick": int(world.tick),
+                    }
+                )
+            world.inventory.add(owner, MaterialId("vessel"), 1)
+            world.inventory.add(owner, MaterialId("coal"), 20)
             return dispatch_shipment(
                 world, owner, MaterialId("grain"), 2, src_plot, dst_plot
             )

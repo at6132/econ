@@ -168,6 +168,19 @@ def test_route_blockage_stops_inter_island_dispatch() -> None:
     ad = w.inventory.add(player, MaterialId("grain"), 10)
     if isinstance(ad, MatterErr):
         raise AssertionError(ad.reason)
+    # Phase 9A — satisfy geography gates so the route-blockage check is the
+    # actual reason the dispatch fails (not the dock/vessel/fuel gate).
+    for endpoint in (from_pid, to_pid):
+        w.plot_buildings.append(
+            {
+                "plot_id": str(endpoint),
+                "building_id": "dock",
+                "party": str(player),
+                "completes_at_tick": int(w.tick),
+            }
+        )
+    w.inventory.add(player, MaterialId("vessel"), 1)
+    w.inventory.add(player, MaterialId("coal"), 20)
     trigger_route_blockage(w, "island_0|island_1", duration_days=4)
     from realm.infrastructure.movement import dispatch_shipment
 
