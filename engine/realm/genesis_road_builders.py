@@ -38,7 +38,7 @@ FRONTIER_ROADS_DISPLAY_NAME: str = "Frontier Roads Co."
 FRONTIER_ROADS_STARTING_CASH_CENTS: int = 8_000_000  # $80,000
 
 DEFAULT_TOLL_PCT: int = 3
-MAX_BUILDS_PER_GAME_DAY: int = 2
+MAX_BUILDS_PER_GAME_DAY: int = 3
 
 
 # ────────────────────────────────────────────────────────────────────────
