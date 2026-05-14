@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from realm.event_log import log_event
-from realm.ids import PlotId
+from realm.core.ids import PlotId
 from realm.world import World
 
 
@@ -367,8 +367,8 @@ def on_residence_built(world: World, plot_id: PlotId) -> None:
 
 def _ensure_settlement_party(world: World) -> None:
     """Idempotent: create the synthetic ``genesis_settlement`` party once."""
-    from realm.ids import PartyId
-    from realm.ledger import party_cash_account
+    from realm.core.ids import PartyId
+    from realm.core.ledger import party_cash_account
 
     pid = PartyId(SETTLEMENT_PARTY_ID)
     if pid in world.parties:
@@ -463,7 +463,7 @@ def seed_genesis_starting_towns(world: World) -> dict[int, str]:
         plot_ids = _pick_starting_residence_plots(world, isl)
         if len(plot_ids) < TOWN_MIN_RESIDENCES:
             continue
-        from realm.ids import PartyId
+        from realm.core.ids import PartyId
 
         for pid in plot_ids:
             plot = world.plots.get(pid)

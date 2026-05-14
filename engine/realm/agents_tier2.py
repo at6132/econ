@@ -27,7 +27,7 @@ Archetypes (problem sketch → behavior):
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.markets import (
     cancel_party_asks_for_material,
     cancel_party_bids_for_material,

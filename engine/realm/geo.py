@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.ids import PlotId
+from realm.core.ids import PlotId
 from realm.world import World
 
 

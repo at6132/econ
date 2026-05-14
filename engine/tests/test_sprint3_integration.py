@@ -28,7 +28,7 @@ from realm.energy import (
 )
 from realm.genesis_energy import NPC_ENERGY_IDS
 from realm.genesis_shippers import NPC_SHIPPER_IDS
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.labor import labor_pool_for_region
 from realm.movement import dispatch_shipment
 from realm.recipe_sites import plot_is_coastal

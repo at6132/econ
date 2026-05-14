@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from realm.actions import claim_plot
 from realm.buildings import build_on_plot
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
 from realm.spoilage import tick_material_spoilage
 from realm.storage_caps import party_storage_cap_units, try_add_inventory
 from realm.world import bootstrap_frontier

@@ -6,7 +6,7 @@ import pytest
 
 from realm.actions import claim_plot
 from realm.buildings import BUILDINGS, build_on_plot
-from realm.ids import PartyId, PlotId
+from realm.core.ids import PartyId, PlotId
 from realm.terrain import Terrain
 from realm.towns import (
     RESIDENCE_BUILDING_ID,
@@ -121,7 +121,7 @@ def test_detect_towns_requires_min_residences():
             break
     assert len(candidate_plots) == 2
     # Claim, fund, build two residences.
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.ledger import party_cash_account, system_reserve_account
     w.ledger.transfer(
         debit=system_reserve_account(),
         credit=party_cash_account(player),
@@ -226,7 +226,7 @@ def test_building_a_third_residence_creates_a_new_town():
     w = bootstrap_genesis(seed=2027, grid_width=64, grid_height=48, settler_count=2)
     player = PartyId("player")
     # Fund the player heavily and grant materials for 3 residences.
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.ledger import party_cash_account, system_reserve_account
     w.ledger.transfer(
         debit=system_reserve_account(),
         credit=party_cash_account(player),

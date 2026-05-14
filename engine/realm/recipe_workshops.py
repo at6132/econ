@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from realm.decay import building_effective_for_bonuses
-from realm.ids import PartyId, PlotId
-from realm.time_scale import building_operational
+from realm.core.ids import PartyId, PlotId
+from realm.core.time_scale import building_operational
 from realm.recipe_sites import (
     recipe_allowed_on_plot,
     recipe_allowed_on_terrain,

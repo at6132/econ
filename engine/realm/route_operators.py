@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import Any
 
 from realm.event_log import log_event
-from realm.ids import PartyId, PlotId
+from realm.core.ids import PartyId, PlotId
 from realm.regions import region_for_plot, route_key
 from realm.world import World
 
@@ -95,7 +95,7 @@ def _party_has_operating_building(
 
 
 def _party_owns_vessel(world: World, party: PartyId) -> bool:
-    from realm.ids import MaterialId
+    from realm.core.ids import MaterialId
 
     return world.inventory.qty(party, MaterialId("vessel")) >= 1
 

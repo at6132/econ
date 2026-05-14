@@ -1,5 +1,5 @@
-from realm.ids import MaterialId, PartyId
-from realm.inventory import Inventory
+from realm.core.ids import MaterialId, PartyId
+from realm.core.inventory import Inventory
 
 
 def test_matter_transfer_conserves_total_units() -> None:

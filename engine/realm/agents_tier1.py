@@ -15,7 +15,7 @@ Ledger total should stay constant across ticks (see ``test_tier1_agent_ticks_con
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.markets import market_buy, place_sell_order
 from realm.world import World
 

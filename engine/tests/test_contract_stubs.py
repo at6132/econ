@@ -11,7 +11,7 @@ from realm.contract_stubs import (
     propose_service_sub,
     repay_loan_contract,
 )
-from realm.ids import PartyId
+from realm.core.ids import PartyId
 from realm.social import propose_contract_stub
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier

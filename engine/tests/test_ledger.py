@@ -1,7 +1,7 @@
 import pytest
 
-from realm.ids import PartyId
-from realm.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
+from realm.core.ids import PartyId
+from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
 
 
 def test_transfer_conserves_total() -> None:

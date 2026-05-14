@@ -28,9 +28,9 @@ from __future__ import annotations
 from typing import Final
 
 from realm.event_log import log_event
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
-from realm.ledger import MoneyErr, party_cash_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
+from realm.core.ledger import MoneyErr, party_cash_account
 from realm.world import World
 
 
@@ -475,8 +475,8 @@ def seed_genesis_npc_stores(world: World) -> list[PlotId]:
     """
     if not world.towns:
         return []
-    from realm.ids import PartyId
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.ids import PartyId
+    from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.decay import BUILDING_CONDITION_FULL_BPS
     from realm.buildings import BUILDINGS
 

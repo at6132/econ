@@ -38,7 +38,7 @@ def main() -> int:
         return 0
 
     from realm.agents_tier3 import plan_llm_party_once
-    from realm.ids import PartyId
+    from realm.core.ids import PartyId
     from realm.persistence import load_snapshot, save_snapshot
     from realm.world import bootstrap_by_scenario
 

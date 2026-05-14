@@ -12,12 +12,12 @@ from realm.agents_genesis_settlers import (
 )
 from realm.assay import ASSAY_MAX_STAGE, get_assay_stage
 from realm.buildings import build_on_plot
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
-from realm.ledger import party_cash_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
+from realm.core.ledger import party_cash_account
 from realm.terrain import Terrain
 from realm.tick import advance_tick
-from realm.time_scale import TICKS_PER_GAME_DAY
+from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.world import SubsurfaceRoll, bootstrap_genesis
 from turnkey_fixtures import grant_turnkey_self_materials
 
@@ -135,8 +135,8 @@ def test_settler_probabilistic_discovery_requires_lab() -> None:
 def test_settler_assay_lab_build_decision() -> None:
     """A settler with sulfur_grade ≥ 0.3 and the cash buffer chooses an assay_lab as Tier-2 build."""
     from realm.agents_genesis_settlers import _maybe_build_tier2_workshop
-    from realm.ledger import system_reserve_account
-    from realm.time_scale import legacy_scaled
+    from realm.core.ledger import system_reserve_account
+    from realm.core.time_scale import legacy_scaled
 
     w = bootstrap_genesis(seed=510, grid_width=10, grid_height=8, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))

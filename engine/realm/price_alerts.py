@@ -15,7 +15,7 @@ from typing import Any
 
 from realm.event_log import log_event
 from realm.markets import best_resting_ask_cents
-from realm.ids import MaterialId
+from realm.core.ids import MaterialId
 from realm.world import World
 
 

@@ -9,9 +9,9 @@ from realm.contract_stubs import (
     propose_forward_contract,
     tick_forward_contracts,
 )
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
-from realm.ledger import party_cash_account, system_reserve_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
+from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world import bootstrap_frontier
 
 
@@ -160,8 +160,8 @@ def test_settler_proposes_forward_with_surplus() -> None:
     """
     from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
     from realm.genesis_forwards import tick_settler_forward_proposals
-    from realm.ids import MaterialId
-    from realm.inventory import MatterErr
+    from realm.core.ids import MaterialId
+    from realm.core.inventory import MatterErr
     from realm.world import bootstrap_genesis
 
     w = bootstrap_genesis(seed=99, grid_width=48, grid_height=36, settler_count=6)

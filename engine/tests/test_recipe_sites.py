@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.actions import claim_plot, survey_plot
 from realm.buildings import build_on_plot
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.production import start_production
 from realm.recipe_sites import assert_recipe_site_catalog_complete, recipe_allowed_on_terrain
 from realm.recipe_workshops import recipe_ids_on_plot_for_owner

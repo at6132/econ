@@ -27,8 +27,8 @@ from realm.actions import (
 )
 from realm.buildings import build_on_plot
 from turnkey_fixtures import grant_turnkey_self_materials
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import Inventory, MatterErr
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import Inventory, MatterErr
 from realm.labor import (
     LABOR_SCARCITY_CRITICAL_THRESHOLD,
     LABOR_SCARCITY_THIN_THRESHOLD,
@@ -40,7 +40,7 @@ from realm.labor import (
     skill_bonus_bps,
     tick_labor_migration,
 )
-from realm.ledger import (
+from realm.core.ledger import (
     Ledger,
     MoneyErr,
     party_cash_account,

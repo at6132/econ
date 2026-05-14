@@ -18,8 +18,8 @@ from realm.genesis_consolidator import (
     tick_consolidator,
 )
 from realm.genesis_pricing import exchange_ask_cents
-from realm.ids import MaterialId, PartyId
-from realm.ledger import party_cash_account
+from realm.core.ids import MaterialId, PartyId
+from realm.core.ledger import party_cash_account
 from realm.markets import place_sell_order
 from realm.world import World, bootstrap_genesis
 
@@ -120,7 +120,7 @@ def test_consolidator_grows_share_over_multi_day_run() -> None:
     # Simulate a buyer that takes Kessler's asks. Phase 7A: pop_hub is gone;
     # any funded party can play the role of the iron_ingot offtaker. We use
     # the player (already funded at bootstrap).
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.markets import market_buy
 
     buyer = PartyId("player")

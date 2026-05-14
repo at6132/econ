@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import claim_plot
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.ledger import party_cash_account, system_reserve_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.production import (
     CONTINUOUS_RUN_COUNT,
     start_production,

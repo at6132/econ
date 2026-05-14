@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from realm.ids import PartyId
+from realm.core.ids import PartyId
 from realm.world import World
 
 _FIRST = (

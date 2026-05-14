@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.markets import market_buy, place_buy_order, place_sell_order
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier
@@ -50,14 +50,14 @@ def test_aggressive_buy_respects_min_seller_honored() -> None:
 
 def test_market_buy_skips_rep_blocked_cheapest_ask() -> None:
     """Cheapest ask can require rep the buyer lacks; walker must still lift higher-priced asks."""
-    from realm.inventory import MatterErr
+    from realm.core.inventory import MatterErr
     from realm.markets import cancel_sell_order
     from realm.world import bootstrap_genesis
 
     # Phase 7A: the buyer used to be ``pop_hub_e`` (which had 0 honored rep).
     # With hubs removed we use a fresh, low-rep buyer — same semantics, the
     # test is about the rep-gate skip in the market walker.
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.ledger import party_cash_account, system_reserve_account
 
     w = bootstrap_genesis(seed=808, grid_width=4, grid_height=4, settler_count=0)
     p = PartyId("player")

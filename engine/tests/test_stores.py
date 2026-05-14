@@ -6,14 +6,14 @@ import pytest
 
 from realm.actions import claim_plot
 from realm.buildings import BUILDINGS, build_on_plot
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
 from realm.laborers import (
     LABORER_STARTING_CASH_CENTS,
     TICKS_PER_GAME_DAY,
     laborer_cash_account,
 )
-from realm.ledger import party_cash_account, system_reserve_account
+from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.stores import (
     FOOD_PER_UNIT,
     FUEL_PER_UNIT,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.actions import claim_plot
-from realm.ids import PartyId, PlotId
+from realm.core.ids import PartyId, PlotId
 from realm.world import bootstrap_genesis, world_summary_dict
 
 

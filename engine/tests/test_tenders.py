@@ -12,7 +12,7 @@ Phase 7A: ``pop_hub_e/w`` were removed. Tests post tenders directly from
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.settler_cost_basis import record_settler_production
 from realm.tenders import (
     list_all_tenders,

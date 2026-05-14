@@ -11,7 +11,7 @@ from realm.agents_tier3 import (
     execute_llm_tool,
     plan_llm_party_once,
 )
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.tick import advance_tick
 from realm.world import bootstrap_frontier
 

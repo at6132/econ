@@ -18,7 +18,7 @@ from realm.biome_noise import (
     genesis_island_layout_supported,
     terrain_for_genesis_island_cell,
 )
-from realm.ids import PartyId, PlotId
+from realm.core.ids import PartyId, PlotId
 from realm.terrain import Terrain
 from realm.tick import advance_tick
 from realm.world import bootstrap_genesis

@@ -1,4 +1,4 @@
-from realm.rng import make_rng
+from realm.core.rng import make_rng
 
 
 def test_rng_deterministic_per_tick_and_purpose() -> None:

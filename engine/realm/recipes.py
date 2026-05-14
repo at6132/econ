@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Mapping
 
-from realm.ids import MaterialId
-from realm.time_scale import TICKS_PER_GAME_DAY, legacy_scaled
+from realm.core.ids import MaterialId
+from realm.core.time_scale import TICKS_PER_GAME_DAY, legacy_scaled
 
 # In-game hours → ticks (1 tick = 1 in-game minute per ``time_scale``).
 _TICKS_PER_GAME_HOUR: int = TICKS_PER_GAME_DAY // 24

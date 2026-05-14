@@ -1,5 +1,5 @@
-from realm.ids import PartyId
-from realm.ledger import party_cash_account, system_reserve_account
+from realm.core.ids import PartyId
+from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world import bootstrap_frontier, generate_plots
 
 

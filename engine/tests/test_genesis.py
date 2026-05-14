@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.markets import MARKET_SELLER_REGISTRATION_CENTS
-from realm.ledger import party_cash_account, system_reserve_account
+from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.tick import advance_tick
 from realm.world import bootstrap_genesis
 
@@ -112,8 +112,8 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
     removed we use ``settler_001`` (any registered party works — the test is
     about the market-matching engine, not about who buys).
     """
-    from realm.inventory import MatterErr
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.inventory import MatterErr
+    from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.markets import cancel_sell_order, market_buy, place_sell_order
 
     w = bootstrap_genesis(seed=77, grid_width=4, grid_height=4, settler_count=2)
@@ -223,7 +223,7 @@ def test_genesis_world_feed_emits_on_digest_cadence() -> None:
 
 
 def test_genesis_margaux_opener_mirrors_to_world_feed() -> None:
-    from realm.time_scale import legacy_scaled
+    from realm.core.time_scale import legacy_scaled
 
     w = bootstrap_genesis(seed=303, grid_width=6, grid_height=5, settler_count=2)
     for _ in range(legacy_scaled(14) + 1):
@@ -340,7 +340,7 @@ def test_genesis_explicit_spawn_cap_enables_arrivals() -> None:
 
 def test_genesis_bankruptcy_retires_settler_after_streak() -> None:
     from realm.genesis_settler_cycle import BANKRUPT_CASH_CENTS, BANKRUPT_STREAK_TICKS, tick_genesis_settler_lifecycle
-    from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+    from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 
     w = bootstrap_genesis(seed=201, grid_width=10, grid_height=8, settler_count=4)
     victim = PartyId("settler_001")

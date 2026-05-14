@@ -12,9 +12,9 @@ Covers:
 from __future__ import annotations
 
 from realm.buildings import BUILDINGS, build_on_plot
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import Inventory, MatterErr
-from realm.ledger import (
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import Inventory, MatterErr
+from realm.core.ledger import (
     Ledger,
     MoneyErr,
     party_cash_account,

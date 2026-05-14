@@ -6,7 +6,7 @@ does not model labor, energy cost, or concurrent production runs.
 
 from __future__ import annotations
 
-from realm.ids import PartyId
+from realm.core.ids import PartyId
 from realm.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
 from realm.recipe_workshops import plot_has_workshop_for_recipe
 from realm.recipes import recipe_public_list

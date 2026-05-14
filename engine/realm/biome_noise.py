@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 
-from realm.rng import make_rng
+from realm.core.rng import make_rng
 from realm.terrain import Terrain
 
 

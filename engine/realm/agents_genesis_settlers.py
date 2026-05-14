@@ -7,8 +7,8 @@ from collections import Counter
 
 from realm.actions import SURVEY_COST_CENTS, claim_plot, start_production_on_plot, survey_plot
 from realm.buildings import BUILDINGS, build_on_plot
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.ledger import party_cash_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.ledger import party_cash_account
 from realm.genesis_pricing import settler_ask_cents
 from realm.markets import (
     best_resting_bid_cents,
@@ -27,7 +27,7 @@ from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units
-from realm.time_scale import legacy_scaled
+from realm.core.time_scale import legacy_scaled
 from realm.terrain import Terrain
 from realm.world import ActiveProduction, World
 
@@ -249,7 +249,7 @@ def _settler_richest_tier2_on_plot(plot) -> tuple[str, float] | None:
 def _settler_assay_lab_plot(world: World, party: PartyId) -> PlotId | None:
     """The settler's first plot containing an operational assay_lab they own (or None)."""
     from realm.decay import building_effective_for_bonuses
-    from realm.time_scale import building_operational
+    from realm.core.time_scale import building_operational
 
     for b in world.plot_buildings:
         if b.get("party") != str(party) or b.get("building_id") != "assay_lab":
@@ -277,7 +277,7 @@ def _settler_probabilistic_discovery(world: World, party: PartyId) -> None:
         _set_assay_stage,
     )
     from realm.event_log import log_event
-    from realm.time_scale import TICKS_PER_GAME_DAY
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
 
     if world.tick % TICKS_PER_GAME_DAY != 0:
         return

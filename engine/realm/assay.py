@@ -15,9 +15,9 @@ from __future__ import annotations
 from typing import Any, Final, Iterable
 
 from realm.event_log import log_event
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.time_scale import TICKS_PER_GAME_DAY
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.world import World, ensure_party_recipe_book
 
 ASSAY_COST_CENTS: Final[int] = 500
@@ -168,7 +168,7 @@ def _set_assay_stage(world: World, party: PartyId, mineral: MaterialId, stage: i
 def _party_has_operational_lab(world: World, party: PartyId, plot_id: PlotId | None = None) -> bool:
     """True if the party has an ``assay_lab`` building on ``plot_id`` (or anywhere if ``plot_id`` is None)."""
     from realm.decay import building_effective_for_bonuses
-    from realm.time_scale import building_operational
+    from realm.core.time_scale import building_operational
 
     for b in world.plot_buildings:
         if b.get("party") != str(party):

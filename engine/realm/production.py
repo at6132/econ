@@ -9,9 +9,9 @@ from realm.decay import (
     building_efficiency_pct,
 )
 from realm.event_log import log_event
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
-from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
+from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 from realm.plot_logistics import (
     PLOT_OUTPUT_STORAGE_CAP_UNITS,
     plot_output_qty,
@@ -30,7 +30,7 @@ from realm.recipe_sites import (
 )
 from realm.recipes import RECIPES
 from realm.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
-from realm.time_scale import building_operational
+from realm.core.time_scale import building_operational
 from realm.world import ActiveProduction, World
 
 # Basis points: share of recipe labor paid out to hired workers (rest + remainder → system reserve).

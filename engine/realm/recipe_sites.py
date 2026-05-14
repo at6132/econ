@@ -164,7 +164,7 @@ def plot_is_coastal(world, plot: Plot) -> bool:
         return False
     deltas = ((1, 0), (-1, 0), (0, 1), (0, -1))
     for dx, dy in deltas:
-        from realm.ids import PlotId
+        from realm.core.ids import PlotId
 
         nb = world.plots.get(PlotId(f"p-{plot.x + dx}-{plot.y + dy}"))
         if nb is None:

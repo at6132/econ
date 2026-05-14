@@ -15,7 +15,7 @@ sudden real-market shifts — strategic by design.
 
 from __future__ import annotations
 
-from realm.ids import MaterialId
+from realm.core.ids import MaterialId
 from realm.recipes import RECIPES
 
 # Reference midprice per material. These are the engine's "fair-value anchors";

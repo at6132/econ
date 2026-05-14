@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from realm.buildings import BUILDINGS
-from realm.ids import MaterialId, PartyId
-from realm.inventory import MatterErr
+from realm.core.ids import MaterialId, PartyId
+from realm.core.inventory import MatterErr
 from realm.world import World
 
 

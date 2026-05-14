@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from realm.event_log import log_event
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.regions import region_for_plot
 from realm.world import World
 

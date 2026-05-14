@@ -24,8 +24,8 @@ from realm.genesis_archetypes import (
     SHIPPER_PARTY_ID,
 )
 from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
-from realm.ids import MaterialId, PartyId
-from realm.ledger import party_cash_account
+from realm.core.ids import MaterialId, PartyId
+from realm.core.ledger import party_cash_account
 from realm.world import World
 
 

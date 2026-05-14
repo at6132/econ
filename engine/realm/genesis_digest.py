@@ -9,10 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from realm.event_log import log_event
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.markets import best_resting_ask_cents
 from realm.plot_logistics import party_material_held
-from realm.time_scale import legacy_scaled
+from realm.core.time_scale import legacy_scaled
 from realm.world import World
 
 # One digest per in-game hour at 1440 ticks/day (was incorrectly scaled to ~16 game-hours).

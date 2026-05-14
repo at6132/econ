@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-from realm.ids import PartyId
+from realm.core.ids import PartyId
 from realm.regions import REGION_GRID_DIM, all_region_ids, region_for_coords
 from realm.world import World
 
@@ -357,7 +357,7 @@ def request_labor_transport(
     workers: int,
 ) -> dict[str, Any]:
     """Charge employer for transport and schedule workers to arrive in ``dst_region``."""
-    from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+    from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
 
     if workers <= 0:
         return {"ok": False, "reason": "workers must be positive"}

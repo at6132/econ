@@ -22,7 +22,7 @@ from realm.actions import (
 )
 from realm.buildings import build_on_plot
 from realm.decay import maintain_building
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.intel import purchase_market_intel
 from realm.markets import (

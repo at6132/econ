@@ -6,13 +6,13 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from realm.ids import PartyId, PlotId
-from realm.inventory import Inventory, MatterErr
-from realm.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
+from realm.core.ids import PartyId, PlotId
+from realm.core.inventory import Inventory, MatterErr
+from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
 from realm.materials import MaterialId
 from realm.recipes import recipe_public_list
 from realm.biome_noise import terrain_for_cell
-from realm.rng import make_rng
+from realm.core.rng import make_rng
 from realm.terrain import Terrain
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -496,7 +496,7 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     from realm.event_log import log_event
     from realm.genesis_exchange_liquidity import ensure_exchange_state_initialised
     from realm.genesis_pricing import exchange_ask_cents
-    from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
+    from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
     from realm.markets import place_sell_order
 
     ex = PartyId("genesis_exchange")
@@ -1073,7 +1073,7 @@ def bootstrap_frontier(
     from realm.market_history import record_market_snapshot
 
     if scenario_id == "archive":
-        from realm.time_scale import legacy_scaled
+        from realm.core.time_scale import legacy_scaled
 
         world.market_intel_expires_tick = max(world.market_intel_expires_tick, legacy_scaled(280))
 
@@ -1190,7 +1190,7 @@ def world_public_dict(world: World) -> dict:
     }
     from realm.actions import hire_catalog_public
     from realm.intel import FREE_MARKET_HISTORY_TICKS
-    from realm.time_scale import TICKS_PER_GAME_DAY
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
 
     intel_active = world.tick < world.market_intel_expires_tick
     hist = world.market_history
@@ -1500,7 +1500,7 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
 def world_compact_dict(world: World) -> dict[str, Any]:
     """Small JSON snapshot for dev/automation: player + aggregates, no full ``plots`` grid."""
     from realm.recipe_workshops import recipe_ids_on_plot_for_owner
-    from realm.time_scale import TICKS_PER_GAME_DAY
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
 
     player = PartyId("player")
     balances = {str(k): v for k, v in world.ledger.snapshot().items()}

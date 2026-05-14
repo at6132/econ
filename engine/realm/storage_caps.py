@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from realm.decay import building_effective_for_bonuses
-from realm.ids import MaterialId, PartyId
-from realm.time_scale import building_operational
-from realm.inventory import MatterErr, MatterOk, MatterResult
+from realm.core.ids import MaterialId, PartyId
+from realm.core.time_scale import building_operational
+from realm.core.inventory import MatterErr, MatterOk, MatterResult
 from realm.world import World
 
 # Default high enough for Frontier bootstrap; field_stockade adds meaningful headroom.

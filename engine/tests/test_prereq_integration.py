@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.tick import advance_tick
 from realm.world import bootstrap_genesis
 

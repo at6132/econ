@@ -9,7 +9,7 @@ truth for matter.
 from __future__ import annotations
 
 from realm.actions import claim_plot
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.movement import dispatch_shipment
 from realm.plot_logistics import plot_output_qty
 from realm.tick import advance_tick
@@ -49,7 +49,7 @@ def test_player_can_list_freshly_produced_goods_from_inventory() -> None:
     """Phase D.1 fix: production output appears in party inventory directly so
     the player can immediately list it on the market without harvesting."""
     from realm.actions import survey_plot
-    from realm.ledger import party_cash_account, system_reserve_account
+    from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.production import start_production
     from realm.terrain import Terrain
 

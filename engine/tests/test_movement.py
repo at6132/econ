@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.actions import claim_plot
 from realm.geo import manhattan
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.movement import BASE_SHIP_FEE_CENTS, PER_TILE_SHIP_CENTS, dispatch_shipment
 from realm.world import bootstrap_frontier
 

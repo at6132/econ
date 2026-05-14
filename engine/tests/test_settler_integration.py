@@ -15,9 +15,9 @@ Covers the four mechanics that put real competitive pressure on the player:
 from __future__ import annotations
 
 from realm.agents_genesis_settlers import _list_price_cents
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
-from realm.ledger import (
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
+from realm.core.ledger import (
     MoneyErr,
     party_cash_account,
     system_reserve_account,

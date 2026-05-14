@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.islands import (
     compute_plot_islands,
     is_inter_island_shipment,

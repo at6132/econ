@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-from realm.ids import PartyId, PlotId
+from realm.core.ids import PartyId, PlotId
 from realm.world import World
 
 

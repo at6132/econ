@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Mapping
 
-from realm.ids import MaterialId
-from realm.time_scale import legacy_scaled
+from realm.core.ids import MaterialId
+from realm.core.time_scale import legacy_scaled
 
 
 @dataclass(frozen=True, slots=True)

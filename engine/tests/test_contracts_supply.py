@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId
 from realm.social import (
     accept_supply_contract,
     fulfill_supply_contract,
@@ -62,7 +62,7 @@ def test_supply_fulfill_rejects_wrong_supplier() -> None:
 
 
 def test_supply_deposit_refund_on_breach_conserves_money() -> None:
-    from realm.ledger import contract_escrow_account, party_cash_account
+    from realm.core.ledger import contract_escrow_account, party_cash_account
 
     w = bootstrap_frontier(seed=63, grid_width=2, grid_height=2)
     vendor = PartyId("npc_grain_vendor")

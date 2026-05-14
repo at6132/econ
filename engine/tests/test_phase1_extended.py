@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from realm.ids import MaterialId, PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.movement import dispatch_shipment
 from realm.markets import market_buy, p2p_trade, place_buy_order, place_sell_order
 from realm.persistence import load_snapshot, save_snapshot
@@ -118,7 +118,7 @@ def test_market_buy_from_listed_ask() -> None:
 def test_build_and_hire_emit_events_and_move_cash() -> None:
     from realm.actions import claim_plot, hire_worker_stub, survey_plot
     from realm.buildings import build_on_plot
-    from realm.ledger import party_cash_account
+    from realm.core.ledger import party_cash_account
 
     w = bootstrap_frontier(seed=17, grid_width=3, grid_height=2)
     pid = PlotId("p-0-0")
@@ -167,7 +167,7 @@ def test_tier1_agent_ticks_conserve_total_cents() -> None:
 
 def test_stub_hire_recurring_wage_moves_cash() -> None:
     from realm.actions import hire_worker_stub
-    from realm.ledger import party_cash_account
+    from realm.core.ledger import party_cash_account
 
     w = bootstrap_frontier(seed=104, grid_width=2, grid_height=2)
     emp = PartyId("player")

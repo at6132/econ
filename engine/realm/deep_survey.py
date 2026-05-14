@@ -16,10 +16,10 @@ from __future__ import annotations
 from typing import Any, Final
 
 from realm.event_log import log_event
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.inventory import MatterErr
-from realm.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.time_scale import TICKS_PER_GAME_DAY
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterErr
+from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.world import World
 
 DEEP_SURVEY_COST_CENTS: Final[int] = 2_000
@@ -38,7 +38,7 @@ def _scen_deep(world: World) -> dict[str, Any]:
 
 def _party_has_operational_drill_rig(world: World, party: PartyId, plot_id: PlotId) -> bool:
     from realm.decay import building_effective_for_bonuses
-    from realm.time_scale import building_operational
+    from realm.core.time_scale import building_operational
 
     for b in world.plot_buildings:
         if b.get("party") != str(party):

@@ -22,8 +22,8 @@ from realm.genesis_archetypes import (
 )
 from realm.genesis_bank import FIRST_BANK_PARTY_ID
 from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
-from realm.ids import MaterialId, PartyId, PlotId
-from realm.ledger import party_cash_account, system_reserve_account
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.markets import market_buy, place_sell_order
 from realm.terrain import Terrain
 from realm.tick import advance_tick
