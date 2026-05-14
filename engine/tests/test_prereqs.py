@@ -92,7 +92,7 @@ def test_tier0_hand_mine_gated_by_subsurface() -> None:
 
 
 def test_tools_on_exchange() -> None:
-    from realm.markets import best_resting_ask_cents
+    from realm.economy.markets import best_resting_ask_cents
 
     w = bootstrap_genesis(seed=303, grid_width=8, grid_height=6, settler_count=0)
     ex = PartyId("genesis_exchange")

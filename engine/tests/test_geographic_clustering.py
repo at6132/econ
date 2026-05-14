@@ -26,7 +26,7 @@ from realm.core.ledger import (
     party_cash_account,
     system_reserve_account,
 )
-from realm.markets import market_buy, place_sell_order
+from realm.economy.markets import market_buy, place_sell_order
 from realm.world.terrain import Terrain
 from realm.world import (
     Plot,

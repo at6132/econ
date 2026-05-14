@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.core.ids import PartyId
-from realm.intel import MARKET_INTEL_EXTEND_TICKS, MARKET_INTEL_FEE_CENTS, FREE_MARKET_HISTORY_TICKS, purchase_market_intel
+from realm.economy.intel import MARKET_INTEL_EXTEND_TICKS, MARKET_INTEL_FEE_CENTS, FREE_MARKET_HISTORY_TICKS, purchase_market_intel
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world import bootstrap_frontier, world_public_dict
 

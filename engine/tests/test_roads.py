@@ -136,7 +136,7 @@ def test_road_toll_collected(gen_world):
     sid = r["segment_id"]
     set_road_toll(w, owner, sid, 5)
     # Place a market ask so the toll calculation can read a unit value.
-    from realm.markets import place_sell_order
+    from realm.economy.markets import place_sell_order
 
     _stock(w, owner, "coal", 5)
     place_sell_order(w, owner, MaterialId("coal"), 1, 200)

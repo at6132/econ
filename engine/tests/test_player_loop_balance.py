@@ -5,7 +5,7 @@ from __future__ import annotations
 from realm.actions import claim_plot, start_production_on_plot, survey_plot
 from realm.buildings import BUILDINGS, build_on_plot
 from realm.decay import maintenance_schedule_for
-from realm.genesis_pricing import (
+from realm.economy.pricing import (
     exchange_ask_cents,
     hub_max_bid_cents,
     producer_cost_basis_cents,
@@ -125,7 +125,7 @@ def test_coal_strategy_cash_positive_after_24_game_hours() -> None:
     is the operator math of the player's coal strategy at the spec
     parameters; multi-agent competition is covered by the integration test.
     """
-    from realm.markets import (
+    from realm.economy.markets import (
         cancel_party_asks_for_material,
         market_buy,
         place_sell_order,

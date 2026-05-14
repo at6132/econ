@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from realm.genesis_exchange_liquidity import tick_genesis_exchange_quoting
-from realm.genesis_pricing import (
+from realm.economy.exchange import tick_genesis_exchange_quoting
+from realm.economy.pricing import (
     EXCHANGE_NON_EXCHANGE_DEPTH_WATERMARK,
     exchange_ask_cents,
     fair_value_cents,
@@ -12,7 +12,7 @@ from realm.genesis_pricing import (
 )
 from realm.core.ids import MaterialId, PartyId
 from realm.core.inventory import MatterErr
-from realm.markets import place_sell_order
+from realm.economy.markets import place_sell_order
 from realm.world import bootstrap_genesis
 
 

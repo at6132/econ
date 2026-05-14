@@ -24,7 +24,7 @@ from realm.genesis_bank import FIRST_BANK_PARTY_ID
 from realm.genesis_consolidator import CONSOLIDATOR_PARTY_ID
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import market_buy, place_sell_order
+from realm.economy.markets import market_buy, place_sell_order
 from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_genesis
@@ -203,7 +203,7 @@ def test_01_exchange_withdrew_for_at_least_2_materials(solo_world):
     exceeds the watermark (real producers carry the supply), the exchange
     is effectively withdrawn for that material.
     """
-    from realm.genesis_exchange_liquidity import (
+    from realm.economy.exchange import (
         EXCHANGE_NON_EXCHANGE_DEPTH_WATERMARK,
         _GENESIS_EXCHANGE,
     )

@@ -114,7 +114,7 @@ def dispatch_shipment(
     # cost by 50% on covered tiles and optionally collect ad-valorem tolls for
     # the road owners.
     from realm.roads import compute_road_savings_and_tolls
-    from realm.markets import best_resting_ask_cents, best_resting_bid_cents
+    from realm.economy.markets import best_resting_ask_cents, best_resting_bid_cents
 
     per_tile_effective = (
         max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS)))

@@ -138,7 +138,7 @@ def test_forward_price_locked_regardless_of_spot() -> None:
     cid = prop["contract_id"]
     accept_forward_contract(w, buyer, cid)
     # Synthetic spot move: place new asks at very different price.
-    from realm.markets import place_sell_order
+    from realm.economy.markets import place_sell_order
 
     extra = PartyId("t1_coal_vendor")
     _give_party_inventory(w, extra, "coal", 20)
@@ -176,7 +176,7 @@ def test_settler_proposes_forward_with_surplus() -> None:
         ad = w.inventory.add(p, MaterialId("coal"), 100)
         assert not isinstance(ad, MatterErr)
     # Seed a spot ask so best_resting_ask_cents has a value.
-    from realm.markets import place_sell_order
+    from realm.economy.markets import place_sell_order
 
     seed_settler = PartyId("settler_001")
     place_sell_order(w, seed_settler, MaterialId("coal"), 1, 70)

@@ -448,7 +448,7 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
 
 def _baseline_unit_cost_cents(material: MaterialId) -> int:
     """Use the existing exchange baseline as the "cost" the NPC marks up over."""
-    from realm.genesis_pricing import _baseline_exchange_ask_cents
+    from realm.economy.pricing import _baseline_exchange_ask_cents
 
     try:
         return int(_baseline_exchange_ask_cents(material))

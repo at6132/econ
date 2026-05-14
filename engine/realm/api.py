@@ -24,8 +24,8 @@ from realm.buildings import build_on_plot
 from realm.decay import maintain_building
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.recipe_workshops import recipe_ids_on_plot_for_owner
-from realm.intel import purchase_market_intel
-from realm.markets import (
+from realm.economy.intel import purchase_market_intel
+from realm.economy.markets import (
     cancel_buy_order,
     cancel_sell_order,
     market_buy,
@@ -36,7 +36,7 @@ from realm.markets import (
 )
 from realm.movement import dispatch_shipment
 from realm.roads import all_roads_public, build_road, set_road_toll
-from realm.supply_signals import all_region_activity, trade_flows_overlay
+from realm.economy.supply_signals import all_region_activity, trade_flows_overlay
 from realm.persistence import load_snapshot, save_snapshot
 from realm.social import (
     accept_supply_contract,
@@ -57,7 +57,7 @@ from realm.contract_stubs import (
     propose_service_sub,
     repay_loan_contract,
 )
-from realm.genesis_analytics import purchase_analytics_product
+from realm.economy.analytics import purchase_analytics_product
 from realm.schematic import validate_linear_recipe_chain
 from realm.code.lua_sandbox import eval_user_lua_chunk
 from realm.world.tick import advance_tick

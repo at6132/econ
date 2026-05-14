@@ -17,10 +17,10 @@ from realm.genesis_consolidator import (
     seed_consolidator,
     tick_consolidator,
 )
-from realm.genesis_pricing import exchange_ask_cents
+from realm.economy.pricing import exchange_ask_cents
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
-from realm.markets import place_sell_order
+from realm.economy.markets import place_sell_order
 from realm.world import World, bootstrap_genesis
 
 
@@ -121,7 +121,7 @@ def test_consolidator_grows_share_over_multi_day_run() -> None:
     # any funded party can play the role of the iron_ingot offtaker. We use
     # the player (already funded at bootstrap).
     from realm.core.ledger import party_cash_account, system_reserve_account
-    from realm.markets import market_buy
+    from realm.economy.markets import market_buy
 
     buyer = PartyId("player")
     # Top up the player so they can absorb 5 days of ingot lifts.

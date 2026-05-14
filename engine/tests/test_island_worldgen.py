@@ -23,7 +23,7 @@ from realm.world.islands import (
     plot_island_id,
     tile_movement_cost,
 )
-from realm.markets import place_sell_order
+from realm.economy.markets import place_sell_order
 from realm.movement import dispatch_shipment
 from realm.world.terrain import Terrain
 from realm.world import bootstrap_genesis

@@ -5,7 +5,7 @@ from __future__ import annotations
 import statistics
 
 from realm.events.event_log import log_event
-from realm.genesis_analytics import (
+from realm.economy.analytics import (
     ANALYTICS_VENDOR_PARTY_ID,
     PARTY_VOLUME_COST_CENTS,
     PARTY_VOLUME_WINDOW_DAYS,
@@ -18,7 +18,7 @@ from realm.genesis_analytics import (
 )
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import cancel_party_asks_for_material, place_sell_order
+from realm.economy.markets import cancel_party_asks_for_material, place_sell_order
 from realm.world.regions import _world_bounds, region_for_coords
 from realm.world import World, bootstrap_frontier, bootstrap_genesis
 

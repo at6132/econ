@@ -102,7 +102,7 @@ def test_settler_lists_below_exchange_when_vertically_integrated() -> None:
     # Plant a low basis directly so we can assert the ask math without running
     # a full production cycle. (record_settler_production proxy.)
     record_settler_production(w, integrated, "smelt_iron", MaterialId("iron_ingot"), 1)
-    from realm.genesis_pricing import exchange_ask_cents
+    from realm.economy.pricing import exchange_ask_cents
 
     ex = int(exchange_ask_cents(MaterialId("iron_ingot"), world=w))
     px = _list_price_cents(w, MaterialId("iron_ingot"), party=integrated)

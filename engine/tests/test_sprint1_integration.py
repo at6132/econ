@@ -33,7 +33,7 @@ from realm.decay import (
 )
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import (
+from realm.economy.markets import (
     market_buy,
     place_sell_order,
 )
@@ -80,7 +80,7 @@ def test_sprint1_multi_agent_slice() -> None:
     # timber. The settler AI itself will continue to do its own thing in
     # parallel; this just ensures the Phase A withdrawal check has the
     # required distinct-seller depth at the first daily checkpoint.
-    from realm.markets import ensure_market_seller_registration, place_sell_order
+    from realm.economy.markets import ensure_market_seller_registration, place_sell_order
 
     seeded_settlers = [PartyId(f"settler_seeded_{i}") for i in range(3)]
     for s in seeded_settlers:

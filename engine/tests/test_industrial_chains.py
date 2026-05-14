@@ -131,7 +131,7 @@ def test_tool_manufacturing_chain() -> None:
 
 def test_new_buildings_on_exchange_have_tier2_materials() -> None:
     """Genesis bootstrap seeds the new Tier-2 raws and tool components onto the exchange book."""
-    from realm.markets import best_resting_ask_cents
+    from realm.economy.markets import best_resting_ask_cents
 
     w = bootstrap_genesis(seed=304, grid_width=8, grid_height=6, settler_count=0)
     for mid_s in ("pig_iron", "drill_bit", "sulfur_ore", "tin_ore", "pick_head"):

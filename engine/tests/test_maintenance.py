@@ -13,7 +13,7 @@ from realm.decay import (
     maintain_building,
     tick_building_maintenance,
 )
-from realm.genesis_exchange_liquidity import _GENESIS_EXCHANGE
+from realm.economy.exchange import _GENESIS_EXCHANGE
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.production import effective_outputs_for_completion

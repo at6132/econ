@@ -34,7 +34,7 @@ from __future__ import annotations
 from typing import Final
 
 from realm.events.event_log import log_event
-from realm.genesis_pricing import (
+from realm.economy.pricing import (
     exchange_ask_cents,
     fair_value_cents,
     producer_cost_basis_cents,
@@ -42,7 +42,7 @@ from realm.genesis_pricing import (
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.markets import market_buy, place_sell_order
+from realm.economy.markets import market_buy, place_sell_order
 from realm.recipe_sites import plot_is_coastal
 from realm.recipes import RECIPES
 from realm.world.regions import _world_bounds, region_for_coords
@@ -319,7 +319,7 @@ def _key_input_for_output(material: MaterialId) -> MaterialId | None:
 def _cost_basis_for_output(world: World, material: MaterialId) -> int | None:
     """Estimate cost basis = cheapest recipe's input-fair-value-per-unit.
 
-    Mirrors :func:`realm.genesis_pricing.producer_cost_basis_cents` (which the
+    Mirrors :func:`realm.economy.pricing.producer_cost_basis_cents` (which the
     exchange itself uses). Labor is deliberately excluded — by sprint-1 design,
     labor cents are recycled through the system reserve and are not a marginal
     cost that the producer must recoup unit-for-unit. Using this basis lets

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from realm.events.event_log import log_event
-from realm.markets import best_resting_ask_cents
+from realm.economy.markets import best_resting_ask_cents
 from realm.core.ids import MaterialId
 from realm.world import World
 

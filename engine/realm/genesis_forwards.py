@@ -25,7 +25,7 @@ from realm.contract_stubs import propose_forward_contract, accept_forward_contra
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
-from realm.markets import best_resting_ask_cents
+from realm.economy.markets import best_resting_ask_cents
 from realm.world import World
 
 
@@ -118,7 +118,7 @@ def tick_settler_forward_proposals(world: World) -> None:
             # to the markup-baseline so settlers can still propose forwards
             # for genuinely thin-market staples.
             try:
-                from realm.genesis_pricing import _baseline_exchange_ask_cents
+                from realm.economy.pricing import _baseline_exchange_ask_cents
 
                 spot = int(_baseline_exchange_ask_cents(MaterialId(material_s)))
             except Exception:

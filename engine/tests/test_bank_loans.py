@@ -16,7 +16,7 @@ from realm.genesis_bank import (
     repay_bank_loan,
     tick_bank_loans,
 )
-from realm.genesis_exchange_liquidity import (
+from realm.economy.exchange import (
     GENESIS_EXCHANGE_PARTY_ID,
     apply_exchange_reputation_adjustment,
     exchange_price_for_party,

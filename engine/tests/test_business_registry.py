@@ -8,7 +8,7 @@ from realm.actions import (
 )
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import place_sell_order
+from realm.economy.markets import place_sell_order
 from realm.world import World, bootstrap_frontier
 
 

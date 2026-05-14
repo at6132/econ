@@ -10,7 +10,7 @@ from typing import Any
 
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
-from realm.markets import best_resting_ask_cents
+from realm.economy.markets import best_resting_ask_cents
 from realm.plot_logistics import party_material_held
 from realm.core.time_scale import legacy_scaled
 from realm.world import World

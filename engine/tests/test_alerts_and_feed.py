@@ -5,7 +5,7 @@ from __future__ import annotations
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import cancel_party_asks_for_material, place_sell_order
+from realm.economy.markets import cancel_party_asks_for_material, place_sell_order
 from realm.events.price_alerts import add_price_alert, remove_price_alert, tick_price_alerts
 from realm.events.sprint4_feed import tick_sprint4_feed
 from realm.world import bootstrap_frontier, bootstrap_genesis

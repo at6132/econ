@@ -7,7 +7,7 @@ import tempfile
 
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.movement import dispatch_shipment
-from realm.markets import market_buy, p2p_trade, place_buy_order, place_sell_order
+from realm.economy.markets import market_buy, p2p_trade, place_buy_order, place_sell_order
 from realm.persistence import load_snapshot, save_snapshot
 from realm.state_io import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.world.tick import advance_tick

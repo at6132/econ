@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import market_escrow_account, party_cash_account
-from realm.markets import (
+from realm.economy.markets import (
     cancel_buy_order,
     cancel_sell_order,
     market_buy,

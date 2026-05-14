@@ -45,7 +45,7 @@ from __future__ import annotations
 from typing import Any
 
 from realm.events.event_log import log_event
-from realm.genesis_pricing import exchange_ask_cents, hub_max_bid_cents
+from realm.economy.pricing import exchange_ask_cents, hub_max_bid_cents
 from realm.core.ids import MaterialId, PartyId
 from realm.settler_cost_basis import (
     settler_output_basis_cents,

@@ -572,7 +572,7 @@ def _auto_list_price_cents(world: World, material: MaterialId) -> int | None:
     Returns ``None`` only if no priceable basis exists for the material.
     """
     try:
-        from realm.genesis_pricing import (
+        from realm.economy.pricing import (
             producer_cost_basis_cents,
             settler_cost_basis_cents,
             _FAIR_VALUE_CENTS,
@@ -601,7 +601,7 @@ def _maybe_auto_list_outputs(
     b = _building_for_run(world, run)
     if b is None or not bool(b.get("auto_list_output")):
         return
-    from realm.markets import place_sell_order
+    from realm.economy.markets import place_sell_order
 
     for mid, qty in eff_out.items():
         q = int(qty)

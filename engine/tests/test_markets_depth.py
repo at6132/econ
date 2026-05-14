@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
-from realm.markets import market_buy, place_buy_order, place_sell_order
+from realm.economy.markets import market_buy, place_buy_order, place_sell_order
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
@@ -51,7 +51,7 @@ def test_aggressive_buy_respects_min_seller_honored() -> None:
 def test_market_buy_skips_rep_blocked_cheapest_ask() -> None:
     """Cheapest ask can require rep the buyer lacks; walker must still lift higher-priced asks."""
     from realm.core.inventory import MatterErr
-    from realm.markets import cancel_sell_order
+    from realm.economy.markets import cancel_sell_order
     from realm.world import bootstrap_genesis
 
     # Phase 7A: the buyer used to be ``pop_hub_e`` (which had 0 honored rep).

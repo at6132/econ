@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from realm.core.ids import MaterialId, PartyId
-from realm.markets import MARKET_SELLER_REGISTRATION_CENTS
+from realm.economy.markets import MARKET_SELLER_REGISTRATION_CENTS
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
@@ -26,7 +26,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     # Sprint 2 adds up to 3 NPC shippers when the world has coastal plots; bootstrap is a
     # no-op when none exist. Count whatever shippers actually got seeded so the assertion
     # tracks `seed_npc_shippers` without re-hardcoding map dependencies.
-    from realm.genesis_analytics import (
+    from realm.economy.analytics import (
         ANALYTICS_VENDOR_PARTY_ID,
         ANALYTICS_VENDOR_STARTING_CASH_CENTS,
     )
@@ -114,7 +114,7 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
     """
     from realm.core.inventory import MatterErr
     from realm.core.ledger import party_cash_account, system_reserve_account
-    from realm.markets import cancel_sell_order, market_buy, place_sell_order
+    from realm.economy.markets import cancel_sell_order, market_buy, place_sell_order
 
     w = bootstrap_genesis(seed=77, grid_width=4, grid_height=4, settler_count=2)
     buyer = PartyId("settler_001")
@@ -206,7 +206,7 @@ def test_genesis_settler_workshop_diversity_not_all_strip_mines() -> None:
 
 
 def test_genesis_coal_asks_return_after_heavy_ticks() -> None:
-    from realm.markets import best_resting_ask_cents
+    from realm.economy.markets import best_resting_ask_cents
 
     w = bootstrap_genesis(seed=9, grid_width=12, grid_height=10, settler_count=12)
     for _ in range(2500):

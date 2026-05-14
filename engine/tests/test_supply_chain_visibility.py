@@ -5,15 +5,15 @@ from __future__ import annotations
 import pytest
 
 from realm.actions import claim_plot
-from realm.genesis_analytics import _party_volume_signal, purchase_analytics_product
+from realm.economy.analytics import _party_volume_signal, purchase_analytics_product
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import (
+from realm.economy.markets import (
     ensure_market_seller_registration,
     place_buy_order,
     place_sell_order,
 )
-from realm.supply_signals import (
+from realm.economy.supply_signals import (
     LARGE_BUY_THRESHOLD_UNITS,
     region_activity_for_material,
 )

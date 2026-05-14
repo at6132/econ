@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from realm.genesis_pricing import (
+from realm.economy.pricing import (
     EXCHANGE_LISTING_MAX_QTY_PER_CLIP,
     EXCHANGE_NON_EXCHANGE_DEPTH_WATERMARK,
     EXCHANGE_PRICE_REFRESH_TICKS,
@@ -42,7 +42,7 @@ from realm.genesis_pricing import (
 )
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
-from realm.markets import place_sell_order
+from realm.economy.markets import place_sell_order
 from realm.world import World
 
 _GENESIS_EXCHANGE = PartyId("genesis_exchange")

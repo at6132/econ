@@ -34,7 +34,7 @@ from realm.genesis_bank import (
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.markets import place_sell_order
+from realm.economy.markets import place_sell_order
 from realm.world.regions import all_region_ids, region_for_plot, route_key
 from realm.route_operators import (
     list_route_operators,
@@ -225,7 +225,7 @@ def _tick_specialist_list_output(world: World, spec: dict) -> None:
     if qty_available <= 0:
         return
     # Match an aggressive but profitable price relative to current spot.
-    from realm.genesis_pricing import exchange_ask_cents
+    from realm.economy.pricing import exchange_ask_cents
 
     spot = int(exchange_ask_cents(mid, world=world))
     price = max(10, int(spot * 96 // 100))  # mild undercut vs exchange

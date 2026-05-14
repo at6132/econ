@@ -494,10 +494,10 @@ def generate_plots(
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
     from realm.events.event_log import log_event
-    from realm.genesis_exchange_liquidity import ensure_exchange_state_initialised
-    from realm.genesis_pricing import exchange_ask_cents
+    from realm.economy.exchange import ensure_exchange_state_initialised
+    from realm.economy.pricing import exchange_ask_cents
     from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-    from realm.markets import place_sell_order
+    from realm.economy.markets import place_sell_order
 
     ex = PartyId("genesis_exchange")
     world.parties.add(ex)
@@ -606,7 +606,7 @@ def bootstrap_genesis(
         terrain_for_genesis_island_cell,
     )
     from realm.events.event_log import log_event
-    from realm.market_history import record_market_snapshot
+    from realm.economy.market_history import record_market_snapshot
 
     human = PartyId("player")
     if map_layout == "auto":
@@ -762,7 +762,7 @@ def bootstrap_genesis(
     from realm.genesis_broker import seed_survey_broker
 
     seed_survey_broker(world)
-    from realm.genesis_analytics import seed_analytics_vendor
+    from realm.economy.analytics import seed_analytics_vendor
 
     seed_analytics_vendor(world)
     from realm.genesis_bank import seed_first_bank
@@ -903,7 +903,7 @@ def _seed_cartel_grain_overlay(
     Cartel scenario: cancel the bulk vendor grain clip, split stock between the incumbent
     vendor and a synthetic pool that lists at a premium (information / rationing pressure).
     """
-    from realm.markets import cancel_sell_order, place_sell_order
+    from realm.economy.markets import cancel_sell_order, place_sell_order
 
     if not vendor_grain_order_id:
         raise ValueError("cartel overlay requires vendor grain order id")
@@ -1010,7 +1010,7 @@ def bootstrap_frontier(
     if isinstance(tr_c, MoneyErr):
         raise ValueError(tr_c.reason)
     from realm.events.event_log import log_event
-    from realm.markets import place_sell_order
+    from realm.economy.markets import place_sell_order
 
     pr = place_sell_order(world, vendor, MaterialId("grain"), 10, 120)
     if not pr.get("ok"):
@@ -1070,7 +1070,7 @@ def bootstrap_frontier(
         _seed_cartel_grain_overlay(world, inv, vendor, grain_vendor_ask_id)
     _seed_tier2_agents(world, inv, timber_merch, clay_v, human)
     _seed_tier3_character(world, inv, scenario_id)
-    from realm.market_history import record_market_snapshot
+    from realm.economy.market_history import record_market_snapshot
 
     if scenario_id == "archive":
         from realm.core.time_scale import legacy_scaled
@@ -1141,7 +1141,7 @@ def world_public_dict(world: World) -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface)."""
     from realm.buildings import building_catalog_public
     from realm.energy import ensure_powered_plots_fresh
-    from realm.markets import market_book_public, market_bids_public
+    from realm.economy.markets import market_book_public, market_bids_public
     from realm.recipe_workshops import recipe_ids_on_plot_for_owner
 
     powered_set = ensure_powered_plots_fresh(world)
@@ -1189,7 +1189,7 @@ def world_public_dict(world: World) -> dict:
         for party, mats in world.inventory.snapshot().items()
     }
     from realm.actions import hire_catalog_public
-    from realm.intel import FREE_MARKET_HISTORY_TICKS
+    from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
     from realm.core.time_scale import TICKS_PER_GAME_DAY
 
     intel_active = world.tick < world.market_intel_expires_tick
@@ -1407,7 +1407,7 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
     cash_cents = int(balances.get(cash_acct, 0))
     # Inventory units valued at fair-value heuristic; falls back to 0 if missing.
     try:
-        from realm.genesis_pricing import _FAIR_VALUE_CENTS
+        from realm.economy.pricing import _FAIR_VALUE_CENTS
     except Exception:
         _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
     inv_value_cents = 0

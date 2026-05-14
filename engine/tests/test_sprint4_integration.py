@@ -24,7 +24,7 @@ from realm.contract_stubs import (
     accept_forward_contract,
     propose_forward_contract,
 )
-from realm.genesis_analytics import (
+from realm.economy.analytics import (
     ANALYTICS_VENDOR_PARTY_ID,
     PRICE_HISTORY_COST_CENTS,
     purchase_analytics_product,
@@ -38,7 +38,7 @@ from realm.genesis_broker import (
 )
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.markets import cancel_party_asks_for_material, place_sell_order
+from realm.economy.markets import cancel_party_asks_for_material, place_sell_order
 from realm.events.price_alerts import add_price_alert, tick_price_alerts
 from realm.world.tick import advance_tick
 from realm.world import World, bootstrap_genesis

@@ -33,7 +33,7 @@ def _record_genesis_fill(
     if world.scenario_id != "genesis":
         return
     try:
-        from realm.genesis_exchange_liquidity import record_market_fill
+        from realm.economy.exchange import record_market_fill
     except ImportError:
         return
     record_market_fill(world, material, int(qty), int(unit_px), seller)
@@ -315,7 +315,7 @@ def _maybe_apply_exchange_rep_adjustment(
 ) -> None:
     """Settle reputation-based rebate/surcharge when the seller is the exchange."""
     try:
-        from realm.genesis_exchange_liquidity import (
+        from realm.economy.exchange import (
             GENESIS_EXCHANGE_PARTY_ID,
             apply_exchange_reputation_adjustment,
         )
@@ -486,7 +486,7 @@ def place_sell_order(
     )
     # Sprint 6 — Phase C.1 Signal 2: anonymous supply concentration warning
     # when one seller controls > 35% of listed supply for this material.
-    from realm.supply_signals import maybe_emit_supply_concentration
+    from realm.economy.supply_signals import maybe_emit_supply_concentration
 
     maybe_emit_supply_concentration(world, material)
     _cross_incoming_ask(world, new_ask)
@@ -597,7 +597,7 @@ def place_buy_order(
     )
     # Sprint 6 — Phase C.1 Signal 1: anonymous large-buy detection (≥ threshold
     # units in a single tick). The buyer is intentionally NOT named.
-    from realm.supply_signals import LARGE_BUY_THRESHOLD_UNITS
+    from realm.economy.supply_signals import LARGE_BUY_THRESHOLD_UNITS
 
     if qty >= LARGE_BUY_THRESHOLD_UNITS:
         log_event(

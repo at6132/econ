@@ -7,7 +7,7 @@ from realm.genesis_settler_names import assign_display_name_for_new_settler
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.markets import cancel_all_party_resting_orders
+from realm.economy.markets import cancel_all_party_resting_orders
 from realm.plot_logistics import remove_plot_output
 from realm.core.time_scale import legacy_scaled
 from realm.world import World
