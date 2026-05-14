@@ -498,6 +498,10 @@ def trigger_storm(
     rng = world.rng(f"storm-flood-roll:{ev.event_id}")
     if rng.random() < STORM_FLOOD_FOLLOWUP_PROB:
         _spawn_flood_followup(world, ev)
+    # Phase 8D: severe storms can close a shipping lane for 5-15 days.
+    from realm.economy.market_events import maybe_close_route_from_storm
+
+    maybe_close_route_from_storm(world, ev)
     return ev
 
 

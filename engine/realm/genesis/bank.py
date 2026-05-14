@@ -230,8 +230,20 @@ def apply_bank_loan(
     Approval is automatic if the borrower's reputation tier permits the
     requested principal. The cash moves lender → borrower immediately and a
     standard ``bank_loan`` contract row is created on ``world.contracts``.
+
+    Phase 8 — Sub-phase 8D: when the bank has hit its 65% lending threshold,
+    ``world.scenario_state["bank_credit_crunch"]`` is set and any new
+    application against ``first_bank`` is refused until the crunch lifts.
+    Private lenders (``lender != FIRST_BANK_PARTY_ID``) are unaffected.
     """
     lender_pid = lender or FIRST_BANK_PARTY_ID
+    if lender_pid == FIRST_BANK_PARTY_ID and bool(
+        world.scenario_state.get("bank_credit_crunch")
+    ):
+        return {
+            "ok": False,
+            "reason": "lending suspended — first_bank credit crunch active",
+        }
     if borrower not in world.parties or lender_pid not in world.parties:
         return {"ok": False, "reason": "unknown party"}
     if borrower == lender_pid:

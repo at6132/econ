@@ -84,6 +84,21 @@ def dispatch_shipment(
     from realm.world.islands import is_inter_island_shipment
 
     inter_island = is_inter_island_shipment(world, from_plot_id, to_plot_id)
+    # Phase 8D: refuse dispatch on a route that's currently blockaded by a storm.
+    if inter_island:
+        from realm.economy.market_events import is_route_blocked
+
+        mapping = world.scenario_state.get("plot_islands") or {}
+        from_isl = mapping.get(str(from_plot_id))
+        to_isl = mapping.get(str(to_plot_id))
+        if from_isl is not None and to_isl is not None:
+            a, b = sorted([int(from_isl), int(to_isl)])
+            simple_key = f"island_{a}|island_{b}"
+            if is_route_blocked(world, simple_key):
+                return {
+                    "ok": False,
+                    "reason": f"route {simple_key} closed by severe weather",
+                }
     ocean_mult = 2 if inter_island else 1
     operator_payee: PartyId | None = None
     op_route_key: str | None = None

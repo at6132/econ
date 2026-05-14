@@ -12,6 +12,7 @@ from realm.agents.tier2 import tick_tier2_agents
 from realm.agents.tier3 import tick_tier3_llm_agents
 from realm.actions import tick_stub_employment
 from realm.production.decay import tick_building_decay, tick_building_maintenance
+from realm.economy.market_events import tick_market_events
 from realm.economy.market_history import record_market_snapshot
 from realm.infrastructure.movement import deliver_transit
 from realm.events.price_alerts import tick_price_alerts
@@ -75,6 +76,9 @@ def advance_tick(world: World) -> None:
         tick_laborer_spending(world)
         tick_laborer_births(world)
     record_market_snapshot(world)
+    # Phase 8 — Sub-phase 8D: price panic detection, credit crunch toggle,
+    # route blockage lazy-expiry. Reads the snapshot we just recorded.
+    tick_market_events(world)
     tick_price_alerts(world)
     if world.scenario_id == "genesis":
         tick_sprint4_feed(world)
