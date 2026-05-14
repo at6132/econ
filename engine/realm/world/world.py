@@ -215,6 +215,17 @@ class World:
     survey a plot they don't own when an active authorization exists.
     Unauthorized speculative surveys are still allowed when the plot is
     unclaimed (no owner)."""
+    liens: list[dict] = field(default_factory=list)
+    """Phase 9E — outstanding debts owed by a debtor to a creditor. Created
+    automatically when a supply-contract breach can't be fully covered by
+    the supplier's cash on hand: the unpaid liquidated-damages portion is
+    recorded here and ``tick_liens`` auto-pulls from the debtor's cash
+    every tick until the lien is closed. Each row:
+    ``{"lien_id", "debtor", "creditor", "amount_remaining_cents",
+    "source_contract_id", "created_at_tick", "status"}`` where status is
+    ``open`` | ``closed``."""
+    next_lien_seq: int = 0
+    """Phase 9E — monotonic id generator for liens (format: ``lien-{seq}``)."""
     business_registry: dict[str, "BusinessRecord"] = field(default_factory=dict)
     """Sprint 5 — Phase A: registered business identities keyed by party id
     str. Once registered, the business name is the authoritative

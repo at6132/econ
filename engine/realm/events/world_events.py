@@ -1132,3 +1132,31 @@ def storm_force_majeure_extension_ticks(world: "World", island_id: int | None) -
         return 0
     remaining = max(0, int(ev.end_tick) - int(world.tick))
     return int(remaining + TICKS_PER_GAME_DAY)
+
+
+# Phase 9E — force-majeure now generalizes to any active world event that
+# plausibly disrupts a supplier's ability to deliver. The grace window for
+# each event type matches the production-side impact (drought slows fields,
+# blight kills crops, mine_collapse halts ore output, epidemic shuts down
+# workers, seismic damages workshops, storm closes shipping lanes).
+_FORCE_MAJEURE_EVENT_TYPES: frozenset[str] = frozenset(
+    {"storm", "drought", "blight", "mine_collapse", "epidemic", "seismic"}
+)
+
+
+def general_force_majeure_extension_ticks(world: "World") -> int:
+    """Return a global force-majeure extension based on any active event.
+
+    Supply contracts don't carry island metadata, so we grant the longest
+    remaining-duration grace across any active force-majeure-eligible event
+    (plus one game-day of recovery buffer). Returns 0 when no qualifying
+    event is active.
+    """
+    longest = 0
+    for ev in active_events(world):
+        if str(ev.event_type) not in _FORCE_MAJEURE_EVENT_TYPES:
+            continue
+        remaining = max(0, int(ev.end_tick) - int(world.tick))
+        if remaining > longest:
+            longest = remaining
+    return int(longest + TICKS_PER_GAME_DAY) if longest > 0 else 0

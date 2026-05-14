@@ -195,6 +195,8 @@ def dump_world(world: World) -> dict[str, Any]:
         "survey_authorizations": [
             copy.deepcopy(row) for row in world.survey_authorizations
         ],
+        "liens": [copy.deepcopy(row) for row in world.liens],
+        "next_lien_seq": int(world.next_lien_seq),
         "analytics_purchases": [copy.deepcopy(row) for row in world.analytics_purchases],
         "business_registry": {
             pid_s: {
@@ -485,6 +487,8 @@ def load_world(d: dict[str, Any]) -> World:
     world.survey_authorizations = [
         copy.deepcopy(row) for row in d.get("survey_authorizations", []) or []
     ]
+    world.liens = [copy.deepcopy(row) for row in d.get("liens", []) or []]
+    world.next_lien_seq = int(d.get("next_lien_seq", 0))
     world.analytics_purchases = [
         copy.deepcopy(row) for row in d.get("analytics_purchases", []) or []
     ]

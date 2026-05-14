@@ -236,28 +236,22 @@ def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -
 def tick_supply_contract_breaches(world: World) -> None:
     """After ``world.tick`` advances: active supply past ``deliver_by_tick`` becomes breached (supplier only).
 
-    Phase 8 — Sub-phase 8B (B5/D3): contracts are NOT auto-breached while
-    an active storm is delaying global shipping. The supplier gets a
-    ``force_majeure_extension_tick`` grace period equal to the storm's
-    remaining duration plus one game-day. This avoids unfair breaches
-    when ocean weather suspends the player's ability to ship.
+    Phase 9E — force-majeure now generalises beyond storms (B7.1). Any
+    active drought, blight, mine_collapse, epidemic, or seismic event
+    extends an at-risk contract's deadline rather than breaching it
+    (Law 10 — disruptions are real and the engine acknowledges them).
+
+    Phase 9E — when a real breach lands and the supplier can't fully
+    cover the liquidated_damages_cents from their cash on hand, the
+    unpaid balance is recorded as a lien on the supplier (B7.2). The
+    lien is auto-deducted from the supplier's cash on every subsequent
+    tick (see ``tick_liens``) until it's paid in full -- so an under-
+    capitalised business that breaches doesn't get a free pass.
     """
-    from realm.events.world_events import (
-        active_events as _active_events,
-        storm_force_majeure_extension_ticks,
-    )
+    from realm.events.world_events import general_force_majeure_extension_ticks
 
     t = world.tick
-    # Cache the global storm extension once per tick — supply contracts
-    # don't carry island info so we apply the longest active storm grace
-    # period to any contract that would otherwise breach right now.
-    active_storms = [ev for ev in _active_events(world) if ev.event_type == "storm"]
-    storm_grace = 0
-    if active_storms:
-        storm_grace = max(
-            storm_force_majeure_extension_ticks(world, ev.island_id)
-            for ev in active_storms
-        )
+    fm_grace = general_force_majeure_extension_ticks(world)
     for c in world.contracts:
         if c.get("kind") != "supply":
             continue
@@ -265,20 +259,20 @@ def tick_supply_contract_breaches(world: World) -> None:
             continue
         if t <= int(c["deliver_by_tick"]):
             continue
-        if storm_grace > 0:
+        if fm_grace > 0:
             # Extend the deadline rather than breach. Mark the contract so
             # the player can see force-majeure was applied.
-            new_deadline = int(c["deliver_by_tick"]) + int(storm_grace)
+            new_deadline = int(c["deliver_by_tick"]) + int(fm_grace)
             c["deliver_by_tick"] = new_deadline
             ext_log = c.setdefault("force_majeure_extensions", [])
-            ext_log.append({"tick": int(t), "extra_ticks": int(storm_grace)})
+            ext_log.append({"tick": int(t), "extra_ticks": int(fm_grace)})
             log_event(
                 world,
                 "contract_force_majeure",
-                f"Supply {c['id']}: deadline extended by storm "
-                f"(+{storm_grace} ticks → new deadline {new_deadline})",
+                f"Supply {c['id']}: deadline extended by force majeure "
+                f"(+{fm_grace} ticks → new deadline {new_deadline})",
                 contract_id=c["id"],
-                extra_ticks=int(storm_grace),
+                extra_ticks=int(fm_grace),
             )
             continue
         c["status"] = "breached"
@@ -294,9 +288,37 @@ def tick_supply_contract_breaches(world: World) -> None:
         if dmg > 0:
             bc = party_cash_account(buyer)
             sc = party_cash_account(sup)
-            pay = min(dmg, world.ledger.balance(sc))
+            sup_balance = world.ledger.balance(sc)
+            pay = min(dmg, sup_balance)
             if pay > 0:
                 world.ledger.transfer(debit=sc, credit=bc, amount_cents=pay)
+            # Phase 9E — lien for the unpaid portion.
+            unpaid = dmg - pay
+            if unpaid > 0:
+                world.next_lien_seq += 1
+                lien_id = f"lien-{world.next_lien_seq}"
+                world.liens.append(
+                    {
+                        "lien_id": lien_id,
+                        "debtor": str(sup),
+                        "creditor": str(buyer),
+                        "amount_remaining_cents": int(unpaid),
+                        "source_contract_id": str(c["id"]),
+                        "created_at_tick": int(t),
+                        "status": "open",
+                    }
+                )
+                log_event(
+                    world,
+                    "contract_supply_lien",
+                    f"Supply {c['id']}: ${unpaid / 100:.2f} of unpaid damages liened "
+                    f"against {sup} (lien {lien_id})",
+                    contract_id=c["id"],
+                    lien_id=lien_id,
+                    supplier=str(sup),
+                    buyer=str(buyer),
+                    amount_cents=int(unpaid),
+                )
         log_event(
             world,
             "contract_supply_breach",
@@ -312,3 +334,63 @@ def bump_spot_exchange_honored(world: World, party_a: PartyId, party_b: PartyId)
     for pid in (party_a, party_b):
         r = world.reputation.setdefault(str(pid), {"honored": 0, "breached": 0})
         r["honored"] = int(r.get("honored", 0)) + 1
+
+
+def tick_liens(world: World) -> None:
+    """Phase 9E — drain open liens out of debtor cash every tick.
+
+    A lien represents an unpaid liquidated-damages balance from a breached
+    supply contract. Each tick we walk the open liens and pull whatever the
+    debtor can afford right now, crediting the original buyer. The lien
+    closes when ``amount_remaining_cents`` hits zero. There is no interest
+    on the lien in v1 -- the damages are already the "stick" of the breach;
+    the lien just ensures the supplier can't dodge the bill by running cash
+    low at the moment of breach.
+    """
+    if not world.liens:
+        return
+    for lien in world.liens:
+        if str(lien.get("status", "")) != "open":
+            continue
+        remaining = int(lien.get("amount_remaining_cents", 0))
+        if remaining <= 0:
+            lien["status"] = "closed"
+            lien["closed_at_tick"] = int(world.tick)
+            continue
+        debtor = PartyId(str(lien["debtor"]))
+        creditor = PartyId(str(lien["creditor"]))
+        debtor_acct = party_cash_account(debtor)
+        creditor_acct = party_cash_account(creditor)
+        world.ledger.ensure_account(creditor_acct)
+        balance = world.ledger.balance(debtor_acct)
+        if balance <= 0:
+            continue
+        pull = min(remaining, balance)
+        tr = world.ledger.transfer(
+            debit=debtor_acct, credit=creditor_acct, amount_cents=pull
+        )
+        if not hasattr(tr, "reason"):
+            lien["amount_remaining_cents"] = remaining - pull
+            if int(lien["amount_remaining_cents"]) <= 0:
+                lien["status"] = "closed"
+                lien["closed_at_tick"] = int(world.tick)
+                log_event(
+                    world,
+                    "lien_closed",
+                    f"Lien {lien['lien_id']} fully paid by {debtor} to {creditor}",
+                    lien_id=str(lien["lien_id"]),
+                    debtor=str(debtor),
+                    creditor=str(creditor),
+                )
+            else:
+                log_event(
+                    world,
+                    "lien_payment",
+                    f"Lien {lien['lien_id']}: pulled ${pull / 100:.2f} from {debtor} "
+                    f"(${int(lien['amount_remaining_cents']) / 100:.2f} remaining)",
+                    lien_id=str(lien["lien_id"]),
+                    debtor=str(debtor),
+                    creditor=str(creditor),
+                    pulled_cents=int(pull),
+                    remaining_cents=int(lien["amount_remaining_cents"]),
+                )
