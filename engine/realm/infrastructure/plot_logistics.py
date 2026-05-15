@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr, MatterOk, MatterResult
@@ -30,14 +32,38 @@ def party_material_on_plot(world: World, party: PartyId, plot_id: PlotId, materi
     return q + plot_output_qty(world, plot_id, material)
 
 
-def party_material_held(world: World, party: PartyId, material: MaterialId) -> int:
-    """Inventory plus staged goods on all owned plots."""
+def party_material_held(
+    world: World,
+    party: PartyId,
+    material: MaterialId,
+    *,
+    owned_plot_ids: Sequence[PlotId] | None = None,
+) -> int:
+    """Inventory plus staged goods on owned plots.
+
+    When ``owned_plot_ids`` is provided (sorted plot ids for that party), only those
+    plots are consulted — used by Genesis settler ticks to avoid scanning the full map
+    thousands of times per day.
+
+    When omitted, staged output is summed by iterating ``plot_output_stock`` keys
+    (plots that actually hold staged matter), not every plot in the world.
+    """
     t = world.inventory.qty(party, material)
     if not plot_logistics_enabled(world):
         return t
-    for pl in world.plots.values():
-        if pl.owner == party:
-            t += plot_output_qty(world, pl.plot_id, material)
+    ms = str(material)
+    if owned_plot_ids is not None:
+        for pid in owned_plot_ids:
+            t += plot_output_qty(world, pid, material)
+        return t
+    for pid_str, bucket in world.plot_output_stock.items():
+        q = int(bucket.get(ms, 0))
+        if q <= 0:
+            continue
+        pl = world.plots.get(PlotId(pid_str))
+        if pl is None or pl.owner != party:
+            continue
+        t += q
     return t
 
 

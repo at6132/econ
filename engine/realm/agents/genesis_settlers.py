@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from collections import Counter
+from collections import Counter, defaultdict
 
 from realm.actions import SURVEY_COST_CENTS, claim_plot, start_production_on_plot, survey_plot
 from realm.production.buildings import BUILDINGS, build_on_plot
@@ -91,6 +91,16 @@ _PRIMARY_RECIPES = frozenset(
 
 # Claim → survey → build → … can span many logical steps; chain several per tick until blocked.
 SETTLER_PIPELINE_BURST = 16
+
+
+def _owned_plots_by_party(world: World) -> dict[PartyId, tuple[PlotId, ...]]:
+    """Single pass over the map — used once per tick for staged-output lookups."""
+    buckets: defaultdict[PartyId, list[PlotId]] = defaultdict(list)
+    for pl in world.plots.values():
+        o = pl.owner
+        if o is not None:
+            buckets[o].append(pl.plot_id)
+    return {p: tuple(sorted(ids, key=str)) for p, ids in buckets.items()}
 
 
 def _plots_manhattan_order(world: World) -> list[PlotId]:
@@ -883,21 +893,34 @@ _STOCKPILE_MATS: tuple[str, ...] = (
 )
 
 
-def _liquidate_settler_stockpiles(world: World, party: PartyId) -> None:
+def _liquidate_settler_stockpiles(
+    world: World,
+    party: PartyId,
+    owned_plot_ids: tuple[PlotId, ...],
+) -> None:
     """Push chronic surpluses into bids + relist so cash recycles (integration with the book)."""
     if not str(party).startswith("settler_"):
         return
     for mid_s in _STOCKPILE_MATS:
         mid = MaterialId(mid_s)
-        q = party_material_held(world, party, mid)
+        q = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
         if q >= 20:
-            _settler_sell_material(world, party, mid, min(q - 3, 40))
+            _settler_sell_material(
+                world, party, mid, min(q - 3, 40), owned_plot_ids=owned_plot_ids
+            )
 
 
-def _settler_sell_material(world: World, party: PartyId, mid: MaterialId, max_units: int) -> None:
+def _settler_sell_material(
+    world: World,
+    party: PartyId,
+    mid: MaterialId,
+    max_units: int,
+    *,
+    owned_plot_ids: tuple[PlotId, ...],
+) -> None:
     if max_units <= 0:
         return
-    total = party_material_held(world, party, mid)
+    total = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
     if total <= 0:
         return
     ensure_inventory_from_stash(world, party, mid, min(max_units, total))
@@ -968,11 +991,13 @@ def _settler_pipeline_step(
     world: World,
     party: PartyId,
     scan: list[PlotId],
+    owned_by_party: dict[PartyId, tuple[PlotId, ...]],
     *,
     allow_secondary: bool,
     preferred_line: tuple[str, str] | None = None,
 ) -> bool:
     """One settler micro-step; return True if we should try another step this same tick."""
+    owned_plot_ids = owned_by_party.get(party, ())
     owned = _first_owned_plot(world, party)
     if owned is None:
         # Per-party preferred starting region — see ``_settler_home_anchor`` docstring.
@@ -1013,16 +1038,22 @@ def _settler_pipeline_step(
 
     _settler_probabilistic_discovery(world, party)
     _settler_maintain_buildings(world, party)
-    _liquidate_settler_stockpiles(world, party)
+    _liquidate_settler_stockpiles(world, party, owned_plot_ids)
 
     if plot_has_active_production(world, owned):
         run = _active_run(world, party, owned)
         recipe = RECIPES.get(run.recipe_id) if run else None
         if recipe:
             for out_m in recipe.outputs:
-                hq = party_material_held(world, party, out_m)
+                hq = party_material_held(world, party, out_m, owned_plot_ids=owned_plot_ids)
                 if hq >= 1:
-                    _settler_sell_material(world, party, out_m, min(hq, 30))
+                    _settler_sell_material(
+                        world,
+                        party,
+                        out_m,
+                        min(hq, 30),
+                        owned_plot_ids=owned_plot_ids,
+                    )
         return False
 
     chosen_rid = _pick_recipe_to_start(
@@ -1038,13 +1069,20 @@ def _settler_pipeline_step(
     recipe = RECIPES.get(chosen_rid)
     if recipe:
         for out_m in recipe.outputs:
-            hq = party_material_held(world, party, out_m)
+            hq = party_material_held(world, party, out_m, owned_plot_ids=owned_plot_ids)
             if hq >= 1:
-                _settler_sell_material(world, party, out_m, min(hq, 24))
+                _settler_sell_material(
+                    world, party, out_m, min(hq, 24), owned_plot_ids=owned_plot_ids
+                )
     return True
 
 
-def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
+def _tick_one_settler(
+    world: World,
+    party: PartyId,
+    scan: list[PlotId],
+    owned_by_party: dict[PartyId, tuple[PlotId, ...]],
+) -> None:
     """Lock primary business line after survey so burst steps do not re-roll a conflicting workshop."""
     locked_line: tuple[str, str] | None = None
     for burst_i in range(SETTLER_PIPELINE_BURST):
@@ -1057,6 +1095,7 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
             world,
             party,
             scan,
+            owned_by_party,
             allow_secondary=(burst_i == 0),
             preferred_line=locked_line,
         )
@@ -1067,6 +1106,7 @@ def _tick_one_settler(world: World, party: PartyId, scan: list[PlotId]) -> None:
 def tick_settler_business(world: World) -> None:
     if world.scenario_id != "genesis":
         return
+    owned_by_party = _owned_plots_by_party(world)
     scan = _plots_manhattan_order(world)
     dry_scan = [pid for pid in scan if terrain_allows_workshop(world.plots[pid].terrain)]
     settlers = sorted((p for p in world.parties if str(p).startswith("settler_")), key=str)
@@ -1074,4 +1114,4 @@ def tick_settler_business(world: World) -> None:
     order = settlers.copy()
     rng.shuffle(order)
     for party in order:
-        _tick_one_settler(world, party, dry_scan)
+        _tick_one_settler(world, party, dry_scan, owned_by_party)

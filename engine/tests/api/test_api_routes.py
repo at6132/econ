@@ -344,3 +344,25 @@ def test_code_eval_without_env_returns_reason() -> None:
     assert r.status_code == 200
     j = r.json()
     assert j.get("ok") is False
+
+
+def test_pre_ui_api_alias_routes_smoke() -> None:
+    """Thin parity routes for the Phase 11 UI (no duplicate game logic)."""
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 203})
+    r1 = c.get("/businesses/templates")
+    assert r1.status_code == 200
+    assert r1.json().get("ok") is True
+    assert isinstance(r1.json().get("templates"), list)
+    r2 = c.get("/businesses/mine", params={"party": "player"})
+    assert r2.status_code == 200
+    assert r2.json().get("ok") is True
+    r3 = c.get("/construction/orders")
+    assert r3.status_code == 200
+    assert r3.json().get("ok") is True
+    r4 = c.get("/science/elements")
+    assert r4.status_code == 200
+    assert r4.json().get("ok") is True
+    r5 = c.get("/science/reactions/discovered", params={"party": "player"})
+    assert r5.status_code == 200
+    assert r5.json().get("ok") is True

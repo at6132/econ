@@ -583,6 +583,44 @@ def get_business_entity_detail(business_id: str) -> dict:
     }
 
 
+@router.post("/businesses/register")
+def post_businesses_register(body: Annotated[dict, Body()]) -> dict:
+    """Alias of ``POST /business/register`` for UI route parity."""
+    return post_business_register(body)
+
+
+@router.get("/businesses/templates")
+def get_businesses_templates() -> dict:
+    from realm.economy.businesses import BUSINESS_TEMPLATES
+
+    rows = [
+        {"template_id": tpl.template_id, "label": tpl.display_name, "kind": tpl.type_tag}
+        for tid, tpl in sorted(BUSINESS_TEMPLATES.items(), key=lambda kv: kv[0])
+    ]
+    return {"ok": True, "tick": _state.WORLD.tick, "templates": rows}
+
+
+@router.get("/businesses/mine")
+def get_businesses_mine(party: Annotated[str, Query()] = "player") -> dict:
+    w = _state.WORLD
+    pid = PartyId(party)
+    rows = [b for b in w.businesses.values() if b.owner_party == pid]
+    return {
+        "ok": True,
+        "tick": w.tick,
+        "party": party,
+        "businesses": [
+            {
+                "business_id": b.business_id,
+                "business_name": b.business_name,
+                "status": b.status,
+                "business_type_tag": b.business_type_tag,
+            }
+            for b in rows
+        ],
+    }
+
+
 @router.post("/business/register")
 def post_business_register(body: Annotated[dict, Body()]) -> dict:
     party_raw = body.get("party", "player")
@@ -653,6 +691,39 @@ def post_construction_accept(body: Annotated[dict, Body()]) -> dict:
     return dict(r)
 
 
+@router.post("/construction/order")
+def post_construction_order(body: Annotated[dict, Body()]) -> dict:
+    """Alias of ``POST /construction/accept`` (place a construction order from a quote)."""
+    return post_construction_accept(body)
+
+
+@router.get("/construction/orders")
+def get_construction_orders(
+    party: Annotated[str, Query()] = "player",
+    role: Annotated[str, Query()] = "any",
+) -> dict:
+    """List construction orders involving ``party`` (client, contractor, or any)."""
+    w = _state.WORLD
+    ps = str(party)
+    role_l = str(role).lower()
+    if role_l not in ("any", "client", "contractor"):
+        raise HTTPException(status_code=400, detail="role must be any, client, or contractor")
+    out: list[dict] = []
+    for c in w.contracts:
+        if c.get("kind") != "construction_order":
+            continue
+        client = str(c.get("client_party", ""))
+        contractor = str(c.get("contractor_party", ""))
+        if role_l == "client" and client != ps:
+            continue
+        if role_l == "contractor" and contractor != ps:
+            continue
+        if role_l == "any" and ps not in (client, contractor):
+            continue
+        out.append(dict(c))
+    return {"ok": True, "tick": w.tick, "party": party, "role": role_l, "orders": out}
+
+
 @router.get("/science/chemistry")
 def get_science_chemistry() -> dict:
     from realm.science import chemistry
@@ -662,6 +733,43 @@ def get_science_chemistry() -> dict:
         "elements": list(chemistry.ELEMENT_SYMBOLS),
         "reactions": chemistry.REACTIONS_PUBLIC,
     }
+
+
+@router.get("/science/elements")
+def get_science_elements() -> dict:
+    from realm.science import chemistry
+
+    return {"ok": True, "elements": list(chemistry.ELEMENT_SYMBOLS)}
+
+
+@router.get("/science/reactions/discovered")
+def get_science_reactions_discovered(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.science import chemistry
+
+    w = _state.WORLD
+    book = w.party_recipe_books.get(party, set())
+    discovered = [r for r in chemistry.REACTIONS_PUBLIC if str(r.get("output", "")) in book]
+    return {"ok": True, "tick": w.tick, "party": party, "reactions": discovered}
+
+
+@router.post("/science/experiment")
+def post_science_experiment(body: Annotated[dict, Body()]) -> dict:
+    from realm.actions.science_actions import run_laboratory_bench
+
+    plot_raw = body.get("plot_id")
+    if not plot_raw:
+        raise HTTPException(status_code=400, detail="plot_id is required in the JSON body")
+    party_raw = body.get("party", "player")
+    r = run_laboratory_bench(
+        _state.WORLD,
+        PartyId(str(party_raw)),
+        PlotId(str(plot_raw)),
+        str(body.get("material_a", "")),
+        str(body.get("material_b", "")),
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
 
 
 @router.post("/plots/{plot_id}/lab/bench")

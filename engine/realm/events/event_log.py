@@ -7,7 +7,9 @@ from typing import Any
 
 from realm.world import World
 
-_MAX_EVENTS = 1200
+# One Genesis game-day can emit ~1k+ mixed events; keep a longer tail so early
+# bootstrap rows (e.g. consolidator seed) remain visible alongside day-1 trades.
+_MAX_EVENTS = 10_000
 # ``world_feed`` lines are mirrored here so a long day of headlines survives ``event_log`` trimming.
 _MAX_WORLD_FEED_EVENTS = 4500
 
