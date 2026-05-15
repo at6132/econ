@@ -40,7 +40,8 @@ from realm.world import ActiveProduction, World
 
 
 def _ag_recipe_id(rid: str) -> bool:
-    return rid.startswith("grow_") or rid == "bake_bread" or rid == "fishing"
+    """Land-crop recipes affected by soil (phosphate) quality — not marine harvest."""
+    return rid.startswith("grow_") or rid == "bake_bread"
 
 
 # Basis points: share of recipe labor paid out to hired workers (rest + remainder → system reserve).

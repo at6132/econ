@@ -120,8 +120,11 @@ def test_harvest_surge_multiplier() -> None:
 
     # Verify the modifier composes inside effective_outputs_for_completion.
     recipe = RECIPES["grow_grain"]
-    # Find any plot we can attach a run to (don't need to actually run).
     sample_pid = next(iter(w.plots))
+    from dataclasses import replace
+
+    sp = w.plots[sample_pid]
+    sp.subsurface = replace(sp.subsurface, phosphate_grade=0.9)
     run = ActiveProduction(
         run_id="run_harvest_test",
         party=PartyId("player"),
