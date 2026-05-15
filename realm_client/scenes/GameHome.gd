@@ -23,6 +23,7 @@ var _panel_continue: VBoxContainer
 
 var _scenario_opt: OptionButton
 var _seed_spin: SpinBox
+var _name_edit: LineEdit
 var _footer: Label
 var _saves_scroll: ScrollContainer
 var _saves_vbox: VBoxContainer
@@ -141,6 +142,29 @@ func _make_new_world() -> VBoxContainer:
 	v.add_theme_constant_override("separation", 14)
 	v.add_child(_menu_heading("New world"))
 
+	var row_name := HBoxContainer.new()
+	row_name.add_theme_constant_override("separation", 12)
+	var lname := Label.new()
+	lname.text = "Name"
+	lname.add_theme_color_override("font_color", RealmColors.DIM)
+	lname.custom_minimum_size.x = 120
+	if RealmFonts.font_body:
+		lname.add_theme_font_override("font", RealmFonts.font_body)
+		lname.add_theme_font_size_override("font_size", 20)
+	_name_edit = LineEdit.new()
+	_name_edit.placeholder_text = "My World"
+	_name_edit.custom_minimum_size.x = 360
+	_name_edit.max_length = 64
+	_name_edit.add_theme_stylebox_override("normal", RealmColors.style_btn_normal())
+	_name_edit.add_theme_color_override("font_color", RealmColors.TEXT)
+	_name_edit.add_theme_color_override("font_placeholder_color", RealmColors.MUTED)
+	if RealmFonts.font_body:
+		_name_edit.add_theme_font_override("font", RealmFonts.font_body)
+		_name_edit.add_theme_font_size_override("font_size", 20)
+	row_name.add_child(lname)
+	row_name.add_child(_name_edit)
+	v.add_child(row_name)
+
 	var row_sc := HBoxContainer.new()
 	row_sc.add_theme_constant_override("separation", 12)
 	var ls := Label.new()
@@ -175,7 +199,7 @@ func _make_new_world() -> VBoxContainer:
 	_seed_spin = SpinBox.new()
 	_seed_spin.min_value = 0
 	_seed_spin.max_value = 2_147_483_647
-	_seed_spin.value = 42
+	_seed_spin.value = _roll_new_world_seed_spin()
 	_seed_spin.step = 1
 	_seed_spin.custom_minimum_size.x = 200
 	_style_primary_button(_seed_spin)
@@ -276,6 +300,18 @@ func _show_panel(which: String) -> void:
 	_panel_solo.visible = which == "solo"
 	_panel_new.visible = which == "new"
 	_panel_continue.visible = which == "continue"
+	if which == "new":
+		if is_instance_valid(_seed_spin):
+			_seed_spin.value = _roll_new_world_seed_spin()
+		if is_instance_valid(_name_edit):
+			_name_edit.text = ""
+
+
+func _roll_new_world_seed_spin() -> int:
+	## Uniform in ``[0, INT32_MAX]`` — matches ``SpinBox`` limits; no engine/API change.
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return rng.randi_range(0, 2_147_483_647)
 
 
 func _on_coming_soon_pressed(feature: String) -> void:
@@ -316,8 +352,18 @@ func _refresh_save_list() -> void:
 					continue
 				var d: Dictionary = row
 				var path: String = str(d.get("path", ""))
-				var nm: String = str(d.get("name", path))
-				var btn := _menu_button(nm + "  →  " + path, false)
+				var wname: String = str(d.get("world_name", ""))
+				var scenario: String = str(d.get("scenario_id", ""))
+				var tick: int = int(d.get("tick", 0))
+				var label: String
+				if not wname.is_empty():
+					label = wname
+					if not scenario.is_empty():
+						label += "  ·  %s" % scenario
+					label += "  ·  tick %d" % tick
+				else:
+					label = "%s  ·  %s  ·  tick %d" % [d.get("name", path), scenario, tick]
+				var btn := _menu_button(label, false)
 				btn.pressed.connect(_on_pick_save.bind(path))
 				_saves_vbox.add_child(btn)
 	)
@@ -357,6 +403,7 @@ var _creation_screen: Control = null
 func _on_start_new_world() -> void:
 	var scenario: String = str(_scenario_opt.get_item_metadata(_scenario_opt.selected))
 	var seed_val := int(_seed_spin.value)
+	var wname: String = _name_edit.text.strip_edges() if is_instance_valid(_name_edit) else ""
 	_footer.text = ""
 
 	# Show creation screen overlay
@@ -380,7 +427,8 @@ func _on_start_new_world() -> void:
 					_creation_screen.queue_free()
 					_creation_screen = null
 				_dialog.dialog_text = "World creation failed: %s" % str(data)
-				_dialog.popup_centered()
+				_dialog.popup_centered(),
+		wname,
 	)
 
 

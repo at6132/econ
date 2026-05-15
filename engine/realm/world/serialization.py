@@ -98,6 +98,7 @@ def world_public_dict(world: "World") -> dict:
         "tick": world.tick,
         "ticks_per_game_day": TICKS_PER_GAME_DAY,
         "scenario_id": world.scenario_id,
+        "world_name": world.world_name,
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "market_intel_active": intel_active,
         "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,

@@ -85,6 +85,7 @@ _log = logging.getLogger("uvicorn.error")
 def dev_reset(
     seed: Annotated[int, Query()] = 42,
     scenario: Annotated[str, Query()] = "genesis",
+    name: Annotated[str, Query()] = "",
 ) -> dict:
     """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive, genesis."""
     _log.info("Realm: POST /dev/reset received (scenario=%r seed=%s) — building world…", scenario, seed)
@@ -93,6 +94,8 @@ def dev_reset(
         _state.WORLD = bootstrap_by_scenario(seed=seed, scenario=scenario)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    if name:
+        _state.WORLD.world_name = name
     elapsed = time.perf_counter() - t0
     _log.info(
         "Realm: POST /dev/reset finished in %.1fs (scenario_id=%r tick=%s).",
@@ -165,6 +168,7 @@ def get_persistence_list() -> dict:
                 "seed": int(meta.get("seed", 0) or 0),
                 "saved_at": int(meta.get("saved_at", 0) or 0),
                 "size_bytes": int(p.stat().st_size),
+                "world_name": str(meta.get("world_name", "") or ""),
             }
         )
     return {"ok": True, "slots": slots}

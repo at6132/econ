@@ -42,6 +42,7 @@ def save_snapshot(path: str, world: World) -> None:
             ("scenario_id", str(world.scenario_id)),
             ("seed", str(int(world.seed))),
             ("saved_at", str(saved_at)),
+            ("world_name", str(getattr(world, "world_name", "") or "")),
         ]
         for k, v in meta_rows:
             con.execute("INSERT OR REPLACE INTO realm_save_meta (k, v) VALUES (?, ?)", (k, v))
@@ -67,7 +68,7 @@ def read_meta(path: str) -> dict[str, Any]:
     Tolerant of older saves that pre-date the meta table — returns empty
     strings/zeros for fields that aren't present.
     """
-    out: dict[str, Any] = {"tick": 0, "scenario_id": "", "seed": 0, "saved_at": 0}
+    out: dict[str, Any] = {"tick": 0, "scenario_id": "", "seed": 0, "saved_at": 0, "world_name": ""}
     try:
         con = sqlite3.connect(path)
     except sqlite3.Error:
@@ -82,6 +83,7 @@ def read_meta(path: str) -> dict[str, Any]:
         out["scenario_id"] = m.get("scenario_id", "")
         out["seed"] = int(m.get("seed", "0") or 0)
         out["saved_at"] = int(m.get("saved_at", "0") or 0)
+        out["world_name"] = m.get("world_name", "")
     finally:
         con.close()
     return out

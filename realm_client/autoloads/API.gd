@@ -412,5 +412,8 @@ func persistence_load_path(relative_path: String, cb: Callable) -> void:
 	post_request("/persistence/load?path=%s" % relative_path.uri_encode(), {}, cb)
 
 
-func dev_reset(seed: int, scenario: String, cb: Callable) -> void:
-	post_request("/dev/reset?seed=%d&scenario=%s" % [int(seed), scenario.uri_encode()], {}, cb)
+func dev_reset(seed: int, scenario: String, cb: Callable, world_name: String = "") -> void:
+	var q := "/dev/reset?seed=%d&scenario=%s" % [int(seed), scenario.uri_encode()]
+	if not world_name.is_empty():
+		q += "&name=%s" % world_name.uri_encode()
+	post_request(q, {}, cb)

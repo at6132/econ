@@ -167,6 +167,8 @@ class World:
     p2p_idempotency: dict[str, dict] = field(default_factory=dict)
     scenario_id: str = "frontier"
     """Active scenario name (Frontier, bootstrapper, speculator, cartel)."""
+    world_name: str = ""
+    """Player-chosen display name for this world (shown in Continue menu)."""
     market_intel_expires_tick: int = 0
     """While ``world.tick < market_intel_expires_tick``, API exposes full ``market_history``; else a short free window."""
     next_building_instance_seq: int = 0
