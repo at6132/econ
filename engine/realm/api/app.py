@@ -14,7 +14,10 @@ Both paths return the same ``FastAPI`` instance.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -50,8 +53,50 @@ _log = logging.getLogger("uvicorn.error")
 # stays WARNING, so ``logging.getLogger("realm.api")`` INFO lines were invisible.
 
 
+def _autosave_seconds() -> int:
+    """Server-side autosave cadence (seconds). 0 disables. Env: ``REALM_AUTOSAVE_SECONDS``."""
+    raw = os.environ.get("REALM_AUTOSAVE_SECONDS", "60")
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 60
+
+
+async def _autosave_loop(interval: int) -> None:
+    """Background autosave — skips while the lazy WORLD is uninitialized so we
+    don't trigger a multi-minute genesis bootstrap from a background task."""
+    from realm.api import _state
+    from realm.api.persistence import save_snapshot
+
+    _log.info("Realm: autosave loop started (every %ds → %s).", interval, _state._AUTOSAVE_PATH.name)
+    while True:
+        try:
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+        if not _state.is_world_initialized():
+            continue
+        path = _state._AUTOSAVE_PATH
+        try:
+            t0 = time.perf_counter()
+            await asyncio.to_thread(save_snapshot, str(path), _state.WORLD)
+            _state.record_save(str(path), "autosave")
+            _log.info(
+                "Realm: autosave wrote %s in %.2fs (tick=%s).",
+                path.name,
+                time.perf_counter() - t0,
+                _state.WORLD.tick,
+            )
+        except Exception as e:  # autosave must never crash the server
+            _log.warning("Realm: autosave failed: %s", e)
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
+    from realm.api import _state
+
+    interval = _autosave_seconds()
+    _state.AUTOSAVE_SECONDS = interval  # type: ignore[attr-defined]
     _log.info(
         "Realm: HTTP stack ready (this step is fast). Dev WORLD is still empty — "
         "it is built lazily on the first request that reads _state.WORLD (default "
@@ -61,8 +106,21 @@ async def _lifespan(_app: FastAPI):
         "Realm: For a smaller first boot, after the server is up run once: "
         "curl -X POST \"http://127.0.0.1:8000/dev/reset?scenario=frontier&seed=1\""
     )
-    yield
-    _log.info("Realm: API shutdown (lifespan end).")
+    task: asyncio.Task[None] | None = None
+    if interval > 0:
+        task = asyncio.create_task(_autosave_loop(interval))
+    else:
+        _log.info("Realm: autosave disabled (REALM_AUTOSAVE_SECONDS=0).")
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        _log.info("Realm: API shutdown (lifespan end).")
 
 
 app = FastAPI(title="Realm Engine", version="0.1.0", lifespan=_lifespan)

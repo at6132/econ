@@ -12,6 +12,8 @@ action function, return its result. No game logic in routes.
 
 from __future__ import annotations
 
+import logging
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -31,7 +33,7 @@ from realm.actions import (
     transfer_survey_report,
 )
 from realm.api import _state
-from realm.api.persistence import load_snapshot, save_snapshot
+from realm.api.persistence import load_snapshot, read_meta, save_snapshot
 from realm.code.lua_sandbox import eval_user_lua_chunk
 from realm.code.user_code import code_layer_public_status, validate_user_source
 from realm.contracts.social import (
@@ -76,6 +78,8 @@ from realm.world.tick import advance_tick
 
 router = APIRouter()
 
+_log = logging.getLogger("uvicorn.error")
+
 
 @router.post("/dev/reset")
 def dev_reset(
@@ -83,27 +87,95 @@ def dev_reset(
     scenario: Annotated[str, Query()] = "genesis",
 ) -> dict:
     """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive, genesis."""
-    # (was: global _state.WORLD; mutation now lives on _state.WORLD)
+    _log.info("Realm: POST /dev/reset received (scenario=%r seed=%s) — building world…", scenario, seed)
+    t0 = time.perf_counter()
     try:
         _state.WORLD = bootstrap_by_scenario(seed=seed, scenario=scenario)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    elapsed = time.perf_counter() - t0
+    _log.info(
+        "Realm: POST /dev/reset finished in %.1fs (scenario_id=%r tick=%s).",
+        elapsed,
+        _state.WORLD.scenario_id,
+        _state.WORLD.tick,
+    )
     return {"ok": True, "seed": seed, "scenario_id": _state.WORLD.scenario_id}
 
 
 @router.post("/persistence/save")
-def post_persistence_save(path: Annotated[str | None, Query()] = None) -> dict:
-    p = _state._save_path(path)
+def post_persistence_save(
+    path: Annotated[str | None, Query()] = None,
+    slot: Annotated[str | None, Query()] = None,
+) -> dict:
+    """Persist the current world to ``saves/<slot>.sqlite``.
+
+    Either ``slot`` (bare name, recommended) or ``path`` (relative to repo root,
+    must stay under ``saves/``) selects the target. Without either, writes the
+    default dev save (``saves/realm_dev.sqlite``).
+    """
+    try:
+        p = _state.safe_save_path(slot or path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    t0 = time.perf_counter()
     save_snapshot(str(p), _state.WORLD)
-    return {"ok": True, "path": str(p)}
+    _state.record_save(str(p), "manual")
+    _log.info(
+        "Realm: POST /persistence/save wrote %s in %.2fs (tick=%s).",
+        p.name,
+        time.perf_counter() - t0,
+        _state.WORLD.tick,
+    )
+    return {"ok": True, "path": p.relative_to(_state._REPO_ROOT).as_posix(), "tick": _state.WORLD.tick}
 
 
 @router.post("/persistence/load")
-def post_persistence_load(path: Annotated[str | None, Query()] = None) -> dict:
-    # (was: global _state.WORLD; mutation now lives on _state.WORLD)
-    p = _state._save_path(path)
+def post_persistence_load(
+    path: Annotated[str | None, Query()] = None,
+    slot: Annotated[str | None, Query()] = None,
+) -> dict:
+    try:
+        p = _state.safe_save_path(slot or path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     try:
         _state.WORLD = load_snapshot(str(p))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    return {"ok": True, "path": str(p), "tick": _state.WORLD.tick}
+    _log.info("Realm: POST /persistence/load read %s (tick=%s).", p.name, _state.WORLD.tick)
+    return {"ok": True, "path": p.relative_to(_state._REPO_ROOT).as_posix(), "tick": _state.WORLD.tick}
+
+
+@router.get("/persistence/list")
+def get_persistence_list() -> dict:
+    """List ``saves/*.sqlite`` for the Continue menu, enriched with tick/scenario/seed/saved_at."""
+    _state._SAVES_DIR.mkdir(parents=True, exist_ok=True)
+    slots: list[dict[str, object]] = []
+    for p in sorted(_state._SAVES_DIR.glob("*.sqlite"), key=lambda x: x.stat().st_mtime, reverse=True):
+        rel = p.relative_to(_state._REPO_ROOT).as_posix()
+        meta = read_meta(str(p))
+        slots.append(
+            {
+                "path": rel,
+                "name": p.stem,
+                "mtime": int(p.stat().st_mtime),
+                "tick": int(meta.get("tick", 0) or 0),
+                "scenario_id": str(meta.get("scenario_id", "")),
+                "seed": int(meta.get("seed", 0) or 0),
+                "saved_at": int(meta.get("saved_at", 0) or 0),
+                "size_bytes": int(p.stat().st_size),
+            }
+        )
+    return {"ok": True, "slots": slots}
+
+
+@router.get("/persistence/status")
+def get_persistence_status() -> dict:
+    """Return last-save info (manual or autosave) for the in-game HUD."""
+    info = _state.last_save_info()
+    info["world_initialized"] = _state.is_world_initialized()
+    info["autosave_seconds"] = int(getattr(_state, "AUTOSAVE_SECONDS", 0) or 0)
+    info["autosave_path"] = _state._AUTOSAVE_PATH.relative_to(_state._REPO_ROOT).as_posix()
+    info["ok"] = True
+    return info

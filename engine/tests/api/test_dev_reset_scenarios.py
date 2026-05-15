@@ -67,3 +67,69 @@ def test_dev_reset_defaults_to_genesis() -> None:
     assert r.json()["scenario_id"] == "genesis"
     assert _state.WORLD.scenario_id == "genesis"
     assert len(_state.WORLD.plots) == 192 * 144
+
+
+def test_persistence_list_returns_ok_and_slots() -> None:
+    c = TestClient(app)
+    r = c.get("/persistence/list")
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("ok") is True
+    assert isinstance(j.get("slots"), list)
+
+
+def test_persistence_save_load_roundtrip_with_meta(tmp_path, monkeypatch) -> None:
+    """Save → list → load preserves tick and exposes meta (scenario/seed/saved_at)."""
+    monkeypatch.setattr(_state, "_SAVES_DIR", tmp_path)
+    monkeypatch.setattr(_state, "_DEFAULT_SAVE_PATH", tmp_path / "realm_dev.sqlite")
+    monkeypatch.setattr(_state, "_AUTOSAVE_PATH", tmp_path / "autosave.sqlite")
+    monkeypatch.setattr(_state, "_REPO_ROOT", tmp_path.parent)
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 9, "scenario": "frontier"})
+    saved_tick = _state.WORLD.tick
+
+    rs = c.post("/persistence/save", params={"slot": "unit_test_slot"})
+    assert rs.status_code == 200
+    assert rs.json()["ok"] is True
+
+    rl = c.get("/persistence/list")
+    slots = rl.json()["slots"]
+    match = [s for s in slots if s["name"] == "unit_test_slot"]
+    assert match, f"slot not in list: {slots}"
+    meta = match[0]
+    assert meta["scenario_id"] == "frontier"
+    assert meta["seed"] == 9
+    assert meta["tick"] == saved_tick
+    assert meta["saved_at"] > 0
+
+    rld = c.post("/persistence/load", params={"slot": "unit_test_slot"})
+    assert rld.status_code == 200
+    assert rld.json()["ok"] is True
+    assert _state.WORLD.tick == saved_tick
+
+
+def test_persistence_save_rejects_path_outside_saves(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(_state, "_SAVES_DIR", tmp_path)
+    monkeypatch.setattr(_state, "_REPO_ROOT", tmp_path.parent)
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 1, "scenario": "frontier"})
+    r = c.post("/persistence/save", params={"path": "../escape.sqlite"})
+    assert r.status_code == 400
+
+
+def test_persistence_status_reports_last_save(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(_state, "_SAVES_DIR", tmp_path)
+    monkeypatch.setattr(_state, "_DEFAULT_SAVE_PATH", tmp_path / "realm_dev.sqlite")
+    monkeypatch.setattr(_state, "_AUTOSAVE_PATH", tmp_path / "autosave.sqlite")
+    monkeypatch.setattr(_state, "_REPO_ROOT", tmp_path.parent)
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 1, "scenario": "frontier"})
+    c.post("/persistence/save", params={"slot": "status_probe"})
+    s = c.get("/persistence/status").json()
+    assert s["ok"] is True
+    assert s["last_save_at"] > 0
+    assert s["last_save_kind"] == "manual"
+    assert s["world_initialized"] is True
