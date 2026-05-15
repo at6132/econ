@@ -21,15 +21,24 @@ REGION_GRID_DIM: int = 3
 """3 × 3 grid → 9 regions total."""
 
 
+_world_bounds_cache: dict[int, tuple[int, int]] = {}
+
+
 def _world_bounds(world: World) -> tuple[int, int]:
     """Return ``(width, height)`` derived from the maximum plot coordinates.
 
     Genesis worlds are dense rectangular grids, so the maximum ``x`` + 1
     and the maximum ``y`` + 1 are reliable bounds. Falls back to ``(1, 1)``
     when the world has no plots (cheap defensive default).
+
+    Result is cached by plot-count (the grid is fixed after generation).
     """
     if not world.plots:
         return (1, 1)
+    cache_key = id(world.plots)
+    cached = _world_bounds_cache.get(cache_key)
+    if cached is not None:
+        return cached
     max_x = 0
     max_y = 0
     for p in world.plots.values():
@@ -37,7 +46,9 @@ def _world_bounds(world: World) -> tuple[int, int]:
             max_x = p.x
         if p.y > max_y:
             max_y = p.y
-    return (max_x + 1, max_y + 1)
+    result = (max_x + 1, max_y + 1)
+    _world_bounds_cache[cache_key] = result
+    return result
 
 
 def region_for_coords(x: int, y: int, world_w: int, world_h: int) -> str:

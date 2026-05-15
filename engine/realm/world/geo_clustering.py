@@ -73,15 +73,20 @@ def _belt_field(seed: int, x: int, y: int, *, key: int, scale: float) -> float:
     return fbm(seed + key, x * scale, y * scale, 3)
 
 
+_iron_belt_angle_cache: dict[int, tuple[float, float]] = {}
+
+
 def mineral_bias_iron(seed: int, x: int, y: int) -> float:
     """Diagonal iron belt — high values trace an oblique band across the map."""
     base = _belt_field(seed, x, y, key=701, scale=0.045)
-    # Oblique component: project (x, y) onto a diagonal direction picked from the
-    # seed so the belt's orientation varies per world.
-    angle = (math.tau * fbm(seed + 731, 0.0, 0.0, 1))
-    proj = math.cos(angle) * x + math.sin(angle) * y
-    # Convert ``proj`` to a 0..1 strip indicator with a soft cosine profile.
-    period = 26.0  # ≈ a few tiles wider than POWER_COVERAGE_RADIUS
+    cached = _iron_belt_angle_cache.get(seed)
+    if cached is None:
+        angle = math.tau * fbm(seed + 731, 0.0, 0.0, 1)
+        cached = (math.cos(angle), math.sin(angle))
+        _iron_belt_angle_cache[seed] = cached
+    cos_a, sin_a = cached
+    proj = cos_a * x + sin_a * y
+    period = 26.0
     strip = 0.5 + 0.5 * math.cos(proj / period * math.tau)
     return min(1.0, 0.5 * base + 0.5 * strip)
 

@@ -13,9 +13,24 @@ import math
 from realm.core.rng import make_rng
 from realm.world.terrain import Terrain
 
+_n01_cache: dict[tuple[int, int, int], float] = {}
+
 
 def _n01(seed: int, ix: int, iy: int) -> float:
-    return make_rng(seed, f"sn:{ix}:{iy}").random()
+    key = (seed, ix, iy)
+    v = _n01_cache.get(key)
+    if v is not None:
+        return v
+    v = make_rng(seed, f"sn:{ix}:{iy}").random()
+    _n01_cache[key] = v
+    return v
+
+
+def clear_noise_cache() -> None:
+    """Release memory after worldgen completes."""
+    _n01_cache.clear()
+    _anchor_sites_cache.clear()
+    _inv_var_cache.clear()
 
 
 def _smooth(seed: int, fx: float, fy: float) -> float:
@@ -162,8 +177,14 @@ _CONTINENTAL_LAND_THRESHOLD: float = 0.25
 _CONTINENTAL_SHALLOW_THRESHOLD: float = 0.30
 
 
+_anchor_sites_cache: dict[int, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]] = {}
+
+
 def _continental_anchor_sites(seed: int) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
     """Three continent centers in normalized ``[0, 1]^2`` with deterministic jitter."""
+    cached = _anchor_sites_cache.get(seed)
+    if cached is not None:
+        return cached
 
     rng = make_rng(int(seed), "continental_anchor_jitter")
     jxa = rng.random() * 0.055 - 0.027
@@ -171,11 +192,13 @@ def _continental_anchor_sites(seed: int) -> tuple[tuple[float, float], tuple[flo
     jxb = rng.random() * 0.050 - 0.025
     jyb = rng.random() * 0.050 - 0.025
 
-    return (
+    result = (
         (0.185 + jxa, 0.255 + jya),
         (0.795 - jxb, 0.305 - jyb),
         (0.485 + jyb, 0.760 + jxa * 0.6),
     )
+    _anchor_sites_cache[seed] = result
+    return result
 
 
 def _continental_sigma_norm(width: int, height: int) -> float:
@@ -194,6 +217,9 @@ def _continental_sigma_norm(width: int, height: int) -> float:
     return 0.133 * scale
 
 
+_inv_var_cache: dict[tuple[int, int], float] = {}
+
+
 def _continental_core_field(seed: int, cx: float, cy: float, width: int, height: int) -> float:
     """Max of three Gaussian lobes → three disjoint land shells (ocean between).
 
@@ -209,9 +235,12 @@ def _continental_core_field(seed: int, cx: float, cy: float, width: int, height:
     ``width`` / ``height`` are the map size in plots (passed from
     :func:`_continental_mask`).
     """
-    sigma = _continental_sigma_norm(width, height)
-    sigma_sq = sigma * sigma
-    inv_var = 1.0 / sigma_sq
+    dim_key = (width, height)
+    inv_var = _inv_var_cache.get(dim_key)
+    if inv_var is None:
+        sigma = _continental_sigma_norm(width, height)
+        inv_var = 1.0 / (sigma * sigma)
+        _inv_var_cache[dim_key] = inv_var
     best = 0.0
     for ax, ay in _continental_anchor_sites(seed):
         dx = cx - ax

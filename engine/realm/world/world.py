@@ -11,7 +11,7 @@ from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
 from realm.materials import MaterialId
 from realm.production.recipes import recipe_public_list
-from realm.world.biome_noise import terrain_for_cell
+from realm.world.biome_noise import clear_noise_cache, terrain_for_cell
 from realm.core.rng import make_rng
 from realm.world.subsurface import SubsurfaceRoll, subsurface_roll
 from realm.world.terrain import Terrain
@@ -425,6 +425,7 @@ def generate_plots(
                 owner=None,
                 subsurface=subsurface,
             )
+    clear_noise_cache()
     return plots
 
 
