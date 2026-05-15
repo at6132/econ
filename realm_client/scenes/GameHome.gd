@@ -324,14 +324,28 @@ func _refresh_save_list() -> void:
 
 
 func _on_pick_save(relative_path: String) -> void:
-	_footer.text = "Loading…"
+	_footer.text = ""
+
+	# Show loading screen overlay
+	_creation_screen = CreationScreenScene.instantiate()
+	add_child(_creation_screen)
+	var display_name := relative_path.get_file().get_basename()
+	_creation_screen.open_load(display_name)
+	_creation_screen.creation_finished.connect(_on_creation_screen_done)
+
 	API.persistence_load_path(
 		relative_path,
 		func(data: Dictionary) -> void:
-			_footer.text = ""
 			if bool(data.get("ok", false)):
-				get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
+				if is_instance_valid(_creation_screen):
+					_creation_screen.mark_done()
+				else:
+					get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
 			else:
+				if is_instance_valid(_creation_screen):
+					_creation_screen.visible = false
+					_creation_screen.queue_free()
+					_creation_screen = null
 				_dialog.dialog_text = "Load failed: %s" % str(data)
 				_dialog.popup_centered()
 	)

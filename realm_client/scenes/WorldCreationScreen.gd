@@ -1,10 +1,10 @@
 extends Control
-## Full-screen loading overlay shown while bootstrap_genesis runs on the server.
+## Full-screen loading overlay shown during world creation or save loading.
 ## Animated globe visualization + progress stage text.
 
 signal creation_finished
 
-const STAGES: Array = [
+const CREATE_STAGES: Array = [
 	"Generating terrain fields",
 	"Rolling subsurface minerals",
 	"Computing landmasses",
@@ -15,7 +15,7 @@ const STAGES: Array = [
 	"Opening for business",
 ]
 
-const STAGE_DETAILS: Array = [
+const CREATE_DETAILS: Array = [
 	"Continental noise, coastlines, biome placement…",
 	"Iron belts, coal seams, copper highlands…",
 	"Continents, islands, islets classification…",
@@ -26,7 +26,25 @@ const STAGE_DETAILS: Array = [
 	"Final viability checks, recipe books…",
 ]
 
-var _scenario: String = "genesis"
+const LOAD_STAGES: Array = [
+	"Reading save file",
+	"Restoring world state",
+	"Rebuilding ledger",
+	"Reconstructing markets",
+	"Resuming simulation",
+]
+
+const LOAD_DETAILS: Array = [
+	"Loading snapshot from disk…",
+	"Plots, terrain, subsurface data…",
+	"Accounts, balances, transactions…",
+	"Order books, contracts, prices…",
+	"Agents, population, tick state…",
+]
+
+enum Mode { CREATE, LOAD }
+var _mode: int = Mode.CREATE
+var _subtitle: String = ""
 var _t: float = 0.0
 var _stage_idx: int = 0
 var _progress: float = 0.0
@@ -44,8 +62,26 @@ var _stage_timer: float = 0.0
 @onready var _globe: Control = $VBox/GlobeArea
 
 
+func _stages() -> Array:
+	return CREATE_STAGES if _mode == Mode.CREATE else LOAD_STAGES
+
+func _details() -> Array:
+	return CREATE_DETAILS if _mode == Mode.CREATE else LOAD_DETAILS
+
+
 func open(scenario: String) -> void:
-	_scenario = scenario
+	_mode = Mode.CREATE
+	_subtitle = scenario
+	_reset_state()
+
+
+func open_load(save_name: String) -> void:
+	_mode = Mode.LOAD
+	_subtitle = save_name
+	_reset_state()
+
+
+func _reset_state() -> void:
 	_stage_idx = 0
 	_progress = 0.0
 	_target_progress = 0.0
@@ -59,7 +95,7 @@ func open(scenario: String) -> void:
 
 func mark_done() -> void:
 	_done = true
-	_stage_idx = STAGES.size() - 1
+	_stage_idx = _stages().size() - 1
 	_target_progress = 1.0
 	_update_labels()
 
@@ -75,12 +111,14 @@ func _process(dt: float) -> void:
 		return
 	_t += dt
 
+	var stages := _stages()
 	if not _done:
+		var interval := 0.32 if _mode == Mode.CREATE else 0.2
 		_stage_timer += dt
-		if _stage_timer > 0.32 and _stage_idx < STAGES.size() - 1:
+		if _stage_timer > interval and _stage_idx < stages.size() - 1:
 			_stage_timer = 0.0
 			_stage_idx += 1
-			_target_progress = float(_stage_idx + 1) / float(STAGES.size()) * 0.92
+			_target_progress = float(_stage_idx + 1) / float(stages.size()) * 0.92
 			_update_labels()
 	else:
 		_done_delay += dt
@@ -96,17 +134,22 @@ func _process(dt: float) -> void:
 
 
 func _update_labels() -> void:
+	var stages := _stages()
+	var details := _details()
 	if _title_label:
-		_title_label.text = "CREATING WORLD"
+		_title_label.text = "CREATING WORLD" if _mode == Mode.CREATE else "LOADING WORLD"
 	if _scenario_label:
-		_scenario_label.text = "Scenario: %s" % _scenario
+		if _mode == Mode.CREATE:
+			_scenario_label.text = "Scenario: %s" % _subtitle
+		else:
+			_scenario_label.text = _subtitle
 	if _stage_label:
-		var txt: String = STAGES[_stage_idx] if _stage_idx < STAGES.size() else "Done"
+		var txt: String = stages[_stage_idx] if _stage_idx < stages.size() else "Done"
 		if _done:
-			txt = "World ready"
+			txt = "World ready" if _mode == Mode.CREATE else "Save loaded"
 		_stage_label.text = txt
 	if _detail_label:
-		var dtxt: String = STAGE_DETAILS[_stage_idx] if _stage_idx < STAGE_DETAILS.size() else ""
+		var dtxt: String = details[_stage_idx] if _stage_idx < details.size() else ""
 		if _done:
 			dtxt = "Entering simulation…"
 		_detail_label.text = dtxt
