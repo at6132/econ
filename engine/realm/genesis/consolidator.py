@@ -65,7 +65,7 @@ __all__ = [
 
 CONSOLIDATOR_PARTY_ID: Final[PartyId] = PartyId("kessler_industrial")
 CONSOLIDATOR_DISPLAY_NAME: Final[str] = "Kessler Industrial"
-CONSOLIDATOR_STARTING_CASH_CENTS: Final[int] = 80 * 100 * 100  # $80,000
+CONSOLIDATOR_STARTING_CASH_CENTS: Final[int] = 80_000 * 100  # $80,000
 
 # Strategy windows.
 _TICKS_PER_GAME_DAY: Final[int] = 1440
