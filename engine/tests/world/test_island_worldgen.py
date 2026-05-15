@@ -168,7 +168,10 @@ def test_inter_island_shipping_pays_2x_per_tile() -> None:
     inter_res = dispatch_shipment(w, player, MaterialId("coal"), 1, inter_a, inter_b)
     assert inter_res["ok"], inter_res
     assert inter_res["inter_island"] is True
-    assert inter_res["ocean_modifier_mult"] == 2
+    # Phase 10: base 2× inter-island open-ocean modifier stacks with
+    # ``landmass_pair_modifier`` (e.g. continent↔continent → 2×3 = 6).
+    assert int(inter_res["ocean_modifier_mult"]) >= 2
+    assert int(inter_res["ocean_modifier_mult"]) >= int(intra_res["ocean_modifier_mult"])
     # Inter-island fee must be strictly higher than intra-island for the same
     # ``dist``; with a 2× per-tile multiplier and finite base fee the inter
     # cost should be roughly 2× minus the unchanged base portion.

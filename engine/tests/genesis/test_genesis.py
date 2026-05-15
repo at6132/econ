@@ -54,9 +54,14 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         FRONTIER_ROADS_PARTY_ID,
         FRONTIER_ROADS_STARTING_CASH_CENTS,
     )
+    from realm.genesis.construction_firms import (
+        GENESIS_CONSTRUCTION_PARTY_ID,
+        STARTING_CASH_CENTS as GENESIS_CONSTRUCTION_STARTING_CASH_CENTS,
+    )
     from realm.genesis.shippers import NPC_SHIPPER_STARTING_CASH_CENTS
 
     n_shippers = sum(1 for k in w.parties if str(k).startswith("shipper_"))
+    n_genesis_construction = 1 if PartyId(GENESIS_CONSTRUCTION_PARTY_ID) in w.parties else 0
     n_consolidators = 1 if CONSOLIDATOR_PARTY_ID in w.parties else 0
     n_brokers = 1 if SURVEY_BROKER_PARTY_ID in w.parties else 0
     n_analytics = 1 if ANALYTICS_VENDOR_PARTY_ID in w.parties else 0
@@ -88,6 +93,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_arch_shippers * SHIPPER_STARTING_CASH_CENTS  # Sprint 5 Cross-Country
         + n_financiers * FINANCIER_STARTING_CASH_CENTS  # Sprint 5 Meridian
         + n_road_builders * FRONTIER_ROADS_STARTING_CASH_CENTS  # Sprint 6 Frontier Roads Co.
+        + n_genesis_construction * GENESIS_CONSTRUCTION_STARTING_CASH_CENTS  # Phase 10D NPC builder
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out
