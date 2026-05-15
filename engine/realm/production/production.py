@@ -691,6 +691,11 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        from realm.economy.business_viability import record_business_production_for_completed_run
+
+        record_business_production_for_completed_run(
+            world, run.party, run.plot_id, run.recipe_id, eff_out
+        )
         # Phase 8 — Sub-phase 8D: resource depletion. Mining recipes draw down
         # the relevant subsurface grade by a tiny amount per completion (a
         # ``mine_ore`` run at 100% efficiency depletes the grade by 0.001;

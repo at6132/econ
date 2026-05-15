@@ -179,6 +179,9 @@ def world_public_dict(world: "World") -> dict:
             (world.scenario_state.get("player_price_alerts") or [])
         ),
         "forward_contracts": _forward_contracts_public(world, PartyId("player")),
+        "business_entities": _business_entities_public(world),
+        "nascent_settlements": _nascent_settlements_public(world),
+        "chemistry_catalog": _chemistry_catalog_public(),
     }
 
 
@@ -231,6 +234,54 @@ def _business_registry_public(world: "World") -> dict[str, dict]:
             "registered_at_tick": int(rec.registered_at_tick),
         }
     return out
+
+
+def _business_entities_public(world: "World") -> list[dict]:
+    from realm.economy.businesses import BusinessEntity
+
+    out: list[dict] = []
+    for biz in world.businesses.values():
+        if not isinstance(biz, BusinessEntity):
+            continue
+        out.append(
+            {
+                "business_id": biz.business_id,
+                "owner_party": str(biz.owner_party),
+                "business_name": biz.business_name,
+                "business_type_tag": biz.business_type_tag,
+                "status": biz.status,
+                "registered_plot_ids": [str(p) for p in biz.registered_plot_ids],
+            }
+        )
+    out.sort(key=lambda r: r["business_id"])
+    return out
+
+
+def _nascent_settlements_public(world: "World") -> list[dict]:
+    from realm.population.nascent_settlements import NascentSettlement
+
+    out: list[dict] = []
+    for ns in world.nascent_settlements.values():
+        if not isinstance(ns, NascentSettlement):
+            continue
+        out.append(
+            {
+                "nascent_id": ns.nascent_id,
+                "island_id": ns.island_id,
+                "anchor_plot_id": str(ns.anchor_plot_id),
+                "member_plot_ids": [str(p) for p in ns.member_plot_ids],
+                "resident_count": ns.resident_count,
+                "consecutive_game_days": ns.consecutive_game_days,
+            }
+        )
+    out.sort(key=lambda r: r["nascent_id"])
+    return out
+
+
+def _chemistry_catalog_public() -> dict[str, int]:
+    from realm.science.chemistry import ELEMENT_SYMBOLS, REACTIONS_PUBLIC
+
+    return {"element_count": len(ELEMENT_SYMBOLS), "reaction_count": len(REACTIONS_PUBLIC)}
 
 
 def _intel_listings_public(world: "World") -> list[dict]:

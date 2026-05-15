@@ -79,6 +79,11 @@ def party_cash_account(party: PartyId) -> AccountId:
     return AccountId(f"cash:{party}")
 
 
+def business_cash_account(business_id: str) -> AccountId:
+    """Sub-ledger for a registered ``BusinessEntity`` (Phase 10C)."""
+    return AccountId(f"cash:biz:{business_id}")
+
+
 def system_reserve_account() -> AccountId:
     return AccountId("system:reserve")
 

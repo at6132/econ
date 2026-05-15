@@ -464,8 +464,94 @@ def post_business_register(body: Annotated[dict, Body()]) -> dict:
     description_raw = body.get("description") or ""
     if not isinstance(name_raw, str) or not name_raw:
         raise HTTPException(status_code=400, detail="name is required")
-    r = register_business(
-        _state.WORLD, PartyId(str(party_raw)), str(name_raw), str(description_raw)
+    template_raw = body.get("template_id")
+    plot_ids_raw = body.get("registered_plot_ids") or body.get("plot_ids")
+    if template_raw is not None:
+        if not isinstance(plot_ids_raw, list) or not plot_ids_raw:
+            raise HTTPException(
+                status_code=400,
+                detail="registered_plot_ids (non-empty list) required with template_id",
+            )
+        r = register_business(
+            _state.WORLD,
+            PartyId(str(party_raw)),
+            str(name_raw),
+            str(description_raw),
+            template_id=str(template_raw),
+            registered_plot_ids=tuple(str(x) for x in plot_ids_raw),
+        )
+    else:
+        r = register_business(
+            _state.WORLD, PartyId(str(party_raw)), str(name_raw), str(description_raw)
+        )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.post("/construction/quotes")
+def post_construction_quotes(body: Annotated[dict, Body()]) -> dict:
+    from realm.actions.construction_actions import request_construction_quotes
+
+    party_raw = body.get("party", "player")
+    plot_raw = body.get("plot_id")
+    building_raw = body.get("building_id")
+    mode = str(body.get("material_responsibility", "contractor"))
+    if not plot_raw or not building_raw:
+        raise HTTPException(status_code=400, detail="plot_id and building_id required")
+    rows = request_construction_quotes(
+        _state.WORLD,
+        PartyId(str(party_raw)),
+        PlotId(str(plot_raw)),
+        str(building_raw),
+        mode,
+    )
+    return {"ok": True, "tick": _state.WORLD.tick, "quotes": rows}
+
+
+@router.post("/construction/accept")
+def post_construction_accept(body: Annotated[dict, Body()]) -> dict:
+    from realm.actions.construction_actions import accept_construction_quote
+
+    r = accept_construction_quote(
+        _state.WORLD,
+        PartyId(str(body.get("client", "player"))),
+        PartyId(str(body.get("contractor"))),
+        PlotId(str(body.get("plot_id"))),
+        str(body.get("building_id", "")),
+        int(body.get("quoted_price_cents", 0)),
+        str(body.get("material_responsibility", "contractor")),
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.get("/science/chemistry")
+def get_science_chemistry() -> dict:
+    from realm.science import chemistry
+
+    return {
+        "ok": True,
+        "elements": list(chemistry.ELEMENT_SYMBOLS),
+        "reactions": chemistry.REACTIONS_PUBLIC,
+    }
+
+
+@router.post("/plots/{plot_id}/lab/bench")
+def post_lab_bench(
+    plot_id: str,
+    body: Annotated[dict, Body()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    from realm.actions.science_actions import run_laboratory_bench
+
+    r = run_laboratory_bench(
+        _state.WORLD,
+        PartyId(party),
+        PlotId(plot_id),
+        str(body.get("material_a", "")),
+        str(body.get("material_b", "")),
     )
     if not r.get("ok"):
         raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))

@@ -37,6 +37,9 @@ from realm.population.employment import tick_job_market, tick_laborer_wages
 from realm.population.laborers import tick_laborer_births, tick_laborers
 from realm.events.sprint4_feed import tick_sprint4_feed
 from realm.population.stores import tick_laborer_spending
+from realm.actions.construction_actions import tick_construction_firms, tick_construction_orders
+from realm.economy.business_viability import tick_business_viability
+from realm.population.nascent_settlements import tick_nascent_settlements
 from realm.world import World
 
 
@@ -87,6 +90,10 @@ def advance_tick(world: World) -> None:
         # post real B2B grain buy orders against surplus islands. Runs
         # after spending so the day's consumption already drained stores.
         tick_inter_island_buy_orders(world)
+    tick_construction_orders(world)
+    tick_construction_firms(world)
+    tick_business_viability(world)
+    tick_nascent_settlements(world)
     record_market_snapshot(world)
     # Phase 8 — Sub-phase 8D: price panic detection, credit crunch toggle,
     # route blockage lazy-expiry. Reads the snapshot we just recorded.

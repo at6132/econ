@@ -31,7 +31,7 @@ from realm.world import (
 from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 12
+SNAPSHOT_VERSION = 13
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -276,12 +276,43 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for op in world.job_openings
         ],
+        "next_business_seq": int(world.next_business_seq),
+        "business_entities": [
+            {
+                "business_id": ent.business_id,
+                "owner_party": str(ent.owner_party),
+                "business_name": ent.business_name,
+                "business_type_tag": ent.business_type_tag,
+                "description": ent.description,
+                "registered_at_tick": int(ent.registered_at_tick),
+                "registered_plot_ids": [str(p) for p in ent.registered_plot_ids],
+                "sub_account_label": ent.sub_account_label,
+                "status": ent.status,
+                "suspension_reason": ent.suspension_reason,
+                "public_profile": bool(ent.public_profile),
+                "last_viability_check_tick": int(ent.last_viability_check_tick),
+            }
+            for ent in world.businesses.values()
+        ],
+        "next_nascent_settlement_seq": int(world.next_nascent_settlement_seq),
+        "nascent_settlements": [
+            {
+                "nascent_id": ns.nascent_id,
+                "island_id": int(ns.island_id),
+                "anchor_plot_id": str(ns.anchor_plot_id),
+                "member_plot_ids": [str(p) for p in ns.member_plot_ids],
+                "resident_count": int(ns.resident_count),
+                "consecutive_game_days": int(ns.consecutive_game_days),
+                "last_checked_tick": int(ns.last_checked_tick),
+            }
+            for ns in world.nascent_settlements.values()
+        ],
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -542,6 +573,57 @@ def load_world(d: dict[str, Any]) -> World:
                         str(payload["filled_by"]) if payload.get("filled_by") else None
                     ),
                 )
+            )
+    world.next_business_seq = int(d.get("next_business_seq", 0))
+    raw_biz = d.get("business_entities") or []
+    if isinstance(raw_biz, list):
+        from realm.economy.businesses import BusinessEntity
+
+        for payload in raw_biz:
+            if not isinstance(payload, dict):
+                continue
+            bid = str(payload.get("business_id", ""))
+            if not bid:
+                continue
+            plots_raw = payload.get("registered_plot_ids") or []
+            world.businesses[bid] = BusinessEntity(
+                business_id=bid,
+                owner_party=PartyId(str(payload.get("owner_party", ""))),
+                business_name=str(payload.get("business_name", "")),
+                business_type_tag=str(payload.get("business_type_tag", "")),
+                description=str(payload.get("description", "")),
+                registered_at_tick=int(payload.get("registered_at_tick", 0)),
+                registered_plot_ids=tuple(PlotId(str(p)) for p in plots_raw),
+                sub_account_label=str(payload.get("sub_account_label", "main")),
+                status=str(payload.get("status", "active")),
+                suspension_reason=(
+                    str(payload["suspension_reason"])
+                    if payload.get("suspension_reason")
+                    else None
+                ),
+                public_profile=bool(payload.get("public_profile", True)),
+                last_viability_check_tick=int(payload.get("last_viability_check_tick", 0)),
+            )
+    world.next_nascent_settlement_seq = int(d.get("next_nascent_settlement_seq", 0))
+    raw_ns = d.get("nascent_settlements") or []
+    if isinstance(raw_ns, list):
+        from realm.population.nascent_settlements import NascentSettlement
+
+        for payload in raw_ns:
+            if not isinstance(payload, dict):
+                continue
+            nid = str(payload.get("nascent_id", ""))
+            if not nid:
+                continue
+            mem = payload.get("member_plot_ids") or []
+            world.nascent_settlements[nid] = NascentSettlement(
+                nascent_id=nid,
+                island_id=int(payload.get("island_id", 0)),
+                anchor_plot_id=PlotId(str(payload.get("anchor_plot_id", ""))),
+                member_plot_ids=tuple(PlotId(str(p)) for p in mem),
+                resident_count=int(payload.get("resident_count", 0)),
+                consecutive_game_days=int(payload.get("consecutive_game_days", 0)),
+                last_checked_tick=int(payload.get("last_checked_tick", 0)),
             )
     for store_field in ("store_inventories", "store_prices"):
         raw_store = d.get(store_field) or {}

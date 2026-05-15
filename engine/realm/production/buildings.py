@@ -286,6 +286,15 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"lumber": 4, "brick": 2, "glass": 2, "timber": 2},
         "turnkey_total_cents": 120_000,
     },
+    "laboratory": {
+        "kind": "contracted",
+        "label": "Laboratory (chemistry experiments)",
+        "self_shell_cents": 70_000,
+        "self_contractor_fee_cents": 28_000,
+        "self_materials": {"lumber": 4, "brick": 4, "glass": 4, "timber": 2},
+        "turnkey_total_cents": 150_000,
+        "labor_days": 4,
+    },
     # Phase 9A — Shipyard. Coastal-only; runs the build_cargo_vessel recipe.
     # Without a shipyard the only path to vessels is the bootstrap stockpile
     # at genesis_exchange (Sprint 2 seeded 20 vessels) — a real economy needs
@@ -380,6 +389,7 @@ def build_on_plot(
     plot_id: PlotId,
     building_id: str,
     build_mode: str | None = None,
+    construction_order_id: str | None = None,
 ) -> dict:
     """
     Place a structure: simple buildings pay ``cost_cents``; contracted workshops need
@@ -392,7 +402,17 @@ def build_on_plot(
     plot = world.plots.get(plot_id)
     if plot is None:
         return {"ok": False, "reason": "unknown plot"}
-    if plot.owner != party:
+    if construction_order_id is not None:
+        from realm.actions.construction_actions import (
+            validate_construction_order_for_contractor_build,
+        )
+
+        ok_co, reason_co = validate_construction_order_for_contractor_build(
+            world, party, plot_id, building_id, construction_order_id
+        )
+        if not ok_co:
+            return {"ok": False, "reason": reason_co or "invalid construction order"}
+    elif plot.owner != party:
         return {"ok": False, "reason": "not your plot"}
     terrain_req = spec.get("terrain_required")
     if terrain_req:
@@ -422,14 +442,15 @@ def build_on_plot(
     else:
         if build_mode not in ("self_contract", "turnkey"):
             return {"ok": False, "reason": "build_mode required: self_contract or turnkey"}
-        shell = int(spec["self_shell_cents"])
-        fee = int(spec["self_contractor_fee_cents"])
-        mats_raw = spec.get("self_materials") or {}
-        mats: dict[str, int] = {str(k): int(v) for k, v in mats_raw.items()}
-        turnkey = int(spec["turnkey_total_cents"])
-        if build_mode == "turnkey":
-            # Turnkey: same physical ``self_materials`` must leave the builder's inventory before
-            # the turnkey cash fee (site is stocked; the fee covers labour / contractor margin).
+        if construction_order_id is not None:
+            if build_mode != "self_contract":
+                return {"ok": False, "reason": "construction orders use self_contract path"}
+            total_cents = 0
+            mode_out = "construction_order"
+        elif build_mode == "turnkey":
+            mats_raw = spec.get("self_materials") or {}
+            mats: dict[str, int] = {str(k): int(v) for k, v in mats_raw.items()}
+            turnkey = int(spec["turnkey_total_cents"])
             total_cents = turnkey
             mode_out = "turnkey"
             if world.ledger.balance(cash) < total_cents:
@@ -448,6 +469,10 @@ def build_on_plot(
                 if isinstance(rm, MatterErr):
                     return {"ok": False, "reason": rm.reason}
         else:
+            shell = int(spec["self_shell_cents"])
+            fee = int(spec["self_contractor_fee_cents"])
+            mats_raw = spec.get("self_materials") or {}
+            mats = {str(k): int(v) for k, v in mats_raw.items()}
             total_cents = shell + fee
             mode_out = "self_contract"
             if world.ledger.balance(cash) < total_cents:
@@ -462,13 +487,19 @@ def build_on_plot(
                 if isinstance(rm, MatterErr):
                     return {"ok": False, "reason": rm.reason}
 
-    pay = world.ledger.transfer(
-        debit=cash,
-        credit=system_reserve_account(),
-        amount_cents=total_cents,
+    if total_cents > 0:
+        pay = world.ledger.transfer(
+            debit=cash,
+            credit=system_reserve_account(),
+            amount_cents=total_cents,
+        )
+        if isinstance(pay, MoneyErr):
+            return {"ok": False, "reason": pay.reason}
+    building_party = (
+        plot.owner
+        if construction_order_id is not None and plot.owner is not None
+        else party
     )
-    if isinstance(pay, MoneyErr):
-        return {"ok": False, "reason": pay.reason}
     world.next_building_instance_seq += 1
     instance_id = f"b{world.next_building_instance_seq:06d}"
     completes_at = world.tick + (BUILD_SIMPLE_TICKS if kind == "simple" else BUILD_CONTRACTED_TICKS)
@@ -477,7 +508,7 @@ def build_on_plot(
             "instance_id": instance_id,
             "condition_bps": BUILDING_CONDITION_FULL_BPS,
             "plot_id": str(plot_id),
-            "party": str(party),
+            "party": str(building_party),
             "building_id": building_id,
             "label": label,
             "cost_cents": total_cents,
@@ -499,7 +530,7 @@ def build_on_plot(
         world,
         "build",
         f"{party} built {label} on {plot_id} ({mode_out}) for ${total_cents / 100:.2f}",
-        party=str(party),
+        party=str(building_party),
         plot_id=str(plot_id),
         building_id=building_id,
         cost_cents=total_cents,
@@ -511,6 +542,9 @@ def build_on_plot(
         from realm.population.towns import on_residence_built
 
         on_residence_built(world, plot_id)
+        from realm.population.nascent_settlements import on_residence_built_nascent
+
+        on_residence_built_nascent(world, plot_id)
     if building_id == "store":
         # Phase 7D — register this plot with its town's store list so
         # ``tick_laborer_spending`` can find it. Town must already exist

@@ -750,6 +750,9 @@ def bootstrap_genesis(
         world.scenario_state["starting_job_market"] = {
             str(k): int(v) for k, v in employment_seed.items()
         }
+    from realm.genesis.construction_firms import seed_genesis_construction_firm
+
+    seed_genesis_construction_firm(world)
     # Phase 10A — viability enforcement. After all bootstrap seeding runs,
     # ensure every continent has a baseline laborer count. Smaller-grid
     # worlds (legacy four-island) skip this step so existing tests stay
