@@ -6,7 +6,7 @@
 script = ExtResource("1_wm")
 
 [node name="Camera2D" type="Camera2D" parent="."]
-position_smoothing_enabled = true
+position_smoothing_enabled = false
 
 [node name="MarkersLayer" type="Node2D" parent="."]
 

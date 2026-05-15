@@ -1,19 +1,26 @@
 extends Node2D
-## Organic jittered mesh map (visual parity with web ``RealmMapMeshPixi``).
+## Organic jittered mesh map — Google Maps–style 4-level LOD + parity with web ``RealmMapMeshPixi``.
 
-const CELL_PX_MAX := 32.0
-const CELL_PX_MIN := 4.5
-## Multiply fit-to-view zoom so tiles read larger on screen (tune 1.0–2.0).
-const DEFAULT_VIEW_ZOOM_BOOST := 1.4
+const WORLD_CELL_PX := 28.0
+## World-space jitter amplitude derives from cell size (``MapOrganicMesh``).
 const MESH_PAD := 12.0
+## Zoom limits are **relative to `_fit_ref_zoom`** (the zoom that fits the whole mesh).
+## Absolute caps broke medium worlds: `clamp(..., ZOOM_MAX)` capped **every** save at 128× zoom,
+## so a comfortable overview (`_fit_ref_zoom` ~2–8) could never zoom in past ~128× world units.
+const FIT_ZOOM_EPS := 1e-9
+const ZOOM_RELATIVE_MIN := 0.05
+## Enough headroom to multiply tiny overview zooms up to street-level; bounded below by hard max.
+const ZOOM_RELATIVE_MAX := 65536.0
+const CAM_ZOOM_ABS_MAX := 8192.0
+const WHEEL_ZOOM_STEP := 1.18
 const DEMO_SEED := 42
 const DEMO_W := 48
 const DEMO_H := 36
-## Overview vs plot-level detail: when each cell is narrower than this on screen (in **pixels**),
-## hide per-plot strokes and draw settlement-level chrome only (town bounds, nascent rings).
-## Scales with zoom like Google Maps. Raise to show plot edges only when more zoomed in.
-const DETAIL_MIN_CELL_SCREEN_PX := 14.0
-## Future LOD hooks: add another threshold above to drop labels/owner fills, simplify terrain, etc.
+
+# ── LOD thresholds (cell pixels on screen: mesh cell × camera zoom) ─────────
+const LOD_CONTINENT_MAX := 3.5
+const LOD_ISLAND_MAX := 14.0
+const LOD_REGION_MAX := 32.0
 
 signal plot_clicked(plot_id: String, plot_data: Dictionary)
 
@@ -28,14 +35,35 @@ var _did_fit_camera: bool = false
 
 var _demo_mode: bool = false
 var _view_size: Vector2 = Vector2(1200, 700)
+## Grid bounds used for the current ``_mesh``; rebuild when this changes.
+var _last_mesh_bounds: Vector2i = Vector2i(-1, -1)
+## ``apply_world`` emits ``world_updated`` during ``_on_world_loaded``; skip duplicate rebuild/fit.
+var _loading_world: bool = false
+## Last zoom from `_fit_camera_to_mesh` (full map in view). Wheel clamps are multiples of this.
+var _fit_ref_zoom: float = 1.0
+## Authoritative uniform zoom; kept in sync with `camera.zoom`.
+var _cam_zoom: float = 1.0
+## plot_id → building count (from ``WorldState.plot_buildings``; rebuilt on world updates).
+var _plot_building_counts: Dictionary = {}
+## Cached visible-plot range (grid col/row bounds) — recalculated per draw.
+var _vis_min_x: int = 0
+var _vis_max_x: int = 0
+var _vis_min_y: int = 0
+var _vis_max_y: int = 0
 
 
 func set_view_size(sz: Vector2) -> void:
+	var prev := _view_size
+	var prev_ok := prev.x > 32.0 and prev.y > 32.0
 	_view_size = sz
-	if WorldState.plots.size() > 0 or _demo_mode:
-		_rebuild_mesh()
-		queue_redraw()
-	_fit_camera_to_mesh()
+	# SubViewport size follows shell layout — scale camera zoom so framing stays stable.
+	# Do **not** rebuild mesh from viewport (that erased wheel-zoom) or refit (that reset pan/zoom).
+	if prev_ok and _did_fit_camera:
+		var rf := minf(sz.x / maxf(prev.x, 1.0), sz.y / maxf(prev.y, 1.0))
+		_cam_zoom = maxf(_cam_zoom * rf, FIT_ZOOM_EPS)
+		_clamp_cam_zoom()
+		_sync_camera_zoom()
+	queue_redraw()
 
 
 func reset_view() -> void:
@@ -45,11 +73,14 @@ func reset_view() -> void:
 func _ready() -> void:
 	camera.enabled = true
 	camera.make_current()
+	# Smoothing lags behind zoom/pivot corrections and breaks zoom-to-cursor inside SubViewport.
+	camera.position_smoothing_enabled = false
 	WorldState.world_updated.connect(_on_world_updated)
 	API.get_world(_on_world_loaded)
 
 
 func _on_world_loaded(data: Dictionary) -> void:
+	_loading_world = true
 	if not data.is_empty():
 		WorldState.apply_world(data)
 		_world_seed = int(data.get("seed", DEMO_SEED))
@@ -66,17 +97,35 @@ func _on_world_loaded(data: Dictionary) -> void:
 		WorldState.world_seed = DEMO_SEED
 		WorldState.world_updated.emit()
 	_rebuild_mesh()
+	_rebuild_building_cache()
 	_fit_camera_to_mesh()
+	_loading_world = false
 	queue_redraw()
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 
 
 func _on_world_updated() -> void:
+	if _loading_world:
+		return
 	if WorldState.plots.is_empty():
 		return
-	_rebuild_mesh()
+	_rebuild_building_cache()
+	var bounds_now := _grid_bounds()
+	if bounds_now != _last_mesh_bounds:
+		_rebuild_mesh()
+		call_deferred("_fit_camera_to_mesh")
 	queue_redraw()
-	call_deferred("_fit_camera_to_mesh")
+
+
+func _rebuild_building_cache() -> void:
+	_plot_building_counts.clear()
+	for row in WorldState.plot_buildings:
+		if not (row is Dictionary):
+			continue
+		var pid := str((row as Dictionary).get("plot_id", ""))
+		if pid.is_empty():
+			continue
+		_plot_building_counts[pid] = int(_plot_building_counts.get(pid, 0)) + 1
 
 
 func _seed_demo_plots() -> void:
@@ -124,23 +173,10 @@ func _grid_bounds() -> Vector2i:
 	return Vector2i(mw, mh)
 
 
-func _cell_px_for_bounds(gw: int, gh: int) -> float:
-	var vp := _view_size
-	if vp.x < 32.0 or vp.y < 32.0:
-		return CELL_PX_MAX * 0.5
-	var margin := 56.0
-	var inner_x := maxf(80.0, vp.x - margin)
-	var inner_y := maxf(80.0, vp.y - margin)
-	var pad_total := MESH_PAD * 2.0
-	var cw := (inner_x - pad_total) / float(maxi(1, gw))
-	var ch := (inner_y - pad_total) / float(maxi(1, gh))
-	return clampf(minf(cw, ch), CELL_PX_MIN, CELL_PX_MAX)
-
-
 func _rebuild_mesh() -> void:
 	var bounds := _grid_bounds()
-	var px := _cell_px_for_bounds(bounds.x, bounds.y)
-	_mesh = MapOrganicMesh.new(_world_seed, bounds.x, bounds.y, MESH_PAD, px)
+	_mesh = MapOrganicMesh.new(_world_seed, bounds.x, bounds.y, MESH_PAD, WORLD_CELL_PX)
+	_last_mesh_bounds = bounds
 
 
 func _fit_camera_to_mesh() -> void:
@@ -154,47 +190,97 @@ func _fit_camera_to_mesh() -> void:
 	var margin := 32.0
 	var zx := (vp.x - margin) / content.x
 	var zy := (vp.y - margin) / content.y
-	var z: float = clampf(minf(zx, zy) * DEFAULT_VIEW_ZOOM_BOOST, 0.35, 4.5)
-	camera.zoom = Vector2(z, z)
+	var z_fit: float = maxf(minf(zx, zy), FIT_ZOOM_EPS)
+	_fit_ref_zoom = z_fit
+	_cam_zoom = z_fit
+	_sync_camera_zoom()
 	camera.position = content * 0.5
 	_did_fit_camera = true
 	queue_redraw()
 
 
+func _clamp_cam_zoom() -> void:
+	var z_min := _fit_ref_zoom * ZOOM_RELATIVE_MIN
+	var z_max := minf(_fit_ref_zoom * ZOOM_RELATIVE_MAX, CAM_ZOOM_ABS_MAX)
+	_cam_zoom = clampf(_cam_zoom, z_min, z_max)
+
+
+func _sync_camera_zoom() -> void:
+	camera.zoom = Vector2(_cam_zoom, _cam_zoom)
+
+
 func _draw() -> void:
 	if _mesh == null:
 		return
-	# Deep void behind mesh
 	draw_rect(Rect2(0, 0, _mesh.content_width, _mesh.content_height), RealmColors.BG2)
-	var sorted: Array = []
-	for plot_id in WorldState.plots.keys():
-		var p: Dictionary = WorldState.plots[plot_id]
-		sorted.append(p)
-	sorted.sort_custom(func(a: Variant, b: Variant) -> bool:
-		var ad: Dictionary = a as Dictionary
-		var bd: Dictionary = b as Dictionary
-		var asel := str(ad.get("id", "")) == _selected_plot_id
-		var bsel := str(bd.get("id", "")) == _selected_plot_id
-		if asel != bsel:
-			return not asel
-		return int(ad.get("y", 0)) < int(bd.get("y", 0))
-	)
-	var detail := _use_plot_detail()
-	for item in sorted:
-		_draw_plot(item as Dictionary, detail)
-	if not detail:
-		_draw_overview_settlement_chrome()
+
+	var lod := _lod()
+	var csp := _cell_screen_px()
+	_compute_visible_range()
+
+	# Draw terrain for visible plots only (frustum culled)
+	for gy in range(_vis_min_y, _vis_max_y):
+		for gx in range(_vis_min_x, _vis_max_x):
+			var pid := "p-%d-%d" % [gx, gy]
+			if _demo_mode:
+				pid = "demo-%d-%d" % [gx, gy]
+			var p: Dictionary = WorldState.plots.get(pid, {})
+			if p.is_empty():
+				continue
+			_draw_terrain(p, lod)
+
+	# Draw selected plot on top (if visible)
+	if not _selected_plot_id.is_empty():
+		var sp: Dictionary = WorldState.plots.get(_selected_plot_id, {})
+		if not sp.is_empty():
+			_draw_terrain(sp, lod)
+
+	if lod == 0:
+		_draw_town_dots()
+		return
+
+	_draw_town_chrome(lod, csp)
+
+	if lod >= 2:
+		_draw_building_dots()
+
+	if lod >= 3:
+		_draw_plot_detail_labels()
 
 
-func _use_plot_detail() -> bool:
+func _compute_visible_range() -> void:
+	var z := maxf(camera.zoom.x, 0.001)
+	var half_view := _view_size * 0.5 / z
+	var cam_pos := camera.position
+	var world_min := cam_pos - half_view
+	var world_max := cam_pos + half_view
+	var bounds := _last_mesh_bounds
+	_vis_min_x = maxi(0, int((world_min.x - _mesh.pad) / _mesh.cell_px) - 1)
+	_vis_min_y = maxi(0, int((world_min.y - _mesh.pad) / _mesh.cell_px) - 1)
+	_vis_max_x = mini(bounds.x, int((world_max.x - _mesh.pad) / _mesh.cell_px) + 2)
+	_vis_max_y = mini(bounds.y, int((world_max.y - _mesh.pad) / _mesh.cell_px) + 2)
+
+
+func _cell_screen_px() -> float:
 	if _mesh == null:
-		return true
-	var cell_screen: float = _mesh.cell_px * camera.zoom.x
-	return cell_screen >= DETAIL_MIN_CELL_SCREEN_PX
+		return 0.0
+	return _mesh.cell_px * camera.zoom.x
 
 
-func _world_line_width_screen_px(px: float) -> float:
-	return px / maxf(0.001, camera.zoom.x)
+## Returns 0=CONTINENT, 1=ISLAND, 2=REGION, 3=PLOT
+func _lod() -> int:
+	var csp := _cell_screen_px()
+	if csp < LOD_CONTINENT_MAX:
+		return 0
+	if csp < LOD_ISLAND_MAX:
+		return 1
+	if csp < LOD_REGION_MAX:
+		return 2
+	return 3
+
+
+func _world_line_width(screen_px: float) -> float:
+	return screen_px / maxf(0.001, camera.zoom.x)
 
 
 func _town_bounds_poly(minx: int, miny: int, maxx: int, maxy: int) -> PackedVector2Array:
@@ -205,14 +291,97 @@ func _town_bounds_poly(minx: int, miny: int, maxx: int, maxy: int) -> PackedVect
 	return PackedVector2Array([p00, p10, p11, p01])
 
 
-func _draw_overview_settlement_chrome() -> void:
-	var outline_w := _world_line_width_screen_px(2.0)
-	var accent := RealmColors.ACCENT
-	accent.a = 0.62
+func _draw_terrain(p: Dictionary, lod: int) -> void:
+	var gx := int(p.get("x", 0))
+	var gy := int(p.get("y", 0))
+	var poly := _mesh.plot_polygon(gx, gy)
+	var terrain: String = str(p.get("terrain", "plains"))
+	var fill: Color = RealmColors.terrain_color(terrain)
+	if bool(p.get("surveyed", false)):
+		fill = fill.lightened(0.06)
+	if p.get("powered", true) == false:
+		fill = fill.darkened(0.22)
+	var pts := PackedVector2Array([poly[0], poly[1], poly[2], poly[3]])
+	draw_colored_polygon(pts, fill)
+
+	var owner_v: Variant = p.get("owner", null)
+	if lod >= 2 and owner_v != null:
+		var tint := MapHash.owner_tint_color(str(owner_v))
+		if tint.a > 0.01:
+			draw_colored_polygon(pts, tint)
+
+	var pid := str(p.get("id", ""))
+	var is_sel := pid == _selected_plot_id
+	var is_mine := str(owner_v) == WorldState.party_id
+
+	if lod <= 1:
+		if is_sel:
+			var sc := RealmColors.ACCENT
+			var sw := _world_line_width(3.5)
+			draw_polyline(pts, sc, sw, true)
+			draw_line(pts[3], pts[0], sc, sw)
+		return
+
+	var stroke_w := _world_line_width(1.0)
+	var stroke_c := Color(0, 0, 0, 0.38)
+	if is_sel:
+		stroke_c = RealmColors.ACCENT
+		stroke_w = _world_line_width(3.5)
+	elif is_mine:
+		stroke_c = RealmColors.MAGIC
+		stroke_c.a = 0.55
+		stroke_w = _world_line_width(1.5)
+	elif owner_v != null:
+		stroke_c = MapHash.owner_accent_color(str(owner_v))
+		stroke_c.a = 0.5
+		stroke_w = _world_line_width(1.25)
+	draw_polyline(pts, stroke_c, stroke_w, true)
+	draw_line(pts[3], pts[0], stroke_c, stroke_w)
+
+	if lod >= 3 and is_mine and not is_sel:
+		var ctr := _mesh.plot_centroid(gx, gy)
+		var r := (_mesh.cell_px * 0.28)
+		var ring_c := RealmColors.MAGIC
+		ring_c.a = 0.35
+		draw_arc(ctr, r, 0.0, TAU, 20, ring_c, _world_line_width(1.0))
+
+
+func _draw_town_dots() -> void:
+	var dot_r := _world_line_width(1.5)
 	for t in WorldState.towns:
 		if not (t is Dictionary):
 			continue
 		var td: Dictionary = t as Dictionary
+		var cx: int = int(td.get("center_x", -1))
+		var cy: int = int(td.get("center_y", -1))
+		if cx < 0 or cy < 0:
+			continue
+		if cx < _vis_min_x or cx >= _vis_max_x or cy < _vis_min_y or cy >= _vis_max_y:
+			continue
+		var ctr := _mesh.plot_centroid(cx, cy)
+		draw_circle(ctr, dot_r, RealmColors.ACCENT)
+
+
+func _draw_town_chrome(lod: int, csp: float) -> void:
+	var outline_w := _world_line_width(2.0)
+	var accent := RealmColors.ACCENT
+	accent.a = 0.62
+
+	var label_alpha := clampf((csp - 6.0) / 8.0, 0.0, 1.0)
+	var font: Font = RealmFonts.font_body
+
+	for t in WorldState.towns:
+		if not (t is Dictionary):
+			continue
+		var td: Dictionary = t as Dictionary
+		var cx: int = int(td.get("center_x", -1))
+		var cy: int = int(td.get("center_y", -1))
+		if cx < 0 or cy < 0:
+			continue
+		if cx < _vis_min_x - 5 or cx >= _vis_max_x + 5 or cy < _vis_min_y - 5 or cy >= _vis_max_y + 5:
+			continue
+		var ctr := _mesh.plot_centroid(cx, cy)
+
 		if td.has("bound_min_x"):
 			var poly := _town_bounds_poly(
 				int(td["bound_min_x"]),
@@ -223,57 +392,106 @@ func _draw_overview_settlement_chrome() -> void:
 			draw_polyline(poly, accent, outline_w, true)
 			draw_line(poly[poly.size() - 1], poly[0], accent, outline_w)
 		else:
-			var cx: int = int(td.get("center_x", -1))
-			var cy: int = int(td.get("center_y", -1))
-			if cx < 0 or cy < 0:
-				continue
-			var ctr := _mesh.plot_centroid(cx, cy)
 			var r := 6.0 / maxf(0.001, camera.zoom.x)
 			draw_arc(ctr, r, 0.0, TAU, 36, accent, maxf(outline_w, 1.0), true)
 
+		if font != null and label_alpha > 0.05:
+			var town_name: String = str(td.get("name", "Town"))
+			var pop: int = int(td.get("laborer_count", 0))
+			var label_text := town_name
+			if lod >= 2 and pop > 0:
+				label_text = "%s  (%d)" % [town_name, pop]
+			var font_size_world := clampi(int(_world_line_width(14.0)), 8, 24)
+			var sz := font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size_world)
+			var label_col := RealmColors.ACCENT
+			label_col.a = label_alpha
+			var label_pos := ctr + Vector2(-sz.x * 0.5, -_world_line_width(10.0))
+			draw_string(font, label_pos, label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size_world, label_col)
 
-func _draw_plot(p: Dictionary, detail: bool) -> void:
-	var gx := int(p.get("x", 0))
-	var gy := int(p.get("y", 0))
-	var poly := _mesh.plot_polygon(gx, gy)
-	var terrain: String = str(p.get("terrain", "plains"))
-	var fill: Color = RealmColors.terrain_color(terrain)
-	if bool(p.get("surveyed", false)):
-		fill = fill.lightened(0.06)
-	if p.get("powered", true) == false:
-		fill = fill.darkened(0.22)
-	var pts: PackedVector2Array = PackedVector2Array([poly[0], poly[1], poly[2], poly[3]])
-	draw_colored_polygon(pts, fill)
-	var owner_v: Variant = p.get("owner", null)
-	if owner_v != null:
-		var tint := MapHash.owner_tint_color(str(owner_v))
-		if tint.a > 0.01:
-			draw_colored_polygon(pts, tint)
-	var pid := str(p.get("id", ""))
-	var is_sel := pid == _selected_plot_id
-	if not detail:
-		if is_sel:
-			var sc := RealmColors.ACCENT
-			var sw := _world_line_width_screen_px(3.5)
-			draw_polyline(pts, sc, sw, true)
-			draw_line(pts[3], pts[0], sc, sw)
+
+func _draw_building_dots() -> void:
+	var dot_r := _world_line_width(2.5)
+	for plot_id in _plot_building_counts:
+		var p: Dictionary = WorldState.plots.get(plot_id, {})
+		if p.is_empty():
+			continue
+		var gx := int(p.get("x", 0))
+		var gy := int(p.get("y", 0))
+		if gx < _vis_min_x or gx >= _vis_max_x or gy < _vis_min_y or gy >= _vis_max_y:
+			continue
+		var ctr := _mesh.plot_centroid(gx, gy)
+		var owner_v: Variant = p.get("owner", null)
+		var is_mine := str(owner_v) == WorldState.party_id
+		var dot_col := RealmColors.ACCENT if is_mine else RealmColors.MUTED
+		dot_col.a = 0.85
+		draw_circle(ctr, dot_r, dot_col)
+
+
+func _draw_plot_detail_labels() -> void:
+	var font: Font = RealmFonts.font_body
+	if font == null:
 		return
-	var is_mine := str(owner_v) == WorldState.party_id
-	var stroke_w := _world_line_width_screen_px(1.0)
-	var stroke_c := Color(0, 0, 0, 0.38)
-	if is_sel:
-		stroke_c = RealmColors.ACCENT
-		stroke_w = _world_line_width_screen_px(3.5)
-	elif is_mine:
-		stroke_c = RealmColors.MAGIC
-		stroke_c.a = 0.55
-		stroke_w = _world_line_width_screen_px(1.5)
-	elif owner_v != null:
-		stroke_c = MapHash.owner_accent_color(str(owner_v))
-		stroke_c.a = 0.5
-		stroke_w = _world_line_width_screen_px(1.25)
-	draw_polyline(pts, stroke_c, stroke_w, true)
-	draw_line(pts[3], pts[0], stroke_c, stroke_w)
+
+	var font_size := clampi(int(_world_line_width(11.0)), 6, 18)
+
+	var grade_keys: Array = [
+		["iron_ore_grade", "Fe"],
+		["copper_ore_grade", "Cu"],
+		["coal_grade", "Co"],
+		["clay_grade", "Cl"],
+		["phosphate_grade", "Ph"],
+		["sulfur_grade", "Su"],
+		["saltpeter_grade", "Sa"],
+		["tin_grade", "Ti"],
+		["lead_grade", "Pb"],
+		["silica_grade", "Si"],
+		["platinum_grade", "Pt"],
+		["oil_shale_grade", "Oil"],
+		["rare_earth_grade", "RE"],
+	]
+
+	# Only check visible plots that belong to the player
+	for gy in range(_vis_min_y, _vis_max_y):
+		for gx in range(_vis_min_x, _vis_max_x):
+			var pid := "p-%d-%d" % [gx, gy]
+			if _demo_mode:
+				pid = "demo-%d-%d" % [gx, gy]
+			var p: Dictionary = WorldState.plots.get(pid, {})
+			if p.is_empty():
+				continue
+			var owner_v: Variant = p.get("owner", null)
+			if str(owner_v) != WorldState.party_id:
+				continue
+
+			var ctr := _mesh.plot_centroid(gx, gy)
+
+			var bcount: int = int(_plot_building_counts.get(pid, 0))
+			if bcount > 0:
+				var badge := "⚙%d" % bcount
+				var badge_col := RealmColors.ACCENT
+				badge_col.a = 0.9
+				var bpos := ctr + Vector2(_world_line_width(-6.0), _world_line_width(-4.0))
+				draw_string(font, bpos, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, badge_col)
+
+			if not bool(p.get("surveyed", false)):
+				continue
+
+			var sub: Dictionary = WorldState.subsurface_for_plot_ui(pid, p)
+			var best_grade := 0.0
+			var best_name := ""
+			for pair in grade_keys:
+				var fld := str((pair as Array)[0])
+				var abbrev := str((pair as Array)[1])
+				var g := float(sub.get(fld, 0.0))
+				if g > best_grade:
+					best_grade = g
+					best_name = abbrev
+			if best_grade >= 0.15:
+				var grade_text := "%s %.0f%%" % [best_name, best_grade * 100.0]
+				var grade_col := Color(0.4, 1.0, 0.4) if best_grade >= 0.5 else Color(0.9, 0.85, 0.3)
+				grade_col.a = 0.85
+				var gpos := ctr + Vector2(_world_line_width(-8.0), _world_line_width(6.0))
+				draw_string(font, gpos, grade_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, grade_col)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -298,9 +516,9 @@ func _handle_map_input(event: InputEvent) -> void:
 					_handle_plot_click(mb.position)
 				_dragging = false
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			_zoom_at_screen_pos(mb.position, 1.12)
+			_zoom_at_screen_pos(mb.position, WHEEL_ZOOM_STEP)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			_zoom_at_screen_pos(mb.position, 1.0 / 1.12)
+			_zoom_at_screen_pos(mb.position, 1.0 / WHEEL_ZOOM_STEP)
 		if mb.pressed or mb.button_index == MOUSE_BUTTON_LEFT:
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _dragging:
@@ -313,31 +531,55 @@ func _handle_map_input(event: InputEvent) -> void:
 
 func _zoom_at_screen_pos(screen_pos: Vector2, factor: float) -> void:
 	var world_before := _screen_to_world(screen_pos)
-	camera.zoom = (camera.zoom * factor).clamp(Vector2(0.2, 0.2), Vector2(8.0, 8.0))
+	_cam_zoom *= factor
+	_clamp_cam_zoom()
+	_sync_camera_zoom()
 	camera.position += world_before - _screen_to_world(screen_pos)
 	queue_redraw()
 
 
+func _viewport_center() -> Vector2:
+	var r := get_viewport().get_visible_rect()
+	return r.position + r.size * 0.5
+
+
+## Screen px → world (WorldMap space). Uses Camera2D math explicitly — canvas inverse was wrong
+## under ``SubViewportContainer`` stretch + Camera smoothing, so zoom-at-cursor and hit-tests broke.
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
-	return get_viewport().get_canvas_transform().affine_inverse() * screen_pos
+	var z := camera.zoom
+	var zx := z.x if absf(z.x) > 1e-6 else 1.0
+	return camera.position + (screen_pos - _viewport_center()) / Vector2(zx, zx)
 
 
 func _handle_plot_click(screen_pos: Vector2) -> void:
 	if _mesh == null:
 		return
 	var world_pos := _screen_to_world(screen_pos)
-	var best_id := ""
-	var best_d := 1e9
 	var cell := _mesh.cell_px
-	for plot_id in WorldState.plots.keys():
-		var p: Dictionary = WorldState.plots[plot_id]
-		var c := _mesh.plot_centroid(int(p.get("x", 0)), int(p.get("y", 0)))
-		var d := world_pos.distance_squared_to(c)
-		if d < best_d:
-			best_d = d
-			best_id = str(plot_id)
-	var hit_r2: float = cell * cell * 4.0
-	if best_id.is_empty() or best_d > hit_r2:
+	# Direct grid lookup: convert world position to approximate grid cell
+	var approx_gx := int((world_pos.x - _mesh.pad) / cell)
+	var approx_gy := int((world_pos.y - _mesh.pad) / cell)
+	# Search a small neighborhood (3×3) around the approximate cell
+	var best_id := ""
+	var best_d := cell * cell * 4.0
+	var bounds := _last_mesh_bounds
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var gx := approx_gx + dx
+			var gy := approx_gy + dy
+			if gx < 0 or gy < 0 or gx >= bounds.x or gy >= bounds.y:
+				continue
+			var pid := "p-%d-%d" % [gx, gy]
+			if _demo_mode:
+				pid = "demo-%d-%d" % [gx, gy]
+			if not WorldState.plots.has(pid):
+				continue
+			var c := _mesh.plot_centroid(gx, gy)
+			var d := world_pos.distance_squared_to(c)
+			if d < best_d:
+				best_d = d
+				best_id = pid
+	if best_id.is_empty():
 		return
 	_selected_plot_id = best_id
 	queue_redraw()
