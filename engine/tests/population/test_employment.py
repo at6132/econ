@@ -107,10 +107,10 @@ def _player_with_funded_plot_in_town(w):
             continue
         if p.terrain in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW):
             continue
-        if max(abs(p.x - center.x), abs(p.y - center.y)) <= 2:
+        if max(abs(p.x - center.x), abs(p.y - center.y)) <= 8:
             pid = p.plot_id
             break
-    assert pid is not None
+    assert pid is not None, "no unowned plot near town center"
     assert claim_plot(w, player, pid)["ok"]
     return player, pid, town
 
