@@ -1,0 +1,79 @@
+[gd_scene load_steps=3 format=3 uid="uid://realm_world_creation"]
+
+[ext_resource type="Script" path="res://scenes/WorldCreationScreen.gd" id="1_wcs"]
+[ext_resource type="Script" path="res://scenes/WorldCreationGlobe.gd" id="2_globe"]
+
+[node name="WorldCreationScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_wcs")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.047, 0.024, 0.071, 0.97)
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -240.0
+offset_right = 280.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="GlobeArea" type="Control" parent="VBox"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_globe")
+
+[node name="TitleLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "CREATING WORLD"
+horizontal_alignment = 1
+
+[node name="ScenarioLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Scenario: genesis"
+horizontal_alignment = 1
+
+[node name="BarBG" type="ColorRect" parent="VBox"]
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+color = Color(0.1, 0.06, 0.14, 1)
+
+[node name="BarFill" type="ColorRect" parent="VBox/BarBG"]
+layout_mode = 1
+anchor_right = 0.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(1, 0.847, 0.29, 1)
+
+[node name="StageLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Generating terrain fields"
+horizontal_alignment = 1
+
+[node name="DetailLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Continental noise, coastlines, biome placement…"
+horizontal_alignment = 1

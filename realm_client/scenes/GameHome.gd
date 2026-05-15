@@ -2,10 +2,11 @@ extends Control
 ## Realm entry: main menu → Solo (New / Continue) → in-game ``Main``.
 
 const MAIN_SCENE := "res://scenes/Main.tscn"
+const CreationScreenScene := preload("res://scenes/WorldCreationScreen.tscn")
 
 const SCENARIOS: Array = [
 	["frontier", "Frontier — default solo slice"],
-	["genesis", "Genesis — large map (slow first boot)"],
+	["genesis", "Genesis — full 192×144 continental map"],
 	["cartel", "Cartel"],
 	["bootstrapper", "Bootstrapper"],
 	["speculator", "Speculator"],
@@ -336,19 +337,41 @@ func _on_pick_save(relative_path: String) -> void:
 	)
 
 
+var _creation_screen: Control = null
+
+
 func _on_start_new_world() -> void:
 	var scenario: String = str(_scenario_opt.get_item_metadata(_scenario_opt.selected))
-	var seed := int(_seed_spin.value)
-	_footer.text = "Creating world on server… (uvicorn: look for Realm: POST /dev/reset received — genesis can take minutes before the access-log line appears.)"
+	var seed_val := int(_seed_spin.value)
+	_footer.text = ""
+
+	# Show creation screen overlay
+	_creation_screen = CreationScreenScene.instantiate()
+	add_child(_creation_screen)
+	_creation_screen.open(scenario)
+	_creation_screen.creation_finished.connect(_on_creation_screen_done)
+
 	API.dev_reset(
-		seed,
+		seed_val,
 		scenario,
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
-				_footer.text = ""
-				get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
+				if is_instance_valid(_creation_screen):
+					_creation_screen.mark_done()
+				else:
+					get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
 			else:
-				_footer.text = ""
-				_dialog.dialog_text = "Reset failed: %s" % str(data)
+				if is_instance_valid(_creation_screen):
+					_creation_screen.visible = false
+					_creation_screen.queue_free()
+					_creation_screen = null
+				_dialog.dialog_text = "World creation failed: %s" % str(data)
 				_dialog.popup_centered()
 	)
+
+
+func _on_creation_screen_done() -> void:
+	if is_instance_valid(_creation_screen):
+		_creation_screen.queue_free()
+		_creation_screen = null
+	get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
