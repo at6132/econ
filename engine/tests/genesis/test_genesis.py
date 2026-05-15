@@ -76,6 +76,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_arch_shippers = 1 if SHIPPER_PARTY_ID in w.parties else 0
     n_financiers = 1 if FINANCIER_PARTY_ID in w.parties else 0
     n_road_builders = 1 if FRONTIER_ROADS_PARTY_ID in w.parties else 0
+    n_insurer = 1 if PartyId("frontier_insurance_co") in w.parties else 0
     reserved_out = (
         1_000_000  # player
         + 4 * 1_000_000  # settlers
@@ -94,6 +95,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_financiers * FINANCIER_STARTING_CASH_CENTS  # Sprint 5 Meridian
         + n_road_builders * FRONTIER_ROADS_STARTING_CASH_CENTS  # Sprint 6 Frontier Roads Co.
         + n_genesis_construction * GENESIS_CONSTRUCTION_STARTING_CASH_CENTS  # Phase 10D NPC builder
+        + n_insurer * 10_000_000  # frontier_insurance_co NPC seed ($100k)
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out

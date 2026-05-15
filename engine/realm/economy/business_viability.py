@@ -65,4 +65,5 @@ def tick_business_viability(world: World) -> None:
             suspension_reason="lost registered plot footprint",
             public_profile=biz.public_profile,
             last_viability_check_tick=int(world.tick),
+            equity_contract_ids=list(getattr(biz, "equity_contract_ids", []) or []),
         )

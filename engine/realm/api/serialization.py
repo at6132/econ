@@ -235,6 +235,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 "cash_cents": int(lab.cash_cents),
                 "needs": {k: float(v) for k, v in lab.needs.items()},
                 "employment_contract": lab.employment_contract,
+                "wage_per_day_cents": int(getattr(lab, "wage_per_day_cents", 0) or 0),
                 "migrating_to": lab.migrating_to,
                 "migration_arrives_tick": int(lab.migration_arrives_tick),
                 "last_needs_tick": int(lab.last_needs_tick),
@@ -291,6 +292,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 "suspension_reason": ent.suspension_reason,
                 "public_profile": bool(ent.public_profile),
                 "last_viability_check_tick": int(ent.last_viability_check_tick),
+                "equity_contract_ids": list(getattr(ent, "equity_contract_ids", []) or []),
             }
             for ent in world.businesses.values()
         ],
@@ -603,6 +605,7 @@ def load_world(d: dict[str, Any]) -> World:
                 ),
                 public_profile=bool(payload.get("public_profile", True)),
                 last_viability_check_tick=int(payload.get("last_viability_check_tick", 0)),
+                equity_contract_ids=[str(x) for x in (payload.get("equity_contract_ids") or [])],
             )
     world.next_nascent_settlement_seq = int(d.get("next_nascent_settlement_seq", 0))
     raw_ns = d.get("nascent_settlements") or []
@@ -687,6 +690,7 @@ def load_world(d: dict[str, Any]) -> World:
                     if payload.get("employment_contract")
                     else None
                 ),
+                wage_per_day_cents=int(payload.get("wage_per_day_cents", 0)),
                 migrating_to=(
                     str(payload["migrating_to"]) if payload.get("migrating_to") else None
                 ),

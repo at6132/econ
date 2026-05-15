@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from realm.core.ids import PartyId, PlotId
 
@@ -10,10 +11,12 @@ __all__ = [
     "BusinessEntity",
     "BusinessTemplate",
     "BUSINESS_TEMPLATES",
+    "ownership_pct_bps_sold",
+    "business_shareholders",
 ]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass
 class BusinessEntity:
     business_id: str
     owner_party: PartyId
@@ -27,6 +30,40 @@ class BusinessEntity:
     suspension_reason: str | None
     public_profile: bool
     last_viability_check_tick: int
+    equity_contract_ids: list[str] = field(default_factory=list)
+    """Active ``equity_stake`` contract ids for this business (append on accept)."""
+
+
+def ownership_pct_bps_sold(world: Any, business_id: str) -> int:
+    """Total basis points of equity sold (proposed + active stakes)."""
+    total = 0
+    for c in world.contracts:
+        if str(c.get("kind", "")) != "equity_stake":
+            continue
+        if str(c.get("business_id", "")) != str(business_id):
+            continue
+        if str(c.get("status", "")) not in ("active", "proposed"):
+            continue
+        total += int(c.get("ownership_pct_bps", 0))
+    return total
+
+
+def business_shareholders(world: Any, business_id: str) -> list[dict[str, int | str]]:
+    out: list[dict[str, int | str]] = []
+    for c in world.contracts:
+        if str(c.get("kind", "")) != "equity_stake":
+            continue
+        if str(c.get("business_id", "")) != str(business_id):
+            continue
+        if str(c.get("status", "")) != "active":
+            continue
+        out.append(
+            {
+                "investor": str(c.get("investor", "")),
+                "ownership_pct_bps": int(c.get("ownership_pct_bps", 0)),
+            }
+        )
+    return out
 
 
 @dataclass(frozen=True, slots=True)

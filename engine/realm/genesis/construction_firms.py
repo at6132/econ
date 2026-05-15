@@ -72,6 +72,7 @@ def seed_genesis_construction_firm(world: World) -> None:
         suspension_reason=None,
         public_profile=True,
         last_viability_check_tick=int(world.tick),
+        equity_contract_ids=[],
     )
     hired = False
     island_key = str(plot_islands.get(str(plot_id), "0"))

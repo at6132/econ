@@ -2,7 +2,10 @@
 
 Functions:
   * ``hire_catalog_public``           — UI: list of NPCs that accept hire
-  * ``hire_worker_stub``              — pay signing bonus + register stub employment
+  * ``hire_worker_stub``              — pay signing bonus + register stub employment,
+                                        or hire a :class:`~realm.population.laborers.LaborerNPC`
+                                        onto a real payroll (Phase 7E).
+  * ``fire_laborer``                  — release a hired laborer from payroll
   * ``tick_stub_employment``          — pay recurring wages each tick interval
   * ``poach_worker``                  — defect a worker to a new employer at +20% wage
   * ``request_labor_transport_action`` — schedule a regional labor transit
@@ -14,6 +17,7 @@ from realm.actions._shared import ActionErr, ActionOk, ActionResult
 from realm.core.ids import PartyId
 from realm.core.ledger import MoneyErr, party_cash_account
 from realm.events.event_log import log_event
+from realm.population.laborers import laborer_cash_account
 from realm.world import World
 
 HIRABLE_NPCS: frozenset[PartyId] = frozenset(
@@ -53,11 +57,62 @@ def hire_worker_stub(
     """
     Signing bonus to an NPC party; optional recurring wage every ``wage_interval_ticks``.
 
+    **Deprecated for human labor:** prefer ``POST /jobs/openings`` (real job market)
+    or hire a laborer id returned by ``GET /laborers`` — this path still accepts
+    the six Tier-1 catalog NPCs for production-line labor routing.
+
     Sprint 3 — Phase C.2: the bonus is multiplied by the regional labor-scarcity
     factor (1.0 / 1.25 / 1.6) and the action is rejected if the employer's
     region pool can't supply ``workers_count`` (or in critical bands, the batch
     exceeds the per-action share cap).
     """
+    laborer_id = str(employee)
+    if laborer_id in world.laborers:
+        if workers_count != 1:
+            return ActionErr(
+                ok=False,
+                reason="workers_count must be 1 when hiring a LaborerNPC",
+            )
+        if signing_bonus_cents < 0:
+            return ActionErr(ok=False, reason="signing bonus must be non-negative")
+        if wage_per_tick_cents < 0:
+            return ActionErr(ok=False, reason="wage_per_tick_cents must be non-negative")
+        if wage_interval_ticks < 1:
+            return ActionErr(ok=False, reason="wage_interval_ticks must be at least 1")
+        if employer not in world.parties:
+            return ActionErr(ok=False, reason="unknown party")
+        lab = world.laborers[laborer_id]
+        if lab.employer is not None:
+            return ActionErr(ok=False, reason="laborer already employed")
+        bc = party_cash_account(employer)
+        lc = laborer_cash_account(laborer_id)
+        world.ledger.ensure_account(bc)
+        world.ledger.ensure_account(lc)
+        if signing_bonus_cents > 0:
+            tr = world.ledger.transfer(
+                debit=bc, credit=lc, amount_cents=int(signing_bonus_cents)
+            )
+            if isinstance(tr, MoneyErr):
+                return ActionErr(ok=False, reason=tr.reason)
+        lab.employer = employer
+        lab.employment_contract = None
+        from realm.population.employment import DEFAULT_WAGE_PER_GAME_DAY_CENTS
+
+        per_day = int(wage_per_tick_cents) * int(wage_interval_ticks)
+        lab.wage_per_day_cents = (
+            per_day if per_day > 0 else int(DEFAULT_WAGE_PER_GAME_DAY_CENTS)
+        )
+        lab.cash_cents = world.ledger.balance(lc)
+        log_event(
+            world,
+            "laborer_hired",
+            f"{employer} hired laborer {laborer_id} (bonus {signing_bonus_cents}¢)",
+            employer=str(employer),
+            laborer_id=laborer_id,
+            signing_bonus_cents=int(signing_bonus_cents),
+        )
+        return ActionOk(ok=True)
+
     if signing_bonus_cents <= 0:
         return ActionErr(ok=False, reason="signing bonus must be positive")
     if wage_per_tick_cents < 0:
@@ -67,7 +122,13 @@ def hire_worker_stub(
     if workers_count < 1:
         return ActionErr(ok=False, reason="workers_count must be at least 1")
     if employee not in HIRABLE_NPCS:
-        return ActionErr(ok=False, reason="that party is not on the hire list (stub)")
+        return ActionErr(
+            ok=False,
+            reason=(
+                "not a hirable party — use a LaborerNPC id from GET /laborers "
+                "or one of the catalog NPCs (GET /jobs/openings/catalog)"
+            ),
+        )
     if employer not in world.parties or employee not in world.parties:
         return ActionErr(ok=False, reason="unknown party")
     # Regional labor cost premium + pool draw (Sprint 3 — Phase C.2).
@@ -159,6 +220,31 @@ def hire_worker_stub(
         employee=str(employee),
         signing_bonus_cents=signing_bonus_cents,
         contract_id=cid,
+    )
+    return ActionOk(ok=True)
+
+
+def fire_laborer(world: World, employer: PartyId, laborer_id: str) -> ActionResult:
+    """Release a hired laborer. Clears any linked job opening slot."""
+    if laborer_id not in world.laborers:
+        return ActionErr(ok=False, reason="unknown laborer")
+    lab = world.laborers[laborer_id]
+    if lab.employer != employer:
+        return ActionErr(ok=False, reason="not your employee")
+    if lab.employment_contract is not None:
+        for op in world.job_openings:
+            if op.opening_id == lab.employment_contract:
+                op.filled_by = None
+                break
+    lab.employer = None
+    lab.employment_contract = None
+    lab.wage_per_day_cents = 0
+    log_event(
+        world,
+        "laborer_fired",
+        f"{employer} released laborer {laborer_id}",
+        employer=str(employer),
+        laborer_id=laborer_id,
     )
     return ActionOk(ok=True)
 

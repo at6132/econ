@@ -30,6 +30,20 @@ from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_accou
 from realm.world import World
 
 
+VALID_SERVICE_IDS: frozenset[str] = frozenset(
+    {
+        "analytics_data",
+        "route_access",
+        "survey_reports",
+        "market_intel",
+        "recipe_license",
+        "construction_priority",
+        "labor_supply",
+        "power_supply",
+    }
+)
+
+
 def _next_contract_id(world: World) -> str:
     world.next_contract_seq += 1
     return f"c-{world.next_contract_seq}"
@@ -203,6 +217,14 @@ def propose_equity_stub(
         return {"ok": False, "reason": "unknown party"}
     if issuer == investor:
         return {"ok": False, "reason": "issuer and investor must differ"}
+    log_event(
+        world,
+        "deprecation_notice",
+        "equity_stub is deprecated — use equity_stake (POST /contracts/equity/stake/propose) "
+        "for ownership-linked dividends.",
+        issuer=str(issuer),
+        investor=str(investor),
+    )
     cid = _next_contract_id(world)
     world.contracts.append(
         {
@@ -313,7 +335,16 @@ def propose_service_sub(
     subscriber: PartyId,
     fee_cents: int,
     duration_ticks: int,
+    service_id: str,
+    service_params: dict | None = None,
 ) -> dict:
+    if service_id not in VALID_SERVICE_IDS:
+        return {
+            "ok": False,
+            "reason": (
+                f"unknown service_id {service_id!r}; valid: {sorted(VALID_SERVICE_IDS)}"
+            ),
+        }
     if fee_cents <= 0 or duration_ticks < 1:
         return {"ok": False, "reason": "fee and duration must be positive"}
     if provider not in world.parties or subscriber not in world.parties:
@@ -330,14 +361,16 @@ def propose_service_sub(
             "subscriber": str(subscriber),
             "fee_cents": fee_cents,
             "duration_ticks": duration_ticks,
-            "service_id": "stub_service",
+            "service_id": service_id,
+            "service_params": dict(service_params or {}),
         }
     )
     log_event(
         world,
         "contract_service_propose",
-        f"{provider} proposes prepaid service {cid} to {subscriber} ({fee_cents}¢ / {duration_ticks} ticks)",
+        f"{provider} proposes service {service_id} {cid} to {subscriber} ({fee_cents}¢ / {duration_ticks} ticks)",
         contract_id=cid,
+        service_id=service_id,
     )
     return {"ok": True, "contract_id": cid}
 
@@ -373,9 +406,35 @@ def accept_service_sub(world: World, subscriber: PartyId, contract_id: str) -> d
 
 
 def tick_service_subscriptions(world: World) -> None:
-    t = world.tick
+    from realm.contracts.instruments import validate_service_delivery
+
+    t = int(world.tick)
     for c in world.contracts:
         if c.get("kind") != "service_sub" or c.get("status") != "active":
+            continue
+        reason = validate_service_delivery(world, c)
+        if reason is not None:
+            fee = int(c.get("fee_cents", 0))
+            dur = max(1, int(c.get("duration_ticks", 1)))
+            exp = int(c.get("expires_tick", t))
+            remaining = max(0, exp - t)
+            refund = (fee * remaining) // dur
+            provider = PartyId(str(c["provider"]))
+            subscriber = PartyId(str(c["subscriber"]))
+            if refund > 0:
+                pc = party_cash_account(provider)
+                sc = party_cash_account(subscriber)
+                world.ledger.transfer(debit=pc, credit=sc, amount_cents=refund)
+            rep = world.reputation.setdefault(str(provider), {"honored": 0, "breached": 0})
+            rep["breached"] = int(rep.get("breached", 0)) + 1
+            c["status"] = "breached"
+            c["breach_reason"] = reason
+            log_event(
+                world,
+                "contract_service_breach",
+                f"Service sub {c['id']} breached: {reason}",
+                contract_id=c["id"],
+            )
             continue
         if t <= int(c.get("expires_tick", t)):
             continue
@@ -390,10 +449,15 @@ def tick_service_subscriptions(world: World) -> None:
 
 def tick_phase2_financial_contracts(world: World) -> None:
     """Run after ``world.tick`` advances (same phase as supply breach checks)."""
+    from realm.contracts.equity_stake import tick_equity_stakes
+    from realm.contracts.instruments import tick_secondary_instruments
+
     tick_equity_stub(world)
+    tick_equity_stakes(world)
     tick_loan_contracts(world)
     tick_service_subscriptions(world)
     tick_forward_contracts(world)
+    tick_secondary_instruments(world)
 
 
 # ─────────────────── Sprint 4 — Phase C: forward contracts ───────────────────

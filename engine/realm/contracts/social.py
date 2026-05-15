@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from realm.events.event_log import log_event
-from realm.core.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, contract_escrow_account, party_cash_account
 from realm.infrastructure.plot_logistics import ensure_inventory_from_stash, plot_logistics_enabled
@@ -12,58 +14,109 @@ from realm.world import World
 
 
 def propose_contract_stub(world: World, party_a: PartyId, party_b: PartyId, kind: str) -> dict:
-    """Legacy generic handshake (honor-only). Supply deals use ``propose_supply_contract``."""
-    if kind in ("loan", "equity_stub", "service_sub"):
-        return {
-            "ok": False,
-            "reason": "use POST /contracts/loan/propose, /contracts/equity/propose, or /contracts/service/propose",
-        }
-    if kind == "supply":
-        return {
-            "ok": False,
-            "reason": "use POST /contracts/supply/propose with material, qty, price, and due_in_ticks",
-        }
-    world.next_contract_seq += 1
-    cid = f"c-{world.next_contract_seq}"
-    world.contracts.append(
-        {
-            "id": cid,
-            "party_a": str(party_a),
-            "party_b": str(party_b),
-            "kind": kind,
-            "status": "open",
-        }
-    )
-    log_event(
-        world,
-        "contract_propose",
-        f"Contract {cid}: {party_a} ↔ {party_b} ({kind})",
-        contract_id=cid,
-        party_a=str(party_a),
-        party_b=str(party_b),
-        contract_kind=kind,
-    )
-    return {"ok": True, "contract_id": cid}
+    """Removed: honor-only contracts are not supported. Use ``propose_enforced_contract``."""
+    return {
+        "ok": False,
+        "reason": (
+            f"honor-only contract kind {kind!r} is not supported. "
+            "POST /contracts/propose with JSON body {{\"kind\", \"params\"}} — "
+            "valid kinds: construction, equity, forward, loan, service, supply."
+        ),
+    }
 
 
 def honor_contract_stub(world: World, contract_id: str) -> dict:
-    for c in world.contracts:
-        if c.get("id") != contract_id:
-            continue
-        if c.get("kind") in ("loan", "equity_stub", "service_sub"):
-            return {"ok": False, "reason": "use phase-2 contract routes for this kind"}
-        if c.get("kind") == "supply" and "deliver_by_tick" in c:
-            return {"ok": False, "reason": "supply contracts use accept then fulfill endpoints"}
-        if c.get("status") not in ("open", "active"):
-            return {"ok": False, "reason": "contract not open"}
-        c["status"] = "honored"
-        for k in ("party_a", "party_b"):
-            p = PartyId(c[k])
-            r = world.reputation.setdefault(str(p), {"honored": 0, "breached": 0})
-            r["honored"] += 1
-        log_event(world, "contract_honor", f"Contract {contract_id} honored", contract_id=contract_id)
-        return {"ok": True}
-    return {"ok": False, "reason": "contract not found"}
+    """Deprecated: contracts enforce themselves via tick handlers and fulfill endpoints."""
+    return {
+        "ok": False,
+        "reason": (
+            "honor_contract_stub is removed. Contracts enforce themselves. "
+            "Use POST /contracts/supply/fulfill, /contracts/loan/repay, "
+            "/contracts/forward/{id}/deliver, etc."
+        ),
+    }
+
+
+def propose_enforced_contract(
+    world: World,
+    party_a: PartyId,
+    party_b: PartyId,
+    kind: str,
+    params: dict[str, Any],
+) -> dict:
+    """Route to a real enforced contract FSM (no honor-only memos)."""
+    from realm.actions.construction_actions import accept_construction_quote
+    from realm.contracts import stubs as contract_stubs
+    from realm.contracts.equity_stake import propose_equity_stake
+
+    k = str(kind).strip().lower()
+    if k == "supply":
+        return propose_supply_contract(
+            world,
+            party_a,
+            party_b,
+            MaterialId(str(params["material"])),
+            int(params["qty"]),
+            int(params["total_price_cents"]),
+            int(params["due_in_ticks"]),
+            buyer_deposit_cents=int(params.get("buyer_deposit_cents", 0)),
+            liquidated_damages_cents=int(params.get("liquidated_damages_cents", 0)),
+        )
+    if k == "loan":
+        return contract_stubs.propose_loan_contract(
+            world,
+            party_a,
+            party_b,
+            int(params["principal_cents"]),
+            int(params["repay_cents"]),
+            int(params["due_in_ticks"]),
+        )
+    if k == "equity":
+        return propose_equity_stake(
+            world,
+            party_a,
+            party_b,
+            str(params["business_id"]),
+            int(params["ownership_pct_bps"]),
+            int(params["investment_cents"]),
+        )
+    if k == "service":
+        return contract_stubs.propose_service_sub(
+            world,
+            party_a,
+            party_b,
+            int(params["fee_cents"]),
+            int(params["duration_ticks"]),
+            str(params["service_id"]),
+            params.get("service_params"),
+        )
+    if k == "forward":
+        return contract_stubs.propose_forward_contract(
+            world,
+            party_a,
+            party_b,
+            MaterialId(str(params["material"])),
+            int(params["qty"]),
+            int(params["price_per_unit_cents"]),
+            int(params["delivery_tick"]),
+        )
+    if k == "construction":
+        return accept_construction_quote(
+            world,
+            party_a,
+            party_b,
+            PlotId(str(params["plot_id"])),
+            str(params["building_id"]),
+            int(params["quoted_price_cents"]),
+            str(params["material_responsibility"]),
+        )
+    return {
+        "ok": False,
+        "reason": (
+            f"{kind!r} is not a valid contract type. "
+            f"Valid types: construction, equity, forward, loan, service, supply."
+        ),
+    }
 
 
 def propose_supply_contract(

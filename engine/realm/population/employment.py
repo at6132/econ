@@ -291,10 +291,18 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
     if int(world.tick) <= 0 or int(world.tick) % TICKS_PER_GAME_DAY != 0:
         return stats
     for lid, lab in list(world.laborers.items()):
-        if lab.employer is None or lab.employment_contract is None:
+        if lab.employer is None:
             continue
-        op = _opening_for_employment(world, lab.employment_contract)
-        wage = int(op.wage_per_day_cents) if op is not None else DEFAULT_WAGE_PER_GAME_DAY_CENTS
+        op = (
+            _opening_for_employment(world, lab.employment_contract)
+            if lab.employment_contract
+            else None
+        )
+        if op is not None:
+            wage = int(op.wage_per_day_cents)
+        else:
+            wpd = int(getattr(lab, "wage_per_day_cents", 0) or 0)
+            wage = wpd if wpd > 0 else DEFAULT_WAGE_PER_GAME_DAY_CENTS
         if wage <= 0:
             stats["paid"] += 1
             continue
@@ -307,12 +315,13 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
                 f"{lab.display_name} quit {lab.employer}: payroll empty",
                 laborer_id=lid,
                 employer=str(lab.employer),
-                opening_id=lab.employment_contract,
+                opening_id=lab.employment_contract or "",
             )
             if op is not None:
                 op.filled_by = None
             lab.employer = None
             lab.employment_contract = None
+            lab.wage_per_day_cents = 0
             stats["quit_for_nonpayment"] += 1
             continue
         lab_acct = laborer_cash_account(lid)

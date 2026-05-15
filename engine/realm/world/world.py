@@ -778,12 +778,25 @@ def bootstrap_genesis(
         "world",
         f"genesis: {n_plots} plots, {initial_n} settlers at boot (cap {settler_cap})"
         + ("; random arrivals enabled" if cycle_enabled else "")
-        + f", layout={effective_layout}, terrain-correlated subsurface, cold-start exchange.",
+        +         f", layout={effective_layout}, terrain-correlated subsurface, cold-start exchange.",
     )
     record_market_snapshot(world)
     world.use_plot_output_logistics = True
     for px in list(world.parties):
         ensure_party_recipe_book(world, px)
+    ins = PartyId("frontier_insurance_co")
+    world.parties.add(ins)
+    world.reputation[str(ins)] = {"honored": 0, "breached": 0}
+    iac = party_cash_account(ins)
+    world.ledger.ensure_account(iac)
+    tr_ins = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=iac,
+        amount_cents=10_000_000,
+    )
+    if isinstance(tr_ins, MoneyErr):
+        raise ValueError(tr_ins.reason)
+    ensure_party_recipe_book(world, ins)
     return world
 
 

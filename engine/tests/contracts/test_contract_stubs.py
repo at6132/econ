@@ -11,8 +11,8 @@ from realm.contracts.stubs import (
     propose_service_sub,
     repay_loan_contract,
 )
-from realm.core.ids import PartyId
-from realm.contracts.social import propose_contract_stub
+from realm.core.ids import MaterialId, PartyId
+from realm.contracts.social import propose_contract_stub, propose_enforced_contract
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
@@ -21,6 +21,33 @@ def test_propose_memo_rejects_reserved_phase2_kinds() -> None:
     w = bootstrap_frontier(seed=60, grid_width=2, grid_height=2)
     r = propose_contract_stub(w, PartyId("player"), PartyId("t1_consumer"), "loan")
     assert r["ok"] is False
+
+
+def test_propose_enforced_supply_round_trip() -> None:
+    from realm.contracts.social import propose_enforced_contract
+    from realm.core.inventory import MatterErr
+
+    w = bootstrap_frontier(seed=60, grid_width=2, grid_height=2)
+    ad = w.inventory.add(PartyId("player"), MaterialId("grain"), 2)
+    assert not isinstance(ad, MatterErr)
+    r = propose_enforced_contract(
+        w,
+        PartyId("player"),
+        PartyId("t1_consumer"),
+        "supply",
+        {
+            "material": "grain",
+            "qty": 1,
+            "total_price_cents": 0,
+            "due_in_ticks": 50,
+        },
+    )
+    assert r.get("ok") is True
+    cid = str(r["contract_id"])
+    from realm.contracts.social import accept_supply_contract, fulfill_supply_contract
+
+    assert accept_supply_contract(w, PartyId("t1_consumer"), cid)["ok"] is True
+    assert fulfill_supply_contract(w, PartyId("player"), cid)["ok"] is True
 
 
 def test_loan_manual_repay_conserves_ledger_total() -> None:
@@ -90,7 +117,7 @@ def test_service_sub_prepaid_then_expires() -> None:
     w = bootstrap_frontier(seed=66, grid_width=2, grid_height=2)
     provider, sub = PartyId("player"), PartyId("t1_consumer")
     t0 = w.ledger.total_cents()
-    pr = propose_service_sub(w, provider, sub, 400, 3)
+    pr = propose_service_sub(w, provider, sub, 400, 3, "analytics_data")
     cid = str(pr["contract_id"])
     assert accept_service_sub(w, sub, cid)["ok"] is True
     assert w.ledger.total_cents() == t0

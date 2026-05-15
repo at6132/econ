@@ -29,6 +29,7 @@ from realm.actions.business_actions import (  # noqa: F401
 )
 from realm.actions.employment_actions import (  # noqa: F401
     HIRABLE_NPCS,
+    fire_laborer,
     hire_catalog_public,
     hire_worker_stub,
     poach_worker,

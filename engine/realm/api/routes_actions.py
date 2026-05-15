@@ -21,6 +21,7 @@ from realm.actions import (
     buy_survey_report,
     cancel_survey_report_listing,
     claim_plot,
+    fire_laborer,
     harvest_plot_output_stock,
     hire_catalog_public,
     hire_worker_stub,
@@ -38,7 +39,6 @@ from realm.contracts.social import (
     accept_supply_contract,
     fulfill_supply_contract,
     honor_contract_stub,
-    propose_contract_stub,
     propose_supply_contract,
 )
 from realm.contracts.stubs import (
@@ -54,6 +54,10 @@ from realm.contracts.stubs import (
     repay_loan_contract,
 )
 from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.population.employment import (
+    cancel_job_opening,
+    post_job_opening,
+)
 from realm.economy.analytics import purchase_analytics_product
 from realm.economy.intel import purchase_market_intel
 from realm.economy.markets import (
@@ -268,6 +272,103 @@ def post_hire(
     return dict(r)
 
 
+def _job_opening_public_dict(op: object) -> dict:
+    return {
+        "opening_id": str(getattr(op, "opening_id", "")),
+        "employer": str(getattr(op, "employer", "")),
+        "plot_id": str(getattr(op, "plot_id", "")),
+        "skill_min": int(getattr(op, "skill_min", 0)),
+        "wage_per_day_cents": int(getattr(op, "wage_per_day_cents", 0)),
+        "posted_at_tick": int(getattr(op, "posted_at_tick", 0)),
+        "filled_by": getattr(op, "filled_by", None),
+    }
+
+
+@router.post("/jobs/openings")
+def create_job_opening(
+    employer: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+    skill_min: Annotated[int, Query()] = 0,
+    wage_per_day_cents: Annotated[int, Query()] = 800,
+) -> dict:
+    r = post_job_opening(
+        _state.WORLD,
+        PartyId(employer),
+        PlotId(plot_id),
+        skill_min=skill_min,
+        wage_per_day_cents=wage_per_day_cents,
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.delete("/jobs/openings/{opening_id}")
+def delete_job_opening(
+    opening_id: str,
+    employer: Annotated[str, Query()],
+) -> dict:
+    r = cancel_job_opening(_state.WORLD, PartyId(employer), opening_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.get("/jobs/openings")
+def list_job_openings(employer: Annotated[str | None, Query()] = None) -> dict:
+    w = _state.WORLD
+    openings = [_job_opening_public_dict(o) for o in w.job_openings]
+    if employer:
+        openings = [o for o in openings if o.get("employer") == employer]
+    return {"openings": openings}
+
+
+@router.get("/jobs/openings/catalog")
+def job_openings_catalog() -> dict:
+    return {"catalog": hire_catalog_public()}
+
+
+@router.get("/laborers")
+def list_laborers(
+    town: Annotated[str | None, Query()] = None,
+    employed: Annotated[bool | None, Query()] = None,
+    skill_min: Annotated[int, Query()] = 0,
+) -> dict:
+    w = _state.WORLD
+    result: list[dict] = []
+    for lab_id, lab in w.laborers.items():
+        if employed is not None and (lab.employer is not None) != employed:
+            continue
+        if int(lab.skill_level) < int(skill_min):
+            continue
+        if town and str(lab.home_town or "") != town:
+            continue
+        result.append(
+            {
+                "laborer_id": lab_id,
+                "display_name": lab.display_name,
+                "skill_level": int(lab.skill_level),
+                "health": float(lab.health),
+                "home_town": lab.home_town,
+                "employed": lab.employer is not None,
+                "employer": str(lab.employer) if lab.employer else None,
+                "wage_per_day_cents": int(getattr(lab, "wage_per_day_cents", 0) or 0),
+            }
+        )
+    return {"laborers": result, "count": len(result)}
+
+
+@router.post("/hire/fire")
+def post_hire_fire(
+    employer: Annotated[str, Query()],
+    laborer_id: Annotated[str, Query()],
+) -> dict:
+    r = fire_laborer(_state.WORLD, PartyId(employer), laborer_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
 @router.post("/plots/{plot_id}/maintain")
 def post_maintain_building(
     plot_id: str,
@@ -455,6 +556,28 @@ def get_business_registry() -> dict:
     from realm.world import _business_registry_public
 
     return {"ok": True, "tick": _state.WORLD.tick, "registry": _business_registry_public(_state.WORLD)}
+
+
+@router.get("/business/entity/{business_id}")
+def get_business_entity_detail(business_id: str) -> dict:
+    from realm.economy.businesses import business_shareholders, ownership_pct_bps_sold
+
+    w = _state.WORLD
+    biz = w.businesses.get(business_id)
+    if biz is None:
+        raise HTTPException(status_code=404, detail="unknown business")
+    sold = ownership_pct_bps_sold(w, business_id)
+    return {
+        "ok": True,
+        "business_id": biz.business_id,
+        "business_name": biz.business_name,
+        "owner_party": str(biz.owner_party),
+        "equity": {
+            "pct_sold_bps": sold,
+            "pct_founder_retains_bps": max(0, 10_000 - sold),
+            "shareholders": business_shareholders(w, business_id),
+        },
+    }
 
 
 @router.post("/business/register")

@@ -13,7 +13,7 @@ action function, return its result. No game logic in routes.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Query
 
@@ -38,7 +38,7 @@ from realm.contracts.social import (
     accept_supply_contract,
     fulfill_supply_contract,
     honor_contract_stub,
-    propose_contract_stub,
+    propose_enforced_contract,
     propose_supply_contract,
 )
 from realm.contracts.stubs import (
@@ -52,6 +52,15 @@ from realm.contracts.stubs import (
     propose_loan_contract,
     propose_service_sub,
     repay_loan_contract,
+)
+from realm.contracts.equity_stake import accept_equity_stake, propose_equity_stake
+from realm.contracts.instruments import (
+    accept_insurance,
+    accept_land_lease,
+    buy_loan,
+    list_loan_for_sale,
+    propose_insurance,
+    propose_land_lease,
 )
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.economy.analytics import purchase_analytics_product
@@ -202,19 +211,64 @@ def post_contract_equity_accept(
     return dict(r)
 
 
+@router.post("/contracts/equity/stake/propose")
+def post_contract_equity_stake_propose(
+    issuer: Annotated[str, Query()],
+    investor: Annotated[str, Query()],
+    business_id: Annotated[str, Query()],
+    ownership_pct_bps: Annotated[int, Query()],
+    investment_cents: Annotated[int, Query()],
+) -> dict:
+    r = propose_equity_stake(
+        _state.WORLD,
+        PartyId(issuer),
+        PartyId(investor),
+        business_id,
+        ownership_pct_bps,
+        investment_cents,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/contracts/equity/stake/accept")
+def post_contract_equity_stake_accept(
+    investor: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_equity_stake(_state.WORLD, PartyId(investor), contract_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
 @router.post("/contracts/service/propose")
 def post_contract_service_propose(
     provider: Annotated[str, Query()],
     subscriber: Annotated[str, Query()],
     fee_cents: Annotated[int, Query()],
     duration_ticks: Annotated[int, Query()],
+    service_id: Annotated[str, Query()],
+    service_params_json: Annotated[str | None, Query()] = None,
 ) -> dict:
+    import json
+
+    params: dict[str, Any] | None = None
+    if service_params_json:
+        try:
+            raw = json.loads(service_params_json)
+            params = dict(raw) if isinstance(raw, dict) else None
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="service_params_json must be valid JSON object")
     r = propose_service_sub(
         _state.WORLD,
         PartyId(provider),
         PartyId(subscriber),
         fee_cents,
         duration_ticks,
+        service_id,
+        params,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
@@ -233,12 +287,15 @@ def post_contract_service_accept(
 
 
 @router.post("/contracts/propose")
-def post_contract_propose(
-    party_a: Annotated[str, Query()],
-    party_b: Annotated[str, Query()],
-    kind: Annotated[str, Query()] = "supply",
-) -> dict:
-    return propose_contract_stub(_state.WORLD, PartyId(party_a), PartyId(party_b), kind)
+def post_contract_propose(body: dict[str, Any] = Body(...)) -> dict:
+    party_a = PartyId(str(body.get("party_a", "")))
+    party_b = PartyId(str(body.get("party_b", "")))
+    kind = str(body.get("kind", ""))
+    params = dict(body.get("params") or {})
+    r = propose_enforced_contract(_state.WORLD, party_a, party_b, kind, params)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
 
 
 @router.post("/contracts/{contract_id}/honor")
@@ -247,6 +304,131 @@ def post_contract_honor(contract_id: str) -> dict:
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
     return dict(r)
+
+
+@router.post("/contracts/insurance/propose")
+def post_insurance_propose(
+    insurer: Annotated[str, Query()],
+    insured: Annotated[str, Query()],
+    covered_event_kind: Annotated[str, Query()],
+    payout_cents: Annotated[int, Query()],
+    premium_per_7days_cents: Annotated[int, Query()],
+    duration_ticks: Annotated[int, Query()],
+    covered_plot_id: Annotated[str | None, Query()] = None,
+) -> dict:
+    r = propose_insurance(
+        _state.WORLD,
+        PartyId(insurer),
+        PartyId(insured),
+        covered_event_kind,
+        covered_plot_id,
+        payout_cents,
+        premium_per_7days_cents,
+        duration_ticks,
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.post("/contracts/insurance/accept")
+def post_insurance_accept(
+    insured: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_insurance(_state.WORLD, PartyId(insured), contract_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.get("/contracts/insurance/mine")
+def get_insurance_mine(party: Annotated[str, Query()] = "player") -> dict:
+    ps = str(party)
+    rows = [
+        dict(c)
+        for c in _state.WORLD.contracts
+        if str(c.get("kind", "")) == "insurance"
+        and str(c.get("status", "")) in ("active", "proposed")
+        and (str(c.get("insured", "")) == ps or str(c.get("insurer", "")) == ps)
+    ]
+    return {"ok": True, "policies": rows}
+
+
+@router.post("/loans/market/list")
+def post_loan_market_list(
+    seller: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+    ask_cents: Annotated[int, Query()],
+) -> dict:
+    r = list_loan_for_sale(_state.WORLD, PartyId(seller), contract_id, ask_cents)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.post("/loans/market/{contract_id}/buy")
+def post_loan_market_buy(
+    contract_id: str,
+    buyer: Annotated[str, Query()],
+) -> dict:
+    r = buy_loan(_state.WORLD, PartyId(buyer), contract_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.get("/loans/market")
+def get_loan_market() -> dict:
+    lm = _state.WORLD.scenario_state.get("loan_market", [])
+    if not isinstance(lm, list):
+        return {"ok": True, "listings": []}
+    return {"ok": True, "listings": list(lm)}
+
+
+@router.post("/contracts/lease/propose")
+def post_lease_propose(
+    lessor: Annotated[str, Query()],
+    lessee: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+    rent_per_7days_cents: Annotated[int, Query()],
+    duration_ticks: Annotated[int, Query()],
+) -> dict:
+    r = propose_land_lease(
+        _state.WORLD,
+        PartyId(lessor),
+        PartyId(lessee),
+        PlotId(plot_id),
+        rent_per_7days_cents,
+        duration_ticks,
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.post("/contracts/lease/accept")
+def post_lease_accept(
+    lessee: Annotated[str, Query()],
+    contract_id: Annotated[str, Query()],
+) -> dict:
+    r = accept_land_lease(_state.WORLD, PartyId(lessee), contract_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.get("/contracts/lease/mine")
+def get_lease_mine(party: Annotated[str, Query()] = "player") -> dict:
+    ps = str(party)
+    rows = [
+        dict(c)
+        for c in _state.WORLD.contracts
+        if str(c.get("kind", "")) == "land_lease"
+        and str(c.get("status", "")) in ("active", "proposed")
+        and (str(c.get("lessor", "")) == ps or str(c.get("lessee", "")) == ps)
+    ]
+    return {"ok": True, "leases": rows}
 
 
 # ─────────────────── Sprint 4 — Phase A: intelligence market ───────────────────

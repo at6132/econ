@@ -155,8 +155,9 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
 
 
 def _plot_owned_by(world: World, party: PartyId, plot_id: PlotId) -> bool:
-    p = world.plots.get(plot_id)
-    return p is not None and p.owner == party
+    from realm.infrastructure.plot_access import party_may_operate_plot
+
+    return party_may_operate_plot(world, party, plot_id)
 
 
 def _active_on_plot(world: World, plot_id: PlotId) -> bool:

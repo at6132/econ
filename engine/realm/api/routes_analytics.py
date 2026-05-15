@@ -38,7 +38,6 @@ from realm.contracts.social import (
     accept_supply_contract,
     fulfill_supply_contract,
     honor_contract_stub,
-    propose_contract_stub,
     propose_supply_contract,
 )
 from realm.contracts.stubs import (

@@ -426,6 +426,13 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
     except Exception:
         ac_count = 0
 
+    active_job_openings = sum(
+        1 for op in getattr(world, "job_openings", []) or [] if getattr(op, "filled_by", None) is None
+    )
+    employed_laborers = sum(
+        1 for lab in getattr(world, "laborers", {}).values() if lab.employer is not None
+    )
+
     return {
         "tick": world.tick,
         "party": str(party),
@@ -438,6 +445,8 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "unread_feed_entries": unread_feed,
         "active_contracts": int(ac_count),
         "open_orders": int(open_orders),
+        "active_job_openings": int(active_job_openings),
+        "employed_laborers": int(employed_laborers),
     }
 
 

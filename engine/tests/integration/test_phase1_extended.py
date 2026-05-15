@@ -11,7 +11,6 @@ from realm.economy.markets import market_buy, p2p_trade, place_buy_order, place_
 from realm.api.persistence import load_snapshot, save_snapshot
 from realm.api.serialization import SNAPSHOT_VERSION, dump_world, dumps_json, loads_json
 from realm.world.tick import advance_tick
-from realm.contracts.social import honor_contract_stub, propose_contract_stub
 from realm.world import bootstrap_frontier
 
 
@@ -181,9 +180,28 @@ def test_stub_hire_recurring_wage_moves_cash() -> None:
     assert w.ledger.balance(wc) >= w0 + 100 + 7
 
 
-def test_contract_honor_increments_reputation() -> None:
+def test_supply_fulfill_increments_reputation() -> None:
+    from realm.contracts.social import (
+        accept_supply_contract,
+        fulfill_supply_contract,
+        propose_supply_contract,
+    )
+    from realm.core.inventory import MatterErr
+    from realm.materials import MaterialId
+
     w = bootstrap_frontier(seed=16, grid_width=2, grid_height=2)
-    pr = propose_contract_stub(w, PartyId("player"), PartyId("npc_grain_vendor"), "memo")
+    ad = w.inventory.add(PartyId("player"), MaterialId("grain"), 5)
+    assert not isinstance(ad, MatterErr)
+    pr = propose_supply_contract(
+        w,
+        PartyId("player"),
+        PartyId("npc_grain_vendor"),
+        MaterialId("grain"),
+        1,
+        0,
+        100,
+    )
     cid = pr["contract_id"]
-    assert honor_contract_stub(w, cid)["ok"] is True
+    assert accept_supply_contract(w, PartyId("npc_grain_vendor"), cid)["ok"] is True
+    assert fulfill_supply_contract(w, PartyId("player"), cid)["ok"] is True
     assert w.reputation["player"]["honored"] >= 1

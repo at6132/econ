@@ -122,6 +122,7 @@ def register_business(
             suspension_reason=None,
             public_profile=True,
             last_viability_check_tick=int(world.tick),
+            equity_contract_ids=[],
         )
         world.businesses[bid] = ent
         record = BusinessRecord(

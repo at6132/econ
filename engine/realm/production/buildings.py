@@ -413,7 +413,10 @@ def build_on_plot(
         if not ok_co:
             return {"ok": False, "reason": reason_co or "invalid construction order"}
     elif plot.owner != party:
-        return {"ok": False, "reason": "not your plot"}
+        from realm.infrastructure.plot_access import party_may_operate_plot
+
+        if not party_may_operate_plot(world, party, plot_id):
+            return {"ok": False, "reason": "not your plot"}
     terrain_req = spec.get("terrain_required")
     if terrain_req:
         req_tuple = (terrain_req,) if isinstance(terrain_req, str) else tuple(terrain_req)

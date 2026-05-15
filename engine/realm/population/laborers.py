@@ -141,6 +141,11 @@ class LaborerNPC:
         default_factory=lambda: {"food": 1.0, "fuel": 1.0, "shelter": 1.0}
     )
     employment_contract: str | None = None
+    """When set, wages follow the linked :class:`JobOpening`. Direct hires leave
+    this ``None`` and use ``wage_per_day_cents`` instead."""
+    wage_per_day_cents: int = 0
+    """Daily wage for direct hires (no ``JobOpening``). Ignored when zero and an
+    opening is linked — then the opening's wage applies."""
     migrating_to: str | None = None
     migration_arrives_tick: int = 0
     last_needs_tick: int = 0
