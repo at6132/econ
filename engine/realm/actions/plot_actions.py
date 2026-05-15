@@ -55,6 +55,10 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
         return ActionErr(ok=False, reason="unknown plot")
     if plot.owner is not None:
         return ActionErr(ok=False, reason="plot already claimed")
+    from realm.production.recipe_sites import plot_allows_structure
+
+    if not plot_allows_structure(plot):
+        return ActionErr(ok=False, reason="cannot claim water plots")
     # Sprint 3 — Phase B.2: claim fee scales with population density. Frontier
     # plots (density 0.0) cost nothing; dense plots near pop hubs cost up to
     # CLAIM_COST_PEAK_CENTS. The cost is sunk to system_reserve.

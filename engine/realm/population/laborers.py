@@ -203,8 +203,14 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
     plot_islands = world.scenario_state.get("plot_islands") or {}
     if not plot_islands:
         return []
+    from realm.production.recipe_sites import plot_allows_structure
+
     candidate_plots = sorted(
-        pid_s for pid_s, isl in plot_islands.items() if int(isl) == int(island_id)
+        pid_s
+        for pid_s, isl in plot_islands.items()
+        if int(isl) == int(island_id)
+        and (p := world.plots.get(PlotId(pid_s))) is not None
+        and plot_allows_structure(p)
     )
     if not candidate_plots:
         return []

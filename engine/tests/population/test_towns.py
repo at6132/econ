@@ -77,6 +77,34 @@ def test_initial_laborers_housed_up_to_capacity():
                 assert lab.needs["shelter"] == pytest.approx(1.0)
 
 
+def test_build_and_claim_reject_water_plots() -> None:
+    w = bootstrap_genesis(seed=11, grid_width=24, grid_height=20, settler_count=2)
+    player = PartyId("player")
+    shallow = next(
+        pid for pid, p in w.plots.items() if p.terrain == Terrain.WATER_SHALLOW
+    )
+    w.plots[shallow].owner = None
+    assert claim_plot(w, player, shallow)["ok"] is False
+    w.plots[shallow].owner = player
+    res = build_on_plot(w, player, shallow, RESIDENCE_BUILDING_ID)
+    assert res["ok"] is False
+    assert "water" in res["reason"].lower()
+
+
+def test_bootstrap_residences_only_on_dry_land() -> None:
+    from realm.production.recipe_sites import plot_allows_structure
+
+    w = bootstrap_genesis(seed=42, settler_count=0)
+    for b in w.plot_buildings:
+        if b.get("building_id") != RESIDENCE_BUILDING_ID:
+            continue
+        plot = w.plots.get(PlotId(str(b["plot_id"])))
+        assert plot is not None
+        assert plot_allows_structure(plot), (
+            f"residence on {plot.terrain.value} at {b['plot_id']}"
+        )
+
+
 def test_bootstrap_houses_all_default_island_laborers():
     """Residence count scales with landmass-density labor targets per island."""
     w = bootstrap_genesis(

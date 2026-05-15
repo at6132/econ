@@ -338,6 +338,13 @@ def assign_laborer_residence(
     lab = world.laborers.get(laborer_id)
     if lab is None:
         return {"ok": False, "reason": "unknown laborer"}
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return {"ok": False, "reason": "unknown plot"}
+    from realm.production.recipe_sites import plot_allows_structure
+
+    if not plot_allows_structure(plot):
+        return {"ok": False, "reason": "cannot house laborers on water"}
     cap = residence_capacity(world, plot_id)
     if cap <= 0:
         return {"ok": False, "reason": "no completed residence on plot"}
@@ -408,6 +415,10 @@ def _pick_starting_residence_plots(world: World, island_id: int) -> list[PlotId]
         plot = world.plots.get(PlotId(pid_s))
         if plot is None or plot.owner is not None:
             continue
+        from realm.production.recipe_sites import plot_allows_structure
+
+        if not plot_allows_structure(plot):
+            continue
         candidates.append((int(plot.x), int(plot.y), pid_s))
     if not candidates:
         return []
@@ -434,6 +445,11 @@ def _seed_residence_on_plot(world: World, owner_party_id: str, plot_id: PlotId) 
     from realm.production.buildings import BUILDINGS
     from realm.production.decay import BUILDING_CONDITION_FULL_BPS
 
+    from realm.production.recipe_sites import plot_allows_structure
+
+    plot = world.plots.get(plot_id)
+    if plot is None or not plot_allows_structure(plot):
+        raise ValueError(f"bootstrap residence requires dry land, got {plot_id}")
     spec = BUILDINGS[RESIDENCE_BUILDING_ID]
     world.next_building_instance_seq += 1
     instance_id = f"b{world.next_building_instance_seq:06d}"

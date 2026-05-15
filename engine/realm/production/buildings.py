@@ -417,6 +417,8 @@ def build_on_plot(
 
         if not party_may_operate_plot(world, party, plot_id):
             return {"ok": False, "reason": "not your plot"}
+    from realm.production.recipe_sites import terrain_allows_workshop
+
     terrain_req = spec.get("terrain_required")
     if terrain_req:
         req_tuple = (terrain_req,) if isinstance(terrain_req, str) else tuple(terrain_req)
@@ -432,6 +434,11 @@ def build_on_plot(
                 "ok": False,
                 "reason": f"{building_id} requires terrain in {sorted(req_names)} (plot is {plot.terrain.value})",
             }
+    elif not terrain_allows_workshop(plot.terrain):
+        return {
+            "ok": False,
+            "reason": f"cannot build on water (plot is {plot.terrain.value})",
+        }
     cash = party_cash_account(party)
     label = str(spec["label"])
     total_cents: int

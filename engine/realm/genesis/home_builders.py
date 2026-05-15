@@ -59,6 +59,10 @@ def _pick_builder_plot(world: World, island_id: int, town_plots: set[str]) -> Pl
         plot = world.plots.get(PlotId(pid_s))
         if plot is None or plot.owner is not None:
             continue
+        from realm.production.recipe_sites import plot_allows_structure
+
+        if not plot_allows_structure(plot):
+            continue
         fallback.append(pid_s)
         # Score = chebyshev distance to nearest town plot. Lower = better.
         score = min(

@@ -1,11 +1,9 @@
 """Phase 7A — Genesis four-island world geometry.
 
 In the Genesis scenario the world is four landmasses separated by deep
-ocean. Ocean tiles (``terrain == WATER_DEEP``) are **impassable by land
-movement** (``tile_movement_cost == math.inf``) and shipping across them
-costs **2×** the normal per-tile rate. Each plot is tagged with an
-``island_id`` in ``[0, 3]`` when it sits on land, and is omitted from the
-mapping when it is ocean. The mapping is computed once at bootstrap (after
+ocean. Ocean and shallow-water tiles are omitted from landmass BFS. Only **dry
+land** (``terrain_allows_workshop``) receives an ``island_id``. Deep ocean
+is impassable by land movement; shallow water is not buildable or claimable. The mapping is computed once at bootstrap (after
 plots are generated) and cached in ``world.scenario_state["plot_islands"]``
 as ``{plot_id_str: island_id_int}``.
 
@@ -98,8 +96,10 @@ def compute_plot_islands(world: World) -> dict[str, int]:
     plots (Union-find would be faster but DFS is fine at our scale).
     """
     coord_to_plot: dict[tuple[int, int], str] = {}
+    from realm.production.recipe_sites import terrain_allows_workshop
+
     for pid, p in world.plots.items():
-        if is_ocean_terrain(p.terrain):
+        if not terrain_allows_workshop(p.terrain):
             continue
         coord_to_plot[(int(p.x), int(p.y))] = str(pid)
 
@@ -140,9 +140,12 @@ def island_coastal_plot_ids(world: World, island_id: int) -> list[str]:
     coord_to_plot: dict[tuple[int, int], str] = {}
     for pid, p in world.plots.items():
         coord_to_plot[(int(p.x), int(p.y))] = str(pid)
-    ocean_coords: set[tuple[int, int]] = {
-        c for c, pid_s in coord_to_plot.items()
-        if is_ocean_terrain(world.plots[PlotId(pid_s)].terrain)
+    from realm.production.recipe_sites import terrain_allows_workshop
+
+    water_coords: set[tuple[int, int]] = {
+        c
+        for c, pid_s in coord_to_plot.items()
+        if not terrain_allows_workshop(world.plots[PlotId(pid_s)].terrain)
     }
     islands_map = world.scenario_state.get("plot_islands") or {}
     out: list[str] = []
@@ -154,7 +157,7 @@ def island_coastal_plot_ids(world: World, island_id: int) -> list[str]:
             continue
         x, y = int(p.x), int(p.y)
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if (nx, ny) in ocean_coords or (nx, ny) not in coord_to_plot:
+            if (nx, ny) in water_coords or (nx, ny) not in coord_to_plot:
                 out.append(pid_s)
                 break
     return sorted(out)

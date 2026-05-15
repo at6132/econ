@@ -75,15 +75,16 @@ def test_ocean_tiles_are_impassable() -> None:
 
 
 def test_land_tiles_are_passable_and_assigned_to_an_island() -> None:
-    """Every non-ocean land plot has a finite cost and a non-None island id."""
+    """Dry land plots are passable and belong to a landmass; water does not."""
+    from realm.production.recipe_sites import terrain_allows_workshop
+
     w = _world()
     for pid, p in w.plots.items():
-        if p.terrain == Terrain.WATER_DEEP:
+        if not terrain_allows_workshop(p.terrain):
+            assert plot_island_id(w, pid) is None
             continue
         assert math.isfinite(tile_movement_cost(w, pid))
-        # Land plots — including beach (``WATER_SHALLOW``) — belong to an island.
-        if p.terrain != Terrain.WATER_SHALLOW:
-            assert plot_island_id(w, pid) is not None
+        assert plot_island_id(w, pid) is not None
 
 
 def test_no_pop_hub_parties_exist_after_bootstrap() -> None:

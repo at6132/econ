@@ -151,6 +151,11 @@ def terrain_allows_workshop(terrain: Terrain) -> bool:
     return terrain not in _WATER
 
 
+def plot_allows_structure(plot: Plot) -> bool:
+    """Dry land only — residences, workshops, and claims require this."""
+    return terrain_allows_workshop(plot.terrain)
+
+
 def subsurface_allows_recipe(plot: Plot, recipe: Recipe) -> bool:
     """Surveyed plot subsurface must meet recipe gates (extraction recipes)."""
     if not recipe.requires_subsurface:
