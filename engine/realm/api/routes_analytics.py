@@ -250,13 +250,17 @@ def post_market_buy(
     material: Annotated[str, Query()],
     max_qty: Annotated[int, Query()],
     min_seller_honored: Annotated[int, Query()] = 0,
+    max_price_per_unit_cents: Annotated[int | None, Query()] = None,
 ) -> dict:
+    kwargs: dict = {"min_seller_honored": min_seller_honored}
+    if max_price_per_unit_cents is not None:
+        kwargs["max_price_per_unit_cents"] = int(max_price_per_unit_cents)
     r = market_buy(
         _state.WORLD,
         PartyId(party),
         MaterialId(material),
         max_qty,
-        min_seller_honored=min_seller_honored,
+        **kwargs,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
