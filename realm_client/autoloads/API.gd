@@ -385,9 +385,32 @@ func fulfill_supply_contract(contract_id: String, cb: Callable, supplier: String
 
 # ── Persistence ─────────────────────────────────────────────────────────────
 
-func save_game(cb: Callable = Callable()) -> void:
-	post_request("/persistence/save", {}, cb)
+## Saves the live world to ``saves/<slot>.sqlite`` (slot defaults to ``current``).
+func save_game(cb: Callable = Callable(), slot: String = "current") -> void:
+	var q := "/persistence/save"
+	if slot != "":
+		q += "?slot=%s" % slot.uri_encode()
+	post_request(q, {}, cb)
 
 
-func load_game(cb: Callable = Callable()) -> void:
-	post_request("/persistence/load", {}, cb)
+func load_game(cb: Callable = Callable(), slot: String = "current") -> void:
+	var q := "/persistence/load"
+	if slot != "":
+		q += "?slot=%s" % slot.uri_encode()
+	post_request(q, {}, cb)
+
+
+func persistence_list(cb: Callable) -> void:
+	get_request("/persistence/list", cb)
+
+
+func persistence_status(cb: Callable) -> void:
+	get_request("/persistence/status", cb)
+
+
+func persistence_load_path(relative_path: String, cb: Callable) -> void:
+	post_request("/persistence/load?path=%s" % relative_path.uri_encode(), {}, cb)
+
+
+func dev_reset(seed: int, scenario: String, cb: Callable) -> void:
+	post_request("/dev/reset?seed=%d&scenario=%s" % [int(seed), scenario.uri_encode()], {}, cb)
