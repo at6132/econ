@@ -17,6 +17,7 @@ from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.population.stores import (
     FOOD_PER_UNIT,
     FUEL_PER_UNIT,
+    GENESIS_STORE_RETAIL_CENTS,
     NPC_STORE_COAL_QTY,
     NPC_STORE_GRAIN_QTY,
     SPENDING_TRIGGER_NEED,
@@ -47,7 +48,7 @@ def test_genesis_seeds_one_npc_store_per_town():
         assert len(active_stores) == 1
 
 
-def test_npc_stores_carry_grain_and_coal_with_premium_prices():
+def test_npc_stores_carry_grain_and_coal_with_subsistence_prices():
     w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
     grain_mid = MaterialId("grain")
     coal_mid = MaterialId("coal")
@@ -55,8 +56,24 @@ def test_npc_stores_carry_grain_and_coal_with_premium_prices():
         for sp in t.store_plots:
             assert store_inventory_qty(w, sp, grain_mid) == NPC_STORE_GRAIN_QTY
             assert store_inventory_qty(w, sp, coal_mid) == NPC_STORE_COAL_QTY
-            assert (store_price_cents(w, sp, grain_mid) or 0) > 0
-            assert (store_price_cents(w, sp, coal_mid) or 0) > 0
+            assert store_price_cents(w, sp, grain_mid) == GENESIS_STORE_RETAIL_CENTS["grain"]
+            assert store_price_cents(w, sp, coal_mid) == GENESIS_STORE_RETAIL_CENTS["coal"]
+
+
+def test_broke_laborer_can_buy_one_grain_when_two_units_unaffordable():
+    """Partial refill: 224¢ must still buy one grain at 60¢, not fail on 2×60."""
+    w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
+    lab = next(l for l in w.laborers.values() if l.home_town)
+    acct = laborer_cash_account(lab.laborer_id)
+    bal = w.ledger.balance(acct)
+    w.ledger.transfer(debit=acct, credit=system_reserve_account(), amount_cents=bal)
+    w.ledger.transfer(debit=system_reserve_account(), credit=acct, amount_cents=224)
+    lab.cash_cents = 224
+    lab.needs["food"] = 0.30
+    w.tick += TICKS_PER_GAME_DAY
+    stats = tick_laborer_spending(w)
+    assert stats["purchases"] >= 1
+    assert lab.needs["food"] > 0.30
 
 
 # ───────────────────────── owner actions ─────────────────────────
@@ -87,7 +104,7 @@ def _build_player_store_in_a_town(
             continue
         if p.terrain in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW):
             continue
-        if max(abs(p.x - center.x), abs(p.y - center.y)) > 2:
+        if max(abs(p.x - center.x), abs(p.y - center.y)) > 8:
             continue
         target = p.plot_id
         break

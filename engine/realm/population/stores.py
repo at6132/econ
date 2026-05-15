@@ -74,6 +74,16 @@ NEED_TARGET_AFTER_PURCHASE: Final[float] = 1.00
 NPC_STORE_MARKUP_BPS: Final[int] = 14_000
 """NPC seeded stores sell at ~40% margin so players can profitably undercut."""
 
+# Genesis training-wheels retail (¢/unit) — subsistence-priced so a laborer on
+# the $200 bootstrap stake can buy several meals before wages land.
+GENESIS_STORE_RETAIL_CENTS: Final[dict[str, int]] = {
+    "grain": 60,
+    "bread": 70,
+    "fish": 80,
+    "coal": 90,
+    "electricity": 120,
+}
+
 NPC_STORE_GRAIN_QTY: Final[int] = 250
 NPC_STORE_COAL_QTY: Final[int] = 200
 """Initial stock per NPC store. Enough to feed a town for a few days but not
@@ -440,6 +450,18 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
             )
             if units_needed <= 0:
                 continue
+            # Buy what cash allows (often 1 unit) rather than failing when the
+            # ideal refill needs more than the laborer can afford.
+            from realm.population.laborers import laborer_cash_account
+
+            unit_px = store_price_cents(world, plot_id, material) or 0
+            if unit_px > 0:
+                affordable = world.ledger.balance(laborer_cash_account(lid)) // int(
+                    unit_px
+                )
+                if affordable <= 0:
+                    continue
+                units_needed = min(units_needed, int(affordable))
             res = _execute_purchase(world, lid, plot_id, material, units_needed)
             if res.get("ok"):
                 bought = int(res.get("units", 0))
@@ -504,6 +526,14 @@ def _baseline_unit_cost_cents(material: MaterialId) -> int:
 def _npc_retail_price(material: MaterialId) -> int:
     base = _baseline_unit_cost_cents(material)
     return max(1, (base * NPC_STORE_MARKUP_BPS) // 10_000)
+
+
+def _genesis_store_retail_price(material: MaterialId) -> int:
+    """Fixed subsistence retail for bootstrap NPC stores (not exchange markup)."""
+    fixed = GENESIS_STORE_RETAIL_CENTS.get(str(material))
+    if fixed is not None:
+        return int(fixed)
+    return _npc_retail_price(material)
 
 
 def seed_genesis_npc_stores(world: World) -> list[PlotId]:
@@ -596,6 +626,6 @@ def seed_genesis_npc_stores(world: World) -> list[PlotId]:
             if isinstance(ad, MatterErr):
                 continue
             stock_store(world, storekeeper, choice, mid, qty)
-            set_store_price(world, storekeeper, choice, mid, _npc_retail_price(mid))
+            set_store_price(world, storekeeper, choice, mid, _genesis_store_retail_price(mid))
         seeded.append(choice)
     return seeded
