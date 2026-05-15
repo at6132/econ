@@ -10,7 +10,23 @@ from realm.economy.markets import MARKET_SELLER_REGISTRATION_CENTS, place_sell_o
 from realm.infrastructure.movement import dispatch_shipment, receiving_fee_cents
 from realm.infrastructure.plot_logistics import try_add_plot_output
 from realm.world.tick import advance_tick
-from realm.world import bootstrap_genesis
+from realm.world.terrain import Terrain
+from realm.world import World, bootstrap_genesis
+
+
+def _two_unowned_land_plots(w: World) -> tuple[PlotId, PlotId]:
+    """Pick two distinct claimable plots (avoids NPC-seeded footprints like ``p-1-0``)."""
+    ids = sorted(
+        (
+            p.plot_id
+            for p in w.plots.values()
+            if p.owner is None and p.terrain != Terrain.WATER_DEEP
+        ),
+        key=str,
+    )
+    if len(ids) < 2:
+        raise AssertionError("bootstrap must yield at least two unowned land plots")
+    return ids[0], ids[1]
 
 
 def test_receiving_fee_scales_with_qty() -> None:
@@ -37,7 +53,7 @@ def test_genesis_second_list_same_material_no_second_registration() -> None:
 
 def test_delivery_deferred_when_insufficient_cash_for_receiving() -> None:
     w = bootstrap_genesis(seed=31, grid_width=10, grid_height=8, settler_count=0)
-    a, b = PlotId("p-0-0"), PlotId("p-1-0")
+    a, b = _two_unowned_land_plots(w)
     p = PartyId("player")
     assert claim_plot(w, p, a)["ok"] is True
     assert claim_plot(w, p, b)["ok"] is True
