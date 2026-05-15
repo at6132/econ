@@ -844,6 +844,16 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         labor_cents=4_00,
         requires_building_id="apothecary",
     ),
+    "soil_remediation": Recipe(
+        recipe_id="soil_remediation",
+        display_name="Soil remediation (phosphate meal)",
+        inputs={MaterialId("phosphate_meal"): 2},
+        outputs={},
+        duration_ticks=6 * _TICKS_PER_GAME_HOUR,
+        labor_cents=2_00,
+        requires_building_id="",
+        requires_tool=MaterialId("spade"),
+    ),
 }
 
 

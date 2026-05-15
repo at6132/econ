@@ -38,6 +38,9 @@ __all__ = [
     "REGIONAL_SURVEY_COST_CENTS",
     "PARTY_VOLUME_COST_CENTS",
     "SUPPLY_SHORTAGE_COST_CENTS",
+    "REGIONAL_EFFICIENCY_COST_CENTS",
+    "REGIONAL_RISK_COST_CENTS",
+    "MARKET_CYCLE_COST_CENTS",
     "SIGNIFICANT_VOLUME_THRESHOLD",
     "SHORTAGE_UNIT_THRESHOLD",
     "SHORTAGE_DAYS",
@@ -60,6 +63,7 @@ SUPPLY_SHORTAGE_COST_CENTS: Final[int] = 400
 # Phase 8E intelligence products.
 REGIONAL_RISK_COST_CENTS: Final[int] = 1_000
 MARKET_CYCLE_COST_CENTS: Final[int] = 800
+REGIONAL_EFFICIENCY_COST_CENTS: Final[int] = 2_000
 
 # Categorical thresholds.
 SIGNIFICANT_VOLUME_THRESHOLD: Final[int] = 50
@@ -77,6 +81,7 @@ _VALID_PRODUCTS: Final[frozenset[str]] = frozenset(
         "supply_shortage",
         "regional_risk",
         "market_cycle",
+        "regional_efficiency",
     }
 )
 
@@ -87,6 +92,7 @@ _PRODUCT_COSTS: Final[dict[str, int]] = {
     "supply_shortage": SUPPLY_SHORTAGE_COST_CENTS,
     "regional_risk": REGIONAL_RISK_COST_CENTS,
     "market_cycle": MARKET_CYCLE_COST_CENTS,
+    "regional_efficiency": REGIONAL_EFFICIENCY_COST_CENTS,
 }
 
 
@@ -513,6 +519,18 @@ def purchase_analytics_product(
         target_party = str(params.get("party_id", "")).strip()
         if not target_party:
             return {"ok": False, "reason": "missing party_id"}
+    elif product == "regional_efficiency":
+        from realm.world.regional_advantage import ADVANTAGE_CATEGORIES
+
+        cat = str(params.get("category", "")).strip()
+        if cat not in ADVANTAGE_CATEGORIES:
+            return {"ok": False, "reason": "invalid category"}
+        try:
+            lm = int(params.get("landmass_id", -1))
+        except (TypeError, ValueError):
+            return {"ok": False, "reason": "invalid landmass_id"}
+        if lm not in world.regional_advantages:
+            return {"ok": False, "reason": "unknown landmass_id"}
     # Charge cash now (single transfer; consistent with intel.py).
     tr = world.ledger.transfer(
         debit=buyer_cash,
@@ -539,6 +557,18 @@ def purchase_analytics_product(
         data = _regional_risk_report(world)
     elif product == "market_cycle":
         data = _market_cycle_report(world)
+    elif product == "regional_efficiency":
+        from realm.world.regional_advantage import qualitative_band
+
+        cat = str(params.get("category", "")).strip()
+        lm = int(params.get("landmass_id", -1))
+        adv = world.regional_advantages.get(lm) or {}
+        mod = float(adv.get(cat, 1.0))
+        data = {
+            "landmass_id": lm,
+            "category": cat,
+            "band": qualitative_band(mod),
+        }
     else:  # supply_shortage
         materials = _supply_shortage_materials(world)
         data = {"materials_in_shortage": materials, "threshold_units": SHORTAGE_UNIT_THRESHOLD}
@@ -568,6 +598,10 @@ def purchase_analytics_product(
         summary_bits.append(
             f"market_cycle — {len(data.get('flagged_materials', []))} flagged material(s); "
             f"credit_crunch={'on' if crunch else 'off'}"
+        )
+    elif product == "regional_efficiency":
+        summary_bits.append(
+            f"regional_efficiency — landmass {data['landmass_id']} {data['category']}: {data['band']}"
         )
     else:
         summary_bits.append(

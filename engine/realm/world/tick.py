@@ -95,6 +95,18 @@ def advance_tick(world: World) -> None:
     tick_business_viability(world)
     tick_nascent_settlements(world)
     record_market_snapshot(world)
+    from realm.economy.cpi import tick_cpi
+
+    tick_cpi(world)
+    from realm.economy.futures import tick_futures_pipeline
+
+    tick_futures_pipeline(world)
+    from realm.economy.fx_market import tick_fx_pipeline
+
+    tick_fx_pipeline(world)
+    from realm.economy.currencies import tick_bank_reserves
+
+    tick_bank_reserves(world)
     # Phase 8 — Sub-phase 8D: price panic detection, credit crunch toggle,
     # route blockage lazy-expiry. Reads the snapshot we just recorded.
     tick_market_events(world)

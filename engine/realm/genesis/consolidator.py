@@ -462,3 +462,24 @@ def tick_consolidator(world: World) -> None:
             break
     _list_output(world, target)
     _maybe_emit_dominance_feed(world)
+    if int(world.tick) % (7 * _TICKS_PER_GAME_DAY) == 0:
+        from realm.economy import futures as futures_mod
+
+        for mat in (MaterialId("iron_ore"), MaterialId("coal")):
+            asks = world.market_asks_by_material.get(str(mat), [])
+            if not asks:
+                continue
+            spot = min(int(a.price_per_unit_cents) for a in asks)
+            if spot <= 0:
+                continue
+            strike = max(1, int(round(spot * 1.05)))
+            dt = int(world.tick) + 30 * _TICKS_PER_GAME_DAY
+            futures_mod.post_futures_order(
+                world,
+                CONSOLIDATOR_PARTY_ID,
+                "buy",
+                mat,
+                5,
+                strike,
+                dt,
+            )

@@ -303,6 +303,10 @@ class World:
     Promoted to a town after ``resident_count >= 2`` for 3+ consecutive
     game-days."""
     next_nascent_settlement_seq: int = 0
+    futures_orders: list[Any] = field(default_factory=list)
+    fx_orders: list[Any] = field(default_factory=list)
+    issued_currencies: dict[str, Any] = field(default_factory=dict)
+    regional_advantages: dict[int, dict[str, float]] = field(default_factory=dict)
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -653,6 +657,9 @@ def bootstrap_genesis(
         from realm.world.landmasses import compute_landmasses
 
         compute_landmasses(world)
+        from realm.world.regional_advantage import seed_regional_advantages
+
+        seed_regional_advantages(world)
     else:
         world.scenario_state["plot_islands"] = {}
     # Phase 7B — seed LaborerNPCs per island. Each laborer gets a real

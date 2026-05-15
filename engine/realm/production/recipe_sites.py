@@ -114,6 +114,8 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     # Phase 8C — herbalism + apothecary chain.
     "gather_herbs": frozenset({T.FOREST}),
     "make_medicine": frozenset({T.PLAINS, T.FOREST, T.MOUNTAIN, T.SWAMP, T.TUNDRA, T.DESERT}),
+    # Soil remediation — same dry-land envelope as mining-adjacent ag degradation.
+    "soil_remediation": frozenset({T.PLAINS, T.HILLS, T.SWAMP, T.TUNDRA, T.DESERT}),
     # Phase 9A — shipyard (coastal-only; same plot_is_coastal gate as the dock).
     # Terrain envelope mirrors tidal_power: any land-terrain that *can* be
     # water-adjacent is surfaced; ``COASTAL_ONLY_RECIPES`` enforces the actual

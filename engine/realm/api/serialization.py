@@ -1,6 +1,6 @@
 """Serialize / deserialize full World for SQLite persistence.
 
-Snapshot ``version`` is ``7`` (older rows still load). Nested dict/list values are deep-copied on dump
+Snapshot ``version`` is ``14`` (older rows still load). Nested dict/list values are deep-copied on dump
 so JSON round-trips do not share mutable subgraphs with the live ``World``.
 
 ``load_world`` uses defaults via ``dict.get`` so older SQLite/JSON rows remain loadable when new
@@ -31,7 +31,7 @@ from realm.world import (
 from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 13
+SNAPSHOT_VERSION = 14
 
 
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
@@ -274,6 +274,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 "wage_per_day_cents": int(op.wage_per_day_cents),
                 "posted_at_tick": int(op.posted_at_tick),
                 "filled_by": op.filled_by,
+                "cpi_indexed": bool(getattr(op, "cpi_indexed", False)),
             }
             for op in world.job_openings
         ],
@@ -309,12 +310,62 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for ns in world.nascent_settlements.values()
         ],
+        "futures_orders": [
+            {
+                "order_id": o.order_id,
+                "side": o.side,
+                "poster": str(o.poster),
+                "material": str(o.material),
+                "qty": int(o.qty),
+                "price_per_unit_cents": int(o.price_per_unit_cents),
+                "delivery_tick": int(o.delivery_tick),
+                "deposit_cents": int(o.deposit_cents),
+                "status": str(o.status),
+                "matched_with": o.matched_with,
+                "posted_at_tick": int(o.posted_at_tick),
+                "match_price_cents": o.match_price_cents,
+            }
+            for o in world.futures_orders
+        ],
+        "fx_orders": [
+            {
+                "order_id": o.order_id,
+                "poster": str(o.poster),
+                "sell_material": str(o.sell_material),
+                "sell_qty": int(o.sell_qty),
+                "buy_material": str(o.buy_material),
+                "buy_qty_min": int(o.buy_qty_min),
+                "posted_at_tick": int(o.posted_at_tick),
+                "status": str(o.status),
+                "expires_at_tick": int(o.expires_at_tick),
+                "filled_sell_qty": int(getattr(o, "filled_sell_qty", 0)),
+                "filled_buy_qty": int(getattr(o, "filled_buy_qty", 0)),
+            }
+            for o in world.fx_orders
+        ],
+        "issued_currencies": {
+            k: {
+                "currency_id": c.currency_id,
+                "symbol": c.symbol,
+                "name": c.name,
+                "issuer_party": c.issuer_party,
+                "business_id": c.business_id,
+                "material_id": c.material_id,
+                "reserve_ratio": float(c.reserve_ratio),
+                "total_issued": int(c.total_issued),
+                "reserve_cents": int(c.reserve_cents),
+                "created_at_tick": int(c.created_at_tick),
+                "status": str(c.status),
+            }
+            for k, c in world.issued_currencies.items()
+        },
+        "regional_advantages": {str(k): dict(v) for k, v in world.regional_advantages.items()},
     }
 
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     width = max(int(p["x"]) for p in d["plots"].values()) + 1
@@ -574,6 +625,7 @@ def load_world(d: dict[str, Any]) -> World:
                     filled_by=(
                         str(payload["filled_by"]) if payload.get("filled_by") else None
                     ),
+                    cpi_indexed=bool(payload.get("cpi_indexed", False)),
                 )
             )
     world.next_business_seq = int(d.get("next_business_seq", 0))
@@ -697,6 +749,98 @@ def load_world(d: dict[str, Any]) -> World:
                 migration_arrives_tick=int(payload.get("migration_arrives_tick", 0)),
                 last_needs_tick=int(payload.get("last_needs_tick", 0)),
             )
+    raw_fu = d.get("futures_orders") or []
+    if isinstance(raw_fu, list):
+        from realm.economy.futures import FuturesOrder
+
+        for row in raw_fu:
+            if not isinstance(row, dict):
+                continue
+            oid = str(row.get("order_id", ""))
+            if not oid:
+                continue
+            world.futures_orders.append(
+                FuturesOrder(
+                    order_id=oid,
+                    side=str(row.get("side", "")),
+                    poster=PartyId(str(row.get("poster", ""))),
+                    material=MaterialId(str(row.get("material", ""))),
+                    qty=int(row.get("qty", 0)),
+                    price_per_unit_cents=int(row.get("price_per_unit_cents", 0)),
+                    delivery_tick=int(row.get("delivery_tick", 0)),
+                    deposit_cents=int(row.get("deposit_cents", 0)),
+                    status=str(row.get("status", "open")),
+                    matched_with=(
+                        str(row["matched_with"]) if row.get("matched_with") else None
+                    ),
+                    posted_at_tick=int(row.get("posted_at_tick", 0)),
+                    match_price_cents=(
+                        int(row["match_price_cents"])
+                        if row.get("match_price_cents") is not None
+                        else None
+                    ),
+                )
+            )
+    raw_fx = d.get("fx_orders") or []
+    if isinstance(raw_fx, list):
+        from realm.economy.fx_market import FXOrder
+
+        for row in raw_fx:
+            if not isinstance(row, dict):
+                continue
+            oid = str(row.get("order_id", ""))
+            if not oid:
+                continue
+            world.fx_orders.append(
+                FXOrder(
+                    order_id=oid,
+                    poster=PartyId(str(row.get("poster", ""))),
+                    sell_material=str(row.get("sell_material", "")),
+                    sell_qty=int(row.get("sell_qty", 0)),
+                    buy_material=str(row.get("buy_material", "")),
+                    buy_qty_min=int(row.get("buy_qty_min", 0)),
+                    posted_at_tick=int(row.get("posted_at_tick", 0)),
+                    status=str(row.get("status", "open")),
+                    expires_at_tick=int(row.get("expires_at_tick", 0)),
+                    filled_sell_qty=int(row.get("filled_sell_qty", 0)),
+                    filled_buy_qty=int(row.get("filled_buy_qty", 0)),
+                )
+            )
+    raw_ic = d.get("issued_currencies") or {}
+    if isinstance(raw_ic, dict):
+        from realm.economy.currencies import IssuedCurrency
+        from realm.materials import register_currency_material
+
+        for cid, payload in raw_ic.items():
+            if not isinstance(payload, dict):
+                continue
+            ic = IssuedCurrency(
+                currency_id=str(payload.get("currency_id", cid)),
+                symbol=str(payload.get("symbol", "")),
+                name=str(payload.get("name", "")),
+                issuer_party=str(payload.get("issuer_party", "")),
+                business_id=str(payload.get("business_id", "")),
+                material_id=str(payload.get("material_id", "")),
+                reserve_ratio=float(payload.get("reserve_ratio", 0.2)),
+                total_issued=int(payload.get("total_issued", 0)),
+                reserve_cents=int(payload.get("reserve_cents", 0)),
+                created_at_tick=int(payload.get("created_at_tick", 0)),
+                status=str(payload.get("status", "active")),
+            )
+            world.issued_currencies[str(cid)] = ic
+            register_currency_material(MaterialId(ic.material_id), ic.name)
+    raw_ra = d.get("regional_advantages") or {}
+    if isinstance(raw_ra, dict):
+        for lk_s, inner in raw_ra.items():
+            if not isinstance(inner, dict):
+                continue
+            try:
+                lk = int(lk_s)
+            except (TypeError, ValueError):
+                continue
+            world.regional_advantages[lk] = {
+                str(kk): float(vv) for kk, vv in inner.items()
+            }
     # Sprint 6 — Phase D.1: matter no longer lives in ``plot_output_stock``.
     # Migrate any staged output from old snapshots (version ≤ 10) into the
     # plot owner's inventory and reset the per-plot dict to a fresh display log.

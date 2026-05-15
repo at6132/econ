@@ -250,10 +250,27 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     ),
 }
 
-DURABLE_MATERIAL_IDS: frozenset[MaterialId] = frozenset(
-    mid for mid, mdef in MATERIALS.items() if mdef.durable
-)
+PLUGIN_MATERIALS: dict[MaterialId, MaterialDef] = {}
+"""Runtime-registered materials (player currencies). Not in the frozen ``MATERIALS`` map."""
+
+CURRENCY_MATERIAL_IDS: set[MaterialId] = set()
+"""Materials that represent bank-issued currency (not valid production inputs)."""
+
+
+def register_currency_material(mid: MaterialId, display_name: str) -> None:
+    if mid in PLUGIN_MATERIALS:
+        return
+    PLUGIN_MATERIALS[mid] = MaterialDef(
+        mid,
+        display_name,
+        0.01,
+        "currency",
+        spoils_to=None,
+        spoilage_interval_ticks=0,
+        durable=True,
+    )
+    CURRENCY_MATERIAL_IDS.add(mid)
 
 
 def all_material_ids() -> tuple[MaterialId, ...]:
-    return tuple(MATERIALS.keys())
+    return tuple(MATERIALS.keys()) + tuple(PLUGIN_MATERIALS.keys())

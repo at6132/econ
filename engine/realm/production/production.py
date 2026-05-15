@@ -38,6 +38,11 @@ from realm.production.storage_caps import party_inventory_unit_total, party_stor
 from realm.core.time_scale import building_operational
 from realm.world import ActiveProduction, World
 
+
+def _ag_recipe_id(rid: str) -> bool:
+    return rid.startswith("grow_") or rid == "bake_bread" or rid == "fishing"
+
+
 # Basis points: share of recipe labor paid out to hired workers (rest + remainder → system reserve).
 EMPLOYMENT_LABOR_TO_WORKERS_BPS = 4000  # 40%
 
@@ -146,6 +151,18 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
     event_mod = yield_modifier_for_plot(world, recipe.recipe_id, plot)
     if event_mod != 1.0:
         out = {k: max(0, int(round(int(v) * float(event_mod)))) for k, v in out.items()}
+    if plot is not None:
+        from realm.world.regional_advantage import regional_advantage_modifier
+
+        ram = regional_advantage_modifier(world, plot.plot_id, str(recipe.recipe_id))
+        if ram != 1.0:
+            out = {k: max(0, int(round(int(v) * float(ram)))) for k, v in out.items()}
+    if plot is not None and _ag_recipe_id(str(recipe.recipe_id)):
+        from realm.production.externalities import soil_quality_modifier
+
+        sm = soil_quality_modifier(world, plot.plot_id)
+        if sm != 1.0:
+            out = {k: max(0, int(round(int(v) * float(sm)))) for k, v in out.items()}
     # Phase 8 — Sub-phase 8D: resource depletion. Mining recipes draw down
     # the relevant subsurface grade by a tiny amount per completion (handled
     # at the run-completion site in ``_apply_subsurface_depletion`` below,
@@ -467,6 +484,19 @@ def start_production(
     plot_ok, plot_reason = recipe_allowed_on_plot(world, plot, recipe_id)
     if not plot_ok:
         return {"ok": False, "reason": plot_reason or "recipe not available on this plot"}
+    from realm.materials import CURRENCY_MATERIAL_IDS
+
+    for mid in recipe.inputs:
+        if mid in CURRENCY_MATERIAL_IDS:
+            return {"ok": False, "reason": "currency materials cannot be used in production"}
+    if _ag_recipe_id(recipe_id):
+        from realm.production.externalities import soil_quality_modifier
+
+        if soil_quality_modifier(world, plot_id) <= 0.0:
+            return {
+                "ok": False,
+                "reason": "soil too degraded from nearby mining — farm cannot operate",
+            }
     if recipe.requires_tool is not None:
         tool = recipe.requires_tool
         if world.inventory.qty(party, tool) < 1:
@@ -702,6 +732,17 @@ def tick_production(world: World) -> None:
         # ``mine_ore`` run at 100% efficiency depletes the grade by 0.001;
         # ~500 runs takes a healthy plot below the recipe's min_grade gate).
         _apply_subsurface_depletion(world, run, recipe)
+        if str(run.recipe_id) == "soil_remediation":
+            p2 = world.plots.get(run.plot_id)
+            if p2 is not None:
+                from dataclasses import replace
+
+                ng = min(1.0, float(p2.subsurface.phosphate_grade) + 0.05)
+                p2.subsurface = replace(p2.subsurface, phosphate_grade=ng)
+        elif str(run.recipe_id).startswith("mine_"):
+            from realm.production.externalities import apply_mining_externality
+
+            apply_mining_externality(world, run.plot_id)
         # Sprint 6 — Phase D.2: optional auto-listing of fresh output.
         if eff_out:
             _maybe_auto_list_outputs(world, run, eff_out)

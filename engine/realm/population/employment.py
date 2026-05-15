@@ -87,6 +87,7 @@ class JobOpening:
     """When a laborer fills this opening, their ``laborer_id`` lands here.
     Filled openings remain in the list for snapshot/UI inspection until
     the laborer quits or is fired."""
+    cpi_indexed: bool = False
 
 
 # ───────────────────────────── owner actions ─────────────────────────────
@@ -99,6 +100,7 @@ def post_job_opening(
     *,
     skill_min: int = 0,
     wage_per_day_cents: int = DEFAULT_WAGE_PER_GAME_DAY_CENTS,
+    cpi_indexed: bool = False,
 ) -> dict:
     """Open a job slot on ``plot_id``. Returns the opening_id on success."""
     if employer not in world.parties:
@@ -120,6 +122,7 @@ def post_job_opening(
         skill_min=int(skill_min),
         wage_per_day_cents=int(wage_per_day_cents),
         posted_at_tick=int(world.tick),
+        cpi_indexed=bool(cpi_indexed),
     )
     world.job_openings.append(opening)
     log_event(
@@ -300,6 +303,10 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
         )
         if op is not None:
             wage = int(op.wage_per_day_cents)
+            if bool(getattr(op, "cpi_indexed", False)):
+                from realm.economy.cpi import cpi_multiplier
+
+                wage = max(1, int(round(wage * float(cpi_multiplier(world)))))
         else:
             wpd = int(getattr(lab, "wage_per_day_cents", 0) or 0)
             wage = wpd if wpd > 0 else DEFAULT_WAGE_PER_GAME_DAY_CENTS

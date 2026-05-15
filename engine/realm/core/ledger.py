@@ -84,6 +84,19 @@ def business_cash_account(business_id: str) -> AccountId:
     return AccountId(f"cash:biz:{business_id}")
 
 
+def futures_escrow_account() -> AccountId:
+    return AccountId("system:futures_escrow")
+
+
+def fx_escrow_account() -> AccountId:
+    return AccountId("system:fx_escrow")
+
+
+def named_reserve_account(name: str) -> AccountId:
+    """Named sub-ledger (e.g. per-currency bank reserves)."""
+    return AccountId(f"system:reserve:{name}")
+
+
 def system_reserve_account() -> AccountId:
     return AccountId("system:reserve")
 

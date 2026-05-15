@@ -281,6 +281,7 @@ def _job_opening_public_dict(op: object) -> dict:
         "wage_per_day_cents": int(getattr(op, "wage_per_day_cents", 0)),
         "posted_at_tick": int(getattr(op, "posted_at_tick", 0)),
         "filled_by": getattr(op, "filled_by", None),
+        "cpi_indexed": bool(getattr(op, "cpi_indexed", False)),
     }
 
 
@@ -290,6 +291,7 @@ def create_job_opening(
     plot_id: Annotated[str, Query()],
     skill_min: Annotated[int, Query()] = 0,
     wage_per_day_cents: Annotated[int, Query()] = 800,
+    cpi_indexed: Annotated[bool, Query()] = False,
 ) -> dict:
     r = post_job_opening(
         _state.WORLD,
@@ -297,6 +299,7 @@ def create_job_opening(
         PlotId(plot_id),
         skill_min=skill_min,
         wage_per_day_cents=wage_per_day_cents,
+        cpi_indexed=cpi_indexed,
     )
     if not r.get("ok"):
         raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
