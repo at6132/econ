@@ -223,7 +223,7 @@ def genesis_settler_population_plan(
         if settler_spawn_cap < initial:
             raise ValueError("settler_spawn_cap must be >= settler_count")
         cap = settler_spawn_cap
-    elif initial == GENESIS_DEFAULT_START_SETTLERS:
+    elif initial >= GENESIS_DEFAULT_START_SETTLERS:
         cap = GENESIS_DEFAULT_MAX_SETTLERS
     else:
         cap = initial

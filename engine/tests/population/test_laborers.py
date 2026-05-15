@@ -6,7 +6,6 @@ import pytest
 
 from realm.population.laborers import (
     DEATH_THRESHOLD,
-    DEFAULT_ISLAND_LABORER_COUNTS,
     FOOD_DECAY_PER_DAY,
     FOOD_LOW_THRESHOLD,
     LABORER_STARTING_CASH_CENTS,
@@ -21,15 +20,18 @@ from realm.population.laborers import (
     tick_laborers,
     unemployed_laborer_count_for_island,
 )
+from realm.population.landmass_density import laborer_target_count_for_landmass
 from realm.world import bootstrap_genesis
 
 
 # ───────────────────────── bootstrap + distribution ─────────────────────────
 
 
-def test_laborers_seeded_per_island_with_default_counts():
-    """A four-island world receives the default per-island laborer counts."""
-    w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
+def test_laborers_seeded_per_landmass_by_density_formula():
+    """Four-island worlds seed labor proportional to each landmass's land plots."""
+    w = bootstrap_genesis(
+        seed=42, grid_width=64, grid_height=48, settler_count=4, map_layout="islands"
+    )
     plot_islands = w.scenario_state.get("plot_islands", {})
     distinct_islands = sorted({int(v) for v in plot_islands.values()})
     assert len(distinct_islands) == 4, (
@@ -37,12 +39,11 @@ def test_laborers_seeded_per_island_with_default_counts():
     )
     for isl in distinct_islands:
         count = laborer_count_for_island(w, isl)
-        expected = DEFAULT_ISLAND_LABORER_COUNTS.get(isl, 100)
+        expected = laborer_target_count_for_landmass(w, isl)
         assert count == expected, (
             f"island {isl}: expected {expected} laborers, got {count}"
         )
-    # Total > 500 per the integration-test target.
-    assert sum(DEFAULT_ISLAND_LABORER_COUNTS.values()) >= 500
+    assert len(w.laborers) >= 200
 
 
 def test_each_seeded_laborer_has_funded_ledger_account():

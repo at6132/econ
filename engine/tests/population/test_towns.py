@@ -12,6 +12,7 @@ from realm.population.towns import (
     RESIDENCE_BUILDING_ID,
     SETTLEMENT_PARTY_ID,
     STARTING_RESIDENCES_PER_ISLAND,
+    starting_residence_plot_count_for_island,
     TOWN_MIN_RESIDENCES,
     TOWN_PROXIMITY_TILES,
     Town,
@@ -62,29 +63,29 @@ def test_initial_laborers_housed_up_to_capacity():
     """Laborers fill residences up to capacity; surplus stays unhoused."""
     w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
     cap_per_residence = int(BUILDINGS[RESIDENCE_BUILDING_ID]["capacity"])
-    expected_per_island = STARTING_RESIDENCES_PER_ISLAND * cap_per_residence
     for t in w.towns.values():
+        expected = (
+            starting_residence_plot_count_for_island(w, t.island_id) * cap_per_residence
+        )
         n_in_town = sum(
             1 for lab in w.laborers.values() if lab.home_town == t.town_id
         )
-        assert 0 < n_in_town <= expected_per_island
+        assert 0 < n_in_town <= expected
         # Shelter need fully restored on housed laborers.
         for lab in w.laborers.values():
             if lab.home_town == t.town_id:
                 assert lab.needs["shelter"] == pytest.approx(1.0)
 
 
-def test_bootstrap_houses_phase9_target_majority():
-    """Phase 9 closure seeds enough homes for a majority, with surplus demand left."""
-    w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
+def test_bootstrap_houses_all_default_island_laborers():
+    """Residence count scales with landmass-density labor targets per island."""
+    w = bootstrap_genesis(
+        seed=42, grid_width=64, grid_height=48, settler_count=4, map_layout="islands"
+    )
     housed = sum(1 for lab in w.laborers.values() if lab.home_town)
     unhoused = sum(1 for lab in w.laborers.values() if not lab.home_town)
-    total = housed + unhoused
-    assert housed * 10 >= total * 6, (
-        f"expected at least 60% of laborers housed after Phase 9 closure, "
-        f"got housed={housed}, unhoused={unhoused}"
-    )
-    assert unhoused > 0, "home_builder market should still have surplus demand"
+    assert unhoused == 0, f"expected all laborers housed, unhoused={unhoused}"
+    assert housed == len(w.laborers)
 
 
 # ───────────────────────── detect_towns clustering ─────────────────────────
@@ -183,8 +184,8 @@ def test_assign_laborer_residence_capacity_blocked():
 
 def test_assign_laborer_residence_restores_shelter():
     w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
-    # Pick an unhoused laborer.
-    lab = next(lab for lab in w.laborers.values() if not lab.home_town)
+    # Free one slot on a residence (all laborers are housed at bootstrap now).
+    lab = next(iter(w.laborers.values()))
     lab.needs["shelter"] = 0.20
     # Pick a residence on the same island.
     same_island_town = next(t for t in w.towns.values() if t.island_id == lab.island_id)

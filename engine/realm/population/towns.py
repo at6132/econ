@@ -36,6 +36,7 @@ __all__ = [
     "residence_capacity",
     "residence_occupancy",
     "seed_genesis_starting_towns",
+    "starting_residence_plot_count_for_island",
     "on_residence_built",
 ]
 
@@ -58,10 +59,19 @@ any player has built anything. Players + entrepreneur NPCs build their
 own residences on top of this baseline."""
 
 STARTING_RESIDENCES_PER_ISLAND: Final[int] = 22
-"""Phase 9 closure - bootstrap with enough residences to seat at least
-60% of each island's laborers under a roof on day 1. The home_builder
-archetype (``realm/genesis/home_builders.py``) extends this over time,
-and players will compete in the residential market starting in Phase 11."""
+"""Legacy default when island laborer count is unknown. Prefer
+:func:`starting_residence_plot_count_for_island`."""
+
+
+def starting_residence_plot_count_for_island(world: World, island_id: int) -> int:
+    """Residence buildings needed to seat the density-target laborers on this landmass."""
+    from realm.population.landmass_density import laborer_target_count_for_landmass
+    from realm.production.buildings import BUILDINGS
+
+    cap = int(BUILDINGS[RESIDENCE_BUILDING_ID].get("capacity", 8))
+    n_lab = laborer_target_count_for_landmass(world, int(island_id))
+    need = (n_lab + cap - 1) // cap
+    return max(TOWN_MIN_RESIDENCES, need)
 
 
 # ───────────────────────── dataclass ─────────────────────────
@@ -383,14 +393,13 @@ def _ensure_settlement_party(world: World) -> None:
 
 
 def _pick_starting_residence_plots(world: World, island_id: int) -> list[PlotId]:
-    """Pick ``STARTING_RESIDENCES_PER_ISLAND`` adjacent land plots on this island.
+    """Pick enough land plots on this island for bootstrap residences.
 
-    Strategy: take the three plots with the smallest (x+y) so they are
-    deterministic per seed and sit naturally in the top-left of the
-    island's bounding box. They are guaranteed to be within 5 tiles of
-    each other on a contiguous island larger than 9 plots, which our
-    four islands all are.
+    Count scales with ``DEFAULT_ISLAND_LABORER_COUNTS`` (8 occupants per
+    residence). Prefer plots near the island's low (x+y) corner; fall back
+    to the first N candidates if the proximity window is too small.
     """
+    target_n = starting_residence_plot_count_for_island(world, island_id)
     plot_islands = world.scenario_state.get("plot_islands") or {}
     candidates: list[tuple[int, int, str]] = []
     for pid_s, isl in plot_islands.items():
@@ -402,22 +411,17 @@ def _pick_starting_residence_plots(world: World, island_id: int) -> list[PlotId]
         candidates.append((int(plot.x), int(plot.y), pid_s))
     if not candidates:
         return []
-    # Sort by (x+y, x, y) so the three picks are nicely clustered.
     candidates.sort(key=lambda t: (t[0] + t[1], t[0], t[1]))
-    # Walk forward to find three plots all within TOWN_PROXIMITY_TILES of
-    # the first pick. Fall back to top-N if no such window exists.
-    if not candidates:
-        return []
     anchor = candidates[0]
     cluster: list[str] = [anchor[2]]
     for x, y, pid_s in candidates[1:]:
         if _chebyshev(x, y, anchor[0], anchor[1]) <= TOWN_PROXIMITY_TILES:
             cluster.append(pid_s)
-        if len(cluster) >= STARTING_RESIDENCES_PER_ISLAND:
+        if len(cluster) >= target_n:
             break
-    if len(cluster) < STARTING_RESIDENCES_PER_ISLAND:
-        cluster = [c[2] for c in candidates[:STARTING_RESIDENCES_PER_ISLAND]]
-    return [PlotId(p) for p in cluster[:STARTING_RESIDENCES_PER_ISLAND]]
+    if len(cluster) < target_n:
+        cluster = [c[2] for c in candidates[:target_n]]
+    return [PlotId(p) for p in cluster[:target_n]]
 
 
 def _seed_residence_on_plot(world: World, owner_party_id: str, plot_id: PlotId) -> str:

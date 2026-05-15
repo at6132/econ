@@ -30,7 +30,13 @@ from realm.world import bootstrap_genesis
 
 
 def _world():
-    return bootstrap_genesis(seed=42, settler_count=0)
+    return bootstrap_genesis(
+        seed=42,
+        grid_width=64,
+        grid_height=48,
+        settler_count=0,
+        map_layout="islands",
+    )
 
 
 # ───────────────────────── invariants ─────────────────────────
@@ -90,8 +96,8 @@ def test_no_pop_hub_parties_exist_after_bootstrap() -> None:
 
 def test_plot_islands_cache_is_deterministic() -> None:
     """Same seed → same island assignment."""
-    w1 = bootstrap_genesis(seed=42, settler_count=0)
-    w2 = bootstrap_genesis(seed=42, settler_count=0)
+    w1 = _world()
+    w2 = _world()
     assert w1.scenario_state["plot_islands"] == w2.scenario_state["plot_islands"]
     # And ``compute_plot_islands`` is a pure function on the plot dict.
     recomputed = compute_plot_islands(w1)
@@ -116,7 +122,14 @@ def test_inter_island_shipment_helper_detects_cross_island_route() -> None:
 
 def test_inter_island_shipping_pays_2x_per_tile() -> None:
     """A shipment across the ocean costs ~2× the per-tile portion vs. intra-island."""
-    w = bootstrap_genesis(seed=42, settler_count=0, starting_cash_cents=100_000_000)
+    w = bootstrap_genesis(
+        seed=42,
+        grid_width=64,
+        grid_height=48,
+        settler_count=0,
+        map_layout="islands",
+        starting_cash_cents=100_000_000,
+    )
     player = PartyId("player")
     islands_map = w.scenario_state["plot_islands"]
     by_island: dict[int, list[str]] = {}

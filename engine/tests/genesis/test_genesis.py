@@ -327,12 +327,18 @@ def test_genesis_full_initial_settler_cohort_no_partial_bootstrap() -> None:
     assert gst.get("settler_cycle_enabled") is False
 
 
-def test_genesis_default_250_start_with_spawn_headroom() -> None:
-    from realm.genesis.settler_cycle import GENESIS_DEFAULT_MAX_SETTLERS, GENESIS_DEFAULT_START_SETTLERS
+def test_genesis_default_boot_scales_settlers_with_landmass_density() -> None:
+    from realm.genesis.settler_cycle import GENESIS_DEFAULT_MAX_SETTLERS
+    from realm.population.landmass_density import (
+        GENESIS_MIN_BOOT_SETTLERS,
+        genesis_settler_count_for_world,
+    )
 
     w = bootstrap_genesis(seed=101)
     n = sum(1 for p in w.parties if str(p).startswith("settler_"))
-    assert n == GENESIS_DEFAULT_START_SETTLERS
+    expected = genesis_settler_count_for_world(w)
+    assert n == expected
+    assert n >= GENESIS_MIN_BOOT_SETTLERS
     gst = w.scenario_state.get("genesis", {})
     assert gst.get("settler_cap") == GENESIS_DEFAULT_MAX_SETTLERS
     assert gst.get("settler_cycle_enabled") is True

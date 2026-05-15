@@ -506,9 +506,9 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
 def bootstrap_genesis(
     *,
     seed: int,
-    grid_width: int = 96,
-    grid_height: int = 72,
-    settler_count: int = 250,
+    grid_width: int = 128,
+    grid_height: int = 96,
+    settler_count: int | None = None,
     settler_spawn_cap: int | None = None,
     starting_cash_cents: int = 1_000_000,
     system_reserve_cents: int = 100_000_000_000,
@@ -537,8 +537,9 @@ def bootstrap_genesis(
 
     Settlers: **all** ``settler_count`` parties are funded at tick 0 (no random partial wave).
     Optional ``settler_spawn_cap`` (≥ ``settler_count``) sets ``settler_cap``; when omitted and
-    ``settler_count`` is the default 250, cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (1000) so random
-    arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
+    ``settler_count`` is ``None`` or ≥ ``GENESIS_DEFAULT_START_SETTLERS``, boot count is derived
+    from landmass labor targets and cap is ``GENESIS_DEFAULT_MAX_SETTLERS`` (1000). Smaller
+    explicit ``settler_count`` values default cap to that count (no growth).
     """
     from realm.world.biome_noise import (
         continental_layout_supported,
@@ -621,6 +622,23 @@ def bootstrap_genesis(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
+    if effective_layout in ("islands", "continental"):
+        from realm.world.landmasses import compute_landmasses
+
+        compute_landmasses(world)
+        from realm.world.regional_advantage import seed_regional_advantages
+
+        seed_regional_advantages(world)
+    else:
+        world.scenario_state["plot_islands"] = {}
+    if settler_count is None:
+        from realm.population.landmass_density import genesis_settler_count_for_world
+
+        settler_count = (
+            genesis_settler_count_for_world(world)
+            if world.landmass_plot_count
+            else 250
+        )
     from realm.genesis.settler_cycle import genesis_settler_population_plan
 
     initial_n, settler_cap, cycle_enabled = genesis_settler_population_plan(
@@ -646,23 +664,8 @@ def bootstrap_genesis(
     gst["next_settler_seq"] = initial_n + 1
     gst["starting_settler_cents"] = starting_cash_cents
     gst["broke_ticks"] = {}
-    # Phase 7A — cache per-plot island membership (connected components of
-    # non-ocean plots). Ocean plots have no entry. Used by movement.py to
-    # detect inter-island shipments (2× per-tile cost) and by future phases
-    # for town/island scoping.
-    # Phase 10A — also classify each connected component as continent /
-    # island / islet so the shipping multiplier and the viability validator
-    # can reason about landmass scale.
-    if effective_layout in ("islands", "continental"):
-        from realm.world.landmasses import compute_landmasses
-
-        compute_landmasses(world)
-        from realm.world.regional_advantage import seed_regional_advantages
-
-        seed_regional_advantages(world)
-    else:
-        world.scenario_state["plot_islands"] = {}
-    # Phase 7B — seed LaborerNPCs per island. Each laborer gets a real
+    gst["boot_settler_count"] = initial_n
+    # Phase 7B — seed LaborerNPCs per landmass (density-scaled). Each laborer gets a real
     # ledger account funded with the subsistence stake from the system
     # reserve. Non-island worlds (small grids in tests) get no laborer
     # population — those tests target older sprint mechanics.
