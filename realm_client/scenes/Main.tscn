@@ -21,14 +21,22 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="MapViewport" type="SubViewportContainer" parent="UILayer/UIRoot"]
-layout_mode = 0
-stretch = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 96.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
 mouse_filter = 0
 
 [node name="SubViewport" type="SubViewport" parent="UILayer/UIRoot/MapViewport"]
+transparent_bg = false
 handle_input_locally = true
 size = Vector2i(1200, 700)
 render_target_update_mode = 4
+render_target_clear_mode = 0
 
 [node name="WorldMap" type="Node2D" parent="UILayer/UIRoot/MapViewport/SubViewport"]
 script = ExtResource("2_wm")

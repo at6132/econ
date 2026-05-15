@@ -25,6 +25,7 @@ func _ready() -> void:
 	_apply_chrome()
 	_build_nav()
 	WorldState.summary_updated.connect(_refresh_stats)
+	WorldState.world_updated.connect(_on_world_changed)
 	_refresh_stats()
 	_refresh_seed()
 
@@ -143,8 +144,13 @@ func _refresh_stats() -> void:
 	cash_pill.text = "Cash %s" % WorldState.format_money(WorldState.player_cash_cents)
 
 
+func _on_world_changed() -> void:
+	_refresh_stats()
+	_refresh_seed()
+
+
 func _refresh_seed() -> void:
-	seed_pill.text = "Seed %d" % 42
+	seed_pill.text = "Seed %d" % WorldState.world_seed
 
 
 func flash_tick() -> void:

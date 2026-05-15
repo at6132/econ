@@ -33,6 +33,8 @@ var building_catalog: Array = []
 var player_owned_reports: Array = []
 var party_display_names: Dictionary = {}
 var scenario_id: String = ""
+## RNG seed from ``GET /world`` (for HUD / map parity with engine).
+var world_seed: int = 42
 ## Flattened ``market_asks`` / ``market_bids`` / ``market_history`` from ``GET /world``.
 var market_asks_rows: Array = []
 var market_bids_rows: Array = []
@@ -60,6 +62,14 @@ signal feed_updated
 signal market_updated
 
 
+## Updates HUD time fields from an authoritative engine tick (e.g. ``POST /tick`` body).
+## Emits ``summary_updated`` so CommandShell refreshes even when GET polling fails.
+func apply_engine_tick_hint(tick: int) -> void:
+	current_tick = tick
+	_update_time_from_tick()
+	summary_updated.emit()
+
+
 func apply_summary(data: Dictionary) -> void:
 	if data.is_empty():
 		return
@@ -82,6 +92,7 @@ func apply_world(data: Dictionary) -> void:
 		return
 	ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
 	current_tick = int(data.get("tick", current_tick))
+	world_seed = int(data.get("seed", world_seed))
 	var raw_plots: Variant = data.get("plots", [])
 	plots.clear()
 	if raw_plots is Array:
@@ -158,6 +169,46 @@ func apply_cpi(data: Dictionary) -> void:
 
 func _rebuild_town_markers_from_world(data: Dictionary) -> void:
 	towns.clear()
+	var tw: Variant = data.get("towns", {})
+	if tw is Dictionary:
+		for _tid in tw.keys():
+			var row: Variant = tw[_tid]
+			if not (row is Dictionary):
+				continue
+			var d: Dictionary = row as Dictionary
+			var rp: Variant = d.get("residential_plots", [])
+			if not (rp is Array) or rp.is_empty():
+				continue
+			var min_x := 2147483647
+			var min_y := 2147483647
+			var max_x := -2147483648
+			var max_y := -2147483648
+			var saw := false
+			for pid in rp:
+				var ps := str(pid)
+				if not plots.has(ps):
+					continue
+				var pd: Dictionary = plots[ps]
+				var gx := int(pd.get("x", 0))
+				var gy := int(pd.get("y", 0))
+				min_x = mini(min_x, gx)
+				min_y = mini(min_y, gy)
+				max_x = maxi(max_x, gx)
+				max_y = maxi(max_y, gy)
+				saw = true
+			if not saw or max_x < min_x:
+				continue
+			towns.append(
+				{
+					"kind": "town",
+					"name": str(d.get("name", _tid)),
+					"town_id": str(d.get("town_id", _tid)),
+					"bound_min_x": min_x,
+					"bound_min_y": min_y,
+					"bound_max_x": max_x,
+					"bound_max_y": max_y,
+				}
+			)
 	var ns: Variant = data.get("nascent_settlements", [])
 	if ns is Array:
 		for row in ns:
@@ -169,6 +220,7 @@ func _rebuild_town_markers_from_world(data: Dictionary) -> void:
 			var pd: Dictionary = plots[anchor]
 			towns.append(
 				{
+					"kind": "nascent",
 					"name": str(row.get("nascent_id", "settlement")),
 					"center_x": int(pd.get("x", 0)),
 					"center_y": int(pd.get("y", 0)),

@@ -27,13 +27,20 @@ func _ready() -> void:
 	shell.nav_pressed.connect(_on_nav_pressed)
 	world_map.plot_clicked.connect(_on_plot_clicked)
 	get_viewport().size_changed.connect(_layout_shell)
-	call_deferred("_layout_shell")
-	call_deferred("_apply_demo_hud_if_needed")
+	call_deferred("_boot_shell")
 	var timer := Timer.new()
 	timer.wait_time = 2.0
 	timer.autostart = true
 	timer.timeout.connect(_auto_tick)
 	add_child(timer)
+
+
+func _boot_shell() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_layout_shell()
+	_refresh_shell_hud()
+	_refresh_from_server()
 
 
 func _layout_shell() -> void:
@@ -52,31 +59,53 @@ func _layout_shell() -> void:
 	sidebar.z_index = 10
 	# Map fills the playfield; sidebar and slide-in panels draw on top (no hard clip).
 	map_viewport.z_index = 0
-	map_viewport.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	map_viewport.stretch = true
+	map_viewport.clip_children = CanvasItem.CLIP_CHILDREN_DISABLED
+	map_viewport.set_anchors_preset(Control.PRESET_FULL_RECT)
+	map_viewport.anchor_left = 0.0
+	map_viewport.anchor_top = 0.0
+	map_viewport.anchor_right = 1.0
+	map_viewport.anchor_bottom = 1.0
+	map_viewport.offset_left = 0.0
+	map_viewport.offset_right = 0.0
+	map_viewport.offset_bottom = 0.0
 	map_viewport.offset_top = top_h
-	var map_size := Vector2i(int(vp.x), int(vp.y - top_h))
+	var gw := maxi(64, int(vp.x))
+	var gh := maxi(64, int(vp.y - top_h))
+	var map_size := Vector2i(gw, gh)
+	sub_viewport.transparent_bg = false
+	sub_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
 	sub_viewport.size = map_size
 	if world_map.has_method("set_view_size"):
 		world_map.call("set_view_size", Vector2(map_size))
 
 
-func _apply_demo_hud_if_needed() -> void:
-	if WorldState.player_cash_cents <= 0:
-		WorldState.player_cash_cents = 1_000_000_00
-		WorldState.current_tick = maxi(WorldState.current_tick, 8)
+## Sync top strip to ``WorldState`` without inventing money/ticks (demo fudge hid dead API calls).
+func _refresh_shell_hud() -> void:
 	if shell.has_method("_refresh_stats"):
 		shell.call("_refresh_stats")
+	if shell.has_method("_refresh_seed"):
+		shell.call("_refresh_seed")
 
 
 func _auto_tick() -> void:
 	API.tick_once(
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
-				API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
-				API.get_world(func(w): WorldState.apply_world(w))
+				var tv: Variant = data.get("tick", null)
+				if tv != null:
+					WorldState.apply_engine_tick_hint(int(tv))
+			else:
+				push_warning("Realm: POST /tick missing ok — HUD refresh still runs (%s)" % str(data))
+			_refresh_from_server()
 			if shell.has_method("flash_tick"):
 				shell.call("flash_tick")
 	)
+
+
+func _refresh_from_server() -> void:
+	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
+	API.get_world(func(w): WorldState.apply_world(w))
 
 
 func _on_nav_pressed(panel_name: String) -> void:

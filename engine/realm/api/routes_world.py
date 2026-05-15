@@ -31,6 +31,7 @@ from realm.actions import (
     transfer_survey_report,
 )
 from realm.api import _state
+from realm.api.routes_ws import broadcast_json
 from realm.api.persistence import load_snapshot, save_snapshot
 from realm.code.lua_sandbox import eval_user_lua_chunk
 from realm.code.user_code import code_layer_public_status, validate_user_source
@@ -154,8 +155,9 @@ def get_hire_catalog() -> dict:
 
 
 @router.post("/tick")
-def post_tick() -> dict:
+async def post_tick() -> dict:
     advance_tick(_state.WORLD)
+    await broadcast_json({"kind": "tick", "tick": _state.WORLD.tick})
     return {"ok": True, "tick": _state.WORLD.tick}
 
 

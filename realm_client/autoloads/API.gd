@@ -20,13 +20,23 @@ func get_request(endpoint: String, callback: Callable) -> void:
 	var h := HTTPRequest.new()
 	add_child(h)
 	h.request_completed.connect(
-		func(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+		func(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+			if result != HTTPRequest.RESULT_SUCCESS:
+				push_warning(
+					"Realm API GET %s — network error result=%s (need uvicorn at %s?)" % [endpoint, result, BASE]
+				)
+				callback.call({})
+				h.queue_free()
+				return
 			if response_code != 200:
 				push_warning("API GET %s → HTTP %d" % [endpoint, response_code])
 				callback.call({})
 				h.queue_free()
 				return
-			_http_done(h, callback, false, body.get_string_from_utf8())
+			var body_text := body.get_string_from_utf8()
+			if JSON.parse_string(body_text) == null and not body_text.is_empty():
+				push_warning("API GET %s — JSON parse failed (response length %d)" % [endpoint, body_text.length()])
+			_http_done(h, callback, false, body_text)
 	)
 	var err := h.request(BASE + endpoint, HEADERS, HTTPClient.METHOD_GET)
 	if err != OK:
@@ -39,11 +49,15 @@ func post_request(endpoint: String, payload: Dictionary = {}, callback: Callable
 	var h := HTTPRequest.new()
 	add_child(h)
 	h.request_completed.connect(
-		func(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+		func(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 			var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
 			if parsed == null:
 				parsed = {}
-			if response_code < 200 or response_code >= 300:
+			if result != HTTPRequest.RESULT_SUCCESS:
+				push_warning(
+					"Realm API POST %s — network error result=%s (need uvicorn at %s?)" % [endpoint, result, BASE]
+				)
+			elif response_code < 200 or response_code >= 300:
 				push_warning("API POST %s → HTTP %d %s" % [endpoint, response_code, str(parsed)])
 			elif require_dict_ok and parsed is Dictionary and not bool(parsed.get("ok", true)):
 				push_warning("API POST %s failed: %s" % [endpoint, str(parsed)])

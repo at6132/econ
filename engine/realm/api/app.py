@@ -14,6 +14,9 @@ Both paths return the same ``FastAPI`` instance.
 
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,6 +28,7 @@ from realm.api import (
     routes_dev,
     routes_economy_depth,
     routes_routes,
+    routes_ws,
     routes_world,
 )
 
@@ -41,7 +45,27 @@ def __getattr__(name: str):
     raise AttributeError(f"module 'realm.api.app' has no attribute {name!r}")
 
 
-app = FastAPI(title="Realm Engine", version="0.1.0")
+_log = logging.getLogger("uvicorn.error")
+# Uvicorn configures ``uvicorn.error`` at the CLI log level; the root logger often
+# stays WARNING, so ``logging.getLogger("realm.api")`` INFO lines were invisible.
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _log.info(
+        "Realm: HTTP stack ready (this step is fast). Dev WORLD is still empty — "
+        "it is built lazily on the first request that reads _state.WORLD (default "
+        "scenario genesis can take many minutes; there is no ETA until that work starts)."
+    )
+    _log.info(
+        "Realm: For a smaller first boot, after the server is up run once: "
+        "curl -X POST \"http://127.0.0.1:8000/dev/reset?scenario=frontier&seed=1\""
+    )
+    yield
+    _log.info("Realm: API shutdown (lifespan end).")
+
+
+app = FastAPI(title="Realm Engine", version="0.1.0", lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -49,6 +73,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(routes_ws.router)
 app.include_router(routes_world.router)
 app.include_router(routes_routes.router)
 app.include_router(routes_actions.router)

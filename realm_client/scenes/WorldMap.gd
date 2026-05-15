@@ -57,9 +57,18 @@ func _on_world_loaded(data: Dictionary) -> void:
 	else:
 		_seed_demo_plots()
 		_demo_mode = true
+		WorldState.world_seed = DEMO_SEED
+		WorldState.world_updated.emit()
+	if WorldState.plots.is_empty():
+		push_warning("Realm map: world payload had no plots — using demo grid (check GET /world)")
+		_seed_demo_plots()
+		_demo_mode = true
+		WorldState.world_seed = DEMO_SEED
+		WorldState.world_updated.emit()
 	_rebuild_mesh()
 	_fit_camera_to_mesh()
 	queue_redraw()
+	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 
 
 func _on_world_updated() -> void:

@@ -8,6 +8,7 @@ const HUD_BAR_TOP := 56.0
 
 @onready var panel: Panel = %Panel
 @onready var close_btn: Button = %CloseBtn
+@onready var plot_scroll: ScrollContainer = %ScrollContainer
 @onready var plot_list: VBoxContainer = %PlotList
 @onready var all_btn: Button = %AllBtn
 @onready var producing_btn: Button = %ProducingBtn
@@ -32,8 +33,11 @@ func _ready() -> void:
 	maint_btn.pressed.connect(func() -> void: _set_filter("maint"))
 	sort_plot_btn.pressed.connect(func() -> void: _set_sort("plot"))
 	sort_eff_btn.pressed.connect(func() -> void: _set_sort("eff"))
+	plot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	plot_scroll.resized.connect(_sync_plot_list_width)
 	WorldState.world_updated.connect(_refresh_list)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	call_deferred("_sync_plot_list_width")
 	_slide_in()
 	API.get_world(func(d): WorldState.apply_world(d))
 	_refresh_list()
@@ -66,6 +70,13 @@ func _style_btn(btn: Button) -> void:
 func _on_viewport_resized() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	panel.size = Vector2(PANEL_WIDTH, vp.y - HUD_BAR_TOP)
+	_sync_plot_list_width()
+
+
+func _sync_plot_list_width() -> void:
+	var w := plot_scroll.size.x
+	if w > 4.0:
+		plot_list.custom_minimum_size.x = w
 
 
 func _slide_in() -> void:
@@ -129,6 +140,7 @@ func _min_efficiency(ui: Dictionary) -> int:
 func _refresh_list() -> void:
 	for c in plot_list.get_children():
 		c.queue_free()
+	call_deferred("_sync_plot_list_width")
 	var rows: Array = []
 	for pid in WorldState.plots.keys():
 		var p: Dictionary = WorldState.plots[pid]
@@ -161,14 +173,20 @@ func _make_plot_row(ui: Dictionary) -> PanelContainer:
 	sb.border_color = Color(0.85, 0.72, 0.2, 0.2)
 	pc.add_theme_stylebox_override("panel", sb)
 	var hbox := HBoxContainer.new()
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pc.add_child(hbox)
 
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.size_flags_stretch_ratio = 1.0
 	var row1 := Label.new()
 	var terrain: String = str(ui.get("terrain", "?"))
 	var n: int = int(ui.get("buildings", []).size())
 	row1.text = "Plot %s · %s · %d building%s" % [pid, terrain.capitalize(), n, "s" if n != 1 else ""]
+	row1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row1.clip_text = true
+	row1.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row1.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
 	info.add_child(row1)
 	var buildings: Array = ui.get("buildings", [])
@@ -184,6 +202,8 @@ func _make_plot_row(ui: Dictionary) -> PanelContainer:
 
 	var open_btn := Button.new()
 	open_btn.text = "Open →"
+	open_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	open_btn.custom_minimum_size.x = 64.0
 	_style_btn(open_btn)
 	open_btn.pressed.connect(func() -> void: plot_selected.emit(pid, ui))
 	hbox.add_child(open_btn)
