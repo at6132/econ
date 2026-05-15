@@ -2,8 +2,10 @@
 
 The HTTP API's dev mode keeps a single in-memory ``World`` object that is
 the source of truth for every request. ``POST /dev/reset`` reassigns this
-attribute; readers in router modules access it via ``_state.WORLD`` so the
-reassignment is reflected everywhere immediately.
+attribute; readers in router modules access it via ``_state.WORLD``.
+
+The singleton is **lazy**: importing ``realm.api.app`` must not bootstrap a full
+solo Genesis map (~30k plots). First access to ``WORLD`` constructs it.
 
 Real production-mode persistence happens through ``realm.api.persistence``
 (SQLite snapshots).
@@ -14,16 +16,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from realm.world import bootstrap_by_scenario
-
 if TYPE_CHECKING:  # pragma: no cover
     from realm.world import World
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_SAVE_PATH = _REPO_ROOT / "saves" / "realm_dev.sqlite"
 
-# The current dev-mode World. Reassigned by ``POST /dev/reset``.
-WORLD: "World" = bootstrap_by_scenario(seed=42, scenario="genesis")
+_world_lazy_singleton: World | None = None
+
+
+def __getattr__(name: str):
+    """Lazy-load default genesis world on first ``_state.WORLD`` access."""
+    global _world_lazy_singleton
+    if name == "WORLD":
+        if _world_lazy_singleton is None:
+            from realm.world import bootstrap_by_scenario
+
+            _world_lazy_singleton = bootstrap_by_scenario(seed=42, scenario="genesis")
+        return _world_lazy_singleton
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _save_path(path: str | None) -> Path:

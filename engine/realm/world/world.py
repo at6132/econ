@@ -506,8 +506,8 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
 def bootstrap_genesis(
     *,
     seed: int,
-    grid_width: int = 128,
-    grid_height: int = 96,
+    grid_width: int = 192,
+    grid_height: int = 144,
     settler_count: int | None = None,
     settler_spawn_cap: int | None = None,
     starting_cash_cents: int = 1_000_000,

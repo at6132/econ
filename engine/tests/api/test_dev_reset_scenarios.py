@@ -5,7 +5,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from realm.api import app
+from realm.api import _state, app
+from realm.core.ids import MaterialId, PartyId
+from realm.core.ledger import party_cash_account
 
 
 @pytest.mark.parametrize(
@@ -17,7 +19,7 @@ from realm.api import app
         ("cartel", 48 * 36, 1_000_000, True),
         ("millrace", 42 * 28, 975_000, False),
         ("archive", 48 * 36, 1_080_000, False),
-        ("genesis", 96 * 72, 1_000_000, False),
+        ("genesis", 192 * 144, 1_000_000, False),
     ],
 )
 def test_dev_reset_applies_scenario_params(
@@ -34,13 +36,12 @@ def test_dev_reset_applies_scenario_params(
     assert j["scenario_id"] == scenario
     assert j["seed"] == 123
 
-    w = c.get("/world")
-    assert w.status_code == 200
-    body = w.json()
-    assert body["scenario_id"] == scenario
-    assert len(body["plots"]) == expected_plots
-    assert body["balances_cents"]["cash:player"] == expected_player_cents
-    grain_parties = {row["party"] for row in body["market_asks"] if row["material"] == "grain"}
+    world = _state.WORLD
+    assert len(world.plots) == expected_plots
+    player_cash = world.ledger.balance(party_cash_account(PartyId("player")))
+    assert player_cash == expected_player_cents
+    grain_orders = world.market_asks_by_material.get(MaterialId("grain"), [])
+    grain_parties = {str(o.party) for o in grain_orders}
     assert ("cartel_grain_cell" in grain_parties) == expect_cartel_cell
     if scenario == "genesis":
         assert "genesis_exchange" in grain_parties
@@ -64,6 +65,5 @@ def test_dev_reset_defaults_to_genesis() -> None:
     r = c.post("/dev/reset", params={"seed": 42})
     assert r.status_code == 200
     assert r.json()["scenario_id"] == "genesis"
-    w = c.get("/world").json()
-    assert w["scenario_id"] == "genesis"
-    assert len(w["plots"]) == 96 * 72
+    assert _state.WORLD.scenario_id == "genesis"
+    assert len(_state.WORLD.plots) == 192 * 144

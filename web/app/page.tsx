@@ -63,11 +63,11 @@ import {
 } from "./useStableMapLayers";
 
 const MAP_PAD = 4;
-/** Large worlds stay legible: tiles never shrink below this (pan / scroll instead of specks). */
-const MAP_MIN_CELL_PX = 42;
+/** Floor so huge maps fit the viewport instead of forcing giant scroll canvas (pan/zoom for detail). */
+const MAP_MIN_CELL_PX = 5;
 const MAP_MAX_CELL_PX = 144;
-/** Default “closer” view so workshops / build markers read at a near–1:1 scale. */
-const MAP_DEFAULT_ZOOM = 1.32;
+/** Initial zoom once mesh size is computed (user can pinch / wheel beyond this). */
+const MAP_DEFAULT_ZOOM = 1.0;
 const MAP_ZOOM_MIN = 0.22;
 const MAP_ZOOM_MAX = 6.8;
 

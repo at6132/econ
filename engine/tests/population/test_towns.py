@@ -94,7 +94,7 @@ def test_build_and_claim_reject_water_plots() -> None:
 def test_bootstrap_residences_only_on_dry_land() -> None:
     from realm.production.recipe_sites import plot_allows_structure
 
-    w = bootstrap_genesis(seed=42, settler_count=0)
+    w = bootstrap_genesis(seed=42, grid_width=100, grid_height=100, settler_count=0)
     for b in w.plot_buildings:
         if b.get("building_id") != RESIDENCE_BUILDING_ID:
             continue
