@@ -80,7 +80,7 @@ router = APIRouter()
 @router.post("/dev/reset")
 def dev_reset(
     seed: Annotated[int, Query()] = 42,
-    scenario: Annotated[str, Query()] = "frontier",
+    scenario: Annotated[str, Query()] = "genesis",
 ) -> dict:
     """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive, genesis."""
     # (was: global _state.WORLD; mutation now lives on _state.WORLD)

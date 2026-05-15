@@ -740,14 +740,14 @@ function readSimSpeedIdxFromStorage(): 0 | 1 | 2 {
 }
 
 function readDevResetScenarioFromStorage(): DevResetScenarioId {
-  if (typeof window === "undefined") return "frontier";
+  if (typeof window === "undefined") return "genesis";
   try {
     const s = localStorage.getItem(FRONTIER_SCENARIO_STORAGE_KEY);
     if (s && (DEV_RESET_SCENARIOS as readonly string[]).includes(s)) return s as DevResetScenarioId;
   } catch {
     /* ignore */
   }
-  return "frontier";
+  return "genesis";
 }
 
 export default function HomePage() {

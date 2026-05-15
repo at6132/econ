@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from realm.world import bootstrap_frontier
+from realm.world import bootstrap_by_scenario
 
 if TYPE_CHECKING:  # pragma: no cover
     from realm.world import World
@@ -23,7 +23,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_SAVE_PATH = _REPO_ROOT / "saves" / "realm_dev.sqlite"
 
 # The current dev-mode World. Reassigned by ``POST /dev/reset``.
-WORLD: "World" = bootstrap_frontier(seed=42)
+WORLD: "World" = bootstrap_by_scenario(seed=42, scenario="genesis")
 
 
 def _save_path(path: str | None) -> Path:

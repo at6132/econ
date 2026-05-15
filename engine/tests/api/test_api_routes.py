@@ -13,7 +13,7 @@ from turnkey_fixtures import grant_turnkey_self_materials
 
 def test_market_cancel_via_http_round_trip() -> None:
     c = TestClient(app)
-    assert c.post("/dev/reset", params={"seed": 55}).status_code == 200
+    assert c.post("/dev/reset", params={"scenario": "frontier", "seed": 55}).status_code == 200
     r = c.post(
         "/market/sell",
         params={"party": "player", "material": "timber", "qty": 2, "price_per_unit_cents": 99},
@@ -29,7 +29,7 @@ def test_market_cancel_via_http_round_trip() -> None:
 
 def test_market_cancel_400_wrong_party() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 56})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 56})
     r = c.post(
         "/market/sell",
         params={"party": "player", "material": "timber", "qty": 1, "price_per_unit_cents": 10},
@@ -41,7 +41,7 @@ def test_market_cancel_400_wrong_party() -> None:
 
 def test_supply_contract_http_flow() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 71})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 71})
     r = c.post(
         "/contracts/supply/propose",
         params={
@@ -63,7 +63,7 @@ def test_supply_contract_http_flow() -> None:
 
 def test_market_bid_cancel_via_http() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 58})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 58})
     r = c.post(
         "/market/bid",
         params={
@@ -84,7 +84,7 @@ def test_market_bid_cancel_via_http() -> None:
 
 def test_tick_batch_advances_world() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 202})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 202})
     t0 = c.get("/world").json()["tick"]
     r = c.post("/tick/batch", params={"count": 100})
     assert r.status_code == 200
@@ -103,7 +103,7 @@ def test_tick_batch_400_when_count_over_cap() -> None:
 
 def test_get_world_compact_shape() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 203})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 203})
     r = c.get("/world", params={"compact": 1})
     assert r.status_code == 200
     body = r.json()
@@ -115,7 +115,7 @@ def test_get_world_compact_shape() -> None:
 
 def test_tick_batch_includes_compact_summary_when_requested() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 204})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 204})
     r = c.post("/tick/batch", params={"count": 3, "summary": 1})
     assert r.status_code == 200
     b = r.json()
@@ -127,7 +127,7 @@ def test_tick_batch_includes_compact_summary_when_requested() -> None:
 
 def test_produce_while_active_returns_200_with_started_false() -> None:
     c = TestClient(app)
-    assert c.post("/dev/reset", params={"seed": 61}).status_code == 200
+    assert c.post("/dev/reset", params={"scenario": "frontier", "seed": 61}).status_code == 200
     pid = "p-0-0"
     assert c.post(f"/plots/{pid}/claim", params={"party": "player"}).status_code == 200
     assert c.post(f"/plots/{pid}/survey", params={"party": "player"}).status_code == 200
@@ -162,7 +162,7 @@ def test_produce_while_active_returns_200_with_started_false() -> None:
 
 def test_p2p_trade_via_http() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 57})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 57})
     # Player has grain; consumer has cash from bootstrap — sell 1 grain P2P for 50¢ total
     r = c.post(
         "/trade/p2p",
@@ -180,7 +180,7 @@ def test_p2p_trade_via_http() -> None:
 
 def test_p2p_http_error_returns_reason_and_code() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 59})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 59})
     r = c.post(
         "/trade/p2p",
         params={
@@ -199,7 +199,7 @@ def test_p2p_http_error_returns_reason_and_code() -> None:
 
 def test_p2p_http_idempotency_replay() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 60})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 60})
     params = {
         "seller": "player",
         "buyer": "t1_consumer",
@@ -220,7 +220,7 @@ def test_p2p_http_idempotency_replay() -> None:
 
 def test_survey_http_returns_terrain_and_recipe_ids() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 1})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 1})
     r = c.post("/plots/p-0-0/claim", params={"party": "player"})
     assert r.status_code == 200
     rs = c.post("/plots/p-0-0/survey", params={"party": "player"})
@@ -248,7 +248,7 @@ def test_survey_http_conserves_ledger_total() -> None:
     import realm.api as api
 
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 96})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 96})
     c.post("/plots/p-1-0/claim", params={"party": "player"})
     total_before = api._world.ledger.total_cents()
     r = c.post("/plots/p-1-0/survey", params={"party": "player"})
@@ -260,7 +260,7 @@ def test_market_intel_http_conserves_ledger_total() -> None:
     import realm.api as api
 
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 97})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 97})
     total_before = api._world.ledger.total_cents()
     r = c.post("/market/intel", params={"party": "player"})
     assert r.status_code == 200
@@ -272,7 +272,7 @@ def test_maintain_http_conserves_ledger_total() -> None:
     import realm.api as api
 
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 98})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 98})
     c.post("/plots/p-0-0/claim", params={"party": "player"})
     c.post("/plots/p-0-0/survey", params={"party": "player"})
     rb = c.post("/plots/p-0-0/build", params={"party": "player", "building_id": "watch_hut"})
@@ -292,7 +292,7 @@ def test_maintain_http_conserves_ledger_total() -> None:
 
 def test_llm_status_lists_margaux() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 77})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 77})
     r = c.get("/llm/status")
     assert r.status_code == 200
     body = r.json()
@@ -327,7 +327,7 @@ def test_code_validate_http() -> None:
 
 def test_code_deploy_and_world_summary() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 201})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 201})
     r = c.post("/code/deploy", json={"party": "player", "source": "-- x\nreturn tick\n"})
     assert r.status_code == 200
     assert r.json().get("ok") is True
@@ -339,7 +339,7 @@ def test_code_deploy_and_world_summary() -> None:
 
 def test_code_eval_without_env_returns_reason() -> None:
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 202})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 202})
     r = c.post("/code/eval", json={"source": "return 1"})
     assert r.status_code == 200
     j = r.json()
@@ -349,7 +349,7 @@ def test_code_eval_without_env_returns_reason() -> None:
 def test_pre_ui_api_alias_routes_smoke() -> None:
     """Thin parity routes for the Phase 11 UI (no duplicate game logic)."""
     c = TestClient(app)
-    c.post("/dev/reset", params={"seed": 203})
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 203})
     r1 = c.get("/businesses/templates")
     assert r1.status_code == 200
     assert r1.json().get("ok") is True

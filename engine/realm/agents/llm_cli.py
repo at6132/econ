@@ -19,7 +19,7 @@ from pathlib import Path
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Realm Tier-3 Haiku planning step")
-    p.add_argument("--scenario", default="frontier", help="bootstrap scenario if not loading (incl. genesis)")
+    p.add_argument("--scenario", default="genesis", help="bootstrap scenario if not loading (incl. frontier)")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--party", default="llm_margaux")
     p.add_argument("--load", type=Path, default=None, help="SQLite snapshot to load first")

@@ -57,3 +57,13 @@ def test_dev_reset_scenario_query_is_case_insensitive() -> None:
     r = c.post("/dev/reset", params={"seed": 7, "scenario": "Frontier"})
     assert r.status_code == 200
     assert r.json()["scenario_id"] == "frontier"
+
+
+def test_dev_reset_defaults_to_genesis() -> None:
+    c = TestClient(app)
+    r = c.post("/dev/reset", params={"seed": 42})
+    assert r.status_code == 200
+    assert r.json()["scenario_id"] == "genesis"
+    w = c.get("/world").json()
+    assert w["scenario_id"] == "genesis"
+    assert len(w["plots"]) == 96 * 72
