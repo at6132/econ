@@ -6,14 +6,18 @@ At genesis bootstrap we seed 3 named NPC shippers. Each:
 - claims a coastal plot in a distinct region,
 - gets a completed ``dock`` (no construction lag),
 - holds 1 ``vessel`` in inventory,
-- auto-registers as the operator for every route touching their home region
-  at ``NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS`` (= 3¢/tile).
+- **does not** pre-register routes (Phase 10B — routes emerge from traffic).
 
 Every game-day, each NPC shipper consults its previous-day fee revenue. If
 revenue is healthy (≥ threshold) they hold. If they are being undercut, they
 shave 1¢ off their fee on the worst-performing route, fighting toward a 1¢
 floor. At the floor they sit and wait — an exiting NPC opens room for a
 single player operator to keep the route lit.
+
+Phase 10B — when a lane from their **home region** has ≥ 3 completed voyages
+in the last 7 game-days and no registered operator, they register at
+``NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS`` (3¢/tile) and emit a ``world_feed``
+headline the first time that lane gains an operator.
 
 The NPC AI is intentionally simple and deterministic. There are no special
 event hooks; from the player's perspective they are just another seller.
@@ -36,10 +40,15 @@ from realm.world.regions import (
 )
 from realm.infrastructure.route_operators import (
     ensure_route_state_initialised,
+    find_cheapest_operator,
     list_route_operators,
     register_route,
     route_revenue_by_party_previous_day,
     set_operator_fee,
+)
+from realm.infrastructure.shipping_traffic import (
+    prune_route_voyage_by_day,
+    route_voyage_count_last_days,
 )
 from realm.production.recipe_sites import plot_is_coastal
 from realm.world import World
@@ -194,18 +203,6 @@ def seed_npc_shippers(world: World, *, starting_cash_cents: int | None = None) -
             plot_id=str(plot_id),
             region=region,
         )
-        # Register operator for every route touching this shipper's home region.
-        for other in all_region_ids():
-            if other == region:
-                continue
-            register_route(
-                world,
-                shipper_id,
-                plot_id,
-                region,
-                other,
-                NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS,
-            )
     ensure_route_state_initialised(world)
     return created
 
@@ -246,6 +243,40 @@ def _routes_operated_by(world: World, party: PartyId) -> list[tuple[str, dict]]:
     return out
 
 
+def _try_traffic_route_discovery(world: World, shipper: PartyId) -> None:
+    """Register one un-served home-region lane that has enough recent traffic."""
+    home = _shipper_home_region(world, shipper)
+    home_plot = _shipper_home_plot(world, shipper)
+    if home is None or home_plot is None:
+        return
+    for other in all_region_ids():
+        if other == home:
+            continue
+        rk = route_key(home, other)
+        if route_voyage_count_last_days(world, rk, days=7) < 3:
+            continue
+        if find_cheapest_operator(world, rk) is not None:
+            continue
+        res = register_route(
+            world,
+            shipper,
+            home_plot,
+            home,
+            other,
+            NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS,
+        )
+        if not res.get("ok"):
+            continue
+        log_event(
+            world,
+            "world_feed",
+            f"A shipping lane between {home} and {other} is now formally operated.",
+            party=str(shipper),
+            route_key=rk,
+        )
+        break
+
+
 def tick_npc_shippers(world: World) -> None:
     """Once per game-day, advance the NPC shipping AI.
 
@@ -259,6 +290,11 @@ def tick_npc_shippers(world: World) -> None:
         return
     if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
+    prune_route_voyage_by_day(world)
+    for shipper in NPC_SHIPPER_IDS:
+        if shipper not in world.parties:
+            continue
+        _try_traffic_route_discovery(world, shipper)
     for shipper in NPC_SHIPPER_IDS:
         if shipper not in world.parties:
             continue
@@ -267,22 +303,6 @@ def tick_npc_shippers(world: World) -> None:
             continue
         my_routes = _routes_operated_by(world, shipper)
         if not my_routes:
-            # No registrations — try to re-register on home routes.
-            home = _shipper_home_region(world, shipper)
-            home_plot = _shipper_home_plot(world, shipper)
-            if home is None or home_plot is None:
-                continue
-            for other in all_region_ids():
-                if other == home:
-                    continue
-                register_route(
-                    world,
-                    shipper,
-                    home_plot,
-                    home,
-                    other,
-                    NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS,
-                )
             continue
         # Find the route most in need of price action: lowest competitor fee that's
         # below this NPC's. Drop our fee on that route by 1¢, with the floor at 1¢.
@@ -309,32 +329,3 @@ def tick_npc_shippers(world: World) -> None:
                 route_key=key,
                 fee_per_tile_cents=new_fee,
             )
-        # If we are already at the floor on every route and still unprofitable, expand
-        # into a route we don't currently operate.
-        if not adjusted_any:
-            at_floor = all(
-                int(e.get("fee_per_tile_cents", 0)) <= NPC_SHIPPER_FEE_FLOOR_CENTS
-                for _, e in my_routes
-            )
-            if not at_floor:
-                continue
-            home = _shipper_home_region(world, shipper)
-            home_plot = _shipper_home_plot(world, shipper)
-            if home is None or home_plot is None:
-                continue
-            owned_keys = {k for k, _ in my_routes}
-            for other in all_region_ids():
-                if other == home:
-                    continue
-                key = route_key(home, other)
-                if key in owned_keys:
-                    continue
-                register_route(
-                    world,
-                    shipper,
-                    home_plot,
-                    home,
-                    other,
-                    NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS,
-                )
-                break  # one new route per day

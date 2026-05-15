@@ -141,6 +141,13 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("vessel"): MaterialDef(
         MaterialId("vessel"), "Vessel (cargo)", 4800.0, "transport", durable=True
     ),
+    MaterialId("small_vessel"): MaterialDef(
+        MaterialId("small_vessel"),
+        "Small vessel (skiff)",
+        900.0,
+        "transport",
+        durable=True,
+    ),
     # ───────── Tier-2 raw minerals (extracted; recipes locked behind assay discovery) ─────────
     MaterialId("sulfur_ore"): MaterialDef(
         MaterialId("sulfur_ore"), "Sulfur ore", 2100.0, "ore"

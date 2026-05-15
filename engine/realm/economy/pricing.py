@@ -74,6 +74,7 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
     "gear_set": 11_000,
     # Transport capital (durable; Sprint 2 — required for coastal route registration).
     "vessel": 45_000,
+    "small_vessel": 18_000,
     # Sprint 3 — Phase D.1: coastal food chain.
     "fish": 160,
     "smoked_fish": 360,
@@ -83,7 +84,7 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
 # markup-over-cost path produces nonsense (e.g. capital goods with no recipe at
 # all). We pin the exchange ask to fair value for these — there is no cheaper
 # legal source in v1.
-_FAIR_VALUE_ONLY_PRICING: frozenset[str] = frozenset({"vessel"})
+_FAIR_VALUE_ONLY_PRICING: frozenset[str] = frozenset({"vessel", "small_vessel"})
 
 # Legacy: exchange sat 15% above fair value (one-sided ask). Kept only as a
 # fallback when neither cost-basis nor markup-tier is known for a material.
@@ -168,6 +169,7 @@ _MARKUP_TIER_BY_MATERIAL: dict[str, int] = {
     "hand_saw": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     "ladder": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     "vessel": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
+    "small_vessel": EXCHANGE_MARKUP_TIER_INDUSTRIAL_BPS,
     # Sprint 3 — Phase D.1: coastal food chain.
     "fish": EXCHANGE_MARKUP_TIER_COMMON_BPS,
     "smoked_fish": EXCHANGE_MARKUP_TIER_PROCESSED_BPS,

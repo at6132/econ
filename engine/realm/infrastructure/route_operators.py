@@ -44,6 +44,7 @@ __all__ = [
     "list_route_operators",
     "find_cheapest_operator",
     "remove_party_operators",
+    "remove_operator_from_route",
     "set_operator_fee",
     "route_revenue_by_party_today",
     "record_route_fee_collected",
@@ -94,10 +95,35 @@ def _party_has_operating_building(
     return (False, None)
 
 
-def _party_owns_vessel(world: World, party: PartyId) -> bool:
+def _party_has_ocean_transport(
+    world: World,
+    party: PartyId,
+    *,
+    from_region: str,
+    to_region: str,
+) -> bool:
+    """Coastal route operators need a ``vessel``, or a ``small_vessel`` on lanes
+    that do not touch continent-class landmasses (Phase 10B).
+    """
     from realm.core.ids import MaterialId
+    from realm.world.regions import _world_bounds, region_centre_coords
 
-    return world.inventory.qty(party, MaterialId("vessel")) >= 1
+    if world.inventory.qty(party, MaterialId("vessel")) >= 1:
+        return True
+    if world.inventory.qty(party, MaterialId("small_vessel")) < 1:
+        return False
+    if not world.landmass_type:
+        return False
+    w, h = _world_bounds(world)
+    for reg in (from_region, to_region):
+        cx, cy = region_centre_coords(reg, w, h)
+        centre_pid = PlotId(f"p-{cx}-{cy}")
+        lid = (world.landmass_id or {}).get(str(centre_pid))
+        if lid is None:
+            return False
+        if world.landmass_type.get(int(lid)) == "continent":
+            return False
+    return True
 
 
 # ────────────────────────── public API ──────────────────────────
@@ -152,8 +178,13 @@ def register_route(
         ok, bid = _party_has_operating_building(world, party, plot_id, require_dock=True)
         if not ok:
             return {"ok": False, "reason": "coastal route requires completed dock on plot"}
-        if not _party_owns_vessel(world, party):
-            return {"ok": False, "reason": "coastal route requires at least one vessel"}
+        if not _party_has_ocean_transport(
+            world, party, from_region=from_region, to_region=to_region
+        ):
+            return {
+                "ok": False,
+                "reason": "coastal route requires a vessel (or small_vessel on non-continent lanes)",
+            }
     else:
         ok, bid = _party_has_operating_building(world, party, plot_id, require_dock=False)
         if not ok:
@@ -231,6 +262,29 @@ def find_cheapest_operator(world: World, key: str) -> dict | None:
     """The current winning operator for ``key`` (lowest fee, oldest tie-break)."""
     entries = list_route_operators(world, key)
     return entries[0] if entries else None
+
+
+def remove_operator_from_route(
+    world: World, party: PartyId, route_key_str: str
+) -> dict[str, Any]:
+    """Drop ``party``'s registration on ``route_key_str`` (if present)."""
+    operators = world.scenario_state.get("route_operators") or {}
+    entries = list(operators.get(str(route_key_str)) or [])
+    new_entries = [e for e in entries if str(e.get("operator_party")) != str(party)]
+    if len(new_entries) == len(entries):
+        return {"ok": False, "reason": "party not registered on this route"}
+    if new_entries:
+        operators[str(route_key_str)] = new_entries
+    else:
+        operators.pop(str(route_key_str), None)
+    log_event(
+        world,
+        "route_operator_removed",
+        f"{party} relinquished route {route_key_str}",
+        party=str(party),
+        route_key=str(route_key_str),
+    )
+    return {"ok": True}
 
 
 def remove_party_operators(world: World, party: PartyId) -> int:

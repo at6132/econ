@@ -144,6 +144,103 @@ def _nearest_island_normalised_distance(
     return math.sqrt(best)
 
 
+# ─────────────────── Phase 10 — continental layout ───────────────────
+
+# Layered FBM produces a continental mask: large land continents, scattered
+# islands, wide ocean gaps. The mask is used as a multiplier on elevation so
+# the noise still shapes terrain *within* a continent (mountains, hills,
+# deserts), but ocean dominates everywhere outside the mask.
+
+# Below this many plots, fall back to ``terrain_for_cell`` (legacy single-
+# continent map) so existing tests with tiny grids stay valid. Backwards
+# compat is mandatory.
+CONTINENTAL_LAYOUT_MIN_PLOTS: int = 10_000
+
+# Mask thresholds (after FBM): below LAND_THRESHOLD is ocean, between LAND_
+# and SHALLOW_THRESHOLD is the beach band, above is land.
+_CONTINENTAL_LAND_THRESHOLD: float = 0.25
+_CONTINENTAL_SHALLOW_THRESHOLD: float = 0.30
+
+
+def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> float:
+    """Layered FBM producing 2–4 continents and 4–10 islands + scattered islets.
+
+    Returns a value in roughly ``[0, 1]`` where higher = more "land-like".
+    The shape is two FBM octave stacks added together: a low-frequency
+    continental scaffold plus a higher-frequency island sprinkle.
+    """
+    # Normalise coords to [0, 1] so the noise scale is grid-size invariant.
+    cx = float(x) / max(1.0, float(width))
+    cy = float(y) / max(1.0, float(height))
+    # Low-frequency continental mass (2–4 large lobes per typical seed).
+    cont = fbm(seed + 401, cx * 2.4, cy * 2.4, 5)
+    # Higher-frequency island sprinkle.
+    isl = fbm(seed + 503, cx * 7.0 + 50.0, cy * 7.0 + 13.0, 3)
+    # Edge taper — push the very edge of the map toward ocean so continents
+    # rarely run all the way to the world border (more realistic shorelines
+    # and gives ships somewhere to sail along).
+    edge_x = min(cx, 1.0 - cx)
+    edge_y = min(cy, 1.0 - cy)
+    edge = min(edge_x, edge_y)
+    edge_taper = min(1.0, edge * 8.0)
+    # Combine. Continents dominate; islands add bumps. Subtract a baseline
+    # so most of the map is below the land threshold (= ocean).
+    raw = cont * 0.75 + isl * 0.30 - 0.18
+    return max(0.0, raw * edge_taper)
+
+
+def continental_layout_terrain(
+    seed: int, x: int, y: int, width: int, height: int
+) -> Terrain:
+    """Procedural continental terrain via layered FBM noise (Phase 10).
+
+    Produces a small number of large continents, several medium islands, a
+    sprinkle of islets, and ocean covering most of the map. Each seed gives a
+    different layout but the structural pattern (continents + ocean + islands)
+    always emerges.
+
+    Below ``CONTINENTAL_LAYOUT_MIN_PLOTS`` callers should fall back to
+    :func:`terrain_for_cell` (the single-continent legacy map) — tiny test
+    grids do not have room for the FBM stack to settle into recognisable
+    landmasses.
+    """
+    mask = _continental_mask(seed, x, y, width, height)
+    if mask < _CONTINENTAL_LAND_THRESHOLD:
+        # Most of the world is ocean. Deeper ocean offshore, shallow ocean
+        # in a narrow band right next to continents (the FBM hands us a
+        # gradient automatically — values between 0.15 and 0.25 are the
+        # offshore band).
+        return Terrain.WATER_DEEP if mask < 0.15 else Terrain.WATER_SHALLOW
+    if mask < _CONTINENTAL_SHALLOW_THRESHOLD:
+        return Terrain.WATER_SHALLOW
+    cx = float(x) / max(1.0, float(width))
+    cy = float(y) / max(1.0, float(height))
+    elev = fbm(seed + 1, cx * 6.0, cy * 6.0, 4) * mask
+    moist = fbm(seed + 2, cx * 5.0 + 10.0, cy * 5.0, 4)
+    # Equatorial heat: high near the middle row, low at the poles, plus FBM
+    # noise so isobars wobble.
+    heat = 1.0 - abs(cy - 0.5) * 2.0
+    heat += fbm(seed + 3, cx * 4.0 + 20.0, cy * 4.0, 3) * 0.3
+    if elev > 0.72:
+        return Terrain.MOUNTAIN
+    if elev > 0.55 and moist < 0.4:
+        return Terrain.HILLS
+    if moist > 0.60 and heat > 0.55:
+        return Terrain.SWAMP
+    if moist > 0.55 and heat < 0.50:
+        return Terrain.FOREST
+    if heat > 0.70 and moist < 0.38:
+        return Terrain.DESERT
+    if heat < 0.25:
+        return Terrain.TUNDRA
+    return Terrain.PLAINS
+
+
+def continental_layout_supported(width: int, height: int) -> bool:
+    """True when the grid is large enough for the continental layout."""
+    return int(width) * int(height) >= CONTINENTAL_LAYOUT_MIN_PLOTS
+
+
 def terrain_for_genesis_island_cell(seed: int, x: int, y: int, width: int, height: int) -> Terrain:
     """Genesis "four islands" terrain for cell ``(x, y)`` on a ``width × height`` map.
 

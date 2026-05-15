@@ -28,6 +28,7 @@ from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_accou
 from realm.infrastructure.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
 from realm.world.regions import region_for_plot, route_key
 from realm.infrastructure.route_operators import find_cheapest_operator, record_route_fee_collected
+from realm.infrastructure.shipping_traffic import record_route_voyage_completed
 from realm.production.storage_caps import try_add_inventory
 from realm.core.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
 from realm.world import InTransit, World
@@ -65,6 +66,33 @@ INTER_ISLAND_FUEL_MATERIALS: tuple[str, ...] = ("coal", "electricity")
 # Light cargo (grain/fish) is barely affected; bulk minerals get a
 # real freight cost that makes local sourcing matter.
 MASS_SHIP_TON_TILE_CENTS: Final[int] = 1
+
+# Phase 10B — uncharted voyages. When a shipment crosses two regions with
+# no registered operator, the shipper can still ship but pays a premium
+# (and the voyage takes longer + burns more fuel). The fee sinks to
+# system_reserve until an NPC or player registers an operator on the lane.
+UNCHARTED_TIME_MULTIPLIER: Final[float] = 2.0
+UNCHARTED_FEE_MULTIPLIER: Final[float] = 1.5
+UNCHARTED_FUEL_MULTIPLIER: Final[float] = 2.0
+
+
+def _inter_island_allows_small_vessel(
+    world: World, from_plot_id: PlotId, to_plot_id: PlotId
+) -> bool:
+    """True when neither endpoint sits on a classified *continent* landmass.
+
+    Legacy worlds without ``landmass_type`` use full-size ``vessel`` only.
+    """
+    if not world.landmass_type:
+        return False
+    for pid in (from_plot_id, to_plot_id):
+        lid = (world.landmass_id or {}).get(str(pid))
+        if lid is None:
+            return False
+        t = world.landmass_type.get(int(lid))
+        if t == "continent":
+            return False
+    return True
 
 
 def receiving_fee_cents(qty: int) -> int:
@@ -196,10 +224,12 @@ def dispatch_shipment(
                 "ok": False,
                 "reason": "inter-island shipping requires a completed dock at the destination plot",
             }
-        if world.inventory.qty(party, MaterialId("vessel")) < 1:
+        has_vessel = world.inventory.qty(party, MaterialId("vessel")) >= 1
+        has_small = world.inventory.qty(party, MaterialId("small_vessel")) >= 1
+        if not has_vessel and not (has_small and _inter_island_allows_small_vessel(world, from_plot_id, to_plot_id)):
             return {
                 "ok": False,
-                "reason": "inter-island shipping requires the shipper to own a cargo vessel",
+                "reason": "inter-island shipping requires a cargo vessel (or small_vessel on non-continent lanes)",
             }
         inter_island_fuel = _inter_island_fuel_plan(world, party, dist)
         if inter_island_fuel is None:
@@ -222,22 +252,51 @@ def dispatch_shipment(
                     "ok": False,
                     "reason": f"route {simple_key} closed by severe weather",
                 }
-    ocean_mult = 2 if inter_island else 1
+    ocean_mult: float = 2.0 if inter_island else 1.0
+    # Phase 10A — when continental-layout landmasses exist, layer the
+    # continent/island/islet pair modifier on top of the existing 2× open-
+    # ocean modifier. Continent↔continent voyages are most expensive,
+    # island↔island within a chain are cheapest. No-op on legacy worlds
+    # without ``landmass_type`` populated.
+    if inter_island and world.landmass_type:
+        from realm.world.landmasses import landmass_pair_modifier
+
+        from_lid = (world.landmass_id or {}).get(str(from_plot_id))
+        to_lid = (world.landmass_id or {}).get(str(to_plot_id))
+        if from_lid is not None and to_lid is not None:
+            ocean_mult *= landmass_pair_modifier(world, int(from_lid), int(to_lid))
     operator_payee: PartyId | None = None
     op_route_key: str | None = None
+    # Phase 10B — uncharted-voyage handling. When the route is inter-region
+    # but no operator is registered, the shipper can still ship — at a
+    # premium (1.5× fee, 2× fuel, 2× transit time) — and the fee sinks to
+    # ``system_reserve``. Operators registering later (from any party) lift
+    # the premium and start collecting. ``UNCHARTED_*`` constants live with
+    # the other movement tunables at the top of this module.
+    uncharted_voyage = False
     if from_region and to_region and from_region != to_region:
         key = route_key(from_region, to_region)
         op_route_key = key
         op = find_cheapest_operator(world, key)
         if op is not None and str(op.get("operator_party")) != str(party):
-            # An operator other than the shipper themselves: credit them the fee.
             operator_payee = PartyId(str(op["operator_party"]))
             per_tile = max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS))) * ocean_mult
-            fee = BASE_SHIP_FEE_CENTS + dist * per_tile
+            fee = BASE_SHIP_FEE_CENTS + int(dist * per_tile)
+        elif op is None:
+            # Phase 10B — "uncharted" is an open-ocean / inter-landmass concept.
+            # Cross-region moves on a single landmass (e.g. Frontier wagon hauls)
+            # keep the legacy per-tile fee so existing scenarios and tests stay
+            # stable; only inter-island voyages pay the no-chart premium.
+            uncharted_voyage = bool(inter_island)
+            if uncharted_voyage:
+                per_tile = PER_TILE_SHIP_CENTS * ocean_mult * UNCHARTED_FEE_MULTIPLIER
+                fee = BASE_SHIP_FEE_CENTS + int(dist * per_tile)
+            else:
+                fee = BASE_SHIP_FEE_CENTS + int(dist * PER_TILE_SHIP_CENTS * ocean_mult)
         else:
-            fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS * ocean_mult
+            fee = BASE_SHIP_FEE_CENTS + int(dist * PER_TILE_SHIP_CENTS * ocean_mult)
     else:
-        fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS * ocean_mult
+        fee = BASE_SHIP_FEE_CENTS + int(dist * PER_TILE_SHIP_CENTS * ocean_mult)
     # Sprint 3 — Phase D.2: 40 % discount for coastal → coastal lanes.
     from realm.production.recipe_sites import plot_is_coastal
 
@@ -259,7 +318,9 @@ def dispatch_shipment(
         if operator_payee is not None
         else PER_TILE_SHIP_CENTS
     )
-    per_tile_effective *= ocean_mult
+    per_tile_effective = int(per_tile_effective * ocean_mult)
+    if uncharted_voyage:
+        per_tile_effective = int(per_tile_effective * UNCHARTED_FEE_MULTIPLIER)
     if coastal_route:
         per_tile_effective = (
             per_tile_effective * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000
@@ -369,9 +430,18 @@ def dispatch_shipment(
     # Phase 9A: burn fuel for inter-island voyages (Law 4). Refund the fee
     # bundle if the inventory pull fails — we shouldn't have charged the
     # shipper without consuming the fuel.
+    # Phase 10B — uncharted voyages burn 2x the fuel (UNCHARTED_FUEL_MULTIPLIER).
     fuel_consumed: tuple[MaterialId, int] | None = None
     if inter_island_fuel is not None:
         fuel_mid, fuel_units = inter_island_fuel
+        if uncharted_voyage:
+            fuel_units = max(1, int(fuel_units * UNCHARTED_FUEL_MULTIPLIER))
+            if world.inventory.qty(party, fuel_mid) < fuel_units:
+                _refund_fee()
+                return {
+                    "ok": False,
+                    "reason": "uncharted voyage requires extra fuel (2x normal)",
+                }
         rm_fuel = world.inventory.remove(party, fuel_mid, fuel_units)
         if isinstance(rm_fuel, MatterErr):
             _refund_fee()
@@ -401,6 +471,11 @@ def dispatch_shipment(
     if has_dock_at_origin and from_plot is not None and plot_is_coastal(world, from_plot):
         # 1.5× speed → travel time × (10000 / 15000) = × 0.667
         transit_ticks = max(1, transit_ticks * 10_000 // (10_000 + HARBOR_TRANSIT_SPEEDUP_BPS))
+    # Phase 10B — uncharted voyage takes 2x the time (UNCHARTED_TIME_MULTIPLIER).
+    # Applied AFTER the harbor bonus so the speedup still helps; the explorer
+    # still loses on net relative to a charted route.
+    if uncharted_voyage:
+        transit_ticks = max(1, int(transit_ticks * UNCHARTED_TIME_MULTIPLIER))
     arrive = world.tick + transit_ticks
     world.next_shipment_seq += 1
     sid = f"ship-{world.next_shipment_seq}"
@@ -419,6 +494,8 @@ def dispatch_shipment(
                 str(dest_dock_owner) if dest_dock_owner is not None else None
             ),
             inter_island=bool(inter_island),
+            route_key=op_route_key,
+            uncharted=bool(uncharted_voyage),
         )
     )
     fuel_log = (
@@ -436,6 +513,7 @@ def dispatch_shipment(
             if fuel_log is not None
             else ""
         )
+        + (", uncharted" if uncharted_voyage else "")
         + ")",
         party=str(party),
         material=str(material),
@@ -446,10 +524,21 @@ def dispatch_shipment(
         route_key=op_route_key,
         operator_party=str(operator_payee) if operator_payee is not None else None,
         inter_island=bool(inter_island),
+        uncharted=bool(uncharted_voyage),
         dest_dock_owner=str(dest_dock_owner) if dest_dock_owner is not None else None,
         fuel_material=fuel_log["material"] if fuel_log is not None else None,
         fuel_units=fuel_log["units"] if fuel_log is not None else 0,
     )
+    if uncharted_voyage and op_route_key is not None:
+        log_event(
+            world,
+            "voyage_uncharted",
+            f"{party} embarked on an uncharted voyage on {op_route_key} (no operator registered).",
+            party=str(party),
+            route_key=op_route_key,
+            fee_cents=fee,
+            transit_ticks=transit_ticks,
+        )
     return {
         "ok": True,
         "shipment_id": sid,
@@ -531,6 +620,13 @@ def deliver_transit(world: World) -> None:
         if world.use_plot_output_logistics:
             bucket = world.plot_output_stock.setdefault(str(s.dest_plot_id), {})
             bucket[str(s.material)] = int(bucket.get(str(s.material), 0)) + int(s.qty)
+        # Phase 10B — record the voyage on its route_key so NPC shippers
+        # (or Phase 11 player UI) can identify high-traffic uncharted lanes
+        # and register a regular operator.
+        rk = getattr(s, "route_key", None)
+        if rk:
+            world.voyage_history[str(rk)] = int(world.voyage_history.get(str(rk), 0)) + 1
+            record_route_voyage_completed(world, str(rk))
         log_event(
             world,
             "ship_deliver",
@@ -541,5 +637,7 @@ def deliver_transit(world: World) -> None:
             dest_plot_id=str(s.dest_plot_id),
             shipment_id=s.shipment_id,
             receiving_fee_cents=recv_fee,
+            route_key=rk,
+            uncharted=bool(getattr(s, "uncharted", False)),
         )
     world.in_transit = keep

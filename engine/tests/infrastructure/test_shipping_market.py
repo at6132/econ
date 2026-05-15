@@ -5,8 +5,10 @@ Covers the route-operator pipeline end-to-end:
 - ``dispatch_shipment`` credits the cheapest registered operator instead of the
   system reserve.
 - Multiple operators compete; cheapest wins each shipment.
-- Genesis bootstrap seeds 3 NPC shippers with default 3¢/tile registrations.
-- A player can undercut the NPCs by registering at a lower fee.
+- Genesis bootstrap seeds 3 NPC shippers with dock + vessel (Phase 10B: routes
+  emerge from traffic / player registration — no day-0 NPC route table).
+- A player can undercut an existing operator (e.g. archetype shipper) by
+  registering at a lower fee.
 - Ledger conservation through every fee operation.
 """
 
@@ -14,7 +16,8 @@ from __future__ import annotations
 
 from realm.actions import register_route
 from realm.production.buildings import build_on_plot
-from realm.genesis.shippers import NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS, NPC_SHIPPER_IDS
+from realm.genesis.archetypes import SHIPPER_PARTY_ID
+from realm.genesis.shippers import NPC_SHIPPER_IDS
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import (
@@ -299,39 +302,30 @@ def test_multiple_operators_cheapest_wins() -> None:
     assert w.ledger.balance(party_cash_account(alice)) == pre_alice
 
 
-def test_npc_shippers_registered_at_bootstrap() -> None:
+def test_npc_shippers_no_routes_at_bootstrap() -> None:
     w = bootstrap_genesis(seed=7, settler_count=4, grid_width=18, grid_height=14)
     shippers = sorted(p for p in w.parties if str(p).startswith("shipper_"))
     assert len(shippers) >= 3, shippers
-    # Sanity: at least one route has an NPC shipper as cheapest operator.
     operators = w.scenario_state.get("route_operators") or {}
     npc_routes = [
         k
         for k, entries in operators.items()
         if any(str(e.get("operator_party")) in {str(s) for s in NPC_SHIPPER_IDS} for e in entries)
     ]
-    assert len(npc_routes) >= 3, npc_routes
-    # And every NPC registration is at the default baseline fee.
-    for k, entries in operators.items():
-        for e in entries:
-            if str(e.get("operator_party")) in {str(s) for s in NPC_SHIPPER_IDS}:
-                assert int(e["fee_per_tile_cents"]) == NPC_SHIPPER_BASELINE_FEE_PER_TILE_CENTS
+    assert npc_routes == [], npc_routes
 
 
 def test_player_can_undercut_npc() -> None:
-    """A player who builds dock + vessel + registers cheaper than the NPC wins the route."""
-    w = bootstrap_genesis(seed=21, settler_count=2, grid_width=18, grid_height=14)
+    """Player registers below the archetype shipper (still seeds all routes at boot)."""
+    w = bootstrap_genesis(seed=21, settler_count=2, grid_width=48, grid_height=36)
     player = PartyId("player")
-    # Find a coastal plot in a region with an NPC route and claim it for the player.
     from realm.production.recipe_sites import plot_is_coastal
 
-    npc_party = next(iter(NPC_SHIPPER_IDS))
-    # Use any registered route involving the NPC's region; pick one with the NPC as operator.
     operators = w.scenario_state.get("route_operators") or {}
     target_key = None
     for k, entries in operators.items():
         for e in entries:
-            if str(e.get("operator_party")) == str(npc_party):
+            if str(e.get("operator_party")) == str(SHIPPER_PARTY_ID):
                 target_key = k
                 break
         if target_key:
@@ -340,7 +334,7 @@ def test_player_can_undercut_npc() -> None:
     npc_entry = next(
         e
         for e in operators[target_key]
-        if str(e.get("operator_party")) == str(npc_party)
+        if str(e.get("operator_party")) == str(SHIPPER_PARTY_ID)
     )
     npc_fee = int(npc_entry["fee_per_tile_cents"])
     npc_region = region_for_plot(w, PlotId(npc_entry["operator_plot"]))

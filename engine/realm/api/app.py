@@ -23,6 +23,7 @@ from realm.api import (
     routes_analytics,
     routes_contracts,
     routes_dev,
+    routes_routes,
     routes_world,
 )
 
@@ -48,6 +49,7 @@ app.add_middleware(
 )
 
 app.include_router(routes_world.router)
+app.include_router(routes_routes.router)
 app.include_router(routes_actions.router)
 app.include_router(routes_contracts.router)
 app.include_router(routes_analytics.router)

@@ -12,5 +12,10 @@ class Terrain(str, Enum):
     DESERT = "desert"
     TUNDRA = "tundra"
     SWAMP = "swamp"
+    # Phase 10 — added by the continental layout. Hills are an upland biome
+    # between plains and mountain (drier, lower-grade ore than mountain).
+    # Existing terrain-conditional code paths treat HILLS like PLAINS unless
+    # they explicitly opt in, so adding this enum value is backwards-compat.
+    HILLS = "hills"
     WATER_SHALLOW = "water_shallow"
     WATER_DEEP = "water_deep"

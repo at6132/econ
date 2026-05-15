@@ -40,6 +40,24 @@ class SubsurfaceRoll:
     platinum_grade: float = 0.0
     oil_shale_grade: float = 0.0
     rare_earth_grade: float = 0.0
+    # Phase 10E — element-correlated grades. New ores added by the chemistry
+    # system (49 industrially significant elements). Default 0.0 so existing
+    # tests that read ``SubsurfaceRoll(...)`` without these fields continue
+    # to work; bootstrap rolls them when ``apply_belts`` is True.
+    au_grade: float = 0.0
+    ag_grade: float = 0.0
+    zn_grade: float = 0.0
+    mn_grade: float = 0.0
+    ni_grade: float = 0.0
+    cr_grade: float = 0.0
+    ti_grade: float = 0.0
+    w_grade: float = 0.0
+    mo_grade: float = 0.0
+    co_grade: float = 0.0
+    v_grade: float = 0.0
+    li_grade: float = 0.0
+    nd_grade: float = 0.0
+    u_grade: float = 0.0
 
 
 def subsurface_roll(
@@ -74,6 +92,24 @@ def subsurface_roll(
     pt = rng.random()
     osh = rng.random()
     re = rng.random()
+    # Phase 10E — additional elemental grades. Rolled the same way as the
+    # Tier-1/2 ores so they share variance with terrain correlation. Most of
+    # these are gated by terrain (see below) so vast tracts of plots will
+    # have 0 grade for any given rare element.
+    au = rng.random()
+    ag = rng.random()
+    zn = rng.random()
+    mn = rng.random()
+    ni = rng.random()
+    cr = rng.random()
+    ti = rng.random()
+    w_ = rng.random()
+    mo = rng.random()
+    co_el = rng.random()  # cobalt — distinct from `co` (coal) above
+    v_ = rng.random()
+    li = rng.random()
+    nd = rng.random()
+    u_ = rng.random()
     if correlate:
         if terrain == Terrain.MOUNTAIN:
             ir = min(1.0, ir * 0.38 + 0.48)
@@ -101,6 +137,13 @@ def subsurface_roll(
             ir *= 0.85
             co *= 0.85
             su = min(1.0, su * 0.55 + 0.18)
+        elif terrain == Terrain.HILLS:
+            # Phase 10A — hills are an upland biome between plains and
+            # mountain. Modest ore bumps; the mountain bonus is bigger.
+            ir = min(1.0, ir * 0.55 + 0.22)
+            cu = min(1.0, cu * 0.58 + 0.18)
+            co = min(1.0, co * 0.55 + 0.18)
+            ld = min(1.0, ld * 0.62 + 0.12)
         elif terrain in (Terrain.WATER_SHALLOW, Terrain.WATER_DEEP):
             damp = 0.28
             ir *= damp
@@ -116,6 +159,41 @@ def subsurface_roll(
             pt *= damp
             osh *= damp
             re *= damp
+            au *= damp
+            ag *= damp
+            zn *= damp
+            mn *= damp
+            ni *= damp
+            cr *= damp
+            ti *= damp
+            w_ *= damp
+            mo *= damp
+            co_el *= damp
+            v_ *= damp
+            li *= damp
+            nd *= damp
+            u_ *= damp
+        # Phase 10E — element-correlated grade bumps.
+        if terrain in (Terrain.MOUNTAIN, Terrain.HILLS):
+            # Mountains/hills host most heavy metals (au, ag co-deposit with cu;
+            # ni/co/cr in mafic rocks; w/mo at high T).
+            au = min(1.0, au * 0.55 + 0.18 + cu * 0.18)
+            ag = min(1.0, ag * 0.55 + 0.16 + cu * 0.18)
+            ni = min(1.0, ni * 0.55 + 0.18)
+            cr = min(1.0, cr * 0.55 + 0.18)
+            co_el = min(1.0, co_el * 0.55 + 0.18)
+            ti = min(1.0, ti * 0.58 + 0.14)
+            w_ = min(1.0, w_ * 0.55 + 0.16)
+            mo = min(1.0, mo * 0.55 + 0.14)
+            v_ = min(1.0, v_ * 0.55 + 0.14)
+            mn = min(1.0, mn * 0.58 + 0.14)
+            zn = min(1.0, zn * 0.58 + 0.14)
+        if terrain in (Terrain.SWAMP, Terrain.FOREST, Terrain.PLAINS):
+            # Lowland clays and pegmatites — Li (spodumene) correlates with clay.
+            li = min(1.0, li * 0.50 + cl * 0.40)
+        if terrain == Terrain.PLAINS:
+            # Carbonatite-style rare-earth deposits often occur at plains-margin.
+            nd = min(1.0, nd * 0.62 + 0.10)
     if apply_belts:
         # Sprint 3 — Phase B.1: layered low-frequency noise creates mineral belts.
         # The bias blends with the iid roll so within a belt the average grade
@@ -146,6 +224,30 @@ def subsurface_roll(
         osh = min(1.0, (osh - 0.95) / 0.05 * 0.8 + 0.12)
     if re > 0.0:
         re = min(1.0, (re - 0.98) / 0.02 * 0.8 + 0.18)
+    # Phase 10E — rarity gates for the new ores. Most plots stay at 0; only
+    # a handful of plots per continent host any meaningful grade. Gate
+    # thresholds tuned so au/ag/zn appear on roughly 5-10% of mountain/hill
+    # plots, ni/co/cr/ti/w/mo/v/mn slightly less often, and uranium is
+    # extremely rare (mountain only, < 5% of mountain plots).
+    au = au if au > 0.85 else 0.0
+    ag = ag if ag > 0.85 else 0.0
+    zn = zn if zn > 0.80 else 0.0
+    mn = mn if mn > 0.78 else 0.0
+    ni = ni if ni > 0.85 else 0.0
+    cr = cr if cr > 0.85 else 0.0
+    ti = ti if ti > 0.83 else 0.0
+    w_ = w_ if w_ > 0.92 else 0.0
+    mo = mo if mo > 0.92 else 0.0
+    co_el = co_el if co_el > 0.88 else 0.0
+    v_ = v_ if v_ > 0.90 else 0.0
+    li = li if li > 0.82 else 0.0
+    nd = nd if nd > 0.94 else 0.0
+    if terrain == Terrain.MOUNTAIN:
+        u_ = u_ if u_ > 0.95 else 0.0
+        if u_ > 0.0:
+            u_ = min(0.30, (u_ - 0.95) / 0.05 * 0.20 + 0.10)
+    else:
+        u_ = 0.0
     return SubsurfaceRoll(
         iron_ore_grade=ir,
         copper_ore_grade=cu,
@@ -160,4 +262,18 @@ def subsurface_roll(
         platinum_grade=pt,
         oil_shale_grade=osh,
         rare_earth_grade=re,
+        au_grade=au,
+        ag_grade=ag,
+        zn_grade=zn,
+        mn_grade=mn,
+        ni_grade=ni,
+        cr_grade=cr,
+        ti_grade=ti,
+        w_grade=w_,
+        mo_grade=mo,
+        co_grade=co_el,
+        v_grade=v_,
+        li_grade=li,
+        nd_grade=nd,
+        u_grade=u_,
     )

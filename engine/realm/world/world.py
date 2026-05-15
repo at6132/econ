@@ -20,8 +20,10 @@ from realm.world.terrain import Terrain
 _subsurface_roll = subsurface_roll
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from realm.economy.businesses import BusinessEntity
     from realm.population.employment import JobOpening
     from realm.population.laborers import LaborerNPC
+    from realm.population.nascent_settlements import NascentSettlement
     from realm.population.towns import Town
 
 
@@ -59,6 +61,12 @@ class InTransit:
     # for intra-island shipments (door-to-door, no port).
     dest_dock_owner: str | None = None
     inter_island: bool = False
+    # Phase 10B — route the shipment is travelling along (or None for intra-
+    # region). Used by ``deliver_transit`` to bump ``world.voyage_history``
+    # so NPC shippers can detect heavy-traffic uncharted lanes and self-
+    # register an operator.
+    route_key: str | None = None
+    uncharted: bool = False
 
 
 @dataclass
@@ -266,6 +274,35 @@ class World:
     """Phase 7E: active job postings from entrepreneurs. ``tick_job_market``
     matches unemployed laborers to openings once per game-day; wages flow
     employer → laborer via ``tick_laborer_wages``."""
+    landmass_id: dict[str, int] = field(default_factory=dict)
+    """Phase 10A: plot-id-str → landmass id (-1 / absent for ocean). Mirrors
+    ``scenario_state["plot_islands"]`` for backwards-compat with movement /
+    demand callers; both are kept in sync by
+    ``realm.world.landmasses.compute_landmasses``."""
+    landmass_type: dict[int, str] = field(default_factory=dict)
+    """Phase 10A: landmass id → ``"continent"`` | ``"island"`` | ``"islet"``.
+    Used by movement.py to compute the cross-landmass shipping multiplier
+    and by viability validation at bootstrap."""
+    landmass_plot_count: dict[int, int] = field(default_factory=dict)
+    """Phase 10A: landmass id → number of plots in that landmass."""
+    voyage_history: dict[str, int] = field(default_factory=dict)
+    """Phase 10B: ``route_key`` → cumulative voyage count. Updated in
+    ``deliver_transit`` so NPC shippers can detect heavy traffic and register
+    a regular operator on the lane."""
+    businesses: dict[str, "BusinessEntity"] = field(default_factory=dict)
+    """Phase 10C: registered business entities keyed by ``business_id``.
+    Distinct from the legacy ``business_registry`` (which is a per-party
+    name/identity record). One party may own multiple businesses; each
+    business is the wrapper around a set of plots + buildings + labor that
+    it organises and is publicly visible / market-tracked under."""
+    next_business_seq: int = 0
+    """Phase 10C: monotonic id generator for ``BusinessEntity.business_id``
+    (format: ``biz-{seq:05d}``)."""
+    nascent_settlements: dict[str, "NascentSettlement"] = field(default_factory=dict)
+    """Phase 10F: residential clusters that haven't yet qualified as towns.
+    Promoted to a town after ``resident_count >= 2`` for 3+ consecutive
+    game-days."""
+    next_nascent_settlement_seq: int = 0
 
     def rng(self, purpose: str) -> random.Random:
         return make_rng(self.tick, purpose)
@@ -442,6 +479,8 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
         # Transport capital — durable, no recipe path yet (Sprint 2). Small
         # finite supply makes coastal route registration achievable on day one.
         (MaterialId("vessel"), 20, 4),
+        # Phase 10B — islet / short-hop craft (exchange-listed; non-continent lanes).
+        (MaterialId("small_vessel"), 120, 60),
         # Sprint 3 — Phase D.1: coastal food chain liquidity.
         (MaterialId("fish"), 600, 30),
         (MaterialId("smoked_fish"), 200, 12),
@@ -498,6 +537,8 @@ def bootstrap_genesis(
     arrivals can fill in over time. Otherwise cap defaults to ``settler_count`` (no growth).
     """
     from realm.world.biome_noise import (
+        continental_layout_supported,
+        continental_layout_terrain,
         genesis_island_layout_supported,
         terrain_for_genesis_island_cell,
     )
@@ -506,16 +547,34 @@ def bootstrap_genesis(
 
     human = PartyId("player")
     if map_layout == "auto":
-        effective_layout = (
-            "islands" if genesis_island_layout_supported(grid_width, grid_height) else "continent"
-        )
-    elif map_layout in ("islands", "continent"):
+        # Phase 10A — three-tier auto-selection. Large grids get the new
+        # procedural continental layout; medium grids stay on the legacy
+        # four-island layout (preserves existing tests + saves); tiny grids
+        # use the single-continent ``terrain_for_cell`` fallback.
+        if continental_layout_supported(grid_width, grid_height):
+            effective_layout = "continental"
+        elif genesis_island_layout_supported(grid_width, grid_height):
+            effective_layout = "islands"
+        else:
+            effective_layout = "continent"
+    elif map_layout in ("islands", "continent", "continental"):
         effective_layout = map_layout
     else:
         raise ValueError(
-            f"unknown map_layout {map_layout!r}; expected 'auto' | 'islands' | 'continent'"
+            f"unknown map_layout {map_layout!r}; expected 'auto' | 'islands' | 'continent' | 'continental'"
         )
-    if effective_layout == "islands":
+    if effective_layout == "continental":
+        def _continental_fn(s: int, x: int, y: int) -> Terrain:
+            return continental_layout_terrain(s, x, y, grid_width, grid_height)
+
+        plots = generate_plots(
+            seed=seed,
+            width=grid_width,
+            height=grid_height,
+            correlate_subsurface=True,
+            terrain_fn=_continental_fn,
+        )
+    elif effective_layout == "islands":
         def _genesis_island_fn(s: int, x: int, y: int) -> Terrain:
             return terrain_for_genesis_island_cell(s, x, y, grid_width, grid_height)
 
@@ -587,10 +646,13 @@ def bootstrap_genesis(
     # non-ocean plots). Ocean plots have no entry. Used by movement.py to
     # detect inter-island shipments (2× per-tile cost) and by future phases
     # for town/island scoping.
-    if effective_layout == "islands":
-        from realm.world.islands import compute_plot_islands
+    # Phase 10A — also classify each connected component as continent /
+    # island / islet so the shipping multiplier and the viability validator
+    # can reason about landmass scale.
+    if effective_layout in ("islands", "continental"):
+        from realm.world.landmasses import compute_landmasses
 
-        world.scenario_state["plot_islands"] = compute_plot_islands(world)
+        compute_landmasses(world)
     else:
         world.scenario_state["plot_islands"] = {}
     # Phase 7B — seed LaborerNPCs per island. Each laborer gets a real
@@ -688,12 +750,27 @@ def bootstrap_genesis(
         world.scenario_state["starting_job_market"] = {
             str(k): int(v) for k, v in employment_seed.items()
         }
+    # Phase 10A — viability enforcement. After all bootstrap seeding runs,
+    # ensure every continent has a baseline laborer count. Smaller-grid
+    # worlds (legacy four-island) skip this step so existing tests stay
+    # deterministic.
+    if effective_layout == "continental":
+        from realm.world.landmasses import validate_continental_viability
+
+        viability = validate_continental_viability(world)
+        if viability["laborers_added"] > 0:
+            log_event(
+                world,
+                "world",
+                f"viability: topped up {viability['laborers_added']} emergency laborers "
+                f"across {viability['continents']} continents.",
+            )
     log_event(
         world,
         "world",
         f"genesis: {n_plots} plots, {initial_n} settlers at boot (cap {settler_cap})"
         + ("; random arrivals enabled" if cycle_enabled else "")
-        + ", terrain-correlated subsurface, cold-start exchange.",
+        + f", layout={effective_layout}, terrain-correlated subsurface, cold-start exchange.",
     )
     record_market_snapshot(world)
     world.use_plot_output_logistics = True

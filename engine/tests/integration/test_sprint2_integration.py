@@ -56,30 +56,35 @@ def test_sprint2_integration_end_to_end() -> None:
     w = _world()
     starting_total_cents = w.ledger.total_cents()
 
-    # ─── 1. NPC shippers registered routes at spawn ────────────────────────────
+    # ─── 1. Phase 10B — NPC coast shippers do not pre-register routes ─────────
     operators = w.scenario_state.get("route_operators") or {}
-    shipper_routes = []
+    npc_shipper_route_count = 0
     for key, entries in operators.items():
         for e in entries:
             if str(e.get("operator_party")) in {str(s) for s in NPC_SHIPPER_IDS}:
-                shipper_routes.append((str(key), str(e.get("operator_party"))))
-                break
-    assert len(shipper_routes) >= 3, (
-        f"expected ≥3 NPC-operated routes at bootstrap, got {len(shipper_routes)}: "
-        f"{shipper_routes}"
+                npc_shipper_route_count += 1
+    assert npc_shipper_route_count == 0, (
+        f"expected no NPC coast shipper routes at bootstrap, got {npc_shipper_route_count}"
     )
 
     # ─── 2. At least one shipping fee ends up with a non-system-reserve party ──
-    # Find a route entry → dispatch a real shipment along it → confirm fee paid.
+    # Cross-Country Logistics (archetype) still registers all lanes at boot.
+    from realm.world.regions import all_region_ids, route_key, split_route_key
+
+    regions = all_region_ids()
+    route_key_str = route_key(regions[0], regions[1])
+    from realm.infrastructure.route_operators import list_route_operators
+
+    ops0 = list_route_operators(w, route_key_str)
+    assert ops0, "expected at least one route operator from archetype shipper"
+    operator_id = str(ops0[0]["operator_party"])
+    shipper_routes = [(route_key_str, operator_id)]
     fee_recipients_pre = {str(p): w.ledger.balance(party_cash_account(PartyId(p))) for p in {pid for _, pid in shipper_routes}}
     # Pick a shipper and dispatch a small shipment on one of its routes by
     # using the player as the shipper and routing through a region in the
     # shipper's coverage. We use the existing dispatch_shipment helper, which
     # already credits the cheapest registered operator.
     route_key_str, operator_id = shipper_routes[0]
-    # Grab one of the regions from the route key.
-    from realm.world.regions import split_route_key
-
     from_region, to_region = split_route_key(route_key_str)
     # The player needs cash and inventory; bootstrap already gave them cash.
     player = PartyId("player")
