@@ -1,0 +1,149 @@
+[gd_scene load_steps=3 format=3 uid="uid://realm_hud"]
+
+[ext_resource type="Script" path="res://scenes/HUD.gd" id="1_hud"]
+[ext_resource type="Theme" path="res://theme/realm_theme.tres" id="2_theme"]
+
+[node name="HUD" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_hud")
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 56.0
+grow_horizontal = 2
+theme = ExtResource("2_theme")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="CashLabel" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Cash —"
+
+[node name="Sep1" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="NetWorthLabel" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "Net —"
+
+[node name="Sep2" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="TimeLabel" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "Time —"
+
+[node name="Sep3" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="CPILabel" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "CPI —"
+
+[node name="Sep4" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="ProductionIcon" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "Prod"
+
+[node name="ProductionCount" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "0"
+
+[node name="Sep5" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="MaintenanceIcon" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "Maint"
+
+[node name="MaintenanceCount" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "0"
+
+[node name="Sep6" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="ContractIcon" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "Pacts"
+
+[node name="ContractCount" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "0"
+
+[node name="Sep7" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="FeedIcon" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "Feed"
+
+[node name="FeedCount" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "0"
+
+[node name="Sep8" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="TickIndicator" type="Label" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+text = "*"
+
+[node name="Spacer" type="Control" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NavButtons" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="MapBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Map"
+
+[node name="TerritoryBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Territory"
+
+[node name="MarketBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Market"
+
+[node name="ChronicleBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Chronicle"
+
+[node name="ContractsBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Pacts"
+
+[node name="FinanceBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Finance"
+
+[node name="LaborBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Labor"
+
+[node name="LabBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Lab"
+
+[node name="MenuBtn" type="Button" parent="PanelContainer/HBoxContainer/NavButtons"]
+layout_mode = 2
+text = "Menu"

@@ -1,0 +1,75 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_command_shell"]
+
+[ext_resource type="Script" path="res://scenes/shell/CommandShell.gd" id="1_script"]
+
+[node name="CommandShell" type="CanvasLayer"]
+layer = 15
+script = ExtResource("1_script")
+
+[node name="TopStrip" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 52.0
+grow_horizontal = 2
+
+[node name="HBox" type="HBoxContainer" parent="TopStrip"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BrandCol" type="VBoxContainer" parent="TopStrip/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="BrandTitle" type="Label" parent="TopStrip/HBox/BrandCol"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REALM"
+
+[node name="BrandSub" type="Label" parent="TopStrip/HBox/BrandCol"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Frontier — player-run economy (solo slice)"
+
+[node name="Pills" type="HBoxContainer" parent="TopStrip/HBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TickPill" type="Label" parent="TopStrip/HBox/Pills"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "World tick 0"
+
+[node name="SeedPill" type="Label" parent="TopStrip/HBox/Pills"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Seed 42"
+
+[node name="CashPill" type="Label" parent="TopStrip/HBox/Pills"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cash $0.00"
+
+[node name="NavRow" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 52.0
+offset_bottom = 96.0
+grow_horizontal = 2
+theme_override_constants/separation = 20
+
+[node name="MapFootnote" type="Label" parent="."]
+unique_name_in_owner = true
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -28.0
+offset_right = -420.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "Drag middle-click to pan · wheel zoom · empty = claim · gold = selected"

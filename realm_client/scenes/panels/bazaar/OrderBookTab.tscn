@@ -1,0 +1,193 @@
+[gd_scene load_steps=3 format=3 uid="uid://realm_order_book_tab"]
+
+[ext_resource type="Script" path="res://scenes/panels/bazaar/OrderBookTab.gd" id="1_script"]
+[ext_resource type="Script" path="res://scenes/panels/bazaar/PriceSparkline.gd" id="2_spark"]
+
+[node name="OrderBookTab" type="HSplitContainer"]
+offset_right = 900.0
+offset_bottom = 500.0
+theme_override_constants/separation = 10
+script = ExtResource("1_script")
+
+[node name="LeftColumn" type="VBoxContainer" parent="."]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="SearchBox" type="LineEdit" parent="LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Search materials…"
+
+[node name="CategoryFilter" type="OptionButton" parent="LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="MaterialList" type="ItemList" parent="LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RightColumn" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="HBoxHeader" type="HBoxContainer" parent="RightColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="MaterialNameLabel" type="Label" parent="RightColumn/HBoxHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Material"
+
+[node name="BestAskLabel" type="Label" parent="RightColumn/HBoxHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Ask: —"
+
+[node name="BestBidLabel" type="Label" parent="RightColumn/HBoxHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Bid: —"
+
+[node name="YourHoldingLabel" type="Label" parent="RightColumn/HBoxHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Hold: 0"
+
+[node name="ChartTitle" type="Label" parent="RightColumn"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "Price"
+theme_override_colors/font_color = Color(0.541, 0.478, 0.596, 1)
+
+[node name="PriceChart" type="Control" parent="RightColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("2_spark")
+
+[node name="BookSplit" type="HSplitContainer" parent="RightColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_horizontal = 3
+
+[node name="AskCol" type="VBoxContainer" parent="RightColumn/BookSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="AskTitle" type="Label" parent="RightColumn/BookSplit/AskCol"]
+layout_mode = 2
+text = "ASKS — cheapest first"
+theme_override_font_sizes/font_size = 11
+
+[node name="AsksList" type="VBoxContainer" parent="RightColumn/BookSplit/AskCol"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BidCol" type="VBoxContainer" parent="RightColumn/BookSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="BidTitle" type="Label" parent="RightColumn/BookSplit/BidCol"]
+layout_mode = 2
+text = "BIDS — highest first"
+theme_override_font_sizes/font_size = 11
+
+[node name="BidsList" type="VBoxContainer" parent="RightColumn/BookSplit/BidCol"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HSeparator" type="HSeparator" parent="RightColumn"]
+layout_mode = 2
+
+[node name="ActionRow" type="HBoxContainer" parent="RightColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="BuyPanel" type="PanelContainer" parent="RightColumn/ActionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BuyVBox" type="VBoxContainer" parent="RightColumn/ActionRow/BuyPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BuyTitle" type="Label" parent="RightColumn/ActionRow/BuyPanel/BuyVBox"]
+layout_mode = 2
+text = "Buy"
+
+[node name="BuyQtySpinBox" type="SpinBox" parent="RightColumn/ActionRow/BuyPanel/BuyVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 9999.0
+value = 1.0
+
+[node name="BuyMaxPriceBox" type="SpinBox" parent="RightColumn/ActionRow/BuyPanel/BuyVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 1.0e+07
+value = 100.0
+suffix = "¢/u"
+
+[node name="BuyTotalLabel" type="Label" parent="RightColumn/ActionRow/BuyPanel/BuyVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Total: $0.00"
+
+[node name="BuyBtn" type="Button" parent="RightColumn/ActionRow/BuyPanel/BuyVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🛒 Buy"
+
+[node name="SellPanel" type="PanelContainer" parent="RightColumn/ActionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SellVBox" type="VBoxContainer" parent="RightColumn/ActionRow/SellPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SellTitle" type="Label" parent="RightColumn/ActionRow/SellPanel/SellVBox"]
+layout_mode = 2
+text = "Sell"
+
+[node name="SellQtySpinBox" type="SpinBox" parent="RightColumn/ActionRow/SellPanel/SellVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 9999.0
+value = 1.0
+
+[node name="SellPriceBox" type="SpinBox" parent="RightColumn/ActionRow/SellPanel/SellVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 1.0e+07
+value = 100.0
+suffix = "¢/u"
+
+[node name="SellTotalLabel" type="Label" parent="RightColumn/ActionRow/SellPanel/SellVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Revenue: $0.00"
+
+[node name="SellBtn" type="Button" parent="RightColumn/ActionRow/SellPanel/SellVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "📤 List for sale"

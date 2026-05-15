@@ -1,0 +1,51 @@
+[gd_scene load_steps=5 format=3 uid="uid://realm_atmosphere"]
+
+[ext_resource type="Script" path="res://scenes/AtmosphereOverlay.gd" id="1_script"]
+
+[sub_resource type="Shader" id="Shader_scan"]
+code = "shader_type canvas_item;
+void fragment() {
+	float line = step(0.5, fract(UV.y * 300.0));
+	COLOR = vec4(0.0, 0.0, 0.0, line * 0.07);
+}"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_scan"]
+shader = SubResource("Shader_scan")
+
+[sub_resource type="Shader" id="Shader_vig"]
+code = "shader_type canvas_item;
+void fragment() {
+	vec2 uv = UV * 2.0 - 1.0;
+	float d = dot(uv, uv);
+	float v = smoothstep(0.2, 1.1, d);
+	COLOR = vec4(0.0, 0.0, 0.0, v * 0.18);
+}"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vig"]
+shader = SubResource("Shader_vig")
+
+[node name="AtmosphereOverlay" type="CanvasLayer"]
+layer = 6
+script = ExtResource("1_script")
+
+[node name="Vignette" type="ColorRect" parent="."]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 1)
+material = SubResource("ShaderMaterial_vig")
+
+[node name="Scanlines" type="ColorRect" parent="."]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 0.12)
+material = SubResource("ShaderMaterial_scan")

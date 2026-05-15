@@ -1,0 +1,90 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_production_control"]
+
+[ext_resource type="Script" path="res://scenes/panels/ProductionControl.gd" id="1_script"]
+
+[node name="ProductionControl" type="VBoxContainer"]
+theme_override_constants/separation = 8
+script = ExtResource("1_script")
+
+[node name="TitleLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Production"
+
+[node name="RecipeSelector" type="OptionButton" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RunModeRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="RunModeLabel" type="Label" parent="RunModeRow"]
+layout_mode = 2
+text = "Run mode"
+
+[node name="RunModeBtn" type="Button" parent="RunModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "One-shot"
+
+[node name="StatusBar" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StatusIcon" type="Label" parent="StatusBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "⏸"
+
+[node name="StatusLabel" type="Label" parent="StatusBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Idle"
+
+[node name="ProgressBar" type="ProgressBar" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 100.0
+show_percentage = false
+
+[node name="ButtonRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StartBtn" type="Button" parent="ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ Start"
+
+[node name="StopBtn" type="Button" parent="ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "⏹ Stop"
+
+[node name="BuyInputsBtn" type="Button" parent="ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+text = "🛒 Buy inputs"
+
+[node name="AutoListRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AutoListLabel" type="Label" parent="AutoListRow"]
+layout_mode = 2
+text = "Auto-list output"
+
+[node name="AutoListToggle" type="CheckButton" parent="AutoListRow"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="MarginLabel" type="Label" parent="AutoListRow"]
+layout_mode = 2
+text = "Margin %"
+
+[node name="MarginSpinBox" type="SpinBox" parent="AutoListRow"]
+unique_name_in_owner = true
+layout_mode = 2

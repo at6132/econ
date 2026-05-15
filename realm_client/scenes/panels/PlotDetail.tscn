@@ -1,0 +1,220 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_plot_detail"]
+
+[ext_resource type="Script" path="res://scenes/panels/PlotDetail.gd" id="1_script"]
+
+[node name="PlotDetail" type="CanvasLayer"]
+layer = 32
+script = ExtResource("1_script")
+
+[node name="Panel" type="Panel" parent="."]
+unique_name_in_owner = true
+offset_right = 420.0
+offset_bottom = 400.0
+
+[node name="Scroll" type="ScrollContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="VBoxMain" type="VBoxContainer" parent="Panel/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="HBoxHeader" type="HBoxContainer" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TitleLabel" type="Label" parent="Panel/Scroll/VBoxMain/HBoxHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Plot"
+
+[node name="CloseBtn" type="Button" parent="Panel/Scroll/VBoxMain/HBoxHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "✕"
+
+[node name="HSeparator1" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
+[node name="InfoGrid" type="GridContainer" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+columns = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 4
+
+[node name="L1" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+layout_mode = 2
+text = "Terrain"
+
+[node name="TerrainValue" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="L2" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+layout_mode = 2
+text = "Coordinates"
+
+[node name="CoordsValue" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="L3" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+layout_mode = 2
+text = "Region"
+
+[node name="LandmassValue" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="L4" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+layout_mode = 2
+text = "Owner"
+
+[node name="OwnerValue" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="L5" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+layout_mode = 2
+text = "Energy"
+
+[node name="EnergyValue" type="Label" parent="Panel/Scroll/VBoxMain/InfoGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="SoilRow" type="HBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SoilLabel" type="Label" parent="Panel/Scroll/VBoxMain/SoilRow"]
+layout_mode = 2
+text = "Soil quality"
+
+[node name="SoilValue" type="Label" parent="Panel/Scroll/VBoxMain/SoilRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+
+[node name="HSeparator2" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
+[node name="ClaimSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ClaimInfoLabel" type="Label" parent="Panel/Scroll/VBoxMain/ClaimSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "This plot is unclaimed."
+
+[node name="ClaimCostLabel" type="Label" parent="Panel/Scroll/VBoxMain/ClaimSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cost:"
+
+[node name="ClaimConfirmBar" type="HBoxContainer" parent="Panel/Scroll/VBoxMain/ClaimSection"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ClaimConfirmLabel" type="Label" parent="Panel/Scroll/VBoxMain/ClaimSection/ClaimConfirmBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Confirm?"
+
+[node name="ClaimConfirmBtn" type="Button" parent="Panel/Scroll/VBoxMain/ClaimSection/ClaimConfirmBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Confirm"
+
+[node name="ClaimCancelBtn" type="Button" parent="Panel/Scroll/VBoxMain/ClaimSection/ClaimConfirmBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="ClaimBtn" type="Button" parent="Panel/Scroll/VBoxMain/ClaimSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Claim plot"
+
+[node name="HSeparator3" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
+[node name="SurveySection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SurveyBtn" type="Button" parent="Panel/Scroll/VBoxMain/SurveySection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Survey this plot"
+
+[node name="HSeparator4" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
+[node name="SubsurfaceSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SubTitle" type="Label" parent="Panel/Scroll/VBoxMain/SubsurfaceSection"]
+layout_mode = 2
+text = "Subsurface grades"
+
+[node name="SubsurfaceGrid" type="GridContainer" parent="Panel/Scroll/VBoxMain/SubsurfaceSection"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 2
+
+[node name="HSeparator5" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
+[node name="BuildingsSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BuildingsTitleBar" type="HBoxContainer" parent="Panel/Scroll/VBoxMain/BuildingsSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BuildingsTitle" type="Label" parent="Panel/Scroll/VBoxMain/BuildingsSection/BuildingsTitleBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Buildings"
+
+[node name="BuildBtn" type="Button" parent="Panel/Scroll/VBoxMain/BuildingsSection/BuildingsTitleBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "＋ Build"
+
+[node name="BuildingsList" type="VBoxContainer" parent="Panel/Scroll/VBoxMain/BuildingsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HSeparator6" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
+[node name="ProductionSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2

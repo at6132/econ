@@ -1,0 +1,80 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_signals_tab"]
+
+[ext_resource type="Script" path="res://scenes/panels/bazaar/SignalsTab.gd" id="1_script"]
+
+[node name="SignalsTab" type="VBoxContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+script = ExtResource("1_script")
+
+[node name="RefreshBtn" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh signals"
+
+[node name="SigTitle" type="Label" parent="."]
+layout_mode = 2
+text = "Regional activity (listed supply)"
+theme_override_font_sizes/font_size = 13
+
+[node name="SignalsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="FlowsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AlertTitle" type="Label" parent="."]
+layout_mode = 2
+text = "Price alerts (best ask vs threshold)"
+theme_override_font_sizes/font_size = 13
+
+[node name="AlertsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AddAlertBar" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MatLabel" type="Label" parent="AddAlertBar"]
+layout_mode = 2
+text = "Material"
+
+[node name="MaterialSelect" type="OptionButton" parent="AddAlertBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CondLabel" type="Label" parent="AddAlertBar"]
+layout_mode = 2
+text = "If"
+
+[node name="ConditionSelect" type="OptionButton" parent="AddAlertBar"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ThreshLabel" type="Label" parent="AddAlertBar"]
+layout_mode = 2
+text = "¢"
+
+[node name="ThresholdSpinBox" type="SpinBox" parent="AddAlertBar"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 1.0e+07
+value = 100.0
+
+[node name="AddAlertBtn" type="Button" parent="AddAlertBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add alert"

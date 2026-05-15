@@ -1,0 +1,95 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_territory_panel"]
+
+[ext_resource type="Script" path="res://scenes/panels/TerritoryPanel.gd" id="1_script"]
+
+[node name="TerritoryPanel" type="CanvasLayer"]
+layer = 5
+script = ExtResource("1_script")
+
+[node name="Panel" type="Panel" parent="."]
+unique_name_in_owner = true
+offset_right = 380.0
+offset_bottom = 400.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Title" type="Label" parent="Panel/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Territory & works"
+
+[node name="CloseBtn" type="Button" parent="Panel/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "✕"
+
+[node name="FilterBar" type="HBoxContainer" parent="Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="FilterLabel" type="Label" parent="Panel/VBoxContainer/FilterBar"]
+layout_mode = 2
+text = "Filter:"
+
+[node name="AllBtn" type="Button" parent="Panel/VBoxContainer/FilterBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "All"
+
+[node name="ProducingBtn" type="Button" parent="Panel/VBoxContainer/FilterBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Producing"
+
+[node name="IdleBtn" type="Button" parent="Panel/VBoxContainer/FilterBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Idle"
+
+[node name="MaintBtn" type="Button" parent="Panel/VBoxContainer/FilterBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "⚠ Maint"
+
+[node name="SortBar" type="HBoxContainer" parent="Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SortLabel" type="Label" parent="Panel/VBoxContainer/SortBar"]
+layout_mode = 2
+text = "Sort:"
+
+[node name="SortPlotBtn" type="Button" parent="Panel/VBoxContainer/SortBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Plot ID"
+
+[node name="SortEffBtn" type="Button" parent="Panel/VBoxContainer/SortBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Efficiency"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlotList" type="VBoxContainer" parent="Panel/VBoxContainer/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8

@@ -1,0 +1,48 @@
+[gd_scene load_steps=6 format=3 uid="uid://realm_main"]
+
+[ext_resource type="Script" path="res://scenes/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scenes/WorldMap.gd" id="2_wm"]
+[ext_resource type="PackedScene" path="res://scenes/shell/CommandShell.tscn" id="3_shell"]
+[ext_resource type="PackedScene" path="res://scenes/shell/TerritorySidebar.tscn" id="4_sidebar"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+layer = 0
+
+[node name="UIRoot" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MapViewport" type="SubViewportContainer" parent="UILayer/UIRoot"]
+layout_mode = 0
+stretch = false
+mouse_filter = 0
+
+[node name="SubViewport" type="SubViewport" parent="UILayer/UIRoot/MapViewport"]
+handle_input_locally = true
+size = Vector2i(1200, 700)
+render_target_update_mode = 4
+
+[node name="WorldMap" type="Node2D" parent="UILayer/UIRoot/MapViewport/SubViewport"]
+script = ExtResource("2_wm")
+
+[node name="Camera2D" type="Camera2D" parent="UILayer/UIRoot/MapViewport/SubViewport/WorldMap"]
+position_smoothing_enabled = true
+
+[node name="MarkersLayer" type="Node2D" parent="UILayer/UIRoot/MapViewport/SubViewport/WorldMap"]
+
+[node name="TerritorySidebar" parent="UILayer/UIRoot" instance=ExtResource("4_sidebar")]
+layout_mode = 0
+mouse_filter = 0
+
+[node name="CommandShell" parent="." instance=ExtResource("3_shell")]
+
+[node name="PanelRoot" type="CanvasLayer" parent="."]
+layer = 20
