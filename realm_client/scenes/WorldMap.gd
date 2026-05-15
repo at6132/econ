@@ -30,6 +30,8 @@ signal plot_clicked(plot_id: String, plot_data: Dictionary)
 var _mesh: MapOrganicMesh
 var _world_seed: int = DEMO_SEED
 var _selected_plot_id: String = ""
+var _selected_gx: int = -1
+var _selected_gy: int = -1
 var _dragging: bool = false
 var _did_drag: bool = false
 var _did_fit_camera: bool = false
@@ -69,6 +71,10 @@ var _cell_pids: PackedStringArray = PackedStringArray()
 const OVERDRAW_FACTOR := 1.8
 var _drawn_world_rect: Rect2 = Rect2()
 var _drawn_zoom: float = -1.0
+## Zoom coalescing: accumulate zoom during rapid scrolling, apply once per frame.
+var _zoom_pending_factor: float = 1.0
+var _zoom_pending_pos: Vector2 = Vector2.ZERO
+var _zoom_pending: bool = false
 
 
 func set_view_size(sz: Vector2) -> void:
@@ -360,16 +366,37 @@ func _draw() -> void:
 	_drawn_world_rect = _overdraw_world_rect()
 
 	var bx := _last_mesh_bounds.x
+	var sel_gx := _selected_gx
+	var sel_gy := _selected_gy
 
-	# Fast terrain pass — reads from flat pre-cached arrays (no string format / dict lookup).
-	# Pre-compute per-frame constants outside the inner loop.
-	var sel_id := _selected_plot_id
+	if lod <= 1:
+		# ── Fast path: fill-only, zero string ops, zero stroke draws ──
+		for gy in range(_vis_min_y, _vis_max_y):
+			var row_off := gy * bx
+			for gx in range(_vis_min_x, _vis_max_x):
+				var idx := row_off + gx
+				if (_cell_flags[idx] & 0x1) == 0:
+					continue
+				draw_colored_polygon(_mesh.plot_polygon(gx, gy), _cell_colors[idx])
+		# Single-cell selection highlight (O(1), not O(N)).
+		if sel_gx >= _vis_min_x and sel_gx < _vis_max_x and sel_gy >= _vis_min_y and sel_gy < _vis_max_y:
+			var sel_idx := sel_gy * bx + sel_gx
+			if (_cell_flags[sel_idx] & 0x1) != 0:
+				var pts := _mesh.plot_polygon(sel_gx, sel_gy)
+				var sw := _world_line_width(3.5)
+				draw_polyline(pts, RealmColors.ACCENT, sw, true)
+				draw_line(pts[3], pts[0], RealmColors.ACCENT, sw)
+		_draw_town_dots()
+		return
+
+	# ── LOD 2+: full terrain + strokes ──
 	var stroke_w_base := _world_line_width(1.0)
 	var stroke_w_sel := _world_line_width(3.5)
 	var stroke_w_mine := _world_line_width(1.5)
 	var stroke_w_other := _world_line_width(1.25)
 	var mine_ring_r := _mesh.cell_px * 0.28
 	var mine_ring_w := stroke_w_base
+	var default_stroke_c := Color(0, 0, 0, 0.38)
 
 	for gy in range(_vis_min_y, _vis_max_y):
 		var row_off := gy * bx
@@ -378,23 +405,16 @@ func _draw() -> void:
 			var flags := _cell_flags[idx]
 			if (flags & 0x1) == 0:
 				continue
-			# plot_polygon returns a pre-computed PackedVector2Array; use it directly.
 			var pts := _mesh.plot_polygon(gx, gy)
 			draw_colored_polygon(pts, _cell_colors[idx])
 
-			if lod >= 2 and (flags & 0x8) != 0:
+			if (flags & 0x8) != 0:
 				var tint := _cell_owner_tints[idx]
 				if tint.a > 0.01:
 					draw_colored_polygon(pts, tint)
 
 			var is_mine := (flags & 0x2) != 0
-			var is_sel := _cell_pids[idx] == sel_id
-
-			if lod <= 1:
-				if is_sel:
-					draw_polyline(pts, RealmColors.ACCENT, stroke_w_sel, true)
-					draw_line(pts[3], pts[0], RealmColors.ACCENT, stroke_w_sel)
-				continue
+			var is_sel := gx == sel_gx and gy == sel_gy
 
 			var stroke_w: float
 			var stroke_c: Color
@@ -410,7 +430,7 @@ func _draw() -> void:
 				stroke_c.a = 0.5
 				stroke_w = stroke_w_other
 			else:
-				stroke_c = Color(0, 0, 0, 0.38)
+				stroke_c = default_stroke_c
 				stroke_w = stroke_w_base
 			draw_polyline(pts, stroke_c, stroke_w, true)
 			draw_line(pts[3], pts[0], stroke_c, stroke_w)
@@ -419,11 +439,7 @@ func _draw() -> void:
 				var ctr := _mesh.plot_centroid(gx, gy)
 				var ring_c := RealmColors.MAGIC
 				ring_c.a = 0.35
-				draw_arc(ctr, mine_ring_r, 0.0, TAU, 20, ring_c, mine_ring_w)
-
-	if lod == 0:
-		_draw_town_dots()
-		return
+				draw_arc(ctr, mine_ring_r, 0.0, TAU, 10, ring_c, mine_ring_w)
 
 	_draw_town_chrome(lod, csp)
 
@@ -450,6 +466,14 @@ func _compute_visible_range_overdraw() -> void:
 	_vis_min_y = maxi(0, int((odr.position.y - _mesh.pad) / _mesh.cell_px) - 1)
 	_vis_max_x = mini(bounds.x, int((odr.end.x - _mesh.pad) / _mesh.cell_px) + 2)
 	_vis_max_y = mini(bounds.y, int((odr.end.y - _mesh.pad) / _mesh.cell_px) + 2)
+	# Cap: if overdraw produces too many cells, shrink to 1× viewport.
+	var cell_count := (_vis_max_x - _vis_min_x) * (_vis_max_y - _vis_min_y)
+	if cell_count > 4000:
+		var vr := _visible_world_rect()
+		_vis_min_x = maxi(0, int((vr.position.x - _mesh.pad) / _mesh.cell_px) - 1)
+		_vis_min_y = maxi(0, int((vr.position.y - _mesh.pad) / _mesh.cell_px) - 1)
+		_vis_max_x = mini(bounds.x, int((vr.end.x - _mesh.pad) / _mesh.cell_px) + 2)
+		_vis_max_y = mini(bounds.y, int((vr.end.y - _mesh.pad) / _mesh.cell_px) + 2)
 
 
 func _cell_screen_px() -> float:
@@ -765,13 +789,32 @@ func _handle_map_input(event: InputEvent) -> void:
 
 
 func _zoom_at_screen_pos(screen_pos: Vector2, factor: float) -> void:
-	var world_before := _screen_to_world(screen_pos)
-	_cam_zoom *= factor
+	# Coalesce rapid wheel events within the same frame: accumulate factor, apply in _process.
+	if not _zoom_pending:
+		_zoom_pending_factor = factor
+		_zoom_pending_pos = screen_pos
+		_zoom_pending = true
+	else:
+		_zoom_pending_factor *= factor
+		_zoom_pending_pos = screen_pos
+
+
+func _apply_pending_zoom() -> void:
+	if not _zoom_pending:
+		return
+	_zoom_pending = false
+	var world_before := _screen_to_world(_zoom_pending_pos)
+	_cam_zoom *= _zoom_pending_factor
+	_zoom_pending_factor = 1.0
 	_clamp_cam_zoom()
 	_sync_camera_zoom()
-	camera.position += world_before - _screen_to_world(screen_pos)
+	camera.position += world_before - _screen_to_world(_zoom_pending_pos)
 	_clamp_camera_position()
 	queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	_apply_pending_zoom()
 
 
 func _viewport_center() -> Vector2:
@@ -792,11 +835,11 @@ func _handle_plot_click(screen_pos: Vector2) -> void:
 		return
 	var world_pos := _screen_to_world(screen_pos)
 	var cell := _mesh.cell_px
-	# Direct grid lookup: convert world position to approximate grid cell
 	var approx_gx := int((world_pos.x - _mesh.pad) / cell)
 	var approx_gy := int((world_pos.y - _mesh.pad) / cell)
-	# Search a small neighborhood (3×3) around the approximate cell
 	var best_id := ""
+	var best_gx := -1
+	var best_gy := -1
 	var best_d := cell * cell * 4.0
 	var bounds := _last_mesh_bounds
 	for dy in range(-1, 2):
@@ -805,18 +848,20 @@ func _handle_plot_click(screen_pos: Vector2) -> void:
 			var gy := approx_gy + dy
 			if gx < 0 or gy < 0 or gx >= bounds.x or gy >= bounds.y:
 				continue
-			var pid := "p-%d-%d" % [gx, gy]
-			if _demo_mode:
-				pid = "demo-%d-%d" % [gx, gy]
-			if not WorldState.plots.has(pid):
+			var idx := gy * bounds.x + gx
+			if (_cell_flags[idx] & 0x1) == 0:
 				continue
 			var c := _mesh.plot_centroid(gx, gy)
 			var d := world_pos.distance_squared_to(c)
 			if d < best_d:
 				best_d = d
-				best_id = pid
+				best_gx = gx
+				best_gy = gy
+				best_id = _cell_pids[idx]
 	if best_id.is_empty():
 		return
 	_selected_plot_id = best_id
-	queue_redraw()
+	_selected_gx = best_gx
+	_selected_gy = best_gy
+	_invalidate_draw_buffer()
 	plot_clicked.emit(best_id, WorldState.plots[best_id] as Dictionary)
