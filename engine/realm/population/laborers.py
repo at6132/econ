@@ -79,12 +79,13 @@ PRODUCTIVITY_REDUCED_THRESHOLD: Final[float] = 0.30
 DEATH_THRESHOLD: Final[float] = 0.10
 """At or below 0.10 health → laborer dies (logged as a world_feed event)."""
 
-# Phase 7B per-island default seeded population (matches the spec).
+# Legacy four-island flavor table (pre–landmass-density). Tests that pin the
+# old layout may still import this; bootstrap uses :mod:`landmass_density`.
 DEFAULT_ISLAND_LABORER_COUNTS: Final[dict[int, int]] = {
-    0: 300,  # Industrial
-    1: 400,  # Agricultural
-    2: 150,  # Frontier
-    3: 100,  # Resource-rich
+    0: 300,
+    1: 400,
+    2: 150,
+    3: 100,
 }
 
 # Birth control (Phase 7C/7D will revisit once towns exist).
@@ -250,21 +251,21 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
 
 
 def bootstrap_island_laborer_populations(world: World) -> dict[int, int]:
-    """Seed every detected island with its default starting laborer count.
+    """Seed every landmass with a plot-count–scaled laborer population.
 
-    Returns ``{island_id: laborers_seeded}`` for the caller to log.
+    Returns ``{landmass_id: laborers_seeded}`` for the caller to log.
     """
     plot_islands = world.scenario_state.get("plot_islands") or {}
     if not plot_islands:
         return {}
+    from realm.population.landmass_density import laborer_target_count_for_landmass
+
     distinct_islands = sorted({int(isl) for isl in plot_islands.values()})
     out: dict[int, int] = {}
     for isl in distinct_islands:
-        count = DEFAULT_ISLAND_LABORER_COUNTS.get(isl)
-        if count is None:
-            # Extra islands beyond the canonical four get a small seed so
-            # they aren't completely empty if world gen produces them.
-            count = 100
+        count = laborer_target_count_for_landmass(world, isl)
+        if count <= 0:
+            continue
         ids = seed_island_laborers(world, isl, count)
         out[isl] = len(ids)
     return out
@@ -326,6 +327,13 @@ def _apply_health_pressure(
         lab.health = max(0.0, lab.health - drop)
 
 
+def _clear_job_openings_for_laborer(world: World, laborer_id: str) -> None:
+    """Free slots when a laborer leaves the workforce (death / retirement)."""
+    for op in world.job_openings:
+        if op.filled_by == laborer_id:
+            op.filled_by = None
+
+
 def _kill_laborer(world: World, lab: LaborerNPC, cause: str) -> None:
     """Remove a laborer from the simulation.
 
@@ -352,6 +360,7 @@ def _kill_laborer(world: World, lab: LaborerNPC, cause: str) -> None:
                 credit=system_reserve_account(),
                 amount_cents=remaining,
             )
+    _clear_job_openings_for_laborer(world, lab.laborer_id)
     world.laborers.pop(lab.laborer_id, None)
     log_event(
         world,
@@ -387,6 +396,7 @@ def _retire_laborer(world: World, lab: LaborerNPC) -> None:
                 credit=system_reserve_account(),
                 amount_cents=remaining,
             )
+    _clear_job_openings_for_laborer(world, lab.laborer_id)
     world.laborers.pop(lab.laborer_id, None)
     log_event(
         world,
