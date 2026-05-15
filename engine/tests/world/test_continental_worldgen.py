@@ -14,19 +14,22 @@ def test_small_grid_uses_fallback_terrain() -> None:
     assert w.plots
 
 
-def test_at_least_2_continents_on_large_grid() -> None:
-    """Continental layout classifies ≥1 continent-sized component (FBM may merge)."""
-    w = bootstrap_genesis(seed=42, settler_count=20, grid_width=100, grid_height=100)
+def test_at_least_3_continents_on_default_genesis_grid() -> None:
+    """Continental procedural layout splits into ≥3 continent-class landmasses (192×144)."""
+
+    w = bootstrap_genesis(seed=42, settler_count=12)
     continents = list_continents(w)
-    assert continents, f"expected at least one continent landmass, got {continents}"
+    assert (
+        len(continents) >= 3
+    ), f"expected ≥3 continents, got {continents}: {w.landmass_type!r}"
     total_continent_plots = sum(
         int((w.landmass_plot_count or {}).get(cid, 0)) for cid in continents
     )
-    assert total_continent_plots >= 500
+    assert total_continent_plots >= 3 * 500
 
 
 def test_viability_validation_passes() -> None:
-    w = bootstrap_genesis(seed=43, settler_count=15, grid_width=100, grid_height=100)
+    w = bootstrap_genesis(seed=43, settler_count=15)
     continents = list_continents(w)
     assert continents
 

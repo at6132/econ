@@ -162,19 +162,79 @@ _CONTINENTAL_LAND_THRESHOLD: float = 0.25
 _CONTINENTAL_SHALLOW_THRESHOLD: float = 0.30
 
 
+def _continental_anchor_sites(seed: int) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """Three continent centers in normalized ``[0, 1]^2`` with deterministic jitter."""
+
+    rng = make_rng(int(seed), "continental_anchor_jitter")
+    jxa = rng.random() * 0.055 - 0.027
+    jya = rng.random() * 0.055 - 0.027
+    jxb = rng.random() * 0.050 - 0.025
+    jyb = rng.random() * 0.050 - 0.025
+
+    return (
+        (0.185 + jxa, 0.255 + jya),
+        (0.795 - jxb, 0.305 - jyb),
+        (0.485 + jyb, 0.760 + jxa * 0.6),
+    )
+
+
+def _continental_sigma_norm(width: int, height: int) -> float:
+    """Gaussian σ in normalized ``[0,1]`` coords, tuned at 192×144.
+
+    Lobes are defined in unit square space; on a 10_000-plot grid the same σ
+    yields smaller *cell* radii than on the default map, dropping components
+    below ``CONTINENT_MIN_PLOTS``. Upscale σ only when ``width*height`` is below
+    the reference area (capped so we never reintroduce inter-continental
+    bridging on tiny margins).
+    """
+    ref_area = 192.0 * 144.0
+    area = float(max(1, int(width) * int(height)))
+    scale = math.sqrt(ref_area / area)
+    scale = max(1.0, min(1.38, scale))
+    return 0.133 * scale
+
+
+def _continental_core_field(seed: int, cx: float, cy: float, width: int, height: int) -> float:
+    """Max of three Gaussian lobes → three disjoint land shells (ocean between).
+
+    A single planar FBM across the whole map tends to reconnect into one mega-
+    component; modulating continental noise by ``core`` keeps each mass ≥
+    ``CONTINENT_MIN_PLOTS`` (see ``realm.world.landmasses``) while still
+    allowing FBM detail *within* each lobe.
+
+    Gaussian σ scales up slightly on grids smaller than 192×144 so cell radii do
+    not shrink purely because of normalization; tuning target is three
+    continent-sized components at the default Genesis size.
+
+    ``width`` / ``height`` are the map size in plots (passed from
+    :func:`_continental_mask`).
+    """
+    sigma = _continental_sigma_norm(width, height)
+    sigma_sq = sigma * sigma
+    inv_var = 1.0 / sigma_sq
+    best = 0.0
+    for ax, ay in _continental_anchor_sites(seed):
+        dx = cx - ax
+        dy = cy - ay
+        v = math.exp(-(dx * dx + dy * dy) * inv_var)
+        if v > best:
+            best = v
+    return best
+
+
 def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> float:
-    """Layered FBM producing 2–4 continents and 4–10 islands + scattered islets.
+    """Layered FBM inside three anchored shells → reliably ≥3 continents.
 
     Returns a value in roughly ``[0, 1]`` where higher = more "land-like".
-    The shape is two FBM octave stacks added together: a low-frequency
-    continental scaffold plus a higher-frequency island sprinkle.
+    Ocean dominates between lobes (``max`` of Gaussians, not ``sum``); FBM only
+    modulates where the core field is non-negligible.
     """
     # Normalise coords to [0, 1] so the noise scale is grid-size invariant.
     cx = float(x) / max(1.0, float(width))
     cy = float(y) / max(1.0, float(height))
-    # Low-frequency continental mass (2–4 large lobes per typical seed).
+    core = _continental_core_field(seed, cx, cy, width, height)
+    # Low-frequency shape *inside* each shell only (prevents bridges).
     cont = fbm(seed + 401, cx * 2.4, cy * 2.4, 5)
-    # Higher-frequency island sprinkle.
     isl = fbm(seed + 503, cx * 7.0 + 50.0, cy * 7.0 + 13.0, 3)
     # Edge taper — push the very edge of the map toward ocean so continents
     # rarely run all the way to the world border (more realistic shorelines
@@ -183,9 +243,7 @@ def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> flo
     edge_y = min(cy, 1.0 - cy)
     edge = min(edge_x, edge_y)
     edge_taper = min(1.0, edge * 8.0)
-    # Combine. Continents dominate; islands add bumps. Subtract a baseline
-    # so most of the map is below the land threshold (= ocean).
-    raw = cont * 0.75 + isl * 0.30 - 0.18
+    raw = core * (0.20 + 0.78 * cont) + isl * 0.22 * core - 0.028
     return max(0.0, raw * edge_taper)
 
 
