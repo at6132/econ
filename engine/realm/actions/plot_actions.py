@@ -586,6 +586,129 @@ def buy_plot_listing(world: World, buyer: PartyId, listing_id: str) -> dict:
     }
 
 
+def subdivide_plot(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    partitions: list[dict[str, int | str]],
+) -> ActionResult:
+    from realm.world.plot_scale import CELL_SIDE_METRES, GRID_CELLS_PER_SIDE, cells_occupied
+
+    plot = world.plots.get(plot_id)
+    if plot is None or plot.owner != party:
+        return ActionErr(ok=False, reason="not your plot")
+    if any(sp.parent_plot_id == str(plot_id) for sp in world.sub_plots.values()):
+        return ActionErr(ok=False, reason="plot is already subdivided")
+    if len(partitions) < 2:
+        return ActionErr(ok=False, reason="need at least 2 partitions to subdivide")
+    if len(partitions) > 9:
+        return ActionErr(ok=False, reason="maximum 9 sub-plots per plot")
+
+    all_cells: set[tuple[int, int]] = set()
+    for p in partitions:
+        gx = int(p["grid_x"])
+        gy = int(p["grid_y"])
+        gw = int(p["grid_w"])
+        gh = int(p["grid_h"])
+        if gw < 2 or gh < 2:
+            return ActionErr(
+                ok=False, reason="minimum sub-plot size is 2×2 cells (20m×20m)"
+            )
+        cells = cells_occupied(gx, gy, gw, gh)
+        overlap = all_cells & cells
+        if overlap:
+            return ActionErr(ok=False, reason=f"partition overlaps at cells {overlap}")
+        if gx < 0 or gy < 0 or gx + gw > GRID_CELLS_PER_SIDE or gy + gh > GRID_CELLS_PER_SIDE:
+            return ActionErr(ok=False, reason="partition exceeds plot bounds")
+        all_cells |= cells
+
+    full_plot_cells = cells_occupied(0, 0, GRID_CELLS_PER_SIDE, GRID_CELLS_PER_SIDE)
+    if all_cells != full_plot_cells:
+        return ActionErr(
+            ok=False,
+            reason="partitions don't cover the entire plot — all 100 cells must be assigned",
+        )
+
+    fee = len(partitions) * 10_000
+    cash = party_cash_account(party)
+    if world.ledger.balance(cash) < fee:
+        return ActionErr(ok=False, reason=f"need ${fee / 100:.2f} surveyor fee")
+    tr = world.ledger.transfer(
+        debit=cash, credit=system_reserve_account(), amount_cents=fee
+    )
+    if isinstance(tr, MoneyErr):
+        return ActionErr(ok=False, reason=tr.reason)
+
+    created: list[str] = []
+    labels = "ABCDEFGHI"
+    for i, p in enumerate(partitions):
+        sp_id = f"{plot_id}:{labels[i]}"
+        gw = int(p["grid_w"])
+        gh = int(p["grid_h"])
+        area = gw * gh * (CELL_SIDE_METRES**2)
+        from realm.world.world import SubPlot
+
+        sp = SubPlot(
+            sub_plot_id=sp_id,
+            parent_plot_id=str(plot_id),
+            owner=str(party),
+            grid_x=int(p["grid_x"]),
+            grid_y=int(p["grid_y"]),
+            grid_w=gw,
+            grid_h=gh,
+            area_sq_metres=area,
+            listed_for_sale=False,
+            ask_price_cents=0,
+            lease_rights=None,
+        )
+        world.sub_plots[sp_id] = sp
+        created.append(sp_id)
+
+    log_event(
+        world,
+        "plot_subdivided",
+        f"{party} subdivided plot {plot_id} into {len(partitions)} sub-plots",
+        party=str(party),
+        plot_id=str(plot_id),
+        sub_plot_ids=created,
+    )
+    return ActionOk(ok=True, sub_plot_ids=created, surveyor_fee_cents=fee)
+
+
+def list_sub_plot_for_sale(
+    world: World, party: PartyId, sub_plot_id: str, ask_price_cents: int
+) -> ActionResult:
+    sp = world.sub_plots.get(sub_plot_id)
+    if sp is None or sp.owner != str(party):
+        return ActionErr(ok=False, reason="not your sub-plot")
+    if ask_price_cents <= 0:
+        return ActionErr(ok=False, reason="ask price must be positive")
+    sp.listed_for_sale = True
+    sp.ask_price_cents = int(ask_price_cents)
+    return ActionOk(ok=True, sub_plot_id=sub_plot_id, ask_price_cents=ask_price_cents)
+
+
+def buy_sub_plot(
+    world: World, buyer: PartyId, sub_plot_id: str
+) -> ActionResult:
+    sp = world.sub_plots.get(sub_plot_id)
+    if sp is None or not sp.listed_for_sale:
+        return ActionErr(ok=False, reason="sub-plot not listed for sale")
+    seller = PartyId(str(sp.owner))
+    ask = int(sp.ask_price_cents)
+    bc = party_cash_account(buyer)
+    sc = party_cash_account(seller)
+    if world.ledger.balance(bc) < ask:
+        return ActionErr(ok=False, reason=f"need ${ask / 100:.2f} to buy this sub-plot")
+    tr = world.ledger.transfer(debit=bc, credit=sc, amount_cents=ask)
+    if isinstance(tr, MoneyErr):
+        return ActionErr(ok=False, reason=tr.reason)
+    sp.owner = str(buyer)
+    sp.listed_for_sale = False
+    sp.ask_price_cents = 0
+    return ActionOk(ok=True, price_paid_cents=ask)
+
+
 # ─────────────────── Phase 9B — speculative surveying ───────────────────
 
 
