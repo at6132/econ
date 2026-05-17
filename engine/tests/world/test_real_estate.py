@@ -121,7 +121,7 @@ def test_claim_cost_scales_with_value() -> None:
         for pid, pl in world.plots.items()
         if pl.owner is None and not pl.terrain.value.startswith("water")
     ]
-    assert max(costs) > min(costs)
+    assert max(costs) >= min(costs) + 10_000
     assert max(costs) >= 50_000
 
 

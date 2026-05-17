@@ -399,15 +399,13 @@ def claim_cost_cents_for_plot(world: "World", plot_id: PlotId) -> int:
     from realm.world.real_estate import compute_plot_value
 
     density = population_density_for(world, plot_id)
-    density_cost = claim_cost_cents_from_density(density)
     market_cost = max(50_000, int(compute_plot_value(world, plot_id)))
-    if density_cost > 0 and density <= POPULATION_FRONTIER_DENSITY_BASELINE + 0.01:
+    if density <= 0.0:
+        return market_cost if market_cost > 50_000 else 0
+    density_cost = claim_cost_cents_from_density(density)
+    if density <= POPULATION_FRONTIER_DENSITY_BASELINE + 0.01:
         return density_cost
-    if density_cost > 0:
-        return max(density_cost, market_cost)
-    if market_cost > 50_000:
-        return market_cost
-    return 0
+    return max(density_cost, market_cost)
 
 
 def ensure_party_recipe_book(world: "World", party: PartyId) -> set[str]:
