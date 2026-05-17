@@ -252,28 +252,48 @@ def _continental_core_field(seed: int, cx: float, cy: float, width: int, height:
 
 
 def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> float:
-    """Layered FBM inside three anchored shells → reliably ≥3 continents.
-
-    Returns a value in roughly ``[0, 1]`` where higher = more "land-like".
-    Ocean dominates between lobes (``max`` of Gaussians, not ``sum``); FBM only
-    modulates where the core field is non-negligible.
-    """
-    # Normalise coords to [0, 1] so the noise scale is grid-size invariant.
+    """Procedural continental mask — fully random per seed (2–5 continents + islands)."""
     cx = float(x) / max(1.0, float(width))
     cy = float(y) / max(1.0, float(height))
-    core = _continental_core_field(seed, cx, cy, width, height)
-    # Low-frequency shape *inside* each shell only (prevents bridges).
-    cont = fbm(seed + 401, cx * 2.4, cy * 2.4, 5)
-    isl = fbm(seed + 503, cx * 7.0 + 50.0, cy * 7.0 + 13.0, 3)
-    # Edge taper — push the very edge of the map toward ocean so continents
-    # rarely run all the way to the world border (more realistic shorelines
-    # and gives ships somewhere to sail along).
-    edge_x = min(cx, 1.0 - cx)
-    edge_y = min(cy, 1.0 - cy)
-    edge = min(edge_x, edge_y)
-    edge_taper = min(1.0, edge * 8.0)
-    raw = core * (0.20 + 0.78 * cont) + isl * 0.22 * core - 0.028
-    return max(0.0, raw * edge_taper)
+    tau = math.tau
+
+    n_continents = 2 + (int(seed) % 4)
+    continent_centers: list[tuple[float, float, float]] = []
+    for i in range(n_continents):
+        angle = (i / n_continents) * tau + fbm(seed + i * 100, 0.0, 0.0, 1) * 1.5
+        radius = 0.25 + fbm(seed + i * 200, 1.0, 0.0, 1) * 0.15
+        ccx = 0.5 + math.cos(angle) * radius
+        ccy = 0.35 + fbm(seed + i * 300, float(i), 0.0, 1) * 0.30
+        size = 0.15 + fbm(seed + i * 400, float(i), 1.0, 1) * 0.20
+        continent_centers.append((ccx, ccy, size))
+
+    n_islands = 4 + (int(seed) % 9)
+    island_centers: list[tuple[float, float, float]] = []
+    for i in range(n_islands):
+        icx = fbm(seed + 1000 + i * 50, float(i), 2.0, 1)
+        icy = 0.1 + fbm(seed + 2000 + i * 50, float(i), 3.0, 1) * 0.80
+        isize = 0.04 + fbm(seed + 3000 + i * 50, float(i), 4.0, 1) * 0.08
+        island_centers.append((icx, icy, isize))
+
+    total = 0.0
+    for ccx, ccy, size in continent_centers:
+        dx = cx - ccx
+        dy = cy - ccy
+        dist = math.sqrt(dx * dx + dy * dy)
+        wobble = fbm(seed + int(ccx * 1000), cx * 8.0, cy * 8.0, 3) * 0.08
+        influence = max(0.0, 1.0 - (dist - wobble) / max(size, 0.01))
+        total = max(total, influence)
+
+    for icx, icy, isize in island_centers:
+        dx = cx - icx
+        dy = cy - icy
+        dist = math.sqrt(dx * dx + dy * dy)
+        wobble = fbm(seed + int(icx * 999), cx * 12.0, cy * 12.0, 2) * 0.04
+        influence = max(0.0, 1.0 - (dist - wobble) / max(isize, 0.01))
+        total = max(total, influence * 0.7)
+
+    pole_penalty = abs(cy - 0.5) * 0.4
+    return max(0.0, total - pole_penalty)
 
 
 def continental_layout_terrain(
@@ -302,15 +322,16 @@ def continental_layout_terrain(
         return Terrain.WATER_SHALLOW
     cx = float(x) / max(1.0, float(width))
     cy = float(y) / max(1.0, float(height))
-    elev = fbm(seed + 1, cx * 6.0, cy * 6.0, 4) * mask
-    moist = fbm(seed + 2, cx * 5.0 + 10.0, cy * 5.0, 4)
-    # Equatorial heat: high near the middle row, low at the poles, plus FBM
-    # noise so isobars wobble.
+    chaos = 0.6 + fbm(seed + 9999, 0.0, 0.0, 1) * 0.8
+    elev = fbm(seed + 1, cx * 6.0, cy * 6.0, 6) * mask
+    moist = fbm(seed + 2, cx * 5.0 + 10.0, cy * 5.0, 6)
     heat = 1.0 - abs(cy - 0.5) * 2.0
     heat += fbm(seed + 3, cx * 4.0 + 20.0, cy * 4.0, 3) * 0.3
-    if elev > 0.72:
+    mtn_thr = 0.72 - (chaos - 0.6) * 0.08
+    hill_thr = 0.55 - (chaos - 0.6) * 0.06
+    if elev > mtn_thr:
         return Terrain.MOUNTAIN
-    if elev > 0.55 and moist < 0.4:
+    if elev > hill_thr and moist < 0.4:
         return Terrain.HILLS
     if moist > 0.60 and heat > 0.55:
         return Terrain.SWAMP
