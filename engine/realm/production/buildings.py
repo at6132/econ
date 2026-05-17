@@ -383,7 +383,7 @@ def building_catalog_public() -> list[dict]:
     return out
 
 
-def build_on_plot(
+def _legacy_build_on_plot_impl(
     world: World,
     party: PartyId,
     plot_id: PlotId,
@@ -392,8 +392,8 @@ def build_on_plot(
     construction_order_id: str | None = None,
 ) -> dict:
     """
-    Place a structure: simple buildings pay ``cost_cents``; contracted workshops need
-    ``build_mode`` ∈ {``self_contract``, ``turnkey``}.
+    Legacy placement path (pre-blueprint grid). Used when blueprint catalog
+    has no entry for ``building_id``.
     """
     spec = BUILDINGS.get(building_id)
     if spec is None:
@@ -570,3 +570,24 @@ def build_on_plot(
         "build_mode": mode_out,
         "completes_at_tick": int(completes_at),
     }
+
+
+def build_on_plot(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    building_id: str,
+    build_mode: str | None = None,
+    construction_order_id: str | None = None,
+) -> dict:
+    """Place a structure on a plot grid (blueprint path) or legacy dict path."""
+    from realm.actions.blueprint_actions import build_on_plot as _bp_build
+
+    return _bp_build(
+        world,
+        party,
+        plot_id,
+        building_id,
+        build_mode,
+        construction_order_id,
+    )

@@ -687,3 +687,54 @@ def tick_forward_contracts(world: World) -> None:
             buyer=str(buyer),
             material=str(c["material"]),
         )
+
+
+def propose_blueprint_license(
+    world: World,
+    licensor: PartyId,
+    licensee: PartyId,
+    blueprint_id: str,
+    fee_per_build_cents: int,
+    max_builds: int | None,
+    duration_ticks: int,
+) -> dict:
+    """Licensor grants licensee the right to build from a private blueprint."""
+    if fee_per_build_cents < 0:
+        return {"ok": False, "reason": "fee_per_build_cents must be non-negative"}
+    if duration_ticks < 1:
+        return {"ok": False, "reason": "duration_ticks must be at least 1"}
+    bp = world.blueprints.get(blueprint_id)
+    if bp is None:
+        return {"ok": False, "reason": "unknown blueprint"}
+    if str(getattr(bp, "creator_party", "")) != str(licensor):
+        return {"ok": False, "reason": "only the blueprint creator may license it"}
+    if licensor not in world.parties or licensee not in world.parties:
+        return {"ok": False, "reason": "unknown party"}
+    if licensor == licensee:
+        return {"ok": False, "reason": "licensor and licensee must differ"}
+    cid = _next_contract_id(world)
+    world.contracts.append(
+        {
+            "id": cid,
+            "kind": "blueprint_license",
+            "status": "proposed",
+            "licensor": str(licensor),
+            "licensee": str(licensee),
+            "blueprint_id": blueprint_id,
+            "fee_per_build_cents": int(fee_per_build_cents),
+            "max_builds": max_builds,
+            "duration_ticks": int(duration_ticks),
+            "proposed_at_tick": int(world.tick),
+            "expires_at_tick": int(world.tick) + int(duration_ticks),
+        }
+    )
+    log_event(
+        world,
+        "contract_proposed",
+        f"{licensor} proposed blueprint license for '{blueprint_id}' to {licensee}",
+        contract_id=cid,
+        licensor=str(licensor),
+        licensee=str(licensee),
+        blueprint_id=blueprint_id,
+    )
+    return {"ok": True, "contract_id": cid}
