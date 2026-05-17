@@ -208,7 +208,7 @@ func _make_new_world() -> VBoxContainer:
 	v.add_child(row_seed)
 
 	var hint := Label.new()
-	hint.text = "Uses the dev API: POST /dev/reset. Start the engine on port 8000 first."
+	hint.text = "Spawns the local Python engine (no uvicorn). First boot can take a minute for Genesis."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_color_override("font_color", RealmColors.MUTED)
 	if RealmFonts.font_body:
@@ -246,7 +246,7 @@ func _make_continue() -> VBoxContainer:
 	v.add_child(b_back)
 
 	var hint2 := Label.new()
-	hint2.text = "Lists *.sqlite under the repo saves/ folder (GET /persistence/list)."
+	hint2.text = "Lists *.sqlite under the repo saves/ folder."
 	hint2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint2.add_theme_color_override("font_color", RealmColors.MUTED)
 	if RealmFonts.font_body:
@@ -325,7 +325,17 @@ func _on_solo_pressed() -> void:
 
 func _on_continue_pressed() -> void:
 	_show_panel("continue")
+	_continue_load_list()
+
+
+func _continue_load_list() -> void:
+	await _ensure_engine_ready()
 	_refresh_save_list()
+
+
+func _ensure_engine_ready() -> void:
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		await Transport.engine_ready
 
 
 func _refresh_save_list() -> void:
@@ -335,7 +345,7 @@ func _refresh_save_list() -> void:
 		func(data: Dictionary) -> void:
 			if not bool(data.get("ok", false)):
 				var err := Label.new()
-				err.text = "Could not list saves (is the API running on port 8000?)."
+				err.text = "Could not list saves (is the local engine running?)."
 				err.add_theme_color_override("font_color", RealmColors.WARN)
 				_saves_vbox.add_child(err)
 				return
@@ -370,6 +380,7 @@ func _refresh_save_list() -> void:
 
 
 func _on_pick_save(relative_path: String) -> void:
+	await _ensure_engine_ready()
 	_footer.text = ""
 
 	# Show loading screen overlay
@@ -401,6 +412,7 @@ var _creation_screen: Control = null
 
 
 func _on_start_new_world() -> void:
+	await _ensure_engine_ready()
 	var scenario: String = str(_scenario_opt.get_item_metadata(_scenario_opt.selected))
 	var seed_val := int(_seed_spin.value)
 	var wname: String = _name_edit.text.strip_edges() if is_instance_valid(_name_edit) else ""

@@ -1,95 +1,27 @@
 extends Node
-## Single entry point for HTTP calls to the Realm FastAPI server.
-## Endpoints and query shapes match ``engine/realm/api/routes_*.py`` (not legacy stubs).
-
-const BASE := "http://127.0.0.1:8000"
-## Not ``const``: ``PackedStringArray([...])`` is not a constant expression in GDScript.
-var HEADERS: PackedStringArray = PackedStringArray(["Content-Type: application/json"])
-
-func _http_done(h: HTTPRequest, callback: Callable, require_ok: bool, body_text: String) -> void:
-	h.queue_free()
-	var parsed: Variant = JSON.parse_string(body_text)
-	if parsed == null:
-		parsed = {}
-	if require_ok and parsed is Dictionary and not bool(parsed.get("ok", true)):
-		push_warning("API rejected response: %s" % str(parsed))
-	callback.call(parsed if parsed is Dictionary else {})
-
+## Semantic API wrapper over ``Transport`` (solo socket or multiplayer HTTP).
+## Endpoint paths match ``engine/realm/api/routes_*.py``.
 
 func get_request(endpoint: String, callback: Callable) -> void:
-	var h := HTTPRequest.new()
-	add_child(h)
-	h.request_completed.connect(
-		func(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-			if result != HTTPRequest.RESULT_SUCCESS:
-				push_warning(
-					"Realm API GET %s — network error result=%s (need uvicorn at %s?)" % [endpoint, result, BASE]
-				)
-				callback.call({})
-				h.queue_free()
-				return
-			if response_code != 200:
-				push_warning("API GET %s → HTTP %d" % [endpoint, response_code])
-				callback.call({})
-				h.queue_free()
-				return
-			var body_text := body.get_string_from_utf8()
-			if JSON.parse_string(body_text) == null and not body_text.is_empty():
-				push_warning("API GET %s — JSON parse failed (response length %d)" % [endpoint, body_text.length()])
-			_http_done(h, callback, false, body_text)
-	)
-	var err := h.request(BASE + endpoint, HEADERS, HTTPClient.METHOD_GET)
-	if err != OK:
-		push_warning("API GET request failed to start: %d %s" % [err, endpoint])
-		h.queue_free()
-		callback.call({})
+	Transport.get_request(endpoint, callback)
 
 
 func post_request(endpoint: String, payload: Dictionary = {}, callback: Callable = Callable(), require_dict_ok: bool = true) -> void:
-	var h := HTTPRequest.new()
-	add_child(h)
-	h.request_completed.connect(
-		func(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-			var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-			if parsed == null:
-				parsed = {}
-			if result != HTTPRequest.RESULT_SUCCESS:
-				push_warning(
-					"Realm API POST %s — network error result=%s (need uvicorn at %s?)" % [endpoint, result, BASE]
-				)
-			elif response_code < 200 or response_code >= 300:
-				push_warning("API POST %s → HTTP %d %s" % [endpoint, response_code, str(parsed)])
-			elif require_dict_ok and parsed is Dictionary and not bool(parsed.get("ok", true)):
-				push_warning("API POST %s failed: %s" % [endpoint, str(parsed)])
-			h.queue_free()
-			if callback.is_valid():
-				callback.call(parsed if parsed is Dictionary else {})
+	if not callback.is_valid():
+		Transport.post_request(endpoint, payload, Callable())
+		return
+	Transport.post_request(
+		endpoint,
+		payload,
+		func(data: Dictionary) -> void:
+			if require_dict_ok and not bool(data.get("ok", true)):
+				push_warning("API POST %s failed: %s" % [endpoint, str(data)])
+			callback.call(data)
 	)
-	var body_str := "{}" if payload.is_empty() else JSON.stringify(payload)
-	var err := h.request(BASE + endpoint, HEADERS, HTTPClient.METHOD_POST, body_str)
-	if err != OK:
-		push_warning("API POST request failed to start: %d %s" % [err, endpoint])
-		h.queue_free()
-		if callback.is_valid():
-			callback.call({})
 
 
 func delete_request(endpoint: String, callback: Callable = Callable()) -> void:
-	var h := HTTPRequest.new()
-	add_child(h)
-	h.request_completed.connect(
-		func(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-			h.queue_free()
-			var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-			if callback.is_valid():
-				callback.call(parsed if parsed is Dictionary else {})
-	)
-	var err := h.request(BASE + endpoint, HEADERS, HTTPClient.METHOD_DELETE)
-	if err != OK:
-		push_warning("API DELETE failed to start: %d" % err)
-		h.queue_free()
-		if callback.is_valid():
-			callback.call({})
+	Transport.delete_request(endpoint, callback)
 
 
 # ── World ───────────────────────────────────────────────────────────────────

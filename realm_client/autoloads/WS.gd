@@ -12,7 +12,11 @@ signal disconnected
 
 
 func _ready() -> void:
-	_try_connect()
+	if Transport.mode == Transport.Mode.SERVER:
+		_try_connect()
+	else:
+		_connected = true
+		connected.emit()
 
 
 func _try_connect() -> void:

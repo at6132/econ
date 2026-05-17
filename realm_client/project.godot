@@ -22,6 +22,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+Transport="*res://autoloads/Transport.gd"
 API="*res://autoloads/API.gd"
 WorldState="*res://autoloads/WorldState.gd"
 WS="*res://autoloads/WS.gd"
