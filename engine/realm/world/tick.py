@@ -41,6 +41,7 @@ from realm.actions.construction_actions import tick_construction_firms, tick_con
 from realm.economy.business_viability import tick_business_viability
 from realm.population.nascent_settlements import tick_nascent_settlements
 from realm.world import World
+from realm.world.real_estate import tick_npc_plot_demand
 
 
 def advance_tick(world: World) -> None:
@@ -62,6 +63,7 @@ def advance_tick(world: World) -> None:
         tick_tier1_agents(world)
         tick_tier2_agents(world)
     tick_tier3_llm_agents(world)
+    tick_npc_plot_demand(world)
     world.tick += 1
     # Phase 8 — Sub-phase 8A: seasonal narration fires on day boundaries.
     # Cheap no-op on every tick except the few days a year that announce
