@@ -120,6 +120,21 @@ class RoadSegment:
 
 
 @dataclass
+class SubPlot:
+    sub_plot_id: str
+    parent_plot_id: str
+    owner: str | None
+    grid_x: int
+    grid_y: int
+    grid_w: int
+    grid_h: int
+    area_sq_metres: int
+    listed_for_sale: bool
+    ask_price_cents: int
+    lease_rights: dict[str, object] | None
+
+
+@dataclass
 class SurveyReport:
     """Tradeable survey document — knowledge as an asset (Sprint 4 — Phase A).
 
@@ -162,6 +177,10 @@ class World:
     event_log: list[dict] = field(default_factory=list)
     world_feed_log: list[dict] = field(default_factory=list)  # world_feed mirror; larger cap than event_log
     plot_buildings: list[dict] = field(default_factory=list)
+    placed_buildings: dict[str, object] = field(default_factory=dict)
+    plot_placed_buildings: dict[str, list[str]] = field(default_factory=dict)
+    blueprints: dict[str, object] = field(default_factory=dict)
+    sub_plots: dict[str, SubPlot] = field(default_factory=dict)
     stub_hires: list[dict] = field(default_factory=list)
     market_history: list[dict] = field(default_factory=list)
     p2p_idempotency: dict[str, dict] = field(default_factory=dict)
@@ -372,10 +391,23 @@ def population_density_for(world: "World", plot_id: PlotId) -> float:
 
 
 def claim_cost_cents_for_plot(world: "World", plot_id: PlotId) -> int:
-    """How much it costs to claim ``plot_id`` (Sprint 3 — Phase B.2)."""
-    from realm.world.geo_clustering import claim_cost_cents_from_density
+    """Claim fee: density curve in populated zones; market floor on valuable frontier plots."""
+    from realm.world.geo_clustering import (
+        POPULATION_FRONTIER_DENSITY_BASELINE,
+        claim_cost_cents_from_density,
+    )
+    from realm.world.real_estate import compute_plot_value
 
-    return claim_cost_cents_from_density(population_density_for(world, plot_id))
+    density = population_density_for(world, plot_id)
+    density_cost = claim_cost_cents_from_density(density)
+    market_cost = max(50_000, int(compute_plot_value(world, plot_id)))
+    if density_cost > 0 and density <= POPULATION_FRONTIER_DENSITY_BASELINE + 0.01:
+        return density_cost
+    if density_cost > 0:
+        return max(density_cost, market_cost)
+    if market_cost > 50_000:
+        return market_cost
+    return 0
 
 
 def ensure_party_recipe_book(world: "World", party: PartyId) -> set[str]:
@@ -612,6 +644,9 @@ def bootstrap_genesis(
         parties={human},
         scenario_id="genesis",
     )
+    from realm.production.blueprints import seed_world_blueprints
+
+    seed_world_blueprints(world)
     res = world.ledger.seed_system_reserve(system_reserve_cents)
     if isinstance(res, MoneyErr):
         raise ValueError(res.reason)
@@ -810,6 +845,9 @@ def bootstrap_genesis(
     if isinstance(tr_ins, MoneyErr):
         raise ValueError(tr_ins.reason)
     ensure_party_recipe_book(world, ins)
+    from realm.production.blueprints import seed_world_blueprints
+
+    seed_world_blueprints(world)
     return world
 
 
@@ -1099,6 +1137,9 @@ def bootstrap_frontier(
     record_market_snapshot(world)
     for px in list(world.parties):
         ensure_party_recipe_book(world, px)
+    from realm.production.blueprints import seed_world_blueprints
+
+    seed_world_blueprints(world)
     return world
 
 

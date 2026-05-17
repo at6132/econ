@@ -34,6 +34,12 @@ from realm.world.terrain import Terrain
 SNAPSHOT_VERSION = 14
 
 
+def _blueprint_public_dict(bp: object) -> dict[str, Any]:
+    from realm.production.blueprints import blueprint_public_dict
+
+    return blueprint_public_dict(bp)  # type: ignore[arg-type]
+
+
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
     m = 0
     for row in rows:
@@ -151,6 +157,44 @@ def dump_world(world: World) -> dict[str, Any]:
         "event_log": [copy.deepcopy(e) for e in world.event_log],
         "world_feed_log": [copy.deepcopy(e) for e in world.world_feed_log],
         "plot_buildings": [copy.deepcopy(b) for b in world.plot_buildings],
+        "placed_buildings": {
+            iid: {
+                "instance_id": pb.instance_id,
+                "blueprint_id": pb.blueprint_id,
+                "plot_id": pb.plot_id,
+                "grid_x": pb.grid_x,
+                "grid_y": pb.grid_y,
+                "built_at_tick": pb.built_at_tick,
+                "built_by": pb.built_by,
+                "status": pb.status,
+                "efficiency_pct": pb.efficiency_pct,
+                "missed_maintenance_cycles": pb.missed_maintenance_cycles,
+                "due_at_tick": pb.due_at_tick,
+                "sub_plot_id": pb.sub_plot_id,
+            }
+            for iid, pb in world.placed_buildings.items()
+        },
+        "plot_placed_buildings": copy.deepcopy(dict(world.plot_placed_buildings)),
+        "blueprints": {
+            bid: copy.deepcopy(_blueprint_public_dict(bp))
+            for bid, bp in world.blueprints.items()
+        },
+        "sub_plots": {
+            sid: {
+                "sub_plot_id": sp.sub_plot_id,
+                "parent_plot_id": sp.parent_plot_id,
+                "owner": sp.owner,
+                "grid_x": sp.grid_x,
+                "grid_y": sp.grid_y,
+                "grid_w": sp.grid_w,
+                "grid_h": sp.grid_h,
+                "area_sq_metres": sp.area_sq_metres,
+                "listed_for_sale": sp.listed_for_sale,
+                "ask_price_cents": sp.ask_price_cents,
+                "lease_rights": copy.deepcopy(sp.lease_rights),
+            }
+            for sid, sp in world.sub_plots.items()
+        },
         "stub_hires": [copy.deepcopy(h) for h in world.stub_hires],
         "market_history": [copy.deepcopy(h) for h in world.market_history],
         "p2p_idempotency": {str(k): copy.deepcopy(dict(v)) for k, v in world.p2p_idempotency.items()},
@@ -544,6 +588,74 @@ def load_world(d: dict[str, Any]) -> World:
                 world.party_recipe_books[str(k)] = {str(x) for x in v}
     for px in world.parties:
         ensure_party_recipe_book(world, px)
+    from realm.production.blueprints import Blueprint, seed_world_blueprints
+    from realm.world.placed_buildings import PlacedBuilding, sync_plot_buildings_from_placed
+    from realm.world.world import SubPlot
+
+    seed_world_blueprints(world)
+    for bid, raw in (d.get("blueprints") or {}).items():
+        if isinstance(raw, dict) and bid not in world.blueprints:
+            world.blueprints[str(bid)] = Blueprint(
+                blueprint_id=str(bid),
+                name=str(raw.get("name", bid)),
+                description=str(raw.get("description", "")),
+                footprint_w=int(raw.get("footprint_w", 3)),
+                footprint_h=int(raw.get("footprint_h", 3)),
+                construction_materials=dict(raw.get("construction_materials") or {}),
+                construction_labor_cents=int(raw.get("construction_labor_cents", 0)),
+                construction_ticks=int(raw.get("construction_ticks", 0)),
+                enabled_recipe_ids=list(raw.get("enabled_recipe_ids") or []),
+                maintenance_interval_ticks=int(raw.get("maintenance_interval_ticks", 0)),
+                maintenance_materials=dict(raw.get("maintenance_materials") or {}),
+                maintenance_grace_ticks=int(raw.get("maintenance_grace_ticks", 0)),
+                is_seeded=bool(raw.get("is_seeded", False)),
+                creator_party=raw.get("creator_party"),
+                is_public=bool(raw.get("is_public", True)),
+                license_fee_cents=int(raw.get("license_fee_cents", 0)),
+                license_contract_id=raw.get("license_contract_id"),
+                category=str(raw.get("category", "custom")),
+                terrain_requirements=list(raw.get("terrain_requirements") or []),
+                requires_coastal=bool(raw.get("requires_coastal", False)),
+                requires_power=bool(raw.get("requires_power", False)),
+            )
+    for iid, raw in (d.get("placed_buildings") or {}).items():
+        if not isinstance(raw, dict):
+            continue
+        world.placed_buildings[str(iid)] = PlacedBuilding(
+            instance_id=str(raw.get("instance_id", iid)),
+            blueprint_id=str(raw.get("blueprint_id", raw.get("building_id", ""))),
+            plot_id=str(raw.get("plot_id", "")),
+            grid_x=int(raw.get("grid_x", 0)),
+            grid_y=int(raw.get("grid_y", 0)),
+            built_at_tick=int(raw.get("built_at_tick", raw.get("completes_at_tick", 0))),
+            built_by=str(raw.get("built_by", raw.get("party", ""))),
+            status=str(raw.get("status", "active")),
+            efficiency_pct=int(raw.get("efficiency_pct", 100)),
+            missed_maintenance_cycles=int(raw.get("missed_maintenance_cycles", 0)),
+            due_at_tick=int(raw.get("due_at_tick", 0)),
+            sub_plot_id=raw.get("sub_plot_id"),
+        )
+    world.plot_placed_buildings = copy.deepcopy(
+        dict(d.get("plot_placed_buildings") or {})
+    )
+    if world.placed_buildings:
+        sync_plot_buildings_from_placed(world)
+    for sid, raw in (d.get("sub_plots") or {}).items():
+        if not isinstance(raw, dict):
+            continue
+        world.sub_plots[str(sid)] = SubPlot(
+            sub_plot_id=str(raw.get("sub_plot_id", sid)),
+            parent_plot_id=str(raw.get("parent_plot_id", "")),
+            owner=raw.get("owner"),
+            grid_x=int(raw.get("grid_x", 0)),
+            grid_y=int(raw.get("grid_y", 0)),
+            grid_w=int(raw.get("grid_w", 2)),
+            grid_h=int(raw.get("grid_h", 2)),
+            area_sq_metres=int(raw.get("area_sq_metres", 0)),
+            listed_for_sale=bool(raw.get("listed_for_sale", False)),
+            ask_price_cents=int(raw.get("ask_price_cents", 0)),
+            lease_rights=copy.deepcopy(raw.get("lease_rights")),
+        )
     raw_maint = d.get("building_maintenance") or {}
     if isinstance(raw_maint, dict):
         for k, v in raw_maint.items():

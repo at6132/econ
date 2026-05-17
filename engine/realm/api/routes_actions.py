@@ -198,6 +198,173 @@ def post_build(
     return dict(r)
 
 
+@router.get("/blueprints")
+def get_blueprints(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.actions.blueprint_actions import blueprints_visible_to
+
+    return {"blueprints": blueprints_visible_to(_state.WORLD, PartyId(party))}
+
+
+@router.get("/blueprints/{blueprint_id}")
+def get_blueprint(blueprint_id: str) -> dict:
+    bp = _state.WORLD.blueprints.get(blueprint_id)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="blueprint not found")
+    from realm.production.blueprints import blueprint_public_dict
+
+    return blueprint_public_dict(bp)
+
+
+@router.post("/blueprints/create")
+def post_create_blueprint(body: dict) -> dict:
+    from realm.actions.blueprint_actions import create_blueprint
+
+    party = PartyId(str(body.get("party", "player")))
+    r = create_blueprint(
+        _state.WORLD,
+        party,
+        str(body.get("name", "")),
+        str(body.get("description", "")),
+        int(body.get("footprint_w", 1)),
+        int(body.get("footprint_h", 1)),
+        dict(body.get("construction_materials") or {}),
+        int(body.get("construction_labor_cents", 0)),
+        int(body.get("construction_ticks", 0)),
+        list(body.get("enabled_recipe_ids") or []),
+        int(body.get("maintenance_interval_ticks", 0)),
+        dict(body.get("maintenance_materials") or {}),
+        int(body.get("maintenance_grace_ticks", 0)),
+        bool(body.get("is_public", False)),
+        int(body.get("license_fee_cents", 0)),
+        str(body.get("category", "custom")),
+        list(body.get("terrain_requirements") or []),
+        bool(body.get("requires_coastal", False)),
+        bool(body.get("requires_power", False)),
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/plots/{plot_id}/place")
+def post_place_blueprint(plot_id: str, body: dict) -> dict:
+    from realm.actions.blueprint_actions import place_blueprint
+
+    party = PartyId(str(body.get("party", "player")))
+    r = place_blueprint(
+        _state.WORLD,
+        party,
+        PlotId(plot_id),
+        str(body.get("blueprint_id", "")),
+        int(body.get("grid_x", 0)),
+        int(body.get("grid_y", 0)),
+        str(body.get("build_mode", "turnkey")),
+        sub_plot_id=body.get("sub_plot_id"),
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.get("/plots/{plot_id}/grid")
+def get_plot_grid(plot_id: str) -> dict:
+    from realm.actions.blueprint_actions import plot_grid_state
+
+    return plot_grid_state(_state.WORLD, PlotId(plot_id))
+
+
+@router.get("/plots/{plot_id}/available_positions/{blueprint_id}")
+def get_available_positions(plot_id: str, blueprint_id: str) -> dict:
+    from realm.actions.blueprint_actions import available_positions
+
+    return {
+        "positions": available_positions(_state.WORLD, PlotId(plot_id), blueprint_id)
+    }
+
+
+@router.get("/plots/{plot_id}/value")
+def get_plot_value(plot_id: str) -> dict:
+    from realm.world.real_estate import plot_market_summary
+
+    return plot_market_summary(_state.WORLD, PlotId(plot_id))
+
+
+@router.get("/plots/market")
+def get_plots_market() -> dict:
+    return {"listings": dict(_state.WORLD.scenario_state.get("plots_for_sale") or {})}
+
+
+@router.post("/plots/{plot_id}/list-for-sale")
+def post_list_plot_for_sale(plot_id: str, body: dict) -> dict:
+    from realm.world.real_estate import list_plot_for_sale_market
+
+    party = PartyId(str(body.get("party", "player")))
+    ask = body.get("ask_price_cents")
+    r = list_plot_for_sale_market(
+        _state.WORLD,
+        party,
+        PlotId(plot_id),
+        int(ask) if ask is not None else None,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=str(r["reason"]))
+    return dict(r)
+
+
+@router.post("/plots/{plot_id}/buy")
+def post_buy_plot(plot_id: str, body: dict) -> dict:
+    from realm.world.real_estate import buy_plot_market
+
+    party = PartyId(str(body.get("party", "player")))
+    r = buy_plot_market(_state.WORLD, party, PlotId(plot_id))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=str(r["reason"]))
+    return dict(r)
+
+
+@router.get("/plots/market/demand")
+def get_plot_demand() -> dict:
+    return {
+        "plot_demand_scores": dict(
+            _state.WORLD.scenario_state.get("plot_demand_scores") or {}
+        ),
+        "plot_npc_bids": dict(_state.WORLD.scenario_state.get("plot_npc_bids") or {}),
+    }
+
+
+@router.post("/plots/{plot_id}/subdivide")
+def post_subdivide_plot(plot_id: str, body: dict) -> dict:
+    from realm.actions.plot_actions import subdivide_plot
+
+    party = PartyId(str(body.get("party", "player")))
+    parts = body.get("partitions") or []
+    r = subdivide_plot(_state.WORLD, party, PlotId(plot_id), list(parts))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.get("/plots/{plot_id}/sub-plots")
+def get_sub_plots(plot_id: str) -> dict:
+    subs = [
+        {
+            "sub_plot_id": sp.sub_plot_id,
+            "parent_plot_id": sp.parent_plot_id,
+            "owner": sp.owner,
+            "grid_x": sp.grid_x,
+            "grid_y": sp.grid_y,
+            "grid_w": sp.grid_w,
+            "grid_h": sp.grid_h,
+            "area_sq_metres": sp.area_sq_metres,
+            "listed_for_sale": sp.listed_for_sale,
+            "ask_price_cents": sp.ask_price_cents,
+        }
+        for sp in _state.WORLD.sub_plots.values()
+        if sp.parent_plot_id == plot_id
+    ]
+    return {"sub_plots": subs}
+
+
 @router.post("/assay")
 def post_assay(
     plot_id: Annotated[str, Query()],
