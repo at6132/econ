@@ -189,6 +189,33 @@ columns = 2
 [node name="HSeparator5" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
 layout_mode = 2
 
+[node name="RealEstateSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RealEstateTitle" type="Label" parent="Panel/Scroll/VBoxMain/RealEstateSection"]
+layout_mode = 2
+text = "Land value"
+
+[node name="PlotValueLabel" type="Label" parent="Panel/Scroll/VBoxMain/RealEstateSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="SaleStatusLabel" type="Label" parent="Panel/Scroll/VBoxMain/RealEstateSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+
+[node name="ListForSaleBtn" type="Button" parent="Panel/Scroll/VBoxMain/RealEstateSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "List for sale"
+
+[node name="HSeparator5b" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+layout_mode = 2
+
 [node name="BuildingsSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
 layout_mode = 2
 theme_override_constants/separation = 6

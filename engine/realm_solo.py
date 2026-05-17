@@ -6,20 +6,18 @@ Writes REALM_READY:<host>:<port> to stdout when the TCP listener is up.
 """
 from __future__ import annotations
 
-import logging
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-logging.basicConfig(
-    level=logging.WARNING,
-    format="%(levelname)s %(name)s: %(message)s",
-)
 os.environ.setdefault("REALM_LLM_DISABLE", "1")
 
+from realm.api.solo_logging import configure_solo_logging
 from realm.api.socket_server import run
 
 if __name__ == "__main__":
+    log_path = configure_solo_logging()
+    print(f"REALM_LOG:{log_path}", flush=True)
     port = int(os.environ.get("REALM_TCP_PORT", "9000"))
     run(port=port)

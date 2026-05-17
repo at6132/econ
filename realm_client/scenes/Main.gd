@@ -3,7 +3,7 @@ extends Node2D
 
 const PlotDetailScene := preload("res://scenes/panels/PlotDetail.tscn")
 const BazaarPanelScene := preload("res://scenes/panels/BazaarPanel.tscn")
-const BuildingPickerScene := preload("res://scenes/panels/BuildingPicker.tscn")
+const BuildPanelScene := preload("res://scenes/panels/BuildPanel.tscn")
 
 const OVERLAY_LAYER := 32
 
@@ -16,7 +16,7 @@ const OVERLAY_LAYER := 32
 
 var _active_overlay: Node = null
 var _resume_plot_id: String = ""
-var _picker_return_plot_id: String = ""
+var _build_return_plot_id: String = ""
 
 
 func _ready() -> void:
@@ -128,7 +128,7 @@ func _on_plot_clicked(plot_id: String, _plot_data_unused: Dictionary) -> void:
 
 
 func _open_plot_detail(plot_id: String) -> void:
-	_picker_return_plot_id = ""
+	_build_return_plot_id = ""
 	_resume_plot_id = plot_id
 	var merged: Dictionary = WorldState.get_plot_ui(plot_id)
 	if merged.is_empty():
@@ -141,39 +141,37 @@ func _open_plot_detail(plot_id: String) -> void:
 
 func _open_bazaar() -> void:
 	_resume_plot_id = ""
-	_picker_return_plot_id = ""
+	_build_return_plot_id = ""
 	_mount_overlay(BazaarPanelScene.instantiate())
 
 
+func open_build_panel(plot_id: String, plot_data: Dictionary) -> void:
+	_build_return_plot_id = plot_id
+	_close_active_overlay()
+	var panel: CanvasLayer = BuildPanelScene.instantiate() as CanvasLayer
+	_mount_overlay(panel, false)
+	if panel.has_method("open"):
+		panel.call("open", plot_id, plot_data)
+	if panel.has_signal("closed"):
+		panel.closed.connect(_on_build_panel_closed, CONNECT_ONE_SHOT)
+
+
 func open_building_picker(plot_id: String, terrain: String) -> void:
-	_picker_return_plot_id = plot_id
-	_close_active_overlay()
-	var picker: CanvasLayer = BuildingPickerScene.instantiate() as CanvasLayer
-	_mount_overlay(picker, false)
-	picker.open(terrain)
-	picker.building_chosen.connect(_on_building_picker_chosen, CONNECT_ONE_SHOT)
+	var merged: Dictionary = WorldState.get_plot_ui(plot_id)
+	if merged.is_empty():
+		merged = WorldState.plots.get(plot_id, {})
+	if merged.is_empty():
+		merged = {"terrain": terrain}
+	open_build_panel(plot_id, merged)
 
 
-func _on_building_picker_chosen(building_id: String, mode: String) -> void:
-	var plot_id: String = _picker_return_plot_id
-	_picker_return_plot_id = ""
+func _on_build_panel_closed() -> void:
+	var plot_id: String = _build_return_plot_id
+	_build_return_plot_id = ""
 	_close_active_overlay()
-	var api_mode: String = mode
-	if mode == "self":
-		api_mode = "self_contract"
-	API.build_on_plot(
-		plot_id,
-		building_id,
-		api_mode,
-		func(data: Dictionary) -> void:
-			if bool(data.get("ok", false)):
-				API.get_world(
-					func(w: Dictionary) -> void:
-						WorldState.apply_world(w)
-				)
-			if plot_id != "":
-				_open_plot_detail(plot_id)
-	)
+	if plot_id != "":
+		API.get_world(func(w): WorldState.apply_world(w))
+		_open_plot_detail(plot_id)
 
 
 func _is_overlay(scene: PackedScene) -> bool:
@@ -219,14 +217,10 @@ func _on_overlay_tree_exited(node: Node) -> void:
 		_active_overlay = null
 	var path: String = node.scene_file_path
 	if path == PlotDetailScene.resource_path:
-		if _picker_return_plot_id == "":
+		if _build_return_plot_id == "":
 			_resume_plot_id = ""
 		return
-	if path == BuildingPickerScene.resource_path:
-		var plot_id: String = _picker_return_plot_id
-		_picker_return_plot_id = ""
-		if plot_id != "":
-			call_deferred("_open_plot_detail", plot_id)
+	if path == BuildPanelScene.resource_path:
 		return
 	if path == BazaarPanelScene.resource_path:
 		_resume_plot_id = ""

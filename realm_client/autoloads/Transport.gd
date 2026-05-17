@@ -133,6 +133,12 @@ func _notification(what: int) -> void:
 		_kill_python()
 
 
+func _safe_call(callback: Callable, data: Dictionary) -> void:
+	if not callback.is_valid():
+		return
+	callback.call(data)
+
+
 func get_request(endpoint: String, callback: Callable) -> void:
 	if mode == Mode.SERVER:
 		_http_get(endpoint, callback)
@@ -199,7 +205,7 @@ func _process(_delta: float) -> void:
 		if _pending.has(rid):
 			var cb: Callable = _pending[rid]
 			_pending.erase(rid)
-			cb.call(resp)
+			_safe_call(cb, resp)
 
 
 func _http_get(endpoint: String, callback: Callable) -> void:
@@ -209,10 +215,10 @@ func _http_get(endpoint: String, callback: Callable) -> void:
 		func(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 			h.queue_free()
 			if response_code != 200:
-				callback.call({})
+				_safe_call(callback, {})
 				return
 			var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-			callback.call(parsed if parsed is Dictionary else {})
+			_safe_call(callback, parsed if parsed is Dictionary else {})
 	)
 	h.request(_server_base + endpoint)
 
@@ -224,7 +230,7 @@ func _http_post(endpoint: String, payload: Dictionary, callback: Callable) -> vo
 		func(_result: int, _response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 			h.queue_free()
 			var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-			callback.call(parsed if parsed is Dictionary else {})
+			_safe_call(callback, parsed if parsed is Dictionary else {})
 	)
 	var body_str := "{}" if payload.is_empty() else JSON.stringify(payload)
 	h.request(
@@ -242,7 +248,7 @@ func _http_delete(endpoint: String, callback: Callable) -> void:
 		func(_result: int, _response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 			h.queue_free()
 			var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-			callback.call(parsed if parsed is Dictionary else {})
+			_safe_call(callback, parsed if parsed is Dictionary else {})
 	)
 	h.request(
 		_server_base + endpoint,

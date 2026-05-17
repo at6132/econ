@@ -27,6 +27,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 _log = logging.getLogger("realm.socket_server")
+_req_log = logging.getLogger("realm.socket_server.request")
 
 _test_client: Any | None = None
 _test_client_lock = threading.Lock()
@@ -150,6 +151,14 @@ def _handle_connection(conn: socket.socket) -> None:
                 t0 = time.perf_counter()
                 result = _dispatch(method, req_path, req_body)
                 elapsed_ms = (time.perf_counter() - t0) * 1000
+                ok = bool(result.get("ok", True))
+                _req_log.info(
+                    "%s %s %.0fms ok=%s",
+                    method,
+                    req_path,
+                    elapsed_ms,
+                    ok,
+                )
                 if elapsed_ms > 200:
                     _log.info("socket slow: %s %s took %.0fms", method, req_path, elapsed_ms)
             except Exception as exc:
@@ -173,6 +182,9 @@ def run(host: str = "127.0.0.1", port: int = 9000) -> None:
     On Unix: Unix socket in a background thread plus TCP on ``host:port``.
     On Windows: TCP only (Godot connects to ``127.0.0.1:9000``).
     """
+    from realm.api.solo_logging import configure_solo_logging
+
+    log_path = configure_solo_logging()
     if not _is_windows():
         threading.Thread(target=_run_unix, args=(_socket_path(),), daemon=True).start()
     _run_tcp(host, port)
@@ -197,14 +209,16 @@ def _run_tcp(host: str, port: int) -> None:
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((host, port))
     server.listen(1)
-    _log.info("Realm solo TCP socket listening on %s:%d", host, port)
+    _log.info("Realm solo TCP socket listening on %s:%d (log %s)", host, port, log_path)
     print(f"REALM_READY:{host}:{port}", flush=True)
+    print(f"REALM_LOG:{log_path}", flush=True)
     while True:
-        conn, _ = server.accept()
+        conn, addr = server.accept()
+        _log.info("client connected %s:%d", addr[0], addr[1])
         _handle_connection(conn)
+        _log.info("client disconnected %s:%d", addr[0], addr[1])
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     port = int(os.environ.get("REALM_TCP_PORT", "9000"))
     run(port=port)

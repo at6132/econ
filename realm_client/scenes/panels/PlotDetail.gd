@@ -58,6 +58,10 @@ const MINERAL_ROWS := [
 @onready var survey_btn: Button = %SurveyBtn
 @onready var subsurface_section: VBoxContainer = %SubsurfaceSection
 @onready var subsurface_grid: GridContainer = %SubsurfaceGrid
+@onready var real_estate_section: VBoxContainer = %RealEstateSection
+@onready var plot_value_label: Label = %PlotValueLabel
+@onready var sale_status_label: Label = %SaleStatusLabel
+@onready var list_for_sale_btn: Button = %ListForSaleBtn
 @onready var build_btn: Button = %BuildBtn
 @onready var buildings_list: VBoxContainer = %BuildingsList
 @onready var production_section: VBoxContainer = %ProductionSection
@@ -86,6 +90,7 @@ func _ready() -> void:
 	)
 	survey_btn.pressed.connect(_on_survey)
 	build_btn.pressed.connect(_on_build_btn)
+	list_for_sale_btn.pressed.connect(_on_list_for_sale)
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
@@ -108,6 +113,7 @@ func _apply_theme() -> void:
 	_style_gold_button(claim_cancel_btn)
 	_style_gold_button(survey_btn)
 	_style_gold_button(build_btn)
+	_style_gold_button(list_for_sale_btn)
 	for n in panel.find_children("*", "Label", true, false):
 		(n as Label).add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
 
@@ -130,6 +136,7 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	_populate(_plot_data)
 	_slide_in()
 	API.get_plot_energy(plot_id, _on_energy_response)
+	API.get_plot_value(plot_id, _on_plot_value_response)
 	_refresh_buildings()
 
 
@@ -208,6 +215,7 @@ func _populate(p: Dictionary) -> void:
 		_populate_subsurface(WorldState.subsurface_for_plot_ui(_plot_id, p))
 
 	build_btn.visible = is_mine
+	real_estate_section.visible = not is_unclaimed
 	production_section.hide()
 	if _production_control and is_instance_valid(_production_control):
 		_production_control.queue_free()
@@ -215,6 +223,8 @@ func _populate(p: Dictionary) -> void:
 
 
 func _on_energy_response(data: Dictionary) -> void:
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
 	if data.is_empty() or not bool(data.get("ok", true)):
 		energy_value.text = "—"
 		energy_value.modulate = Color(0.7, 0.7, 0.7)
@@ -418,12 +428,62 @@ func _on_survey() -> void:
 	)
 
 
+func _on_plot_value_response(data: Dictionary) -> void:
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
+	if data.is_empty():
+		return
+	_plot_data["market"] = data
+	var fair := int(data.get("fair_value_cents", 0))
+	plot_value_label.text = "Fair value: %s" % WorldState.format_money(fair)
+	var listed := bool(data.get("listed_for_sale", false))
+	var owner_s := _plot_owner_str(_plot_data)
+	var is_mine := owner_s == WorldState.party_id
+	if listed:
+		var ask := int(data.get("ask_price_cents", fair))
+		sale_status_label.text = "Listed for %s" % WorldState.format_money(ask)
+		list_for_sale_btn.text = "Update listing"
+	elif is_mine:
+		sale_status_label.text = "Not listed"
+		list_for_sale_btn.text = "List for sale"
+	else:
+		var npc_bid := int(data.get("top_npc_bid_cents", 0))
+		if npc_bid > 0:
+			sale_status_label.text = "Top NPC interest: %s" % WorldState.format_money(npc_bid)
+		else:
+			sale_status_label.text = ""
+		list_for_sale_btn.hide()
+		return
+	list_for_sale_btn.visible = is_mine
+
+
+func _on_list_for_sale() -> void:
+	list_for_sale_btn.disabled = true
+	var fair := 0
+	if _plot_data.has("market"):
+		fair = int(_plot_data["market"].get("fair_value_cents", 0))
+	API.list_plot_for_sale(
+		_plot_id,
+		fair if fair > 0 else 0,
+		func(data: Dictionary) -> void:
+			list_for_sale_btn.disabled = false
+			if bool(data.get("ok", false)):
+				API.get_plot_value(_plot_id, _on_plot_value_response)
+				API.get_world(func(w): WorldState.apply_world(w))
+			else:
+				_show_error(str(data.get("reason", "Listing failed"))),
+	)
+
+
 func _on_build_btn() -> void:
 	var host: Node = get_tree().current_scene
+	if host != null and host.has_method("open_build_panel"):
+		host.call("open_build_panel", _plot_id, _plot_data)
+		return
 	if host != null and host.has_method("open_building_picker"):
 		host.call("open_building_picker", _plot_id, str(_plot_data.get("terrain", "plains")))
 		return
-	push_warning("PlotDetail: Main.open_building_picker unavailable")
+	push_warning("PlotDetail: Main.open_build_panel unavailable")
 
 
 func _on_maintain(b: Dictionary) -> void:

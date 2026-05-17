@@ -16,7 +16,8 @@ func post_request(endpoint: String, payload: Dictionary = {}, callback: Callable
 		func(data: Dictionary) -> void:
 			if require_dict_ok and not bool(data.get("ok", true)):
 				push_warning("API POST %s failed: %s" % [endpoint, str(data)])
-			callback.call(data)
+			if callback.is_valid():
+				callback.call(data)
 	)
 
 
@@ -88,6 +89,47 @@ func post_building_auto_list(instance_id: String, enabled: bool, cb: Callable, p
 
 func get_plot_energy(plot_id: String, cb: Callable) -> void:
 	get_request("/plots/%s/energy" % plot_id.uri_encode(), cb)
+
+
+func get_plot_grid(plot_id: String, cb: Callable) -> void:
+	get_request("/plots/%s/grid" % plot_id.uri_encode(), cb)
+
+
+func get_plot_value(plot_id: String, cb: Callable) -> void:
+	get_request("/plots/%s/value" % plot_id.uri_encode(), cb)
+
+
+func get_plot_sub_plots(plot_id: String, cb: Callable) -> void:
+	get_request("/plots/%s/sub-plots" % plot_id.uri_encode(), cb)
+
+
+func place_blueprint(
+	plot_id: String,
+	blueprint_id: String,
+	grid_x: int,
+	grid_y: int,
+	build_mode: String,
+	cb: Callable,
+	party: String = "player",
+	sub_plot_id: String = "",
+) -> void:
+	var body := {
+		"party": party,
+		"blueprint_id": blueprint_id,
+		"grid_x": grid_x,
+		"grid_y": grid_y,
+		"build_mode": build_mode,
+	}
+	if sub_plot_id != "":
+		body["sub_plot_id"] = sub_plot_id
+	post_request("/plots/%s/place" % plot_id.uri_encode(), body, cb)
+
+
+func list_plot_for_sale(plot_id: String, ask_price_cents: int, cb: Callable, party: String = "player") -> void:
+	var body := {"party": party}
+	if ask_price_cents > 0:
+		body["ask_price_cents"] = ask_price_cents
+	post_request("/plots/%s/list-for-sale" % plot_id.uri_encode(), body, cb)
 
 
 func get_plot_throughput(plot_id: String, recipe_id: String, cb: Callable, party: String = "player") -> void:
