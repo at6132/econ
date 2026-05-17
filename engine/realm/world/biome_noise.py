@@ -1,9 +1,12 @@
 """Deterministic biome fields for frontier plot generation (coherent regions, not iid tiles).
 
-Genesis "four islands" layout (added 2026-05): see :func:`terrain_for_genesis_island_cell`
-and :func:`genesis_island_centers`. Each quadrant of a sufficiently large map holds one
-elliptical landmass with an FBM-wobbled coastline; deep water fills the cross-shaped gap
-between them, forcing inter-island shipping for the demand layer in non-hub islands.
+Genesis layouts:
+
+* **Continental** (default on large grids) — seed-derived land lobes scattered across
+  the map with ``make_rng`` placement, FBM coast wobble, and archipelago speckle.
+  Same seed always yields the same coastlines (Law 9).
+* **Four islands** (legacy medium grids) — fixed quadrant ellipses; see
+  :func:`terrain_for_genesis_island_cell`.
 """
 
 from __future__ import annotations
@@ -29,8 +32,7 @@ def _n01(seed: int, ix: int, iy: int) -> float:
 def clear_noise_cache() -> None:
     """Release memory after worldgen completes."""
     _n01_cache.clear()
-    _anchor_sites_cache.clear()
-    _inv_var_cache.clear()
+    _continental_lobes_cache.clear()
 
 
 def _smooth(seed: int, fx: float, fy: float) -> float:
@@ -166,6 +168,10 @@ def _nearest_island_normalised_distance(
 # the noise still shapes terrain *within* a continent (mountains, hills,
 # deserts), but ocean dominates everywhere outside the mask.
 
+# Default Genesis solo map (continental layout when plot count ≥ threshold).
+GENESIS_DEFAULT_GRID_WIDTH: int = 320
+GENESIS_DEFAULT_GRID_HEIGHT: int = 240
+
 # Below this many plots, fall back to ``terrain_for_cell`` (legacy single-
 # continent map) so existing tests with tiny grids stay valid. Backwards
 # compat is mandatory.
@@ -177,122 +183,73 @@ _CONTINENTAL_LAND_THRESHOLD: float = 0.25
 _CONTINENTAL_SHALLOW_THRESHOLD: float = 0.30
 
 
-_anchor_sites_cache: dict[int, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]] = {}
+# (cx, cy, radius) in normalized map coords — cached per seed.
+_ContinentalLobe = tuple[float, float, float]
+_continental_lobes_cache: dict[int, list[_ContinentalLobe]] = {}
 
 
-def _continental_anchor_sites(seed: int) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
-    """Three continent centers in normalized ``[0, 1]^2`` with deterministic jitter."""
-    cached = _anchor_sites_cache.get(seed)
+def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
+    """Seed-derived land lobes for the continental layout (for tests / debug).
+
+    Each lobe is ``(center_x, center_y, radius)`` in ``[0, 1]`` space. Placement
+    uses ``make_rng(seed, "continental_land_lobes")`` so the same seed always
+    yields the same set; failed placements are skipped rather than retried with
+    weaker spacing rules.
+    """
+    cached = _continental_lobes_cache.get(int(seed))
     if cached is not None:
         return cached
 
-    rng = make_rng(int(seed), "continental_anchor_jitter")
-    jxa = rng.random() * 0.055 - 0.027
-    jya = rng.random() * 0.055 - 0.027
-    jxb = rng.random() * 0.050 - 0.025
-    jyb = rng.random() * 0.050 - 0.025
+    rng = make_rng(int(seed), "continental_land_lobes")
+    n_major = 3 + rng.randrange(6)
+    n_minor = 6 + rng.randrange(10)
+    lobes: list[_ContinentalLobe] = []
 
-    result = (
-        (0.185 + jxa, 0.255 + jya),
-        (0.795 - jxb, 0.305 - jyb),
-        (0.485 + jyb, 0.760 + jxa * 0.6),
-    )
-    _anchor_sites_cache[seed] = result
-    return result
+    def _spacing_ok(cx: float, cy: float, radius: float) -> bool:
+        for ox, oy, orad in lobes:
+            gap = math.hypot(cx - ox, cy - oy)
+            if gap < (radius + orad) * 0.68:
+                return False
+        return True
 
+    def _try_place(r_lo: float, r_hi: float) -> bool:
+        for _ in range(100):
+            cx = 0.05 + rng.random() * 0.90
+            cy = 0.05 + rng.random() * 0.90
+            radius = r_lo + rng.random() * (r_hi - r_lo)
+            if _spacing_ok(cx, cy, radius):
+                lobes.append((cx, cy, radius))
+                return True
+        return False
 
-def _continental_sigma_norm(width: int, height: int) -> float:
-    """Gaussian σ in normalized ``[0,1]`` coords, tuned at 192×144.
+    for _ in range(n_major):
+        _try_place(0.11, 0.21)
+    for _ in range(n_minor):
+        _try_place(0.03, 0.085)
 
-    Lobes are defined in unit square space; on a 10_000-plot grid the same σ
-    yields smaller *cell* radii than on the default map, dropping components
-    below ``CONTINENT_MIN_PLOTS``. Upscale σ only when ``width*height`` is below
-    the reference area (capped so we never reintroduce inter-continental
-    bridging on tiny margins).
-    """
-    ref_area = 192.0 * 144.0
-    area = float(max(1, int(width) * int(height)))
-    scale = math.sqrt(ref_area / area)
-    scale = max(1.0, min(1.38, scale))
-    return 0.133 * scale
-
-
-_inv_var_cache: dict[tuple[int, int], float] = {}
-
-
-def _continental_core_field(seed: int, cx: float, cy: float, width: int, height: int) -> float:
-    """Max of three Gaussian lobes → three disjoint land shells (ocean between).
-
-    A single planar FBM across the whole map tends to reconnect into one mega-
-    component; modulating continental noise by ``core`` keeps each mass ≥
-    ``CONTINENT_MIN_PLOTS`` (see ``realm.world.landmasses``) while still
-    allowing FBM detail *within* each lobe.
-
-    Gaussian σ scales up slightly on grids smaller than 192×144 so cell radii do
-    not shrink purely because of normalization; tuning target is three
-    continent-sized components at the default Genesis size.
-
-    ``width`` / ``height`` are the map size in plots (passed from
-    :func:`_continental_mask`).
-    """
-    dim_key = (width, height)
-    inv_var = _inv_var_cache.get(dim_key)
-    if inv_var is None:
-        sigma = _continental_sigma_norm(width, height)
-        inv_var = 1.0 / (sigma * sigma)
-        _inv_var_cache[dim_key] = inv_var
-    best = 0.0
-    for ax, ay in _continental_anchor_sites(seed):
-        dx = cx - ax
-        dy = cy - ay
-        v = math.exp(-(dx * dx + dy * dy) * inv_var)
-        if v > best:
-            best = v
-    return best
+    _continental_lobes_cache[int(seed)] = lobes
+    return lobes
 
 
 def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> float:
-    """Procedural continental mask — fully random per seed (2–5 continents + islands)."""
+    """Continental land mask in ``[0, 1]`` — max influence of seed-placed lobes + speckle."""
     cx = float(x) / max(1.0, float(width))
     cy = float(y) / max(1.0, float(height))
-    tau = math.tau
-
-    n_continents = 2 + (int(seed) % 4)
-    continent_centers: list[tuple[float, float, float]] = []
-    for i in range(n_continents):
-        angle = (i / n_continents) * tau + fbm(seed + i * 100, 0.0, 0.0, 1) * 1.5
-        radius = 0.25 + fbm(seed + i * 200, 1.0, 0.0, 1) * 0.15
-        ccx = 0.5 + math.cos(angle) * radius
-        ccy = 0.35 + fbm(seed + i * 300, float(i), 0.0, 1) * 0.30
-        size = 0.15 + fbm(seed + i * 400, float(i), 1.0, 1) * 0.20
-        continent_centers.append((ccx, ccy, size))
-
-    n_islands = 4 + (int(seed) % 9)
-    island_centers: list[tuple[float, float, float]] = []
-    for i in range(n_islands):
-        icx = fbm(seed + 1000 + i * 50, float(i), 2.0, 1)
-        icy = 0.1 + fbm(seed + 2000 + i * 50, float(i), 3.0, 1) * 0.80
-        isize = 0.04 + fbm(seed + 3000 + i * 50, float(i), 4.0, 1) * 0.08
-        island_centers.append((icx, icy, isize))
 
     total = 0.0
-    for ccx, ccy, size in continent_centers:
-        dx = cx - ccx
-        dy = cy - ccy
-        dist = math.sqrt(dx * dx + dy * dy)
-        wobble = fbm(seed + int(ccx * 1000), cx * 8.0, cy * 8.0, 3) * 0.08
-        influence = max(0.0, 1.0 - (dist - wobble) / max(size, 0.01))
+    for lx, ly, radius in continental_layout_lobes(seed):
+        dx = cx - lx
+        dy = cy - ly
+        dist = math.hypot(dx, dy)
+        wobble = (fbm(seed + int(lx * 733) + int(ly * 991), cx * 10.0, cy * 10.0, 3) - 0.5) * 0.07
+        influence = max(0.0, 1.0 - (dist - wobble) / max(radius, 0.02))
         total = max(total, influence)
 
-    for icx, icy, isize in island_centers:
-        dx = cx - icx
-        dy = cy - icy
-        dist = math.sqrt(dx * dx + dy * dy)
-        wobble = fbm(seed + int(icx * 999), cx * 12.0, cy * 12.0, 2) * 0.04
-        influence = max(0.0, 1.0 - (dist - wobble) / max(isize, 0.01))
-        total = max(total, influence * 0.7)
+    arch = fbm(seed + 5555, cx * 18.0, cy * 18.0, 4)
+    if arch > 0.74 and total < 0.18:
+        total = max(total, (arch - 0.74) * 2.8)
 
-    pole_penalty = abs(cy - 0.5) * 0.4
+    pole_penalty = abs(cy - 0.5) * 0.32
     return max(0.0, total - pole_penalty)
 
 

@@ -6,7 +6,7 @@ const CreationScreenScene := preload("res://scenes/WorldCreationScreen.tscn")
 
 const SCENARIOS: Array = [
 	["frontier", "Frontier — default solo slice"],
-	["genesis", "Genesis — full 192×144 continental map"],
+	["genesis", "Genesis — full 320×240 continental map"],
 	["cartel", "Cartel"],
 	["bootstrapper", "Bootstrapper"],
 	["speculator", "Speculator"],

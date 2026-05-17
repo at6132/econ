@@ -79,8 +79,10 @@ def test_genesis_islands_terrain_centre_is_land_corners_are_ocean() -> None:
 
 
 def test_genesis_islands_default_bootstrap_produces_four_landmasses() -> None:
-    """Default Genesis bootstrap (96 × 72) yields at least four distinct land components."""
-    world = bootstrap_genesis(seed=42, settler_count=0)
+    """Legacy four-island layout (96 × 72) yields at least four distinct land components."""
+    world = bootstrap_genesis(
+        seed=42, grid_width=96, grid_height=72, settler_count=0, map_layout="islands"
+    )
     comps = _flood_fill_land_components(world)
     assert len(comps) >= 4, (
         f"expected ≥4 land components on Genesis default map, got {len(comps)}"
@@ -98,7 +100,9 @@ def test_genesis_islands_default_bootstrap_produces_four_landmasses() -> None:
 
 def test_genesis_islands_have_real_ocean_between_them() -> None:
     """The cross-shaped band between quadrants is dominated by water."""
-    world = bootstrap_genesis(seed=42, settler_count=0)
+    world = bootstrap_genesis(
+        seed=42, grid_width=96, grid_height=72, settler_count=0, map_layout="islands"
+    )
     # Sample the vertical and horizontal ocean strips at the map midline.
     mid_x, mid_y = 96 // 2, 72 // 2
     h_strip = [
@@ -126,7 +130,9 @@ def test_genesis_islands_centers_are_each_on_distinct_landmass() -> None:
     hubs removed the same structural invariant is asserted directly against
     ``genesis_island_centers``: four centres → four distinct landmasses.
     """
-    world = bootstrap_genesis(seed=42, settler_count=0)
+    world = bootstrap_genesis(
+        seed=42, grid_width=96, grid_height=72, settler_count=0, map_layout="islands"
+    )
     centers = genesis_island_centers(96, 72)
     comps = _flood_fill_land_components(world)
     seen_components: set[int] = set()
@@ -150,8 +156,16 @@ def test_genesis_islands_force_continent_layout_when_requested() -> None:
     Phase 7A: the continent layout has no ``plot_islands`` cache (it's a single
     landmass), so we just assert the bootstrap succeeds and produces plots.
     """
-    world = bootstrap_genesis(seed=42, settler_count=0, map_layout="continent")
-    assert len(world.plots) == 96 * 72
+    world = bootstrap_genesis(
+        seed=42,
+        grid_width=96,
+        grid_height=72,
+        settler_count=0,
+        map_layout="continent",
+    )
+    from realm.world.plot_parcels import world_map_tile_count
+
+    assert world_map_tile_count(world) == 96 * 72
     assert world.scenario_state.get("plot_islands") == {}
 
 

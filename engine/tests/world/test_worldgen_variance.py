@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from realm.world.biome_noise import _continental_mask, continental_layout_terrain
+from realm.world.biome_noise import (
+    GENESIS_DEFAULT_GRID_HEIGHT,
+    GENESIS_DEFAULT_GRID_WIDTH,
+    _continental_mask,
+    continental_layout_lobes,
+    continental_layout_terrain,
+)
 from realm.world.terrain import Terrain
 from realm.world.world import generate_plots
 
@@ -20,11 +26,16 @@ def test_different_seeds_produce_different_coastlines() -> None:
     assert _coast_signature(1) != _coast_signature(2)
 
 
-def test_continent_count_varies() -> None:
+def test_lobe_placement_varies_by_seed() -> None:
     counts: set[int] = set()
-    for seed in range(10):
-        counts.add(2 + (seed % 4))
-    assert len(counts) >= 3
+    for seed in range(24):
+        counts.add(len(continental_layout_lobes(seed)))
+    assert len(counts) >= 4
+
+
+def test_same_seed_same_lobes() -> None:
+    assert continental_layout_lobes(9001) == continental_layout_lobes(9001)
+    assert continental_layout_lobes(9001) != continental_layout_lobes(9002)
 
 
 def test_all_seeds_produce_at_least_2_landmasses() -> None:

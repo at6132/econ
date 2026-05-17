@@ -8,10 +8,11 @@ from fastapi.testclient import TestClient
 from realm.api import _state, app
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
+from realm.world.plot_parcels import world_map_tile_count
 
 
 @pytest.mark.parametrize(
-    "scenario,expected_plots,expected_player_cents,expect_cartel_cell",
+    "scenario,expected_map_tiles,expected_player_cents,expect_cartel_cell",
     [
         ("frontier", 48 * 36, 1_000_000, False),
         ("bootstrapper", 32 * 24, 485_000, False),
@@ -19,12 +20,12 @@ from realm.core.ledger import party_cash_account
         ("cartel", 48 * 36, 1_000_000, True),
         ("millrace", 42 * 28, 975_000, False),
         ("archive", 48 * 36, 1_080_000, False),
-        ("genesis", 192 * 144, 1_000_000, False),
+        ("genesis", 320 * 240, 1_000_000, False),
     ],
 )
 def test_dev_reset_applies_scenario_params(
     scenario: str,
-    expected_plots: int,
+    expected_map_tiles: int,
     expected_player_cents: int,
     expect_cartel_cell: bool,
 ) -> None:
@@ -37,7 +38,7 @@ def test_dev_reset_applies_scenario_params(
     assert j["seed"] == 123
 
     world = _state.WORLD
-    assert len(world.plots) == expected_plots
+    assert world_map_tile_count(world) == expected_map_tiles
     player_cash = world.ledger.balance(party_cash_account(PartyId("player")))
     assert player_cash == expected_player_cents
     grain_orders = world.market_asks_by_material.get(MaterialId("grain"), [])
@@ -66,7 +67,7 @@ def test_dev_reset_defaults_to_genesis() -> None:
     assert r.status_code == 200
     assert r.json()["scenario_id"] == "genesis"
     assert _state.WORLD.scenario_id == "genesis"
-    assert len(_state.WORLD.plots) == 192 * 144
+    assert world_map_tile_count(_state.WORLD) == 320 * 240
 
 
 def test_persistence_list_returns_ok_and_slots() -> None:

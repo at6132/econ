@@ -79,6 +79,8 @@ class Plot:
     subsurface: SubsurfaceRoll
     surveyed: bool = False
     deep_surveyed: bool = False
+    # World map tiles in this deed (empty → legacy single tile at ``(x, y)``).
+    world_cells: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass
@@ -425,40 +427,35 @@ def generate_plots(
     height: int,
     correlate_subsurface: bool = False,
     terrain_fn: Any | None = None,
+    uniform_plots: bool = False,
 ) -> dict[PlotId, Plot]:
-    """Grid of width x height plots; terrain from coherent biome fields; subsurface rolled per plot.
+    """Tile the world into deeds; terrain from coherent biome fields; subsurface rolled per plot.
+
+    Default: variable rectangular parcels (1×1 … 3×3 world tiles per deed).
+    ``uniform_plots=True``: one deed per map cell (tests / legacy).
 
     ``terrain_fn`` is an optional callable ``(seed, x, y) -> Terrain`` that overrides the
     default :func:`realm.world.biome_noise.terrain_for_cell`. Genesis bootstraps the four-island
     layout by passing a closure that wraps :func:`realm.world.biome_noise.terrain_for_genesis_island_cell`
     with the active map width/height.
     """
-    plots: dict[PlotId, Plot] = {}
-    pick = terrain_fn if terrain_fn is not None else terrain_for_cell
-    for y in range(height):
-        for x in range(width):
-            pid = PlotId(f"p-{x}-{y}")
-            rng = make_rng(seed, f"gen:{pid}")
-            terrain = pick(seed, x, y)
-            subsurface = _subsurface_roll(
-                rng,
-                terrain,
-                correlate=correlate_subsurface,
-                seed=seed,
-                x=x,
-                y=y,
-                apply_belts=correlate_subsurface,
-            )
-            plots[pid] = Plot(
-                plot_id=pid,
-                x=x,
-                y=y,
-                terrain=terrain,
-                owner=None,
-                subsurface=subsurface,
-            )
-    clear_noise_cache()
-    return plots
+    from realm.world.plot_parcels import generate_plot_parcels, generate_uniform_plots
+
+    if uniform_plots:
+        return generate_uniform_plots(
+            seed=seed,
+            width=width,
+            height=height,
+            correlate_subsurface=correlate_subsurface,
+            terrain_fn=terrain_fn,
+        )
+    return generate_plot_parcels(
+        seed=seed,
+        width=width,
+        height=height,
+        correlate_subsurface=correlate_subsurface,
+        terrain_fn=terrain_fn,
+    )
 
 
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
@@ -539,8 +536,8 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
 def bootstrap_genesis(
     *,
     seed: int,
-    grid_width: int = 192,
-    grid_height: int = 144,
+    grid_width: int | None = None,
+    grid_height: int | None = None,
     settler_count: int | None = None,
     settler_spawn_cap: int | None = None,
     starting_cash_cents: int = 1_000_000,
@@ -558,9 +555,11 @@ def bootstrap_genesis(
         cost (open-ocean modifier).
       * ``"continent"`` — legacy single-continent map (whatever ``terrain_for_cell``
         produces for the seed); kept for backward compat in tiny-grid tests.
-      * ``"auto"`` (default) — use ``"islands"`` if the grid is large enough
-        (≥ ``GENESIS_ISLAND_MIN_WIDTH × GENESIS_ISLAND_MIN_HEIGHT``), otherwise
-        fall back to ``"continent"``.
+      * ``"continental"`` — seed-scattered land lobes on large grids (default
+        ``GENESIS_DEFAULT_GRID_WIDTH × GENESIS_DEFAULT_GRID_HEIGHT``).
+      * ``"auto"`` (default) — continental when plot count ≥
+        ``CONTINENTAL_LAYOUT_MIN_PLOTS``, else four-island layout on medium grids,
+        else single-continent ``terrain_for_cell``.
 
     Phase 7: there are no ``pop_hub_*`` parties anymore. Demand will be supplied
     by real ``LaborerNPC`` agents (Phase 7B) buying from entrepreneur-run stores
@@ -575,6 +574,8 @@ def bootstrap_genesis(
     explicit ``settler_count`` values default cap to that count (no growth).
     """
     from realm.world.biome_noise import (
+        GENESIS_DEFAULT_GRID_HEIGHT,
+        GENESIS_DEFAULT_GRID_WIDTH,
         continental_layout_supported,
         continental_layout_terrain,
         genesis_island_layout_supported,
@@ -582,6 +583,11 @@ def bootstrap_genesis(
     )
     from realm.events.event_log import log_event
     from realm.economy.market_history import record_market_snapshot
+
+    if grid_width is None:
+        grid_width = GENESIS_DEFAULT_GRID_WIDTH
+    if grid_height is None:
+        grid_height = GENESIS_DEFAULT_GRID_HEIGHT
 
     human = PartyId("player")
     if map_layout == "auto":
@@ -642,6 +648,11 @@ def bootstrap_genesis(
         parties={human},
         scenario_id="genesis",
     )
+    world.scenario_state["grid_width"] = grid_width
+    world.scenario_state["grid_height"] = grid_height
+    from realm.world.plot_parcels import refresh_world_cell_index
+
+    refresh_world_cell_index(world)
     from realm.production.blueprints import seed_world_blueprints
 
     seed_world_blueprints(world)
@@ -994,6 +1005,7 @@ def bootstrap_frontier(
     starting_cash_cents: int = 1_000_000,  # $10,000.00
     system_reserve_cents: int = 100_000_000_000,  # $1B — unallocated pool
     scenario_id: str = "frontier",
+    uniform_plots: bool = False,
 ) -> World:
     """
     Frontier scenario: one human player party + plots + funded economy.
@@ -1001,7 +1013,12 @@ def bootstrap_frontier(
     Phase 1: single human party `player` — AI parties added with agents module.
     """
     human = PartyId("player")
-    plots = generate_plots(seed=seed, width=grid_width, height=grid_height)
+    plots = generate_plots(
+        seed=seed,
+        width=grid_width,
+        height=grid_height,
+        uniform_plots=uniform_plots,
+    )
     n_plots = len(plots)
     ledger = Ledger()
     inv = Inventory()
@@ -1014,6 +1031,11 @@ def bootstrap_frontier(
         parties={human},
         scenario_id=scenario_id,
     )
+    world.scenario_state["grid_width"] = grid_width
+    world.scenario_state["grid_height"] = grid_height
+    from realm.world.plot_parcels import refresh_world_cell_index
+
+    refresh_world_cell_index(world)
     res = world.ledger.seed_system_reserve(system_reserve_cents)
     if isinstance(res, MoneyErr):
         raise ValueError(res.reason)
