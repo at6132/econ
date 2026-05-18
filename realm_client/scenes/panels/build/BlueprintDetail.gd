@@ -25,11 +25,15 @@ func _ready() -> void:
 		if on:
 			build_mode = "turnkey"
 			build_mode_changed.emit(build_mode)
+			if not current_blueprint.is_empty():
+				_reset_hint()
 	)
 	mode_self.toggled.connect(func(on: bool) -> void:
 		if on:
 			build_mode = "self"
 			build_mode_changed.emit(build_mode)
+			if not current_blueprint.is_empty():
+				_reset_hint()
 	)
 	_apply_theme()
 
@@ -82,7 +86,31 @@ func show_blueprint(bp: Dictionary) -> void:
 	var creator := str(bp.get("creator_party", ""))
 	if creator != "" and creator != "null":
 		desc_label.text += "\nCreator: %s" % WorldState.party_label(creator)
-	hint_label.text = "Click the grid to place footprint. Y/Enter to confirm. Stock materials for self-build."
+	_reset_hint()
+
+
+func show_placement_error(msg: String) -> void:
+	var reason := msg.strip_edges()
+	if reason.is_empty():
+		reason = "Placement failed"
+	hint_label.text = "Cannot place: %s" % reason
+	hint_label.add_theme_color_override("font_color", Color(1.0, 0.38, 0.32))
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+func _reset_hint() -> void:
+	hint_label.remove_theme_color_override("font_color")
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if build_mode == "turnkey":
+		hint_label.text = (
+			"Click the grid to place. Y or Enter to confirm, N or Esc to cancel. "
+			"Turnkey charges labor plus market materials."
+		)
+	else:
+		hint_label.text = (
+			"Click the grid to place. Y or Enter to confirm, N or Esc to cancel. "
+			"You must stock construction materials in inventory for self-build."
+		)
 
 
 func set_market_context(fair_value_cents: int, free_cells: int) -> void:

@@ -158,10 +158,21 @@ func _confirm_placement(gx: int, gy: int) -> void:
 						# (powered flag may flip). Refresh both lean payloads.
 						API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 						API.get_world_map(func(m): WorldState.apply_map(m))
-					elif grid_view.has_method("show_error"):
-						grid_view.call("show_error", str(data.get("reason", "Placement failed"))),
+					else:
+						_show_placement_failed(str(data.get("reason", "Placement failed"))),
 			),
 	)
+
+
+func _show_placement_failed(reason: String) -> void:
+	var msg := reason.strip_edges()
+	if msg.is_empty():
+		msg = "Placement failed"
+	MainFeedback.toast(msg, true)
+	if detail_panel.has_method("show_placement_error"):
+		detail_panel.call("show_placement_error", msg)
+	if grid_view.has_method("show_error"):
+		grid_view.call("show_error", msg)
 
 
 func _close() -> void:

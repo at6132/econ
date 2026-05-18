@@ -53,6 +53,7 @@ var _confirm_gx: int = -1
 var _confirm_gy: int = -1
 
 var _error_flash_until: float = 0.0
+var _error_message: String = ""
 
 
 func _ready() -> void:
@@ -184,9 +185,21 @@ func key_cancels(event: InputEventKey) -> bool:
 	)
 
 
-func show_error(_msg: String) -> void:
-	_error_flash_until = Time.get_ticks_msec() / 1000.0 + 0.35
+func show_error(msg: String) -> void:
+	_error_message = msg.strip_edges()
+	_error_flash_until = Time.get_ticks_msec() / 1000.0 + 5.0
+	set_process(true)
 	queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	if _error_message.is_empty():
+		set_process(false)
+		return
+	if Time.get_ticks_msec() / 1000.0 >= _error_flash_until:
+		_error_message = ""
+		set_process(false)
+		queue_redraw()
 
 
 func _cell_size() -> float:
@@ -229,7 +242,7 @@ func _draw() -> void:
 	var cs := _cell_size()
 	var terrain_color: Color = TERRAIN_COLORS.get(_terrain, Color(0.5, 0.5, 0.5))
 	if Time.get_ticks_msec() / 1000.0 < _error_flash_until:
-		terrain_color = terrain_color.lerp(Color(0.9, 0.2, 0.2), 0.35)
+		terrain_color = terrain_color.lerp(Color(0.9, 0.2, 0.2), 0.12)
 
 	_draw_cell_fills(terrain_color)
 	_draw_streets(cs)
@@ -322,6 +335,43 @@ func _draw() -> void:
 			10,
 			METRE_LABEL,
 		)
+
+	_draw_error_banner()
+
+
+func _draw_error_banner() -> void:
+	if _error_message.is_empty():
+		return
+	if Time.get_ticks_msec() / 1000.0 >= _error_flash_until:
+		return
+	var plot_rect := _cells_rect(0, 0, _grid_w, _grid_h)
+	var pad := 12.0
+	var banner_w := minf(plot_rect.size.x - pad * 2.0, size.x - pad * 2.0)
+	var banner_h := 56.0
+	var pos := Vector2(
+		plot_rect.position.x + (plot_rect.size.x - banner_w) * 0.5,
+		plot_rect.position.y + plot_rect.size.y * 0.5 - banner_h * 0.5,
+	)
+	var banner := Rect2(pos, Vector2(banner_w, banner_h))
+	draw_rect(banner, Color(0.12, 0.04, 0.04, 0.92))
+	draw_rect(banner, Color(1.0, 0.35, 0.3, 0.95), false, 2.0)
+	var font: Font = RealmFonts.font_body
+	if font == null:
+		return
+	var title := "Cannot place here"
+	var body := _error_message
+	var y := banner.position.y + 8.0
+	draw_string(font, Vector2(banner.position.x + 8.0, y), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.45, 0.4))
+	y += 18.0
+	draw_string(
+		font,
+		Vector2(banner.position.x + 8.0, y),
+		body,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		int(banner.size.x - 16.0),
+		12,
+		Color(0.95, 0.9, 0.88),
+	)
 
 
 func _draw_cell_fills(terrain_color: Color) -> void:
