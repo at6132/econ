@@ -38,6 +38,23 @@ def test_sim_status_returns_canon_constants() -> None:
     assert body["seconds_per_tick"] == pytest.approx(2.5)
 
 
+def test_world_static_exposes_pacing_constants() -> None:
+    """Clients should read pacing from ``/world/static`` instead of hard-coding."""
+    c = TestClient(app)
+    c.post("/dev/reset", params={"scenario": "frontier", "seed": 991})
+    r = c.get("/world/static")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ticks_per_game_day"] == TICKS_PER_GAME_DAY
+    assert body["real_seconds_per_game_day"] == REAL_SECONDS_PER_GAME_DAY
+    assert body["real_seconds_per_tick_at_1x"] == pytest.approx(2.5)
+    assert body["ticks_per_real_second_at_1x"] == pytest.approx(0.4)
+    # Presets must always include 0 (paused) and 1 (default).
+    presets = body["sim_speed_presets"]
+    assert 0.0 in presets
+    assert 1.0 in presets
+
+
 def test_sim_control_pauses_and_resumes() -> None:
     c = TestClient(app)
     r = c.post("/sim/control", json={"paused": True})

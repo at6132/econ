@@ -257,6 +257,11 @@ func apply_static(data: Dictionary) -> void:
 	if data.is_empty():
 		return
 	ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
+	real_seconds_per_game_day = int(data.get("real_seconds_per_game_day", real_seconds_per_game_day))
+	if data.has("sim_speed_presets"):
+		var presets: Variant = data.get("sim_speed_presets", null)
+		if presets is Array:
+			sim_speed_presets = (presets as Array).duplicate()
 	market_history_free_window_ticks = int(data.get("market_history_free_window_ticks", market_history_free_window_ticks))
 	world_seed = int(data.get("seed", world_seed))
 	scenario_id = str(data.get("scenario_id", scenario_id))

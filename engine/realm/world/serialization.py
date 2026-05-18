@@ -534,7 +534,13 @@ def world_static_dict(world: "World") -> dict[str, Any]:
     + map_layout for the map renderer, the public party-display names
     map, and the bank plot id."""
     from realm.actions import hire_catalog_public
-    from realm.core.time_scale import TICKS_PER_GAME_DAY
+    from realm.core.time_scale import (
+        REAL_SECONDS_PER_GAME_DAY,
+        REAL_SECONDS_PER_TICK_AT_1X,
+        SPEED_MULTIPLIERS,
+        TICKS_PER_GAME_DAY,
+        TICKS_PER_REAL_SECOND_AT_1X,
+    )
     from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
     from realm.production.buildings import building_catalog_public
 
@@ -560,6 +566,12 @@ def world_static_dict(world: "World") -> dict[str, Any]:
         "scenario_id": world.scenario_id,
         "world_name": world.world_name,
         "ticks_per_game_day": TICKS_PER_GAME_DAY,
+        # Wall-clock pacing canon (Law 2 / doc 09). Solo / public mode shards
+        # both observe these; only the host-loop ``speed`` multiplier varies.
+        "real_seconds_per_game_day": REAL_SECONDS_PER_GAME_DAY,
+        "real_seconds_per_tick_at_1x": REAL_SECONDS_PER_TICK_AT_1X,
+        "ticks_per_real_second_at_1x": TICKS_PER_REAL_SECOND_AT_1X,
+        "sim_speed_presets": list(SPEED_MULTIPLIERS),
         "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
         "map_layout": map_layout,
         "grid_width": int(grid_w) if grid_w is not None else None,
