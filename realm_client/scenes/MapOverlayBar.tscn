@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_map_overlay_bar"]
+
+[ext_resource type="Script" path="res://scenes/MapOverlayBar.gd" id="1_script"]
+
+[node name="MapOverlayBar" type="HBoxContainer"]
+script = ExtResource("1_script")

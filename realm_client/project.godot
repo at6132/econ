@@ -28,6 +28,7 @@ WorldState="*res://autoloads/WorldState.gd"
 WS="*res://autoloads/WS.gd"
 RealmColors="*res://autoloads/RealmColors.gd"
 RealmFonts="*res://autoloads/RealmFonts.gd"
+MainFeedback="*res://autoloads/MainFeedback.gd"
 
 [display]
 
