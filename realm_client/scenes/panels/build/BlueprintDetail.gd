@@ -104,12 +104,12 @@ func _reset_hint() -> void:
 	if build_mode == "turnkey":
 		hint_label.text = (
 			"Click the grid to place. Y or Enter to confirm, N or Esc to cancel. "
-			"Turnkey charges labor plus market materials."
+			+ "Turnkey charges labor plus market materials."
 		)
 	else:
 		hint_label.text = (
 			"Click the grid to place. Y or Enter to confirm, N or Esc to cancel. "
-			"You must stock construction materials in inventory for self-build."
+			+ "You must stock construction materials in inventory for self-build."
 		)
 
 
