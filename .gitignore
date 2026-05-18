@@ -6,8 +6,8 @@ __pycache__/
 *.egg
 *.egg-info/
 .eggs/
-build/
-dist/
+/build/
+/dist/
 .Python
 pip-log.txt
 pip-delete-this-directory.txt
@@ -49,9 +49,9 @@ out/
 .turbo/
 .vercel/
 
-# Build output
-build/
-dist/
+# Build output (repo root only — not realm_client/scenes/panels/build/)
+/build/
+/dist/
 
 # Logs
 npm-debug.log*
