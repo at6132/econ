@@ -15,6 +15,8 @@ const WHEEL_ZOOM_STEP := 1.18
 const DEMO_SEED := 42
 const DEMO_W := 48
 const DEMO_H := 36
+## Parcel / deed boundary stroke (black — not gold).
+const DEED_STROKE := Color(0, 0, 0, 0.72)
 
 # ── LOD thresholds (cell pixels on screen: mesh cell × camera zoom) ─────────
 const LOD_CONTINENT_MAX := 3.5
@@ -150,7 +152,7 @@ func _refresh_map_view_from_world_state() -> void:
 		return
 	_loading_world = true
 	_sync_demo_mode_from_world()
-	_world_seed = int(WorldState.world_seed)
+	_world_seed = WorldState.world_seed
 	_rebuild_mesh()
 	_rebuild_building_cache_only()
 	_rebuild_cell_cache()
@@ -245,7 +247,7 @@ func _rebuild_building_cache_only() -> void:
 		var pid := str(d.get("plot_id", ""))
 		if pid.is_empty():
 			continue
-		_plot_building_counts[pid] = int(_plot_building_counts.get(pid, 0)) + 1
+		_plot_building_counts[pid] = WorldState.variant_to_int(_plot_building_counts.get(pid, 0), 0) + 1
 		if not _plot_buildings_by_plot.has(pid):
 			_plot_buildings_by_plot[pid] = []
 		(_plot_buildings_by_plot[pid] as Array).append(d)
@@ -363,14 +365,14 @@ func _plot_cell_set(p: Dictionary, plot_id: String = "") -> Dictionary:
 		for c in cells_v as Array:
 			if c is Dictionary:
 				var d: Dictionary = c as Dictionary
-				cell_set["%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]] = true
+				cell_set["%d,%d" % [WorldState.variant_to_int(d.get("x", 0), 0), WorldState.variant_to_int(d.get("y", 0), 0)]] = true
 	# When the map payload omits per-plot lists, rebuild from ``world_cell_to_plot``.
 	if cell_set.is_empty() and plot_id != "" and not WorldState.world_cell_to_plot.is_empty():
 		for key in WorldState.world_cell_to_plot.keys():
 			if str(WorldState.world_cell_to_plot[key]) == plot_id:
 				cell_set[str(key)] = true
 	if cell_set.is_empty():
-		cell_set["%d,%d" % [int(p.get("x", 0)), int(p.get("y", 0))]] = true
+		cell_set["%d,%d" % [WorldState.variant_to_int(p.get("x", 0), 0), WorldState.variant_to_int(p.get("y", 0), 0)]] = true
 	return cell_set
 
 
@@ -522,11 +524,11 @@ func _grid_bounds() -> Vector2i:
 		if cells is Array and not (cells as Array).is_empty():
 			for c in cells:
 				if c is Dictionary:
-					mw = maxi(mw, int((c as Dictionary).get("x", 0)) + 1)
-					mh = maxi(mh, int((c as Dictionary).get("y", 0)) + 1)
+					mw = maxi(mw, WorldState.variant_to_int((c as Dictionary).get("x", 0), 0) + 1)
+					mh = maxi(mh, WorldState.variant_to_int((c as Dictionary).get("y", 0), 0) + 1)
 		else:
-			mw = maxi(mw, int(p.get("x", 0)) + 1)
-			mh = maxi(mh, int(p.get("y", 0)) + 1)
+			mw = maxi(mw, WorldState.variant_to_int(p.get("x", 0), 0) + 1)
+			mh = maxi(mh, WorldState.variant_to_int(p.get("y", 0), 0) + 1)
 	if _demo_mode:
 		mw = maxi(mw, DEMO_W)
 		mh = maxi(mh, DEMO_H)
@@ -740,7 +742,6 @@ func _draw_parcel_edges(lod: int) -> void:
 	## (that recreates the chessboard the player should not see).
 	if _mesh == null:
 		return
-	var multi_c := Color(0.95, 0.78, 0.22, 0.92)
 	var mine_c := RealmColors.MAGIC
 	mine_c.a = 0.55
 	for entry in _parcel_entries:
@@ -750,8 +751,8 @@ func _draw_parcel_edges(lod: int) -> void:
 		var poly: PackedVector2Array = entry.get("poly", PackedVector2Array())
 		if poly.size() < 3:
 			continue
-		var n_cells: int = int(entry.get("n_cells", 1))
-		var flags: int = int(entry.get("flags", 0))
+		var n_cells: int = WorldState.variant_to_int(entry.get("n_cells", 1), 1)
+		var flags: int = WorldState.variant_to_int(entry.get("flags", 0), 0)
 		var stroke_c: Color
 		var stroke_w: float
 		var draw_outline := false
@@ -760,8 +761,8 @@ func _draw_parcel_edges(lod: int) -> void:
 			stroke_w = _world_line_width(2.0)
 			draw_outline = true
 		elif n_cells > 1:
-			stroke_c = multi_c
-			stroke_w = _world_line_width(2.75)
+			stroke_c = DEED_STROKE
+			stroke_w = _world_line_width(2.0)
 			draw_outline = true
 		if draw_outline:
 			_draw_polyline_world(poly, stroke_c, stroke_w, true)
@@ -787,12 +788,10 @@ func _draw_parcel_boundaries_large_map(lod: int) -> void:
 	if _mesh == null:
 		return
 	var bx := _last_mesh_bounds.x
-	var default_c := Color(0.08, 0.10, 0.12, 0.48)
-	var multi_c := Color(0.95, 0.78, 0.22, 0.85)
 	var mine_c := RealmColors.MAGIC
 	mine_c.a = 0.55
 	var stroke_w := _world_line_width(1.0)
-	var stroke_w_multi := _world_line_width(2.0)
+	var stroke_w_deed := _world_line_width(1.75)
 	var multicell_cache: Dictionary = {}
 
 	for gy in range(_vis_min_y, _vis_max_y):
@@ -811,22 +810,18 @@ func _draw_parcel_boundaries_large_map(lod: int) -> void:
 				if wc is Array:
 					n_cells = maxi(1, (wc as Array).size())
 				elif p.has("world_tiles_w") and p.has("world_tiles_h"):
-					n_cells = maxi(
-						1,
-						int(p.get("world_tiles_w", 1)) * int(p.get("world_tiles_h", 1))
-					)
+					var tw := WorldState.variant_to_int(p.get("world_tiles_w", 1), 1)
+					var th := WorldState.variant_to_int(p.get("world_tiles_h", 1), 1)
+					n_cells = maxi(1, tw * th)
 				multicell_cache[pid] = n_cells
 			else:
-				n_cells = int(multicell_cache[pid])
+				n_cells = multicell_cache[pid] as int
 
-			var edge_c := default_c
-			var edge_w := stroke_w
+			var edge_c := DEED_STROKE
+			var edge_w := stroke_w_deed if n_cells > 1 else stroke_w
 			if (flags & 0x2) != 0:
 				edge_c = mine_c
 				edge_w = _world_line_width(1.5)
-			elif n_cells > 1:
-				edge_c = multi_c
-				edge_w = stroke_w_multi
 
 			if not _neighbor_same_parcel(gx, gy, 0, -1):
 				draw_line(r.position, r.position + Vector2(r.size.x, 0.0), edge_c, edge_w)
@@ -1115,8 +1110,8 @@ func _draw_town_dots() -> void:
 		if not (t is Dictionary):
 			continue
 		var td: Dictionary = t as Dictionary
-		var cx: int = int(td.get("center_x", -1))
-		var cy: int = int(td.get("center_y", -1))
+		var cx: int = WorldState.variant_to_int(td.get("center_x", -1), -1)
+		var cy: int = WorldState.variant_to_int(td.get("center_y", -1), -1)
 		if cx < 0 or cy < 0:
 			continue
 		if cx < _vis_min_x or cx >= _vis_max_x or cy < _vis_min_y or cy >= _vis_max_y:
@@ -1137,8 +1132,8 @@ func _draw_town_chrome(lod: int, csp: float) -> void:
 		if not (t is Dictionary):
 			continue
 		var td: Dictionary = t as Dictionary
-		var cx: int = int(td.get("center_x", -1))
-		var cy: int = int(td.get("center_y", -1))
+		var cx: int = WorldState.variant_to_int(td.get("center_x", -1), -1)
+		var cy: int = WorldState.variant_to_int(td.get("center_y", -1), -1)
 		if cx < 0 or cy < 0:
 			continue
 		if cx < _vis_min_x - 5 or cx >= _vis_max_x + 5 or cy < _vis_min_y - 5 or cy >= _vis_max_y + 5:
@@ -1147,10 +1142,10 @@ func _draw_town_chrome(lod: int, csp: float) -> void:
 
 		if td.has("bound_min_x"):
 			var poly := _town_bounds_poly(
-				int(td["bound_min_x"]),
-				int(td["bound_min_y"]),
-				int(td["bound_max_x"]),
-				int(td["bound_max_y"])
+				WorldState.variant_to_int(td["bound_min_x"], 0),
+				WorldState.variant_to_int(td["bound_min_y"], 0),
+				WorldState.variant_to_int(td["bound_max_x"], 0),
+				WorldState.variant_to_int(td["bound_max_y"], 0)
 			)
 			draw_polyline(poly, accent, outline_w, true)
 			draw_line(poly[poly.size() - 1], poly[0], accent, outline_w)
@@ -1160,7 +1155,7 @@ func _draw_town_chrome(lod: int, csp: float) -> void:
 
 		if font != null and label_alpha > 0.05:
 			var town_name: String = str(td.get("name", "Town"))
-			var pop: int = int(td.get("laborer_count", 0))
+			var pop: int = WorldState.variant_to_int(td.get("laborer_count", 0), 0)
 			var label_text := town_name
 			if lod >= 2 and pop > 0:
 				label_text = "%s  (%d)" % [town_name, pop]
@@ -1183,7 +1178,7 @@ func _draw_building_dots() -> void:
 			if not _cell_set_visible(cell_set):
 				continue
 			var ctr := _parcel_centroid(cell_set)
-			var is_mine := (int(entry.get("flags", 0)) & 0x2) != 0
+			var is_mine := (WorldState.variant_to_int(entry.get("flags", 0), 0) & 0x2) != 0
 			var dot_col := RealmColors.ACCENT if is_mine else RealmColors.MUTED
 			dot_col.a = 0.85
 			draw_circle(ctr, dot_r, dot_col)
@@ -1234,7 +1229,7 @@ func _draw_site_layout_in_bbox(
 	var n := rows.size()
 	if n < 1:
 		return
-	var is_mine := (int(entry.get("flags", 0)) & 0x2) != 0
+	var is_mine := (WorldState.variant_to_int(entry.get("flags", 0), 0) & 0x2) != 0
 	var cols_i := maxi(1, int(ceil(sqrt(float(n)))))
 	var nrows_i := maxi(1, int(ceil(float(n) / float(cols_i))))
 	var gap := _mesh.cell_px * 0.06
@@ -1343,7 +1338,7 @@ func _draw_plot_detail_labels() -> void:
 
 	if _uses_parcel_polygon_draw():
 		for entry in _parcel_entries:
-			var flags: int = int(entry.get("flags", 0))
+			var flags: int = WorldState.variant_to_int(entry.get("flags", 0), 0)
 			if (flags & 0x3) != 0x3:
 				continue
 			var pid: String = str(entry.get("pid", ""))
@@ -1351,7 +1346,7 @@ func _draw_plot_detail_labels() -> void:
 			if not _cell_set_visible(cell_set):
 				continue
 			var ctr := _parcel_centroid(cell_set)
-			var bcount: int = int(_plot_building_counts.get(pid, 0))
+			var bcount: int = WorldState.variant_to_int(_plot_building_counts.get(pid, 0), 0)
 			if bcount > 0:
 				var badge := "⚙%d" % bcount
 				var badge_col := RealmColors.ACCENT
@@ -1390,7 +1385,7 @@ func _draw_plot_detail_labels() -> void:
 
 			var ctr := _mesh.plot_centroid(gx, gy)
 
-			var bcount: int = int(_plot_building_counts.get(pid, 0))
+			var bcount: int = WorldState.variant_to_int(_plot_building_counts.get(pid, 0), 0)
 			if bcount > 0:
 				var badge := "⚙%d" % bcount
 				var badge_col := RealmColors.ACCENT

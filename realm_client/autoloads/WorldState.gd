@@ -1,6 +1,20 @@
 extends Node
 ## Cached display state from the last successful API responses (read-only mirror; no game rules).
 
+## Godot 4.4+ rejects ``int()`` on values that are already ``int`` — use for JSON/API Variants.
+static func variant_to_int(v: Variant, default_val: int = 0) -> int:
+	match typeof(v):
+		TYPE_INT:
+			return v
+		TYPE_FLOAT:
+			return int(v)
+		TYPE_STRING:
+			var s := v as String
+			return int(s) if s.is_valid_int() else default_val
+		_:
+			return default_val
+
+
 # ── Player state ─────────────────────────────────────────────────────────────
 var player_cash_cents: int = 0
 var player_net_worth_cents: int = 0
@@ -108,9 +122,9 @@ func apply_engine_tick_hint(tick: int) -> void:
 func apply_tick_frame(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	current_tick = int(data.get("tick", current_tick))
-	game_day = int(data.get("game_day", game_day))
-	game_year = int(data.get("game_year", game_year))
+	current_tick = variant_to_int(data.get("tick", current_tick), current_tick)
+	game_day = variant_to_int(data.get("game_day", game_day), game_day)
+	game_year = variant_to_int(data.get("game_year", game_year), game_year)
 	var season_v: Variant = data.get("season", null)
 	if season_v is String and not (season_v as String).is_empty():
 		game_season = String(season_v)
@@ -137,9 +151,9 @@ func apply_sim_status(data: Dictionary) -> void:
 	if spt != null:
 		sim_seconds_per_tick = float(spt)
 	if data.has("ticks_per_game_day"):
-		ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
+		ticks_per_game_day = variant_to_int(data.get("ticks_per_game_day", ticks_per_game_day), ticks_per_game_day)
 	if data.has("real_seconds_per_game_day"):
-		real_seconds_per_game_day = int(data.get("real_seconds_per_game_day", real_seconds_per_game_day))
+		real_seconds_per_game_day = variant_to_int(data.get("real_seconds_per_game_day", real_seconds_per_game_day), real_seconds_per_game_day)
 	if data.has("speed_presets"):
 		var presets: Variant = data.get("speed_presets", null)
 		if presets is Array:
@@ -150,18 +164,18 @@ func apply_sim_status(data: Dictionary) -> void:
 func apply_summary(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	player_cash_cents = int(data.get("cash", 0))
-	player_net_worth_cents = int(data.get("net_worth_estimate", 0))
+	player_cash_cents = variant_to_int(data.get("cash", 0), 0)
+	player_net_worth_cents = variant_to_int(data.get("net_worth_estimate", 0), 0)
 	# Summary polls must not rewind the clock below the last push frame.
-	var summary_tick := int(data.get("tick", current_tick))
+	var summary_tick := variant_to_int(data.get("tick", current_tick), current_tick)
 	current_tick = maxi(current_tick, summary_tick)
 	var ap: Variant = data.get("active_production", [])
-	active_production_count = int(ap.size()) if ap is Array else 0
+	active_production_count = ap.size() if ap is Array else 0
 	var mw: Variant = data.get("maintenance_warnings", [])
-	maintenance_warning_count = int(mw.size()) if mw is Array else 0
-	active_contracts_count = int(data.get("active_contracts", 0))
-	unread_feed_count = int(data.get("unread_feed_entries", 0))
-	unread_npc_messages = int(data.get("unread_npc_messages", 0))
+	maintenance_warning_count = mw.size() if mw is Array else 0
+	active_contracts_count = variant_to_int(data.get("active_contracts", 0), 0)
+	unread_feed_count = variant_to_int(data.get("unread_feed_entries", 0), 0)
+	unread_npc_messages = variant_to_int(data.get("unread_npc_messages", 0), 0)
 	_update_time_from_tick()
 	summary_updated.emit()
 
@@ -169,9 +183,9 @@ func apply_summary(data: Dictionary) -> void:
 func apply_world(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
-	current_tick = int(data.get("tick", current_tick))
-	world_seed = int(data.get("seed", world_seed))
+	ticks_per_game_day = variant_to_int(data.get("ticks_per_game_day", ticks_per_game_day), ticks_per_game_day)
+	current_tick = variant_to_int(data.get("tick", current_tick), current_tick)
+	world_seed = variant_to_int(data.get("seed", world_seed), world_seed)
 	var raw_plots: Variant = data.get("plots", [])
 	plots.clear()
 	if raw_plots is Array:
@@ -239,7 +253,7 @@ func apply_world(data: Dictionary) -> void:
 	market_bids_rows = mb if mb is Array else []
 	var mh: Variant = data.get("market_history", [])
 	market_history_rows = mh if mh is Array else []
-	market_history_free_window_ticks = int(data.get("market_history_free_window_ticks", 48))
+	market_history_free_window_ticks = variant_to_int(data.get("market_history_free_window_ticks", 48), 48)
 
 	var inv_root: Variant = data.get("inventory", {})
 	if inv_root is Dictionary:
@@ -258,14 +272,14 @@ func apply_world(data: Dictionary) -> void:
 func apply_static(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
-	real_seconds_per_game_day = int(data.get("real_seconds_per_game_day", real_seconds_per_game_day))
+	ticks_per_game_day = variant_to_int(data.get("ticks_per_game_day", ticks_per_game_day), ticks_per_game_day)
+	real_seconds_per_game_day = variant_to_int(data.get("real_seconds_per_game_day", real_seconds_per_game_day), real_seconds_per_game_day)
 	if data.has("sim_speed_presets"):
 		var presets: Variant = data.get("sim_speed_presets", null)
 		if presets is Array:
 			sim_speed_presets = (presets as Array).duplicate()
-	market_history_free_window_ticks = int(data.get("market_history_free_window_ticks", market_history_free_window_ticks))
-	world_seed = int(data.get("seed", world_seed))
+	market_history_free_window_ticks = variant_to_int(data.get("market_history_free_window_ticks", market_history_free_window_ticks), market_history_free_window_ticks)
+	world_seed = variant_to_int(data.get("seed", world_seed), world_seed)
 	scenario_id = str(data.get("scenario_id", scenario_id))
 	var pdn: Variant = data.get("party_display_names", {})
 	if pdn is Dictionary:
@@ -284,16 +298,16 @@ func apply_static(data: Dictionary) -> void:
 ## inventory, owned plots (and their subsurface/recipe_ids), placed
 ## buildings, active production, in-transit, forward contracts, bank
 ## rates/loans, owned reports, price alerts. Does NOT touch the map.
-func _merge_server_tick(server_tick: int) -> void:
+func _merge_server_tick(server_tick: Variant) -> void:
 	# Poll responses can finish after a newer tick push — never rewind the HUD.
-	current_tick = maxi(current_tick, server_tick)
+	current_tick = maxi(current_tick, variant_to_int(server_tick, current_tick))
 
 
 func apply_player(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	_merge_server_tick(int(data.get("tick", current_tick)))
-	player_cash_cents = int(data.get("cash_cents", player_cash_cents))
+	_merge_server_tick(data.get("tick", current_tick))
+	player_cash_cents = variant_to_int(data.get("cash_cents", player_cash_cents), player_cash_cents)
 	var inv: Variant = data.get("inventory", {})
 	player_inventory = inv if inv is Dictionary else {}
 	var own_raw: Variant = data.get("owned_plots", [])
@@ -354,14 +368,14 @@ func apply_map(data: Dictionary) -> void:
 			return
 		push_warning("WorldState.apply_map: payload had no plots")
 		return
-	_merge_server_tick(int(data.get("tick", current_tick)))
+	_merge_server_tick(data.get("tick", current_tick))
 	var uniform := bool(data.get("uniform_plots", false))
 	if uniform:
 		push_warning(
 			"World map is uniform 1×1 plots — run dev reset for varied parcel shapes (L, zigzag, multi-hectare)."
 		)
-	var grid_w := int(data.get("grid_width", 0))
-	var grid_h := int(data.get("grid_height", 0))
+	var grid_w := variant_to_int(data.get("grid_width", 0), 0)
+	var grid_h := variant_to_int(data.get("grid_height", 0), 0)
 	# Preserve subsurface + recipe_ids from any prior player payload so a
 	# map refresh after a build action doesn't blank out per-owned-plot
 	# detail the player can already see.
@@ -396,7 +410,7 @@ func apply_map(data: Dictionary) -> void:
 		if uniform:
 			for pid in plots.keys():
 				var pd: Dictionary = plots[pid]
-				world_cell_to_plot["%d,%d" % [int(pd.get("x", 0)), int(pd.get("y", 0))]] = str(pid)
+				world_cell_to_plot["%d,%d" % [variant_to_int(pd.get("x", 0), 0), variant_to_int(pd.get("y", 0), 0)]] = str(pid)
 		else:
 			_ensure_world_cell_index()
 	population_density_map.clear()
@@ -420,8 +434,8 @@ func apply_map(data: Dictionary) -> void:
 func apply_feed(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	_merge_server_tick(int(data.get("tick", current_tick)))
-	var since: int = int(data.get("since_tick", -1))
+	_merge_server_tick(data.get("tick", current_tick))
+	var since: int = variant_to_int(data.get("since_tick", -1), -1)
 	var events: Variant = data.get("event_log", [])
 	var feed: Variant = data.get("world_feed_log", [])
 	var npc: Variant = data.get("npc_messages", [])
@@ -485,10 +499,10 @@ func _ensure_world_cell_index() -> void:
 			for c in cells as Array:
 				if c is Dictionary:
 					var d: Dictionary = c as Dictionary
-					var key := "%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]
+					var key := "%d,%d" % [variant_to_int(d.get("x", 0), 0), variant_to_int(d.get("y", 0), 0)]
 					world_cell_to_plot[key] = str(pid)
 		else:
-			world_cell_to_plot["%d,%d" % [int(p.get("x", 0)), int(p.get("y", 0))]] = str(pid)
+			world_cell_to_plot["%d,%d" % [variant_to_int(p.get("x", 0), 0), variant_to_int(p.get("y", 0), 0)]] = str(pid)
 
 
 func _rebuild_town_markers_from_world(data: Dictionary) -> void:
@@ -513,8 +527,8 @@ func _rebuild_town_markers_from_world(data: Dictionary) -> void:
 				if not plots.has(ps):
 					continue
 				var pd: Dictionary = plots[ps]
-				var gx := int(pd.get("x", 0))
-				var gy := int(pd.get("y", 0))
+				var gx := variant_to_int(pd.get("x", 0), 0)
+				var gy := variant_to_int(pd.get("y", 0), 0)
 				min_x = mini(min_x, gx)
 				min_y = mini(min_y, gy)
 				max_x = maxi(max_x, gx)
@@ -546,8 +560,8 @@ func _rebuild_town_markers_from_world(data: Dictionary) -> void:
 				{
 					"kind": "nascent",
 					"name": str(row.get("nascent_id", "settlement")),
-					"center_x": int(pd.get("x", 0)),
-					"center_y": int(pd.get("y", 0)),
+					"center_x": variant_to_int(pd.get("x", 0), 0),
+					"center_y": variant_to_int(pd.get("y", 0), 0),
 				}
 			)
 
@@ -568,8 +582,9 @@ func _update_time_from_tick() -> void:
 
 
 func format_money(cents: int) -> String:
-	var dollars := int(abs(cents)) / 100
-	var c := int(abs(cents)) % 100
+	var ac := absi(cents)
+	var dollars := ac / 100
+	var c := ac % 100
 	var sign := "-" if cents < 0 else ""
 	return "%s$%s.%02d" % [sign, _format_int_commas(dollars), c]
 
@@ -615,9 +630,9 @@ func get_plot_ui(plot_id: String) -> Dictionary:
 		var b: Dictionary = (row as Dictionary).duplicate(true)
 		var m: Variant = b.get("maintenance", {})
 		if m is Dictionary:
-			b["_efficiency_pct"] = int(m.get("efficiency_pct", 100))
-			b["_missed_cycles"] = int(m.get("missed_cycles", 0))
-			var due_at: int = int(m.get("due_at_tick", 0))
+			b["_efficiency_pct"] = variant_to_int(m.get("efficiency_pct", 100), 100)
+			b["_missed_cycles"] = variant_to_int(m.get("missed_cycles", 0), 0)
+			var due_at: int = variant_to_int(m.get("due_at_tick", 0), 0)
 			b["_due_in_ticks"] = maxi(0, due_at - current_tick)
 			var mats: Variant = m.get("materials", {})
 			b["_maintenance_materials"] = mats if mats is Dictionary else {}
