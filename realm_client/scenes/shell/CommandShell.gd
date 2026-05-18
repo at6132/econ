@@ -25,16 +25,21 @@ var _nav_buttons: Dictionary = {}
 var _last_save_at: int = 0
 var _saving: bool = false
 var _status_timer: Timer
+var _pause_button: Button = null
+var _speed_buttons: Array[Button] = []  # one per non-zero preset (1×, 2×, 4×)
 
 
 func _ready() -> void:
 	layer = 15
 	_apply_chrome()
 	_build_nav()
+	_build_sim_controls()
 	WorldState.summary_updated.connect(_refresh_stats)
 	WorldState.world_updated.connect(_on_world_changed)
+	WorldState.sim_clock_updated.connect(_refresh_sim_controls)
 	_refresh_stats()
 	_refresh_seed()
+	_refresh_sim_controls()
 	save_button.pressed.connect(_on_save_pressed)
 	_status_timer = Timer.new()
 	_status_timer.wait_time = STATUS_POLL_SECONDS
@@ -43,6 +48,72 @@ func _ready() -> void:
 	add_child(_status_timer)
 	_refresh_save_status()
 	set_process(true)
+
+
+## Pause / 1× / 2× / 4× chips in the top strip. All call ``POST /sim/control``
+## and rely on the engine's ``kind: "sim_status"`` push to update local state.
+func _build_sim_controls() -> void:
+	var pills_parent: Node = tick_pill.get_parent()
+	if pills_parent == null:
+		return
+
+	_pause_button = Button.new()
+	_pause_button.text = "Pause"
+	_pause_button.toggle_mode = false
+	_pause_button.focus_mode = Control.FOCUS_NONE
+	_style_pill_btn(_pause_button)
+	_pause_button.pressed.connect(_on_pause_pressed)
+	pills_parent.add_child(_pause_button)
+
+	for mult in [1.0, 2.0, 4.0]:
+		var b := Button.new()
+		b.text = "%dx" % int(mult)
+		b.toggle_mode = false
+		b.focus_mode = Control.FOCUS_NONE
+		_style_pill_btn(b)
+		b.pressed.connect(_on_speed_pressed.bind(mult))
+		pills_parent.add_child(b)
+		_speed_buttons.append(b)
+
+
+func _style_pill_btn(b: Button) -> void:
+	b.add_theme_stylebox_override("normal", RealmColors.style_chip(false))
+	b.add_theme_stylebox_override("hover", RealmColors.style_chip(false))
+	b.add_theme_stylebox_override("pressed", RealmColors.style_chip(true))
+	b.add_theme_color_override("font_color", RealmColors.DIM)
+	b.add_theme_color_override("font_hover_color", RealmColors.ACCENT)
+	if RealmFonts.font_body:
+		b.add_theme_font_override("font", RealmFonts.font_body)
+		b.add_theme_font_size_override("font_size", 16)
+
+
+func _on_pause_pressed() -> void:
+	API.sim_control({"paused": not WorldState.sim_paused}, Callable())
+
+
+func _on_speed_pressed(mult: float) -> void:
+	# Speed click always resumes (engine pause flag is cleared on non-zero speed).
+	API.sim_control({"speed": float(mult), "paused": false}, Callable())
+
+
+func _refresh_sim_controls() -> void:
+	if _pause_button != null:
+		_pause_button.text = "Resume" if WorldState.sim_paused else "Pause"
+		var pause_active := WorldState.sim_paused
+		_pause_button.add_theme_stylebox_override("normal", RealmColors.style_chip(pause_active))
+		_pause_button.add_theme_color_override(
+			"font_color",
+			RealmColors.ACCENT if pause_active else RealmColors.DIM,
+		)
+	# Highlight whichever speed matches the engine's effective rate.
+	for i in range(_speed_buttons.size()):
+		var mult: float = [1.0, 2.0, 4.0][i]
+		var active := not WorldState.sim_paused and is_equal_approx(WorldState.sim_speed, mult)
+		_speed_buttons[i].add_theme_stylebox_override("normal", RealmColors.style_chip(active))
+		_speed_buttons[i].add_theme_color_override(
+			"font_color",
+			RealmColors.ACCENT if active else RealmColors.DIM,
+		)
 
 
 func shell_top_height() -> float:
@@ -170,7 +241,16 @@ func _set_active_nav(panel_id: String) -> void:
 
 
 func _refresh_stats() -> void:
-	tick_pill.text = "World tick %d" % WorldState.current_tick
+	var clock_label: String
+	if WorldState.sim_paused:
+		clock_label = "PAUSED · Day %d · tick %d" % [WorldState.game_day, WorldState.current_tick]
+	else:
+		clock_label = "Day %d · %s · tick %d" % [
+			WorldState.game_day,
+			WorldState.game_season,
+			WorldState.current_tick,
+		]
+	tick_pill.text = clock_label
 	cash_pill.text = "Cash %s" % WorldState.format_money(WorldState.player_cash_cents)
 	_refresh_nav_badges()
 

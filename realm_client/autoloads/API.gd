@@ -62,12 +62,29 @@ func get_world(cb: Callable) -> void:
 	get_request("/world", cb)
 
 
+## Legacy single-tick poke. The host now owns the clock — this is kept only for
+## tests, dev tools, and emergency "advance once" buttons. Game UI should NOT
+## call this anymore (the engine pushes ``kind: "tick"`` frames automatically).
 func tick_once(cb: Callable = Callable()) -> void:
 	post_request("/tick", {}, cb)
 
 
+## Advance N ticks in one round-trip. Dev / automation only.
 func tick_batch(n: int, cb: Callable = Callable()) -> void:
 	post_request("/tick/batch?count=%d" % int(n), {}, cb)
+
+
+# ── Sim control (host clock pause / speed) ──────────────────────────────────
+
+## Read pause + speed + pacing constants.
+func get_sim_status(cb: Callable) -> void:
+	get_request("/sim/status", cb)
+
+
+## Set ``paused`` and/or ``speed`` in one round-trip. Either field is optional.
+## Speed snaps to the nearest preset (``0`` pauses, ``1.0`` / ``2.0`` / ``4.0``).
+func sim_control(body: Dictionary, cb: Callable = Callable()) -> void:
+	post_request("/sim/control", body, cb)
 
 
 # ── Plots ───────────────────────────────────────────────────────────────────

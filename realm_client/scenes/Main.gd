@@ -29,6 +29,15 @@ var _active_overlay: Node = null
 var _resume_plot_id: String = ""
 var _build_return_plot_id: String = ""
 
+## Wall-clock throttle on the realtime refresh: the engine pushes a tick every
+## ``sim_seconds_per_tick`` (2.5 s at 1×, 0.625 s at 4×). We don't need to
+## re-pull summary/player/feed for every push — once every ~2 real seconds is
+## enough for the HUD and feed deltas.
+const _REFRESH_MIN_INTERVAL_S: float = 2.0
+var _last_refresh_msec: int = -1
+## Avoid overlapping refreshes when an earlier round-trip is still in flight.
+var _refresh_in_flight: bool = false
+
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(RealmColors.BG)
@@ -39,11 +48,11 @@ func _ready() -> void:
 	world_map.plot_clicked.connect(_on_plot_clicked)
 	get_viewport().size_changed.connect(_layout_shell)
 	call_deferred("_boot_shell")
-	var timer := Timer.new()
-	timer.wait_time = 2.0
-	timer.autostart = true
-	timer.timeout.connect(_auto_tick)
-	add_child(timer)
+	# The host engine owns the clock. We listen for pushes instead of polling
+	# ``/tick`` on a client timer. Tick frames update the HUD instantly; the
+	# heavier ``summary + player + feed`` GETs run throttled in
+	# ``_on_engine_push`` (at most once per ``_REFRESH_MIN_INTERVAL_S``).
+	Transport.engine_push.connect(_on_engine_push)
 
 
 func _boot_shell() -> void:
@@ -171,29 +180,57 @@ func _refresh_shell_hud() -> void:
 		shell.call("_refresh_seed")
 
 
-func _auto_tick() -> void:
-	API.tick_once(
-		func(data: Dictionary) -> void:
-			if bool(data.get("ok", false)):
-				var tv: Variant = data.get("tick", null)
-				if tv != null:
-					WorldState.apply_engine_tick_hint(int(tv))
-			else:
-				push_warning("Realm: POST /tick missing ok — HUD refresh still runs (%s)" % str(data))
-			_refresh_from_server()
+## Engine push handler. Two frame kinds today:
+##   ``tick``       — per-tick clock + day/season + paused/speed. Cheap.
+##   ``sim_status`` — pause/speed/pacing changed (from any control source).
+## On tick frames we also kick a throttled HUD refresh so cash/feed/inventory
+## stay current without polling on a client timer.
+func _on_engine_push(payload: Dictionary) -> void:
+	var kind := str(payload.get("kind", ""))
+	match kind:
+		"tick":
+			WorldState.apply_tick_frame(payload)
 			if shell.has_method("flash_tick"):
 				shell.call("flash_tick")
-	)
+			_maybe_refresh_from_server()
+		"sim_status":
+			WorldState.apply_sim_status(payload)
+		_:
+			# Unknown push — log once and ignore. Don't crash on future frame
+			# kinds added by the engine.
+			push_warning("Main: unknown engine push kind %s" % kind)
 
 
-## Realtime refresh — runs every 2 s after each /tick. Only the three
-## cheap payloads (summary + player + feed delta). The fat /world/map
-## payload is NOT polled here — it is refreshed only after structural
-## actions (claim / survey / build / buy / sell / dispatch).
+## Realtime refresh — at most once per ``_REFRESH_MIN_INTERVAL_S`` real seconds
+## regardless of how often the engine pushes ticks. At 1× the engine pushes
+## every 2.5 s so we hit refresh nearly every tick; at 4× we still only hit it
+## every ~2 s, keeping HTTP-shaped load constant under speed changes.
+##
+## Only the three cheap payloads (summary + player + feed delta). The fat
+## ``/world/map`` is refreshed only after structural actions.
+func _maybe_refresh_from_server() -> void:
+	if _refresh_in_flight:
+		return
+	var now_ms := Time.get_ticks_msec()
+	if _last_refresh_msec >= 0 and (now_ms - _last_refresh_msec) < int(_REFRESH_MIN_INTERVAL_S * 1000.0):
+		return
+	_last_refresh_msec = now_ms
+	_refresh_from_server()
+
+
 func _refresh_from_server() -> void:
+	_refresh_in_flight = true
+	# Three independent gets fire in parallel; ``_refresh_in_flight`` clears as
+	# the slowest (feed) returns so we don't pile up requests under load.
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
-	API.get_world_feed(func(f): WorldState.apply_feed(f), WorldState.feed_seen_tick)
+	API.get_world_feed(
+		func(f):
+			WorldState.apply_feed(f)
+			_refresh_in_flight = false
+		,
+		WorldState.feed_seen_tick,
+	)
 
 
 ## Refresh the lean map view after a structural action (claim / survey /

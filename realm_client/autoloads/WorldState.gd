@@ -9,12 +9,23 @@ var display_name: String = "Player"
 
 # ── Time scale (from ``GET /world``; default matches engine ``TICKS_PER_GAME_DAY``) ──
 var ticks_per_game_day: int = 1440
+## Canon (Law 2): 1 in-game day = 1 real hour at 1× speed.
+var real_seconds_per_game_day: int = 3600
 
 # ── Time (derived from tick + ticks_per_game_day) ───────────────────────────
 var current_tick: int = 0
 var game_day: int = 1
 var game_season: String = "Spring"
 var game_year: int = 1
+
+# ── Sim clock (host-side pacing — pushed by the engine, no client metronome) ──
+var sim_paused: bool = false
+var sim_speed: float = 1.0
+var sim_effective_speed: float = 1.0
+var sim_seconds_per_tick: float = 2.5
+var sim_speed_presets: Array = [0.0, 1.0, 2.0, 4.0]
+
+signal sim_clock_updated
 
 # ── HUD counters ─────────────────────────────────────────────────────────────
 var active_production_count: int = 0
@@ -89,6 +100,51 @@ func apply_engine_tick_hint(tick: int) -> void:
 	current_tick = tick
 	_update_time_from_tick()
 	summary_updated.emit()
+
+
+## Apply a server push frame (kind == "tick"). Auth source for clock + calendar:
+## the engine already computed game_day/season/year, so we trust it instead of
+## re-deriving on the client (avoids drift when the engine changes the calendar).
+func apply_tick_frame(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	current_tick = int(data.get("tick", current_tick))
+	game_day = int(data.get("game_day", game_day))
+	game_year = int(data.get("game_year", game_year))
+	var season_v: Variant = data.get("season", null)
+	if season_v is String and not (season_v as String).is_empty():
+		game_season = String(season_v)
+	# Pause / speed are pushed along with each tick so the HUD never falls
+	# behind a control change made elsewhere.
+	if data.has("paused"):
+		sim_paused = bool(data.get("paused", sim_paused))
+	if data.has("speed"):
+		sim_speed = float(data.get("speed", sim_speed))
+	if data.has("effective_speed"):
+		sim_effective_speed = float(data.get("effective_speed", sim_effective_speed))
+	summary_updated.emit()
+	sim_clock_updated.emit()
+
+
+## Apply a server push frame (kind == "sim_status") — pause / speed / pacing.
+func apply_sim_status(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	sim_paused = bool(data.get("paused", sim_paused))
+	sim_speed = float(data.get("speed", sim_speed))
+	sim_effective_speed = float(data.get("effective_speed", sim_effective_speed))
+	var spt: Variant = data.get("seconds_per_tick", null)
+	if spt != null:
+		sim_seconds_per_tick = float(spt)
+	if data.has("ticks_per_game_day"):
+		ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
+	if data.has("real_seconds_per_game_day"):
+		real_seconds_per_game_day = int(data.get("real_seconds_per_game_day", real_seconds_per_game_day))
+	if data.has("speed_presets"):
+		var presets: Variant = data.get("speed_presets", null)
+		if presets is Array:
+			sim_speed_presets = (presets as Array).duplicate()
+	sim_clock_updated.emit()
 
 
 func apply_summary(data: Dictionary) -> void:

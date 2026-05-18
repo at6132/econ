@@ -22,6 +22,10 @@ const MAX_CONNECT_ATTEMPTS := 40
 
 signal engine_ready
 signal engine_error(msg: String)
+## Server-initiated push frame (no ``id`` matched a pending request). Carries
+## ``kind`` plus arbitrary payload. See ``realm.api.sim_loop`` and
+## ``realm.api.routes_sim`` for shapes (``tick``, ``sim_status``, …).
+signal engine_push(payload: Dictionary)
 
 
 func _ready() -> void:
@@ -207,10 +211,19 @@ func _process(_delta: float) -> void:
 			continue
 		var resp: Dictionary = parsed
 		var rid: String = str(resp.get("id", ""))
+		if rid.is_empty() and resp.has("kind"):
+			# Server-initiated push (tick frame, sim_status, …). No callback to
+			# match; broadcast to listeners.
+			engine_push.emit(resp)
+			continue
 		if _pending.has(rid):
 			var cb: Callable = _pending[rid]
 			_pending.erase(rid)
 			_safe_call(cb, resp)
+		elif resp.has("kind"):
+			# Push frame whose ``id`` accidentally collided with an unused
+			# numeric — still route as a push.
+			engine_push.emit(resp)
 		elif not _pending.is_empty():
 			push_warning("Transport: response id %s did not match a pending request" % rid)
 
