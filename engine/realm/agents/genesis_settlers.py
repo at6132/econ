@@ -118,8 +118,13 @@ def _plots_manhattan_order(world: World) -> list[PlotId]:
 
 
 def _world_dimensions(world: World) -> tuple[int, int]:
+    # Cached for the lifetime of one tick: 16k-plot Genesis tick used to call
+    # this 15k+ times via _settler_home_anchor (~3 s per tick wasted).
     if not world.plots:
         return (1, 1)
+    cache = world.scenario_state.get("_world_dims_cache")
+    if isinstance(cache, dict) and int(cache.get("tick", -1)) == int(world.tick):
+        return (int(cache["w"]), int(cache["h"]))
     max_x = 0
     max_y = 0
     for p in world.plots.values():
@@ -127,7 +132,13 @@ def _world_dimensions(world: World) -> tuple[int, int]:
             max_x = p.x
         if p.y > max_y:
             max_y = p.y
-    return (max_x + 1, max_y + 1)
+    dims = (max_x + 1, max_y + 1)
+    world.scenario_state["_world_dims_cache"] = {
+        "tick": int(world.tick),
+        "w": dims[0],
+        "h": dims[1],
+    }
+    return dims
 
 
 def _settler_home_anchor(world: World, party: PartyId) -> tuple[int, int]:
@@ -156,23 +167,49 @@ def _settler_home_anchor(world: World, party: PartyId) -> tuple[int, int]:
 
 
 def _scan_from_anchor(world: World, dry_scan: list[PlotId], anchor: tuple[int, int]) -> list[PlotId]:
-    """Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break)."""
+    """Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break).
+
+    Cached per (tick, anchor) — there are only 4 anchors at runtime but each
+    settler called this without the cache (~28 s / tick on Genesis).
+    """
+    cache = world.scenario_state.get("_scan_from_anchor_cache")
+    if not isinstance(cache, dict) or int(cache.get("tick", -1)) != int(world.tick):
+        cache = {"tick": int(world.tick)}
+        world.scenario_state["_scan_from_anchor_cache"] = cache
+    key = (int(anchor[0]), int(anchor[1]))
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
     ax, ay = anchor
-    return sorted(
+    plots = world.plots
+    ordered = sorted(
         dry_scan,
         key=lambda pid: (
-            abs(world.plots[pid].x - ax) + abs(world.plots[pid].y - ay),
-            world.plots[pid].x,
-            world.plots[pid].y,
+            abs(plots[pid].x - ax) + abs(plots[pid].y - ay),
+            plots[pid].x,
+            plots[pid].y,
         ),
     )
+    cache[key] = ordered
+    return ordered
 
 
 def _first_owned_plot(world: World, party: PartyId) -> PlotId | None:
+    """O(plots) scan. Hot path callers should prefer ``owned_by_party[party][0]``
+    from the per-tick index built at the top of ``tick_settler_business``;
+    this remains for paths where that index isn't threaded yet."""
     for pid, pl in world.plots.items():
         if pl.owner == party:
             return pid
     return None
+
+
+def _first_owned_plot_indexed(
+    owned_by_party: dict[PartyId, tuple[PlotId, ...]], party: PartyId
+) -> PlotId | None:
+    """O(1) lookup against the per-tick owned-plots index."""
+    ids = owned_by_party.get(party)
+    return ids[0] if ids else None
 
 
 def _party_salience_jitter(party: PartyId) -> float:
@@ -1035,15 +1072,16 @@ def _settler_pipeline_step(
 ) -> bool:
     """One settler micro-step; return True if we should try another step this same tick."""
     owned_plot_ids = owned_by_party.get(party, ())
-    owned = _first_owned_plot(world, party)
+    owned = owned_plot_ids[0] if owned_plot_ids else None
     if owned is None:
         # Per-party preferred starting region — see ``_settler_home_anchor`` docstring.
-        # Cheap: only re-sorts the dry scan on the (rare) unowned branch.
         party_scan = _scan_from_anchor(world, scan, _settler_home_anchor(world, party))
         for pid in party_scan:
             plot = world.plots[pid]
             if plot.owner is None:
-                claim_plot(world, party, pid)
+                result = claim_plot(world, party, pid)
+                if result.get("ok"):
+                    owned_by_party[party] = owned_plot_ids + (pid,)
                 return True
         return False
 
@@ -1123,7 +1161,10 @@ def _tick_one_settler(
     """Lock primary business line after survey so burst steps do not re-roll a conflicting workshop."""
     locked_line: tuple[str, str] | None = None
     for burst_i in range(SETTLER_PIPELINE_BURST):
-        owned = _first_owned_plot(world, party)
+        # owned_by_party is authoritative for this tick — _settler_pipeline_step
+        # mutates it in place when a claim lands, so no rescan is needed here.
+        owned_ids = owned_by_party.get(party, ())
+        owned = owned_ids[0] if owned_ids else None
         if owned is not None:
             pl = world.plots[owned]
             if pl.surveyed and locked_line is None:
@@ -1138,9 +1179,9 @@ def _tick_one_settler(
         )
         if not progressed:
             break
-    owned = _first_owned_plot(world, party)
-    if owned is not None:
-        _maybe_post_settler_job_opening(world, party, owned)
+    owned_ids = owned_by_party.get(party, ())
+    if owned_ids:
+        _maybe_post_settler_job_opening(world, party, owned_ids[0])
 
 
 def tick_settler_business(world: World) -> None:

@@ -37,6 +37,31 @@ PLOT_TRANSFER_FEE_MAX_CENTS: int = 100_000  # $1,000 cap
 SURVEY_AUTH_DURATION_TICKS: int = 30 * 1_440  # 30 game-days
 
 
+def _owned_plot_count(world: World, party: PartyId) -> int:
+    """Owner→count cache invalidated per tick. Genesis settler bursts call
+    ``claim_plot`` ~15k× per tick; the naive sum-over-plots variant was the
+    largest single line item in ``advance_tick`` (20 s)."""
+    cache = world.scenario_state.get("_owner_plot_count_cache")
+    if not isinstance(cache, dict) or int(cache.get("tick", -1)) != int(world.tick):
+        counts: dict[str, int] = {}
+        for p in world.plots.values():
+            if p.owner is None:
+                continue
+            owner_s = str(p.owner)
+            counts[owner_s] = counts.get(owner_s, 0) + 1
+        cache = {"tick": int(world.tick), "counts": counts}
+        world.scenario_state["_owner_plot_count_cache"] = cache
+    return int(cache["counts"].get(str(party), 0))
+
+
+def _bump_owned_plot_count(world: World, party: PartyId, delta: int) -> None:
+    cache = world.scenario_state.get("_owner_plot_count_cache")
+    if isinstance(cache, dict) and int(cache.get("tick", -1)) == int(world.tick):
+        counts = cache.setdefault("counts", {})
+        owner_s = str(party)
+        counts[owner_s] = max(0, counts.get(owner_s, 0) + int(delta))
+
+
 def _plot_transfer_fee_cents(price_cents: int) -> int:
     """Compute the registry fee on a plot sale (clamped to floor/cap)."""
     if price_cents <= 0:
@@ -70,9 +95,7 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
     # makes large land-grabs strategically expensive (anti-monopoly)
     # without blocking honest expansion. Frontier plots (density 0) are
     # still free at any quantity; we only mark up the densest-zone fee.
-    owned_count = sum(
-        1 for p in world.plots.values() if p.owner == party
-    )
+    owned_count = _owned_plot_count(world, party)
     if cost > 0 and owned_count > 0:
         multiplier_bps = min(10_000 + owned_count * 2_000, 50_000)
         cost = cost * multiplier_bps // 10_000
@@ -88,6 +111,7 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
             return ActionErr(ok=False, reason=tr.reason)
     plot.owner = party
     world.parties.add(party)
+    _bump_owned_plot_count(world, party, 1)
     from realm.world import ensure_party_recipe_book
 
     ensure_party_recipe_book(world, party)
