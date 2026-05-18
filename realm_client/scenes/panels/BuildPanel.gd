@@ -40,7 +40,11 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	_plot_data = plot_data.duplicate(true)
 	var terrain: String = str(plot_data.get("terrain", "plains"))
 	var tlabel: String = terrain.replace("_", " ").capitalize()
-	plot_title.text = "Build on Plot %s  ·  %s  ·  100m × 100m" % [plot_id, tlabel]
+	var area_m := int(plot_data.get("area_sq_metres", 10_000))
+	var wt := int(plot_data.get("world_tiles_w", 1))
+	var ht := int(plot_data.get("world_tiles_h", 1))
+	var size_lbl := "%d m² (%d×%d ha)" % [area_m, wt, ht] if wt > 1 or ht > 1 else "100m × 100m"
+	plot_title.text = "Build on Plot %s  ·  %s  ·  %s" % [plot_id, tlabel, size_lbl]
 	if sidebar.has_method("set_plot_id"):
 		sidebar.call("set_plot_id", plot_id)
 	if sidebar.has_method("load_blueprints"):
@@ -60,6 +64,11 @@ func _refresh_plot_data() -> void:
 func _on_grid_loaded(data: Dictionary) -> void:
 	_plot_data["placed_buildings"] = data.get("placed_buildings", [])
 	_plot_data["grid"] = data
+	_plot_data["grid_cells_w"] = int(data.get("grid_cells_w", 10))
+	_plot_data["grid_cells_h"] = int(data.get("grid_cells_h", 10))
+	_plot_data["world_tiles_w"] = int(data.get("world_tiles_w", 1))
+	_plot_data["world_tiles_h"] = int(data.get("world_tiles_h", 1))
+	_plot_data["area_sq_metres"] = int(data.get("area_sq_metres", 10_000))
 	if grid_view.has_method("load_plot"):
 		grid_view.call("load_plot", _plot_id, _plot_data)
 	var free_cells := int(data.get("free_cells_count", 100))

@@ -53,6 +53,7 @@ func survey_plot(plot_id: String, cb: Callable, party: String = "player") -> voi
 	post_request("/plots/%s/survey?party=%s" % [plot_id.uri_encode(), party.uri_encode()], {}, cb)
 
 
+## NPC/script auto-place only — players use ``place_blueprint`` from the build panel.
 func build_on_plot(plot_id: String, building_id: String, mode: String, cb: Callable, party: String = "player") -> void:
 	var q := "/plots/%s/build?party=%s&building_id=%s" % [
 		plot_id.uri_encode(), party.uri_encode(), building_id.uri_encode()]
@@ -332,6 +333,307 @@ func get_cpi(cb: Callable) -> void:
 
 func get_fx_rates(cb: Callable) -> void:
 	get_request("/fx/rates", cb)
+
+
+func get_fx_orders(cb: Callable) -> void:
+	get_request("/fx/orders", cb)
+
+
+func get_fx_mine(party: String, cb: Callable) -> void:
+	get_request("/fx/mine?party=%s" % party.uri_encode(), cb)
+
+
+func get_fx_history(pair: String, cb: Callable) -> void:
+	get_request("/fx/history/%s" % pair.uri_encode(), cb)
+
+
+func post_fx_order(
+	sell_material: String,
+	sell_qty: int,
+	buy_material: String,
+	buy_qty_min: int,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/fx/orders?party=%s&sell_material=%s&sell_qty=%d&buy_material=%s&buy_qty_min=%d"
+		% [party.uri_encode(), sell_material.uri_encode(), int(sell_qty), buy_material.uri_encode(), int(buy_qty_min)],
+		{},
+		cb,
+	)
+
+
+func delete_fx_order(order_id: String, party: String, cb: Callable) -> void:
+	delete_request("/fx/orders/%s?party=%s" % [order_id.uri_encode(), party.uri_encode()], cb)
+
+
+func get_futures_orders(cb: Callable) -> void:
+	get_request("/futures/orders", cb)
+
+
+func get_futures_mine(party: String, cb: Callable) -> void:
+	get_request("/futures/mine?party=%s" % party.uri_encode(), cb)
+
+
+func get_futures_curve(material: String, cb: Callable) -> void:
+	get_request("/futures/curve/%s" % material.uri_encode(), cb)
+
+
+func post_futures_order(params: Dictionary, cb: Callable) -> void:
+	var q := "/futures/orders?"
+	var parts: PackedStringArray = []
+	for k in params.keys():
+		parts.append("%s=%s" % [str(k), str(params[k]).uri_encode()])
+	post_request(q + "&".join(parts), {}, cb)
+
+
+func delete_futures_order(order_id: String, party: String, cb: Callable) -> void:
+	delete_request("/futures/orders/%s?party=%s" % [order_id.uri_encode(), party.uri_encode()], cb)
+
+
+func get_bank_loans(cb: Callable, party: String = "player") -> void:
+	get_request("/bank/loans?party=%s" % party.uri_encode(), cb)
+
+
+func repay_bank_loan(loan_id: String, cb: Callable, party: String = "player") -> void:
+	post_request("/bank/loan/%s/repay?party=%s" % [loan_id.uri_encode(), party.uri_encode()], {}, cb)
+
+
+func get_account_history(label: String, cb: Callable, party: String = "player") -> void:
+	get_request("/accounts/%s/history?party=%s" % [label.uri_encode(), party.uri_encode()], cb)
+
+
+func create_account(label: String, cb: Callable, party: String = "player") -> void:
+	post_request("/accounts/create", {"party": party, "label": label}, cb)
+
+
+func transfer_accounts(from_label: String, to_label: String, amount_cents: int, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/accounts/transfer",
+		{"party": party, "from_label": from_label, "to_label": to_label, "amount_cents": int(amount_cents)},
+		cb,
+	)
+
+
+func get_banks_currencies(cb: Callable) -> void:
+	get_request("/banks/currencies", cb)
+
+
+func get_loans_market(cb: Callable) -> void:
+	get_request("/loans/market", cb)
+
+
+func list_loan_for_sale(contract_id: String, ask_cents: int, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/loans/market/list?party=%s&contract_id=%s&ask_cents=%d"
+		% [party.uri_encode(), contract_id.uri_encode(), int(ask_cents)],
+		{},
+		cb,
+	)
+
+
+func buy_loan_on_market(contract_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/loans/market/%s/buy?party=%s" % [contract_id.uri_encode(), party.uri_encode()], {}, cb
+	)
+
+
+func get_npc_messages(cb: Callable) -> void:
+	get_world(func(d: Dictionary) -> void:
+		var msgs: Variant = d.get("npc_messages_to_player", d.get("npc_messages", []))
+		cb.call(msgs if msgs is Array else [])
+	)
+
+
+func get_insurance_mine(party: String, cb: Callable) -> void:
+	get_request("/contracts/insurance/mine?party=%s" % party.uri_encode(), cb)
+
+
+func get_lease_mine(party: String, cb: Callable) -> void:
+	get_request("/contracts/lease/mine?party=%s" % party.uri_encode(), cb)
+
+
+func get_forward_contracts(cb: Callable) -> void:
+	get_request("/contracts/forward", cb)
+
+
+func get_construction_orders(party: String, cb: Callable) -> void:
+	get_request("/construction/orders?party=%s" % party.uri_encode(), cb)
+
+
+func post_construction_quotes(body: Dictionary, cb: Callable) -> void:
+	post_request("/construction/quotes", body, cb)
+
+
+func post_construction_order(body: Dictionary, cb: Callable) -> void:
+	post_request("/construction/order", body, cb)
+
+
+func get_businesses_mine(party: String, cb: Callable) -> void:
+	get_request("/businesses/mine?party=%s" % party.uri_encode(), cb)
+
+
+func get_businesses_public(cb: Callable) -> void:
+	get_request("/businesses", cb)
+
+
+func get_business_templates(cb: Callable) -> void:
+	get_request("/businesses/templates", cb)
+
+
+func register_business(body: Dictionary, cb: Callable) -> void:
+	post_request("/businesses/register", body, cb)
+
+
+func get_job_openings(employer: String, cb: Callable) -> void:
+	get_request("/jobs/openings?employer=%s" % employer.uri_encode(), cb)
+
+
+func delete_job_opening(opening_id: String, employer: String, cb: Callable) -> void:
+	delete_request("/jobs/openings/%s?employer=%s" % [opening_id.uri_encode(), employer.uri_encode()], cb)
+
+
+func get_laborers_filtered(query: String, cb: Callable) -> void:
+	get_request("/laborers%s" % query, cb)
+
+
+func get_routes_uncharted(cb: Callable) -> void:
+	get_request("/routes/uncharted", cb)
+
+
+func revise_route_fee(route_key: String, fee: int, plot_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/routes/revise_fee",
+		{"party": party, "plot_id": plot_id, "route_key": route_key, "fee_per_tile_cents": int(fee)},
+		cb,
+	)
+
+
+func get_roads(cb: Callable) -> void:
+	get_request("/roads", cb)
+
+
+func set_road_toll(segment_id: String, toll_bps: int, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/roads/%s/toll?party=%s&toll_bps=%d" % [segment_id.uri_encode(), party.uri_encode(), int(toll_bps)],
+		{},
+		cb,
+	)
+
+
+func p2p_trade(body: Dictionary, cb: Callable) -> void:
+	post_request("/trade/p2p", body, cb)
+
+
+func propose_insurance(params: Dictionary, cb: Callable) -> void:
+	var pairs: PackedStringArray = []
+	for k in params.keys():
+		pairs.append("%s=%s" % [str(k), str(params[k]).uri_encode()])
+	post_request("/contracts/insurance/propose?" + "&".join(pairs), {}, cb)
+
+
+func accept_insurance(contract_id: String, insured: String, cb: Callable) -> void:
+	post_request(
+		"/contracts/insurance/accept?insured=%s&contract_id=%s"
+		% [insured.uri_encode(), contract_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func propose_lease(params: Dictionary, cb: Callable) -> void:
+	var pairs: PackedStringArray = []
+	for k in params.keys():
+		pairs.append("%s=%s" % [str(k), str(params[k]).uri_encode()])
+	post_request("/contracts/lease/propose?" + "&".join(pairs), {}, cb)
+
+
+func accept_lease(contract_id: String, lessee: String, cb: Callable) -> void:
+	post_request(
+		"/contracts/lease/accept?lessee=%s&contract_id=%s" % [lessee.uri_encode(), contract_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func propose_forward(params: Dictionary, cb: Callable) -> void:
+	var pairs: PackedStringArray = []
+	for k in params.keys():
+		pairs.append("%s=%s" % [str(k), str(params[k]).uri_encode()])
+	post_request("/contracts/forward/propose?" + "&".join(pairs), {}, cb)
+
+
+func accept_forward(contract_id: String, party: String, cb: Callable) -> void:
+	post_request(
+		"/contracts/forward/%s/accept?party=%s" % [contract_id.uri_encode(), party.uri_encode()], {}, cb
+	)
+
+
+func deliver_forward(contract_id: String, party: String, cb: Callable) -> void:
+	post_request(
+		"/contracts/forward/%s/deliver?party=%s" % [contract_id.uri_encode(), party.uri_encode()], {}, cb
+	)
+
+
+func propose_equity_stake(params: Dictionary, cb: Callable) -> void:
+	var pairs: PackedStringArray = []
+	for k in params.keys():
+		pairs.append("%s=%s" % [str(k), str(params[k]).uri_encode()])
+	post_request("/contracts/equity/stake/propose?" + "&".join(pairs), {}, cb)
+
+
+func accept_equity_stake(contract_id: String, investor: String, cb: Callable) -> void:
+	post_request(
+		"/contracts/equity/stake/accept?investor=%s&contract_id=%s"
+		% [investor.uri_encode(), contract_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func propose_service_contract(params: Dictionary, cb: Callable) -> void:
+	var pairs: PackedStringArray = []
+	for k in params.keys():
+		pairs.append("%s=%s" % [str(k), str(params[k]).uri_encode()])
+	post_request("/contracts/service/propose?" + "&".join(pairs), {}, cb)
+
+
+func accept_service_contract(contract_id: String, subscriber: String, cb: Callable) -> void:
+	post_request(
+		"/contracts/service/accept?subscriber=%s&contract_id=%s"
+		% [subscriber.uri_encode(), contract_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func get_science_elements(cb: Callable) -> void:
+	get_request("/science/elements", cb)
+
+
+func get_science_reactions(cb: Callable) -> void:
+	get_request("/science/reactions/discovered", cb)
+
+
+func post_science_experiment(body: Dictionary, cb: Callable) -> void:
+	post_request("/science/experiment", body, cb)
+
+
+func get_cpi_components(cb: Callable) -> void:
+	get_request("/economy/cpi/components", cb)
+
+
+func get_tenders(cb: Callable) -> void:
+	get_request("/tenders", cb)
+
+
+func post_tender_bid(tender_id: String, price_cents: int, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/tenders/bid?tender_id=%s&party=%s&price_per_unit_cents=%d"
+		% [tender_id.uri_encode(), party.uri_encode(), int(price_cents)],
+		{},
+		cb,
+	)
 
 
 # ── Contracts ───────────────────────────────────────────────────────────────

@@ -504,27 +504,6 @@ func _on_maintain(b: Dictionary) -> void:
 	)
 
 
-func _start_build(building_id: String, mode: String) -> void:
-	var api_mode := mode
-	if mode == "self":
-		api_mode = "self_contract"
-	API.build_on_plot(
-		_plot_id,
-		building_id,
-		api_mode,
-		func(data: Dictionary) -> void:
-			if bool(data.get("ok", false)):
-				API.get_world(
-					func(w: Dictionary) -> void:
-						WorldState.apply_world(w)
-						_plot_data = WorldState.get_plot_ui(_plot_id)
-						_refresh_buildings()
-				)
-			else:
-				_show_error(str(data.get("reason", "Build failed")))
-	)
-
-
 func _show_error(msg: String) -> void:
 	var err := Label.new()
 	err.text = "⚠ %s" % msg

@@ -4,6 +4,16 @@ extends Node2D
 const PlotDetailScene := preload("res://scenes/panels/PlotDetail.tscn")
 const BazaarPanelScene := preload("res://scenes/panels/BazaarPanel.tscn")
 const BuildPanelScene := preload("res://scenes/panels/BuildPanel.tscn")
+const ChroniclePanelScene := preload("res://scenes/panels/ChroniclePanel.tscn")
+const PactsPanelScene := preload("res://scenes/panels/PactsPanel.tscn")
+const FinancePanelScene := preload("res://scenes/panels/FinancePanel.tscn")
+const LaborPanelScene := preload("res://scenes/panels/LaborPanel.tscn")
+const BusinessPanelScene := preload("res://scenes/panels/BusinessPanel.tscn")
+const ShippingPanelScene := preload("res://scenes/panels/ShippingPanel.tscn")
+const SciencePanelScene := preload("res://scenes/panels/SciencePanel.tscn")
+const EconomicsPanelScene := preload("res://scenes/panels/EconomicsPanel.tscn")
+const TendersPanelScene := preload("res://scenes/panels/TendersPanel.tscn")
+const ProfilePanelScene := preload("res://scenes/panels/ProfilePanel.tscn")
 
 const OVERLAY_LAYER := 32
 
@@ -13,6 +23,7 @@ const OVERLAY_LAYER := 32
 @onready var world_map: Node2D = $UILayer/UIRoot/MapViewport/SubViewport/WorldMap
 @onready var shell: CanvasLayer = $CommandShell
 @onready var sidebar: PanelContainer = $UILayer/UIRoot/TerritorySidebar
+var _overlay_bar: HBoxContainer
 
 var _active_overlay: Node = null
 var _resume_plot_id: String = ""
@@ -38,9 +49,33 @@ func _ready() -> void:
 func _boot_shell() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
+	_setup_map_overlay_bar()
 	_layout_shell()
 	_refresh_shell_hud()
 	_refresh_from_server()
+
+
+func _setup_map_overlay_bar() -> void:
+	if is_instance_valid(_overlay_bar):
+		return
+	_overlay_bar = preload("res://scenes/MapOverlayBar.tscn").instantiate() as HBoxContainer
+	ui_root.add_child(_overlay_bar)
+	_overlay_bar.overlay_changed.connect(
+		func(mode: String) -> void:
+			if world_map.has_method("set_overlay_mode"):
+				world_map.call("set_overlay_mode", mode)
+	)
+	_position_overlay_bar()
+
+
+func _position_overlay_bar() -> void:
+	if not is_instance_valid(_overlay_bar):
+		return
+	var top_h: float = 96.0
+	if shell.has_method("shell_top_height"):
+		top_h = float(shell.call("shell_top_height"))
+	_overlay_bar.position = Vector2(12, top_h + 12)
+	_overlay_bar.z_index = 5
 
 
 func _layout_shell() -> void:
@@ -78,6 +113,7 @@ func _layout_shell() -> void:
 	sub_viewport.size = map_size
 	if world_map.has_method("set_view_size"):
 		world_map.call("set_view_size", Vector2(map_size))
+	_position_overlay_bar()
 
 
 ## Sync top strip to ``WorldState`` without inventing money/ticks (demo fudge hid dead API calls).
@@ -117,7 +153,50 @@ func _on_nav_pressed(panel_name: String) -> void:
 		return
 	if panel_name == "territory":
 		return
+	if panel_name == "chronicle":
+		_toggle_overlay(ChroniclePanelScene)
+		return
+	if panel_name == "contracts":
+		_toggle_overlay(PactsPanelScene)
+		return
+	if panel_name == "finance":
+		_toggle_overlay(FinancePanelScene)
+		return
+	if panel_name == "labor":
+		_toggle_overlay(LaborPanelScene)
+		return
+	if panel_name == "business":
+		_toggle_overlay(BusinessPanelScene)
+		return
+	if panel_name == "caravans" or panel_name == "shipping":
+		_toggle_overlay(ShippingPanelScene)
+		return
+	if panel_name == "lab" or panel_name == "science":
+		_toggle_overlay(SciencePanelScene)
+		return
+	if panel_name == "economics":
+		_toggle_overlay(EconomicsPanelScene)
+		return
+	if panel_name == "tenders":
+		_toggle_overlay(TendersPanelScene)
+		return
+	if panel_name == "menu" or panel_name == "profile":
+		_toggle_overlay(ProfilePanelScene)
+		return
 	push_warning("Panel '%s' not implemented yet" % panel_name)
+
+
+func show_feedback(message: String, is_error: bool = false) -> void:
+	MainFeedback.toast(message, is_error)
+
+
+func _toggle_overlay(scene: PackedScene) -> void:
+	if _is_overlay(scene):
+		_close_active_overlay()
+	else:
+		_resume_plot_id = ""
+		_build_return_plot_id = ""
+		_mount_overlay(scene.instantiate())
 
 
 func _on_plot_clicked(plot_id: String, _plot_data_unused: Dictionary) -> void:

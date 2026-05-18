@@ -25,7 +25,7 @@ func _ready() -> void:
 	close_btn.z_index = 10
 	close_btn.pressed.connect(close)
 	_setup_tabs()
-	_slide_in()
+	SlidePanelAnim.slide_in(self, panel, PANEL_WIDTH_PCT, true)
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	API.get_world(func(d): WorldState.apply_world(d))
 
@@ -71,18 +71,7 @@ func _on_viewport_resized() -> void:
 		panel.position.x = vp.x - w
 
 
-func _slide_in() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var w: float = vp.x * PANEL_WIDTH_PCT
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(panel, "position:x", vp.x - w, 0.28)
-
-
 func close() -> void:
 	if not is_inside_tree():
 		return
-	var vp := get_viewport().get_visible_rect().size
-	var w: float = vp.x * PANEL_WIDTH_PCT
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(panel, "position:x", vp.x, 0.22)
-	tw.finished.connect(queue_free, CONNECT_ONE_SHOT)
+	SlidePanelAnim.slide_out(self, panel, PANEL_WIDTH_PCT, queue_free, true)

@@ -98,16 +98,21 @@ func _build_nav() -> void:
 	])
 	_add_nav_group("COMMERCE", [
 		["market", "Bazaar & tape"],
-		["caravans", "Caravans"],
+		["caravans", "Shipping"],
+		["economics", "Economics"],
+		["tenders", "Tenders"],
 	])
 	_add_nav_group("REALM", [
 		["chronicle", "Chronicle"],
-		["contracts", "Pacts & hires"],
+		["contracts", "Pacts"],
 		["finance", "Finance"],
 		["labor", "Labor"],
-		["lab", "Lab"],
-		["menu", "Menu"],
+		["business", "Business"],
+		["lab", "Science"],
+		["menu", "Profile"],
 	])
+	WorldState.summary_updated.connect(_refresh_nav_badges)
+	WorldState.feed_updated.connect(_refresh_nav_badges)
 	_set_active_nav("territory")
 
 
@@ -167,6 +172,19 @@ func _set_active_nav(panel_id: String) -> void:
 func _refresh_stats() -> void:
 	tick_pill.text = "World tick %d" % WorldState.current_tick
 	cash_pill.text = "Cash %s" % WorldState.format_money(WorldState.player_cash_cents)
+	_refresh_nav_badges()
+
+
+func _refresh_nav_badges() -> void:
+	var chron_btn: Button = _nav_buttons.get("chronicle", null) as Button
+	if chron_btn == null:
+		return
+	var unread: int = WorldState.unread_feed_count + WorldState.unread_npc_messages
+	var base: String = "Chronicle"
+	if unread > 0:
+		chron_btn.text = "%s (%d)" % [base, unread]
+	else:
+		chron_btn.text = base
 
 
 func _on_world_changed() -> void:

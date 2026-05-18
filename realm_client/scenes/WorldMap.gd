@@ -75,6 +75,9 @@ var _drawn_zoom: float = -1.0
 var _zoom_pending_factor: float = 1.0
 var _zoom_pending_pos: Vector2 = Vector2.ZERO
 var _zoom_pending: bool = false
+var _overlay_mode: String = "none"
+var _overlay_mineral: String = "coal"
+var _overlay_advantage_cat: String = "mining"
 
 
 func set_view_size(sz: Vector2) -> void:
@@ -94,6 +97,14 @@ func set_view_size(sz: Vector2) -> void:
 
 func reset_view() -> void:
 	_fit_camera_to_mesh()
+
+
+func set_overlay_mode(mode: String, mineral: String = "coal") -> void:
+	_overlay_mode = mode
+	if mineral != "":
+		_overlay_mineral = mineral
+	_rebuild_cell_cache()
+	queue_redraw()
 
 
 func _ready() -> void:
@@ -180,7 +191,13 @@ func _rebuild_cell_cache() -> void:
 			if _demo_mode:
 				pid = "demo-%d-%d" % [gx, gy]
 			else:
-				pid = "p-%d-%d" % [gx, gy]
+				var key := "%d,%d" % [gx, gy]
+				if WorldState.world_cell_to_plot.has(key):
+					pid = str(WorldState.world_cell_to_plot[key])
+				elif WorldState.plots.has("p-%d-%d" % [gx, gy]):
+					pid = "p-%d-%d" % [gx, gy]
+				else:
+					pid = ""
 			_cell_pids[idx] = pid
 			var p: Dictionary = WorldState.plots.get(pid, {})
 			if p.is_empty():
@@ -195,6 +212,11 @@ func _rebuild_cell_cache() -> void:
 				fill = fill.lightened(0.06)
 			if p.get("powered", true) == false:
 				fill = fill.darkened(0.22)
+			var ov := MapOverlays.overlay_tint_for_plot(
+				_overlay_mode, p, my_party, _overlay_mineral
+			)
+			if ov.a > 0.01:
+				fill = fill.lerp(ov, clampf(ov.a, 0.0, 1.0))
 			_cell_colors[idx] = fill
 			var flags := 0x1
 			var owner_v: Variant = p.get("owner", null)
@@ -249,10 +271,24 @@ func hash32_demo(gx: int, gy: int) -> int:
 func _grid_bounds() -> Vector2i:
 	var mw := 1
 	var mh := 1
+	if not _demo_mode and not WorldState.world_cell_to_plot.is_empty():
+		for key in WorldState.world_cell_to_plot.keys():
+			var parts: PackedStringArray = str(key).split(",")
+			if parts.size() != 2:
+				continue
+			mw = maxi(mw, int(parts[0]) + 1)
+			mh = maxi(mh, int(parts[1]) + 1)
 	for plot_id in WorldState.plots.keys():
 		var p: Dictionary = WorldState.plots[plot_id]
-		mw = maxi(mw, int(p.get("x", 0)) + 1)
-		mh = maxi(mh, int(p.get("y", 0)) + 1)
+		var cells: Variant = p.get("world_cells", [])
+		if cells is Array and not (cells as Array).is_empty():
+			for c in cells:
+				if c is Dictionary:
+					mw = maxi(mw, int((c as Dictionary).get("x", 0)) + 1)
+					mh = maxi(mh, int((c as Dictionary).get("y", 0)) + 1)
+		else:
+			mw = maxi(mw, int(p.get("x", 0)) + 1)
+			mh = maxi(mh, int(p.get("y", 0)) + 1)
 	if _demo_mode:
 		mw = maxi(mw, DEMO_W)
 		mh = maxi(mh, DEMO_H)

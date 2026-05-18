@@ -26,6 +26,8 @@ var cpi_current: float = 100.0
 
 # ── World data ───────────────────────────────────────────────────────────────
 var plots: Dictionary = {} # plot_id str → plot dict
+## ``"gx,gy"`` world map coordinates → plot_id (multi-tile parcels).
+var world_cell_to_plot: Dictionary = {}
 var plot_buildings: Array = []
 var active_production: Array = [] # engine ``active_production`` list (plot-level runs)
 var recipes: Array = [] # ``recipe_public_list()`` rows
@@ -47,6 +49,14 @@ var businesses: Array = []
 var active_contracts: Array = []
 var world_feed_log: Array = []
 var npc_messages: Array = []
+var event_log: Array = []
+var active_world_events: Array = []
+var in_transit: Array = []
+var forward_contracts: Array = []
+var player_price_alerts: Array = []
+var road_segments: Array = []
+var population_density_map: Dictionary = {}
+var regional_advantage: Dictionary = {}
 
 ## Matches ``realm.actions.plot_actions.SURVEY_COST_CENTS`` (engine source of truth).
 const SURVEY_COST_CENTS: int = 50_000
@@ -105,6 +115,9 @@ func apply_world(data: Dictionary) -> void:
 		for k in raw_plots.keys():
 			plots[str(k)] = raw_plots[k]
 
+	var wc: Variant = data.get("world_cell_to_plot", {})
+	world_cell_to_plot = wc if wc is Dictionary else {}
+
 	_rebuild_town_markers_from_world(data)
 
 	businesses = data.get("business_entities", data.get("businesses", []))
@@ -113,9 +126,26 @@ func apply_world(data: Dictionary) -> void:
 	world_feed_log = data.get("world_feed_log", [])
 	if not (world_feed_log is Array):
 		world_feed_log = []
-	npc_messages = data.get("npc_messages", [])
-	if not (npc_messages is Array):
-		npc_messages = []
+	var npc_raw: Variant = data.get("npc_messages_to_player", data.get("npc_messages", []))
+	npc_messages = npc_raw if npc_raw is Array else []
+	var el: Variant = data.get("event_log", [])
+	event_log = el if el is Array else []
+	var awe: Variant = data.get("active_world_events", [])
+	active_world_events = awe if awe is Array else []
+	var it: Variant = data.get("in_transit", [])
+	in_transit = it if it is Array else []
+	var fc: Variant = data.get("forward_contracts", [])
+	forward_contracts = fc if fc is Array else []
+	var pa: Variant = data.get("player_price_alerts", [])
+	player_price_alerts = pa if pa is Array else []
+	var rs: Variant = data.get("road_segments", [])
+	road_segments = rs if rs is Array else []
+	var adv: Variant = data.get("regional_advantage", data.get("landmass_advantage", {}))
+	regional_advantage = adv if adv is Dictionary else {}
+	population_density_map.clear()
+	for pid in plots.keys():
+		var pd: Dictionary = plots[pid]
+		population_density_map[str(pid)] = float(pd.get("population_density", 0.0))
 	plot_buildings = data.get("plot_buildings", [])
 	if not (plot_buildings is Array):
 		plot_buildings = []
