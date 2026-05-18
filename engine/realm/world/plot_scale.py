@@ -52,6 +52,23 @@ def plot_area_sq_metres(plot: Plot) -> int:
     return plot_world_tile_count(plot) * PLOT_AREA_SQ_METRES
 
 
+def plot_deed_grid_cells(plot: Plot) -> set[tuple[int, int]]:
+    """10m build cells that belong to this deed (polyomino-aware)."""
+    cells = plot_world_cells_tuple(plot)
+    xs = [c[0] for c in cells]
+    ys = [c[1] for c in cells]
+    min_x = min(xs)
+    min_y = min(ys)
+    out: set[tuple[int, int]] = set()
+    for wx, wy in cells:
+        base_x = (wx - min_x) * CELLS_PER_WORLD_TILE
+        base_y = (wy - min_y) * CELLS_PER_WORLD_TILE
+        for dx in range(CELLS_PER_WORLD_TILE):
+            for dy in range(CELLS_PER_WORLD_TILE):
+                out.add((base_x + dx, base_y + dy))
+    return out
+
+
 def plot_grid_side_for_id(world: World, plot_id: PlotId | str) -> tuple[int, int]:
     plot = world.plots.get(PlotId(str(plot_id)))
     if plot is None:
@@ -81,6 +98,11 @@ def cells_free(
     if grid_x + w > grid_side_w or grid_y + h > grid_side_h:
         return False
     target_cells = cells_occupied(grid_x, grid_y, w, h)
+    plot = world.plots.get(PlotId(str(plot_id)))
+    if plot is not None:
+        deed = plot_deed_grid_cells(plot)
+        if not target_cells.issubset(deed):
+            return False
     for iid in world.plot_placed_buildings.get(plot_id, []):
         pb = world.placed_buildings.get(iid)
         if pb is None:

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from realm.production.blueprints import seed_world_blueprints
 from realm.world import bootstrap_frontier
-from realm.world.plot_scale import cells_free, cells_occupied, plot_grid_side_for_id
+from realm.world.plot_scale import (
+    cells_free,
+    cells_occupied,
+    plot_deed_grid_cells,
+    plot_grid_side_for_id,
+)
 from realm.world.placed_buildings import PlacedBuilding, register_placed_building
 
 
@@ -70,3 +75,25 @@ def test_cells_free_rejects_out_of_bounds() -> None:
     plot_id = str(next(iter(world.plots)))
     gw, gh = plot_grid_side_for_id(world, plot_id)
     assert cells_free(plot_id, world, gw - 1, gh - 1, 2, 2) is False
+
+
+def test_cells_free_rejects_bbox_corner_outside_polyomino_deed() -> None:
+    from dataclasses import replace
+
+    from realm.core.ids import PlotId
+
+    world = bootstrap_frontier(seed=42, uniform_plots=True)
+    seed_world_blueprints(world)
+    plot_id = PlotId(str(next(iter(world.plots))))
+    plot = world.plots[plot_id]
+    world.plots[plot_id] = replace(
+        plot,
+        world_cells=((0, 0), (1, 0), (0, 1)),
+        parcel_shape="l",
+    )
+    deed = plot_deed_grid_cells(world.plots[plot_id])
+    gw, gh = plot_grid_side_for_id(world, str(plot_id))
+    assert len(deed) < gw * gh
+    void_gx, void_gy = gw - 5, gh - 5
+    assert (void_gx, void_gy) not in deed
+    assert cells_free(str(plot_id), world, void_gx, void_gy, 1, 1) is False

@@ -14,7 +14,12 @@ from realm.production.buildings import BUILDINGS
 from realm.production.recipes import RECIPES
 from realm.world import World
 from realm.world.placed_buildings import PlacedBuilding, register_placed_building
-from realm.world.plot_scale import cells_free, plot_grid_side_for_id
+from realm.world.plot_scale import (
+    cells_free,
+    cells_occupied,
+    plot_deed_grid_cells,
+    plot_grid_side_for_id,
+)
 
 
 def _next_blueprint_id(world: World) -> str:
@@ -387,9 +392,11 @@ def blueprints_visible_to(world: World, party: PartyId | None) -> list[dict]:
 
 def plot_grid_state(world: World, plot_id: PlotId) -> dict:
     pid = str(plot_id)
+    plot = world.plots.get(plot_id)
     grid_w, grid_h = plot_grid_side_for_id(world, plot_id)
+    deed_cells: set[tuple[int, int]] = plot_deed_grid_cells(plot) if plot is not None else set()
     occupied: list[list[int]] = []
-    free_cells = grid_w * grid_h
+    free_cells = len(deed_cells) if deed_cells else grid_w * grid_h
     placed: list[dict] = []
     for iid in world.plot_placed_buildings.get(pid, []):
         pb = world.placed_buildings.get(iid)
@@ -399,7 +406,9 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
         fw = bp.footprint_w if bp else 1
         fh = bp.footprint_h if bp else 1
         occupied.append([pb.grid_x, pb.grid_y, fw, fh])
-        free_cells -= fw * fh
+        for cell in cells_occupied(pb.grid_x, pb.grid_y, fw, fh):
+            if cell in deed_cells:
+                free_cells -= 1
         placed.append(
             {
                 "instance_id": pb.instance_id,
@@ -414,7 +423,6 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
                 "maintenance_due_in_ticks": max(0, pb.due_at_tick - world.tick),
             }
         )
-    plot = world.plots.get(plot_id)
     world_w = 1
     world_h = 1
     area_sq_m = 10_000
