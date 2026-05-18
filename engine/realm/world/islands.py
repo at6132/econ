@@ -95,13 +95,18 @@ def compute_plot_islands(world: World) -> dict[str, int]:
     Used at bootstrap once; not called on a hot path. O(N) where N is land
     plots (Union-find would be faster but DFS is fine at our scale).
     """
-    coord_to_plot: dict[tuple[int, int], str] = {}
     from realm.production.recipe_sites import terrain_allows_workshop
+    from realm.world.plot_scale import plot_world_cells_tuple
 
+    # Index every hectare in each parcel — anchor-only indexing breaks BFS once
+    # plots span multiple ``world_cells`` (polyomino deeds).
+    coord_to_plot: dict[tuple[int, int], str] = {}
     for pid, p in world.plots.items():
         if not terrain_allows_workshop(p.terrain):
             continue
-        coord_to_plot[(int(p.x), int(p.y))] = str(pid)
+        pid_s = str(pid)
+        for cx, cy in plot_world_cells_tuple(p):
+            coord_to_plot[(cx, cy)] = pid_s
 
     visited: set[tuple[int, int]] = set()
     components: list[list[tuple[int, int]]] = []
@@ -137,16 +142,22 @@ def island_coastal_plot_ids(world: World, island_id: int) -> list[str]:
     either deep water or off the map edge (the map border counts as "ocean"
     for the purposes of coastal docking).
     """
-    coord_to_plot: dict[tuple[int, int], str] = {}
-    for pid, p in world.plots.items():
-        coord_to_plot[(int(p.x), int(p.y))] = str(pid)
     from realm.production.recipe_sites import terrain_allows_workshop
+    from realm.world.plot_scale import plot_world_cells_tuple
 
-    water_coords: set[tuple[int, int]] = {
-        c
-        for c, pid_s in coord_to_plot.items()
-        if not terrain_allows_workshop(world.plots[PlotId(pid_s)].terrain)
-    }
+    all_cells: dict[tuple[int, int], str] = {}
+    for pid, p in world.plots.items():
+        pid_s = str(pid)
+        for cx, cy in plot_world_cells_tuple(p):
+            all_cells[(cx, cy)] = pid_s
+
+    def _is_water_at(x: int, y: int) -> bool:
+        pid_s = all_cells.get((x, y))
+        if pid_s is None:
+            return True
+        wp = world.plots.get(PlotId(pid_s))
+        return wp is None or not terrain_allows_workshop(wp.terrain)
+
     islands_map = world.scenario_state.get("plot_islands") or {}
     out: list[str] = []
     for pid_s, isl in islands_map.items():
@@ -155,9 +166,11 @@ def island_coastal_plot_ids(world: World, island_id: int) -> list[str]:
         p = world.plots.get(PlotId(pid_s))
         if p is None:
             continue
-        x, y = int(p.x), int(p.y)
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if (nx, ny) in water_coords or (nx, ny) not in coord_to_plot:
-                out.append(pid_s)
+        for cx, cy in plot_world_cells_tuple(p):
+            for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                if _is_water_at(nx, ny):
+                    out.append(pid_s)
+                    break
+            if pid_s in out:
                 break
     return sorted(out)

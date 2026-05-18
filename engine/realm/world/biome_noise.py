@@ -305,8 +305,9 @@ def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
         return cached
 
     rng = make_rng(int(seed), "continental_land_lobes")
-    n_major = 5 + rng.randrange(5)
-    n_minor = 10 + rng.randrange(8)
+    # Few large continents + a sprinkle of islets — not a 15-island archipelago.
+    n_major = 2 + rng.randrange(2)  # 2–3 continent-scale lobes
+    n_minor = rng.randrange(3)  # 0–2 small islands
     lobes: list[_ContinentalLobe] = []
 
     def _spacing_ok(cx: float, cy: float, radius: float) -> bool:
@@ -328,9 +329,9 @@ def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
         return False
 
     for _ in range(n_major):
-        _try_place(0.07, 0.13)
+        _try_place(0.14, 0.24)
     for _ in range(n_minor):
-        _try_place(0.025, 0.055)
+        _try_place(0.035, 0.07)
 
     _continental_lobes_cache[int(seed)] = lobes
     return lobes
