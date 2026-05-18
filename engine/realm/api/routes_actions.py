@@ -192,6 +192,7 @@ def post_build(
     party: Annotated[str, Query()] = "player",
     build_mode: Annotated[str | None, Query()] = None,
 ) -> dict:
+    # Auto-place seeded blueprint (settlers, scripts). Players use POST /plots/{id}/place.
     r = build_on_plot(_state.WORLD, PartyId(party), PlotId(plot_id), building_id, build_mode=build_mode)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])

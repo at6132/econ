@@ -23,6 +23,12 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from realm.world.world import World
 
 
+def _world_map_tile_count(world: "World") -> int:
+    from realm.world.plot_parcels import world_map_tile_count
+
+    return world_map_tile_count(world)
+
+
 def _building_maintenance_view(world: "World", row: dict) -> dict:
     """Public DTO for a single building's maintenance state (forwarded to API/UI)."""
     from realm.production.decay import building_maintenance_status
@@ -43,14 +49,29 @@ def world_public_dict(world: "World") -> dict:
 
     powered_set = ensure_powered_plots_fresh(world)
     density_map = world.scenario_state.get("population_density") or {}
+    from realm.world.plot_scale import (
+        plot_area_sq_metres,
+        plot_grid_side,
+        plot_world_cells_tuple,
+        plot_world_span,
+    )
+
     plots_out: list[dict] = []
     for p in world.plots.values():
         density = float(density_map.get(str(p.plot_id), 0.0))
+        _, _, wt, ht = plot_world_span(p)
+        gcw, gch = plot_grid_side(p)
         entry: dict = {
             "id": p.plot_id,
             "x": p.x,
             "y": p.y,
             "terrain": p.terrain.value,
+            "world_cells": [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)],
+            "world_tiles_w": wt,
+            "world_tiles_h": ht,
+            "grid_cells_w": gcw,
+            "grid_cells_h": gch,
+            "area_sq_metres": plot_area_sq_metres(p),
             "owner": p.owner,
             "surveyed": p.surveyed,
             "deep_surveyed": getattr(p, "deep_surveyed", False),
@@ -103,6 +124,7 @@ def world_public_dict(world: "World") -> dict:
         "market_intel_active": intel_active,
         "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
         "plots": plots_out,
+        "world_cell_to_plot": dict(world.scenario_state.get("world_cell_to_plot") or {}),
         "balances_cents": balances,
         "inventory": inv,
         "parties": [str(x) for x in world.parties],
@@ -526,7 +548,8 @@ def world_compact_dict(world: "World") -> dict[str, Any]:
         "ticks_per_game_day": TICKS_PER_GAME_DAY,
         "scenario_id": world.scenario_id,
         "plot_counts": {
-            "total": len(world.plots),
+            "total": _world_map_tile_count(world),
+            "deeds": len(world.plots),
             "claimed": sum(1 for pl in world.plots.values() if pl.owner is not None),
             "player_owned": len(player_plot_entries),
         },

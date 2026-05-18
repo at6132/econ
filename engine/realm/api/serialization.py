@@ -31,7 +31,7 @@ from realm.world import (
 from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 14
+SNAPSHOT_VERSION = 15
 
 
 def _blueprint_public_dict(bp: object) -> dict[str, Any]:
@@ -54,10 +54,13 @@ def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
 
 def dump_world(world: World) -> dict[str, Any]:
     plots_out: dict[str, Any] = {}
+    from realm.world.plot_scale import plot_world_cells_tuple
+
     for pid, p in world.plots.items():
         plots_out[str(pid)] = {
             "x": p.x,
             "y": p.y,
+            "world_cells": [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)],
             "terrain": p.terrain.value,
             "owner": str(p.owner) if p.owner else None,
             "surveyed": p.surveyed,
@@ -405,28 +408,47 @@ def dump_world(world: World) -> dict[str, Any]:
             for k, c in world.issued_currencies.items()
         },
         "regional_advantages": {str(k): dict(v) for k, v in world.regional_advantages.items()},
+        "grid_width": int(world.scenario_state.get("grid_width", 0)),
+        "grid_height": int(world.scenario_state.get("grid_height", 0)),
+        "world_cell_to_plot": dict(world.scenario_state.get("world_cell_to_plot") or {}),
     }
 
 
-def load_world(d: dict[str, Any]) -> World:
-    ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
-        raise ValueError(f"unsupported snapshot version: {ver!r}")
-    seed = int(d["seed"])
-    width = max(int(p["x"]) for p in d["plots"].values()) + 1
-    height = max(int(p["y"]) for p in d["plots"].values()) + 1
-    plots = generate_plots(seed=seed, width=width, height=height)
-    for pid_str, saved in d["plots"].items():
-        pid = PlotId(pid_str)
-        if pid not in plots:
-            continue
-        p = plots[pid]
-        p.terrain = Terrain(saved["terrain"])
-        p.owner = PartyId(saved["owner"]) if saved.get("owner") else None
-        p.surveyed = bool(saved.get("surveyed", False))
-        p.deep_surveyed = bool(saved.get("deep_surveyed", False))
-        sub = saved.get("subsurface") or {}
-        p.subsurface = SubsurfaceRoll(
+def _snapshot_grid_size(saved_plots: dict[str, Any]) -> tuple[int, int]:
+    max_x = 0
+    max_y = 0
+    for saved in saved_plots.values():
+        cells = saved.get("world_cells")
+        if cells:
+            for c in cells:
+                max_x = max(max_x, int(c["x"]))
+                max_y = max(max_y, int(c["y"]))
+        else:
+            max_x = max(max_x, int(saved["x"]))
+            max_y = max(max_y, int(saved["y"]))
+    return max_x + 1, max_y + 1
+
+
+def _plot_from_snapshot(pid_str: str, saved: dict[str, Any]) -> Plot:
+    from realm.world.world import Plot
+
+    cells_raw = saved.get("world_cells")
+    if cells_raw:
+        world_cells = tuple((int(c["x"]), int(c["y"])) for c in cells_raw)
+        anchor_x = min(c[0] for c in world_cells)
+        anchor_y = min(c[1] for c in world_cells)
+    else:
+        anchor_x = int(saved["x"])
+        anchor_y = int(saved["y"])
+        world_cells = ((anchor_x, anchor_y),)
+    sub = saved.get("subsurface") or {}
+    return Plot(
+        plot_id=PlotId(pid_str),
+        x=anchor_x,
+        y=anchor_y,
+        terrain=Terrain(saved["terrain"]),
+        owner=PartyId(saved["owner"]) if saved.get("owner") else None,
+        subsurface=SubsurfaceRoll(
             iron_ore_grade=float(sub.get("iron_ore_grade", 0)),
             copper_ore_grade=float(sub.get("copper_ore_grade", 0)),
             clay_grade=float(sub.get("clay_grade", 0)),
@@ -440,7 +462,53 @@ def load_world(d: dict[str, Any]) -> World:
             platinum_grade=float(sub.get("platinum_grade", 0)),
             oil_shale_grade=float(sub.get("oil_shale_grade", 0)),
             rare_earth_grade=float(sub.get("rare_earth_grade", 0)),
-        )
+        ),
+        surveyed=bool(saved.get("surveyed", False)),
+        deep_surveyed=bool(saved.get("deep_surveyed", False)),
+        world_cells=world_cells,
+    )
+
+
+def load_world(d: dict[str, Any]) -> World:
+    ver = d.get("version", 1)
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15):
+        raise ValueError(f"unsupported snapshot version: {ver!r}")
+    seed = int(d["seed"])
+    saved_plots: dict[str, Any] = d["plots"]
+    has_geometry = any(saved.get("world_cells") for saved in saved_plots.values())
+    if has_geometry:
+        plots = {PlotId(pid_str): _plot_from_snapshot(pid_str, saved) for pid_str, saved in saved_plots.items()}
+    else:
+        width, height = _snapshot_grid_size(saved_plots)
+        if int(d.get("grid_width", 0)) > 0 and int(d.get("grid_height", 0)) > 0:
+            width = int(d["grid_width"])
+            height = int(d["grid_height"])
+        plots = generate_plots(seed=seed, width=width, height=height)
+        for pid_str, saved in saved_plots.items():
+            pid = PlotId(pid_str)
+            if pid not in plots:
+                continue
+            p = plots[pid]
+            p.terrain = Terrain(saved["terrain"])
+            p.owner = PartyId(saved["owner"]) if saved.get("owner") else None
+            p.surveyed = bool(saved.get("surveyed", False))
+            p.deep_surveyed = bool(saved.get("deep_surveyed", False))
+            sub = saved.get("subsurface") or {}
+            p.subsurface = SubsurfaceRoll(
+                iron_ore_grade=float(sub.get("iron_ore_grade", 0)),
+                copper_ore_grade=float(sub.get("copper_ore_grade", 0)),
+                clay_grade=float(sub.get("clay_grade", 0)),
+                coal_grade=float(sub.get("coal_grade", 0)),
+                sulfur_grade=float(sub.get("sulfur_grade", 0)),
+                saltpeter_grade=float(sub.get("saltpeter_grade", 0)),
+                tin_grade=float(sub.get("tin_grade", 0)),
+                lead_grade=float(sub.get("lead_grade", 0)),
+                phosphate_grade=float(sub.get("phosphate_grade", 0)),
+                silica_grade=float(sub.get("silica_grade", 0)),
+                platinum_grade=float(sub.get("platinum_grade", 0)),
+                oil_shale_grade=float(sub.get("oil_shale_grade", 0)),
+                rare_earth_grade=float(sub.get("rare_earth_grade", 0)),
+            )
     ledger = Ledger()
     for acc, bal in d["ledger"].items():
         ledger.balances[acc] = int(bal)
@@ -640,6 +708,18 @@ def load_world(d: dict[str, Any]) -> World:
     )
     if world.placed_buildings:
         sync_plot_buildings_from_placed(world)
+    gw = int(d.get("grid_width", 0))
+    gh = int(d.get("grid_height", 0))
+    if gw > 0 and gh > 0:
+        world.scenario_state["grid_width"] = gw
+        world.scenario_state["grid_height"] = gh
+    elif not world.scenario_state.get("grid_width"):
+        sw, sh = _snapshot_grid_size(saved_plots)
+        world.scenario_state["grid_width"] = sw
+        world.scenario_state["grid_height"] = sh
+    from realm.world.plot_parcels import refresh_world_cell_index
+
+    refresh_world_cell_index(world)
     for sid, raw in (d.get("sub_plots") or {}).items():
         if not isinstance(raw, dict):
             continue

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from realm.production.blueprints import seed_world_blueprints
 from realm.world import bootstrap_frontier
-from realm.world.plot_scale import GRID_CELLS_PER_SIDE, cells_free, cells_occupied
+from realm.world.plot_scale import cells_free, cells_occupied, plot_grid_side_for_id
 from realm.world.placed_buildings import PlacedBuilding, register_placed_building
 
 
@@ -16,7 +16,7 @@ def test_cells_occupied_correct() -> None:
 
 
 def test_cells_free_detects_overlap() -> None:
-    world = bootstrap_frontier(seed=42)
+    world = bootstrap_frontier(seed=42, uniform_plots=True)
     seed_world_blueprints(world)
     plot_id = next(iter(world.plots))
     pid = str(plot_id)
@@ -41,7 +41,7 @@ def test_cells_free_detects_overlap() -> None:
 
 
 def test_cells_free_allows_adjacent() -> None:
-    world = bootstrap_frontier(seed=42)
+    world = bootstrap_frontier(seed=42, uniform_plots=True)
     seed_world_blueprints(world)
     plot_id = next(iter(world.plots))
     pid = str(plot_id)
@@ -65,7 +65,8 @@ def test_cells_free_allows_adjacent() -> None:
 
 
 def test_cells_free_rejects_out_of_bounds() -> None:
-    world = bootstrap_frontier(seed=42)
+    world = bootstrap_frontier(seed=42, uniform_plots=True)
     seed_world_blueprints(world)
     plot_id = str(next(iter(world.plots)))
-    assert cells_free(plot_id, world, 9, 9, 2, 2) is False
+    gw, gh = plot_grid_side_for_id(world, plot_id)
+    assert cells_free(plot_id, world, gw - 1, gh - 1, 2, 2) is False

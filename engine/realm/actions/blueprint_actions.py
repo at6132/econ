@@ -10,11 +10,11 @@ from realm.core.time_scale import BUILD_CONTRACTED_TICKS, BUILD_SIMPLE_TICKS
 from realm.economy.markets import market_buy
 from realm.events.event_log import log_event
 from realm.production.blueprints import Blueprint, blueprint_public_dict
-from realm.production.buildings import BUILDINGS, _legacy_build_on_plot_impl
+from realm.production.buildings import BUILDINGS
 from realm.production.recipes import RECIPES
 from realm.world import World
 from realm.world.placed_buildings import PlacedBuilding, register_placed_building
-from realm.world.plot_scale import GRID_CELLS_PER_SIDE, cells_free
+from realm.world.plot_scale import cells_free, plot_grid_side_for_id
 
 
 def _next_blueprint_id(world: World) -> str:
@@ -32,12 +32,11 @@ def _find_free_position(
     world: World,
     plot_id: str,
     bp: Blueprint,
-    *,
-    grid_side: int = GRID_CELLS_PER_SIDE,
 ) -> tuple[int, int] | None:
-    for gy in range(grid_side):
-        for gx in range(grid_side):
-            if cells_free(plot_id, world, gx, gy, bp.footprint_w, bp.footprint_h, grid_side=grid_side):
+    gw, gh = plot_grid_side_for_id(world, plot_id)
+    for gy in range(gh):
+        for gx in range(gw):
+            if cells_free(plot_id, world, gx, gy, bp.footprint_w, bp.footprint_h):
                 return gx, gy
     return None
 
@@ -339,16 +338,24 @@ def build_on_plot(
     build_mode: str | None = None,
     construction_order_id: str | None = None,
 ) -> ActionResult:
-    """Backward-compatible wrapper: auto-finds grid position, delegates to legacy path if needed."""
+    """Auto-place a seeded (or known) blueprint — for NPCs/scripts, not the player build UI."""
+    if construction_order_id is not None:
+        from realm.actions.construction_actions import (
+            validate_construction_order_for_contractor_build,
+        )
+
+        ok_co, reason_co = validate_construction_order_for_contractor_build(
+            world, party, plot_id, building_id, construction_order_id
+        )
+        if not ok_co:
+            return {"ok": False, "reason": reason_co or "invalid construction order"}
     if building_id not in world.blueprints and building_id in BUILDINGS:
         from realm.production.blueprints import seed_world_blueprints
 
         seed_world_blueprints(world)
     bp = world.blueprints.get(building_id)
     if bp is None:
-        return _legacy_build_on_plot_impl(
-            world, party, plot_id, building_id, build_mode, construction_order_id
-        )
+        return {"ok": False, "reason": f"unknown blueprint '{building_id}'"}
     pos = _find_free_position(world, str(plot_id), bp)
     if pos is None:
         return {"ok": False, "reason": "no free grid space on plot for this footprint"}
@@ -380,8 +387,9 @@ def blueprints_visible_to(world: World, party: PartyId | None) -> list[dict]:
 
 def plot_grid_state(world: World, plot_id: PlotId) -> dict:
     pid = str(plot_id)
+    grid_w, grid_h = plot_grid_side_for_id(world, plot_id)
     occupied: list[list[int]] = []
-    free_cells = GRID_CELLS_PER_SIDE * GRID_CELLS_PER_SIDE
+    free_cells = grid_w * grid_h
     placed: list[dict] = []
     for iid in world.plot_placed_buildings.get(pid, []):
         pb = world.placed_buildings.get(iid)
@@ -406,9 +414,23 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
                 "maintenance_due_in_ticks": max(0, pb.due_at_tick - world.tick),
             }
         )
+    plot = world.plots.get(plot_id)
+    world_w = 1
+    world_h = 1
+    area_sq_m = 10_000
+    if plot is not None:
+        from realm.world.plot_scale import plot_area_sq_metres, plot_world_span
+
+        _, _, world_w, world_h = plot_world_span(plot)
+        area_sq_m = plot_area_sq_metres(plot)
     return {
-        "cells_per_side": GRID_CELLS_PER_SIDE,
+        "grid_cells_w": grid_w,
+        "grid_cells_h": grid_h,
+        "cells_per_side": grid_w,
         "cell_side_metres": 10,
+        "world_tiles_w": world_w,
+        "world_tiles_h": world_h,
+        "area_sq_metres": area_sq_m,
         "occupied_cells": occupied,
         "free_cells_count": max(0, free_cells),
         "placed_buildings": placed,
@@ -421,9 +443,10 @@ def available_positions(
     bp = world.blueprints.get(blueprint_id)
     if bp is None:
         return []
+    gw, gh = plot_grid_side_for_id(world, plot_id)
     out: list[dict[str, int]] = []
-    for gy in range(GRID_CELLS_PER_SIDE):
-        for gx in range(GRID_CELLS_PER_SIDE):
+    for gy in range(gh):
+        for gx in range(gw):
             if cells_free(str(plot_id), world, gx, gy, bp.footprint_w, bp.footprint_h):
                 out.append({"grid_x": gx, "grid_y": gy})
     return out

@@ -26,7 +26,7 @@ def _claim_land(world, party: PartyId = PartyId("player")):
 
 
 def test_subdivide_into_2() -> None:
-    world = bootstrap_frontier(seed=200)
+    world = bootstrap_frontier(seed=200, uniform_plots=True)
     seed_world_blueprints(world)
     snap = ConservationSnapshot.of(world.ledger, world.inventory)
     party = PartyId("player")
@@ -46,7 +46,7 @@ def test_subdivide_into_2() -> None:
 
 
 def test_subdivide_rejects_gap() -> None:
-    world = bootstrap_frontier(seed=201)
+    world = bootstrap_frontier(seed=201, uniform_plots=True)
     seed_world_blueprints(world)
     party = PartyId("player")
     pid = _claim_land(world, party)
@@ -63,7 +63,7 @@ def test_subdivide_rejects_gap() -> None:
 
 
 def test_subdivide_rejects_overlap() -> None:
-    world = bootstrap_frontier(seed=202)
+    world = bootstrap_frontier(seed=202, uniform_plots=True)
     seed_world_blueprints(world)
     party = PartyId("player")
     pid = _claim_land(world, party)
@@ -80,7 +80,7 @@ def test_subdivide_rejects_overlap() -> None:
 
 
 def test_subdivide_minimum_size() -> None:
-    world = bootstrap_frontier(seed=203)
+    world = bootstrap_frontier(seed=203, uniform_plots=True)
     seed_world_blueprints(world)
     party = PartyId("player")
     pid = _claim_land(world, party)
@@ -97,7 +97,7 @@ def test_subdivide_minimum_size() -> None:
 
 
 def test_subdivide_max_9() -> None:
-    world = bootstrap_frontier(seed=204)
+    world = bootstrap_frontier(seed=204, uniform_plots=True)
     seed_world_blueprints(world)
     party = PartyId("player")
     pid = _claim_land(world, party)
@@ -107,7 +107,7 @@ def test_subdivide_max_9() -> None:
 
 
 def test_build_on_sub_plot() -> None:
-    world = bootstrap_frontier(seed=205)
+    world = bootstrap_frontier(seed=205, uniform_plots=True)
     seed_world_blueprints(world)
     party = PartyId("player")
     pid = _claim_land(world, party)
@@ -135,7 +135,7 @@ def test_build_on_sub_plot() -> None:
 
 
 def test_sub_plot_sale() -> None:
-    world = bootstrap_frontier(seed=206)
+    world = bootstrap_frontier(seed=206, uniform_plots=True)
     seed_world_blueprints(world)
     snap = ConservationSnapshot.of(world.ledger, world.inventory)
     seller = PartyId("player")

@@ -30,7 +30,9 @@ def compute_plot_value(world: World, plot_id: PlotId) -> int:
     if terr.startswith("water"):
         return 0
 
-    value = BASE_PLOT_VALUE_CENTS
+    from realm.world.plot_scale import plot_world_tile_count
+
+    value = BASE_PLOT_VALUE_CENTS * max(1, plot_world_tile_count(plot))
     min_town_dist = _min_town_distance(world, plot)
     if min_town_dist < 5:
         value = int(value * 3.5)

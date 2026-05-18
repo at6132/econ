@@ -51,12 +51,15 @@ def test_world_public_hides_subsurface_until_surveyed() -> None:
 
 def test_world_compact_omits_full_plot_grid() -> None:
     from realm.world import world_compact_dict, world_public_dict
+    from realm.world.plot_parcels import world_map_tile_count
 
-    w = bootstrap_frontier(seed=3, grid_width=5, grid_height=4)
+    w = bootstrap_frontier(seed=3, grid_width=5, grid_height=4, uniform_plots=True)
     compact = world_compact_dict(w)
     assert compact.get("compact") is True
     assert "plots" not in compact
     assert compact["plot_counts"]["total"] == 5 * 4
+    assert compact["plot_counts"]["deeds"] == 5 * 4
     assert isinstance(compact.get("claim_hint_any_plot_id"), str)
     full = world_public_dict(w)
-    assert len(full["plots"]) == compact["plot_counts"]["total"]
+    assert len(full["plots"]) == compact["plot_counts"]["deeds"]
+    assert world_map_tile_count(w) == compact["plot_counts"]["total"]

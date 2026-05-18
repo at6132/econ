@@ -592,11 +592,12 @@ def subdivide_plot(
     plot_id: PlotId,
     partitions: list[dict[str, int | str]],
 ) -> ActionResult:
-    from realm.world.plot_scale import CELL_SIDE_METRES, GRID_CELLS_PER_SIDE, cells_occupied
+    from realm.world.plot_scale import CELL_SIDE_METRES, cells_occupied, plot_grid_side
 
     plot = world.plots.get(plot_id)
     if plot is None or plot.owner != party:
         return ActionErr(ok=False, reason="not your plot")
+    grid_w, grid_h = plot_grid_side(plot)
     if any(sp.parent_plot_id == str(plot_id) for sp in world.sub_plots.values()):
         return ActionErr(ok=False, reason="plot is already subdivided")
     if len(partitions) < 2:
@@ -618,15 +619,15 @@ def subdivide_plot(
         overlap = all_cells & cells
         if overlap:
             return ActionErr(ok=False, reason=f"partition overlaps at cells {overlap}")
-        if gx < 0 or gy < 0 or gx + gw > GRID_CELLS_PER_SIDE or gy + gh > GRID_CELLS_PER_SIDE:
+        if gx < 0 or gy < 0 or gx + gw > grid_w or gy + gh > grid_h:
             return ActionErr(ok=False, reason="partition exceeds plot bounds")
         all_cells |= cells
 
-    full_plot_cells = cells_occupied(0, 0, GRID_CELLS_PER_SIDE, GRID_CELLS_PER_SIDE)
+    full_plot_cells = cells_occupied(0, 0, grid_w, grid_h)
     if all_cells != full_plot_cells:
         return ActionErr(
             ok=False,
-            reason="partitions don't cover the entire plot — all 100 cells must be assigned",
+            reason="partitions must cover the entire build grid for this parcel",
         )
 
     fee = len(partitions) * 10_000

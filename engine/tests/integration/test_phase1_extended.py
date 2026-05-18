@@ -135,8 +135,11 @@ def test_build_and_hire_emit_events_and_move_cash() -> None:
 
 
 def test_bootstrap_default_plot_count() -> None:
+    from realm.world.plot_parcels import world_map_tile_count
+
     w = bootstrap_frontier(seed=0)
-    assert len(w.plots) == 48 * 36
+    assert world_map_tile_count(w) == 48 * 36
+    assert len(w.plots) < 48 * 36
 
 
 def test_market_history_after_ticks() -> None:
