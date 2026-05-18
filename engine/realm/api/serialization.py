@@ -717,9 +717,9 @@ def load_world(d: dict[str, Any]) -> World:
         sw, sh = _snapshot_grid_size(saved_plots)
         world.scenario_state["grid_width"] = sw
         world.scenario_state["grid_height"] = sh
-    from realm.world.plot_parcels import refresh_world_cell_index
+    from realm.world.biome_noise import ensure_world_ocean_border
 
-    refresh_world_cell_index(world)
+    ensure_world_ocean_border(world)
     for sid, raw in (d.get("sub_plots") or {}).items():
         if not isinstance(raw, dict):
             continue

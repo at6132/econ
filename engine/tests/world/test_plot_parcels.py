@@ -33,11 +33,12 @@ def test_multi_tile_parcel_grid_scales() -> None:
 
 
 def test_bootstrap_world_cell_index_and_public_dict() -> None:
-    world = bootstrap_frontier(seed=5, grid_width=6, grid_height=4)
-    assert world_map_tile_count(world) == 24
-    assert len(world.plots) < 24
+    # Interior must be large enough for multi-tile parcels inside the ocean border band.
+    world = bootstrap_frontier(seed=5, grid_width=12, grid_height=10)
+    assert world_map_tile_count(world) == 120
+    assert len(world.plots) < 120
     pub = world_public_dict(world)
-    assert len(pub["world_cell_to_plot"]) == 24
+    assert len(pub["world_cell_to_plot"]) == 120
     sample = next(p for p in pub["plots"] if len(p.get("world_cells", [])) > 1)
     assert sample["grid_cells_w"] == int(sample["world_tiles_w"]) * 10
     assert sample["area_sq_metres"] > 10_000

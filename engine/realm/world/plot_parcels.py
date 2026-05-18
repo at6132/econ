@@ -6,7 +6,12 @@ from typing import Any, Callable
 
 from realm.core.ids import PlotId
 from realm.core.rng import make_rng
-from realm.world.biome_noise import clear_noise_cache, terrain_for_cell
+from realm.world.biome_noise import (
+    clear_noise_cache,
+    is_world_map_edge,
+    terrain_for_cell,
+    terrain_with_ocean_border,
+)
 from realm.world.plot_scale import plot_world_cells_tuple
 from realm.world.world import Plot, Terrain, _subsurface_roll
 
@@ -79,9 +84,37 @@ def generate_plot_parcels(
     Each parcel is one :class:`Plot`; anchor ``(x, y)`` is the min corner.
     """
     pick = terrain_fn if terrain_fn is not None else terrain_for_cell
+    pick = terrain_with_ocean_border(pick, width=width, height=height)
     assigned: list[list[str | None]] = [[None for _ in range(width)] for _ in range(height)]
     plots: dict[PlotId, Plot] = {}
     rng = make_rng(seed, "plot_parcels")
+
+    for y in range(height):
+        for x in range(width):
+            if not is_world_map_edge(x, y, width, height):
+                continue
+            if assigned[y][x] is not None:
+                continue
+            pid = PlotId(f"p-{x}-{y}")
+            _stamp(assigned, x, y, 1, 1, str(pid))
+            sub_rng = make_rng(seed, f"gen:{pid}")
+            plots[pid] = Plot(
+                plot_id=pid,
+                x=x,
+                y=y,
+                terrain=Terrain.WATER_DEEP,
+                owner=None,
+                subsurface=_subsurface_roll(
+                    sub_rng,
+                    Terrain.WATER_DEEP,
+                    correlate=correlate_subsurface,
+                    seed=seed,
+                    x=x,
+                    y=y,
+                    apply_belts=correlate_subsurface,
+                ),
+                world_cells=((x, y),),
+            )
 
     for y in range(height):
         for x in range(width):
@@ -166,6 +199,7 @@ def generate_uniform_plots(
     from realm.world.biome_noise import terrain_for_cell as default_terrain
 
     pick = terrain_fn if terrain_fn is not None else default_terrain
+    pick = terrain_with_ocean_border(pick, width=width, height=height)
     plots: dict[PlotId, Plot] = {}
     for y in range(height):
         for x in range(width):

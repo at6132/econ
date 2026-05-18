@@ -717,12 +717,14 @@ def world_map_dict(world: "World") -> dict[str, Any]:
     Drops ``world_cell_to_plot`` and per-plot ``world_cells`` on uniform
     grids — derivable from ``(x, y)`` as ``p-{x}-{y}``."""
     from realm.infrastructure.energy import ensure_powered_plots_fresh
+    from realm.world.biome_noise import ensure_world_ocean_border
     from realm.world.plot_scale import (
         plot_grid_side,
         plot_world_cells_tuple,
         plot_world_span,
     )
 
+    ensure_world_ocean_border(world)
     powered_set = ensure_powered_plots_fresh(world)
     density_map = world.scenario_state.get("population_density") or {}
     uniform = _grid_is_uniform(world)

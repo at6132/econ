@@ -440,21 +440,26 @@ def generate_plots(
     """
     from realm.world.plot_parcels import generate_plot_parcels, generate_uniform_plots
 
+    from realm.world.biome_noise import enforce_map_ocean_border
+
     if uniform_plots:
-        return generate_uniform_plots(
+        plots = generate_uniform_plots(
             seed=seed,
             width=width,
             height=height,
             correlate_subsurface=correlate_subsurface,
             terrain_fn=terrain_fn,
         )
-    return generate_plot_parcels(
-        seed=seed,
-        width=width,
-        height=height,
-        correlate_subsurface=correlate_subsurface,
-        terrain_fn=terrain_fn,
-    )
+    else:
+        plots = generate_plot_parcels(
+            seed=seed,
+            width=width,
+            height=height,
+            correlate_subsurface=correlate_subsurface,
+            terrain_fn=terrain_fn,
+        )
+    enforce_map_ocean_border(plots, width, height, seed=seed)
+    return plots
 
 
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
@@ -629,6 +634,9 @@ def bootstrap_genesis(
     from realm.world.plot_parcels import refresh_world_cell_index
 
     refresh_world_cell_index(world)
+    from realm.world.biome_noise import ensure_world_ocean_border
+
+    ensure_world_ocean_border(world)
     from realm.production.blueprints import seed_world_blueprints
 
     seed_world_blueprints(world)
@@ -1012,6 +1020,9 @@ def bootstrap_frontier(
     from realm.world.plot_parcels import refresh_world_cell_index
 
     refresh_world_cell_index(world)
+    from realm.world.biome_noise import ensure_world_ocean_border
+
+    ensure_world_ocean_border(world)
     res = world.ledger.seed_system_reserve(system_reserve_cents)
     if isinstance(res, MoneyErr):
         raise ValueError(res.reason)

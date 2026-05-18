@@ -10,9 +10,14 @@ Genesis layouts:
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
+from realm.core.ids import PlotId
 from realm.core.rng import make_rng
 from realm.world.terrain import Terrain
+
+## Deep-ocean ring around the world map (cells from each edge).
+MAP_OCEAN_BORDER_DEPTH: int = 2
 
 _n01_cache: dict[tuple[int, int, int], float] = {}
 
@@ -63,6 +68,177 @@ def fbm(seed: int, x: float, y: float, octaves: int = 4) -> float:
         amp *= 0.5
         freq *= 2.0
     return v / tot if tot else 0.0
+
+
+def map_ocean_border_depth(
+    width: int, height: int, depth: int = MAP_OCEAN_BORDER_DEPTH
+) -> int:
+    """Effective border thickness (clamped so tiny grids stay playable)."""
+    if width < 1 or height < 1:
+        return 1
+    return max(1, min(depth, width // 2, height // 2))
+
+
+def is_world_map_edge(
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    depth: int = MAP_OCEAN_BORDER_DEPTH,
+) -> bool:
+    """True when ``(x, y)`` lies in the ocean border band (map must not end on land)."""
+    d = map_ocean_border_depth(width, height, depth)
+    return x < d or y < d or x >= width - d or y >= height - d
+
+
+def enforce_map_ocean_border(
+    plots: dict[PlotId, Plot],
+    width: int,
+    height: int,
+    *,
+    seed: int | None = None,
+) -> None:
+    """Ensure border-band cells are dedicated 1×1 ``water_deep`` plots.
+
+    Multi-cell deeds that straddle the border are split so interior tiles keep
+    their deed while edge tiles become ocean plots (``p-{x}-{y}``).
+    """
+    from realm.core.rng import make_rng
+    from realm.world.plot_scale import plot_world_cells_tuple
+    from realm.world.world import Plot, _subsurface_roll
+
+    if width < 1 or height < 1:
+        return
+
+    def _water_subsurface(cx: int, cy: int) -> object:
+        rng = make_rng(seed if seed is not None else 0, f"ocean-border:{cx}:{cy}")
+        return _subsurface_roll(rng, Terrain.WATER_DEEP, correlate=False)
+
+    for y in range(height):
+        for x in range(width):
+            if not is_world_map_edge(x, y, width, height):
+                continue
+            water_pid = PlotId(f"p-{x}-{y}")
+            cell = (x, y)
+
+            holder: Plot | None = None
+            holder_id: PlotId | None = None
+            for pid, plot in plots.items():
+                if cell in plot_world_cells_tuple(plot):
+                    holder = plot
+                    holder_id = pid
+                    break
+
+            if holder is None:
+                plots[water_pid] = Plot(
+                    plot_id=water_pid,
+                    x=x,
+                    y=y,
+                    terrain=Terrain.WATER_DEEP,
+                    owner=None,
+                    subsurface=_water_subsurface(x, y),
+                    world_cells=(cell,),
+                )
+                continue
+
+            cells = list(plot_world_cells_tuple(holder))
+            remnant_terrain = holder.terrain
+            remnant_owner = holder.owner
+            remnant_sub = holder.subsurface
+            remnant_surveyed = holder.surveyed
+            remnant_deep = holder.deep_surveyed
+
+            if len(cells) == 1:
+                holder.terrain = Terrain.WATER_DEEP
+                holder.owner = None
+                holder.x = x
+                holder.y = y
+                holder.world_cells = (cell,)
+                if holder_id != water_pid:
+                    plots[water_pid] = holder
+                    del plots[holder_id]  # type: ignore[arg-type]
+                continue
+
+            remaining = tuple(c for c in cells if c != cell)
+            plots[water_pid] = Plot(
+                plot_id=water_pid,
+                x=x,
+                y=y,
+                terrain=Terrain.WATER_DEEP,
+                owner=None,
+                subsurface=_water_subsurface(x, y),
+                world_cells=(cell,),
+            )
+            if not remaining:
+                if holder_id is not None and holder_id != water_pid:
+                    del plots[holder_id]
+                continue
+
+            min_x = min(c[0] for c in remaining)
+            min_y = min(c[1] for c in remaining)
+            remnant_pid = PlotId(f"p-{min_x}-{min_y}")
+            if remnant_pid == water_pid:
+                ax, ay = next(c for c in sorted(remaining) if c != cell)
+                remnant_pid = PlotId(f"p-{ax}-{ay}")
+            if holder_id == water_pid:
+                plots[remnant_pid] = Plot(
+                    plot_id=remnant_pid,
+                    x=min_x,
+                    y=min_y,
+                    terrain=remnant_terrain,
+                    owner=remnant_owner,
+                    subsurface=remnant_sub,
+                    surveyed=remnant_surveyed,
+                    deep_surveyed=remnant_deep,
+                    world_cells=remaining,
+                )
+            else:
+                holder.world_cells = remaining
+                holder.x = min_x
+                holder.y = min_y
+
+
+def ensure_world_ocean_border(world: object) -> None:
+    """Apply :func:`enforce_map_ocean_border` to a live :class:`World`."""
+    from realm.world.plot_scale import plot_world_cells_tuple
+    from realm.world.world import World
+
+    if not isinstance(world, World):
+        return
+    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
+    gw = int(scen.get("grid_width", 0))
+    gh = int(scen.get("grid_height", 0))
+    if gw <= 0 or gh <= 0:
+        gw = 0
+        gh = 0
+        for plot in world.plots.values():
+            for cx, cy in plot_world_cells_tuple(plot):
+                gw = max(gw, cx + 1)
+                gh = max(gh, cy + 1)
+    if gw <= 0 or gh <= 0:
+        return
+    scen["grid_width"] = gw
+    scen["grid_height"] = gh
+    enforce_map_ocean_border(world.plots, gw, gh, seed=int(world.seed))
+    from realm.world.plot_parcels import refresh_world_cell_index
+
+    refresh_world_cell_index(world)
+
+
+def terrain_with_ocean_border(
+    pick: Callable[[int, int, int], Terrain],
+    *,
+    width: int,
+    height: int,
+) -> Callable[[int, int, int], Terrain]:
+    """Wrap a terrain picker so the map perimeter is always deep ocean."""
+
+    def wrapped(seed: int, x: int, y: int) -> Terrain:
+        if is_world_map_edge(x, y, width, height):
+            return Terrain.WATER_DEEP
+        return pick(seed, x, y)
+
+    return wrapped
 
 
 def terrain_for_cell(seed: int, x: int, y: int) -> Terrain:
@@ -198,6 +374,8 @@ def continental_layout_terrain(
     grids do not have room for the FBM stack to settle into recognisable
     landmasses.
     """
+    if is_world_map_edge(x, y, width, height):
+        return Terrain.WATER_DEEP
     mask = _continental_mask(seed, x, y, width, height)
     if mask < _CONTINENTAL_LAND_THRESHOLD:
         # Most of the world is ocean. Deeper ocean offshore, shallow ocean
