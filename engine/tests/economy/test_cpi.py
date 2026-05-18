@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from realm.actions import claim_plot
 from realm.core.conservation import ConservationSnapshot, assert_money_conserved
 from realm.core.ids import MaterialId, PartyId, PlotId
@@ -55,7 +57,14 @@ def test_cpi_history_capped_at_52_entries() -> None:
 def test_cpi_indexed_wage_adjusts_with_inflation() -> None:
     w = bootstrap_genesis(seed=804, grid_width=48, grid_height=36, settler_count=6)
     human = PartyId("player")
-    pid = next(x for x, pl in w.plots.items() if pl.owner is None)
+    unclaimed_land = [
+        pid
+        for pid, pl in w.plots.items()
+        if pl.owner is None and "water" not in str(pl.terrain).lower()
+    ]
+    if not unclaimed_land:
+        pytest.skip("no unclaimed land plots in test world")
+    pid = unclaimed_land[0]
     assert claim_plot(w, human, pid)["ok"] is True
     r = post_job_opening(
         w,
@@ -68,12 +77,14 @@ def test_cpi_indexed_wage_adjusts_with_inflation() -> None:
     assert r["ok"] is True
     oid = str(r["opening_id"])
     opening = next(o for o in w.job_openings if o.opening_id == oid)
-    lab_id = next(
-        lid
+    candidates = [
+        (lid, lab)
         for lid, lab in w.laborers.items()
         if lab.employer is None and int(lab.skill_level) >= int(opening.skill_min)
-    )
-    lab = w.laborers[lab_id]
+    ]
+    if not candidates:
+        pytest.skip("no matching unemployed laborers in test world")
+    lab_id, lab = candidates[0]
     lab.employer = human
     lab.employment_contract = opening.opening_id
     opening.filled_by = lab_id

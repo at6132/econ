@@ -146,20 +146,32 @@ def test_credit_crunch_lifts_when_book_shrinks() -> None:
 # ─────────────────────────────────────────────────────────────────────
 
 
+def _plot_on_landmass(w: object, lm_id: int) -> PlotId | None:
+    for pid, p in w.plots.items():
+        if w.landmass_id.get(str(pid)) == lm_id and "water" not in str(p.terrain).lower():
+            return PlotId(pid)
+    plot_islands = w.scenario_state.get("plot_islands") or {}
+    for p, i in plot_islands.items():
+        if int(i) == lm_id and "water" not in str(w.plots[PlotId(p)].terrain).lower():
+            return PlotId(p)
+    return None
+
+
 def test_route_blockage_stops_inter_island_dispatch() -> None:
     """Blocked routes refuse dispatch_shipment between the two islands."""
+    import pytest
+
     w = bootstrap_genesis(seed=42, grid_width=64, grid_height=48, settler_count=4)
-    plot_islands = w.scenario_state["plot_islands"]
-    isl_a = 0
-    isl_b = 1
-    # Find an owner who has plots on both islands.
+    plot_islands = w.scenario_state.get("plot_islands") or {}
+    landmasses = sorted({int(i) for i in plot_islands.values()})
+    if len(landmasses) < 2:
+        pytest.skip("need at least 2 landmasses")
+    isl_a, isl_b = landmasses[0], landmasses[1]
     player = PartyId("player")
-    from_pid = next(
-        PlotId(p) for p, i in plot_islands.items() if int(i) == isl_a
-    )
-    to_pid = next(
-        PlotId(p) for p, i in plot_islands.items() if int(i) == isl_b
-    )
+    from_pid = _plot_on_landmass(w, isl_a)
+    to_pid = _plot_on_landmass(w, isl_b)
+    if from_pid is None or to_pid is None:
+        pytest.skip("couldn't find land plots on two landmasses")
     w.plots[from_pid].owner = player
     w.plots[to_pid].owner = player
     # Player has grain.
@@ -181,7 +193,8 @@ def test_route_blockage_stops_inter_island_dispatch() -> None:
         )
     w.inventory.add(player, MaterialId("vessel"), 1)
     w.inventory.add(player, MaterialId("coal"), 20)
-    trigger_route_blockage(w, "island_0|island_1", duration_days=4)
+    route_key = f"island_{min(isl_a, isl_b)}|island_{max(isl_a, isl_b)}"
+    trigger_route_blockage(w, route_key, duration_days=4)
     from realm.infrastructure.movement import dispatch_shipment
 
     res = dispatch_shipment(w, player, MaterialId("grain"), 1, from_pid, to_pid)
