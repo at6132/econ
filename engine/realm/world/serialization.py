@@ -1,13 +1,28 @@
 """Public-dict serialization for ``World``: the JSON DTOs returned by
-``/world``, ``/world/compact``, and ``/world/summary``.
+``/world*`` routes.
 
-All three previously lived in ``realm.world.world``. They were extracted
-to keep the world-state module focused on dataclasses, bootstrap, and
-worldgen primitives — the serialization layer is read-only and only ever
-walks the world graph.
+Functions take ``world: World`` (and sometimes ``party``) and return
+JSON-serializable ``dict``s. They never mutate state.
 
-Functions intentionally take ``world: World`` (and sometimes ``party``)
-and return JSON-serializable ``dict``s. They never mutate state.
+Endpoints + payload responsibilities (see ``routes_world.py``):
+
+* ``world_public_dict``  — legacy "everything in one shot" (heavy; ~27 MB on
+                            Genesis). Kept for back-compat; new code should
+                            prefer the split payloads below.
+* ``world_summary_dict`` — top-bar HUD (tick, cash, counters). Tiny.
+* ``world_static_dict``  — read-once tables (recipes, building catalog,
+                            chemistry, scenario constants, party names).
+* ``world_player_dict``  — everything tied to a single party: inventory,
+                            owned plots + subsurface + recipe_ids, accounts,
+                            bank rates/loans, in_transit, forward contracts,
+                            owned reports, price alerts, active production.
+* ``world_plots_dict``   — map-only lean view: terrain / owner / surveyed /
+                            powered / population_density / claim_cost_cents.
+                            Drops per-cell subsurface and recipe_ids; drops
+                            ``world_cells`` on uniform-plot grids.
+* ``world_feed_dict``    — event_log + world_feed + npc_messages tails
+                            (optionally since ``since_tick``).
+* ``world_compact_dict`` — small dev/automation aggregate snapshot.
 """
 
 from __future__ import annotations
@@ -36,8 +51,28 @@ def _building_maintenance_view(world: "World", row: dict) -> dict:
     return building_maintenance_status(world, row)
 
 
+def _grid_is_uniform(world: "World") -> bool:
+    """True when every plot covers exactly one (x, y) cell.
+
+    Used to drop ``world_cells`` lists and ``world_cell_to_plot`` from the
+    wire — they're fully derivable from ``(plot.x, plot.y)`` on uniform
+    grids (the default Genesis layout)."""
+    for p in world.plots.values():
+        wc = p.world_cells
+        if wc and len(wc) != 1:
+            return False
+        if wc and (wc[0][0] != p.x or wc[0][1] != p.y):
+            return False
+    return True
+
+
 def world_public_dict(world: "World") -> dict:
-    """JSON-serializable view for API (hides unsurveyed subsurface)."""
+    """JSON-serializable view for API (hides unsurveyed subsurface).
+
+    Legacy "kitchen-sink" payload. Heavy on Genesis grids; the realtime
+    client should poll ``/world/summary`` + ``/world/player`` + ``/world/feed``
+    and only request ``/world/map`` after a structural change.
+    """
     from realm.actions import hire_catalog_public
     from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
     from realm.economy.markets import market_bids_public, market_book_public
@@ -56,6 +91,8 @@ def world_public_dict(world: "World") -> dict:
         plot_world_span,
     )
 
+    uniform = _grid_is_uniform(world)
+
     plots_out: list[dict] = []
     for p in world.plots.values():
         density = float(density_map.get(str(p.plot_id), 0.0))
@@ -66,7 +103,6 @@ def world_public_dict(world: "World") -> dict:
             "x": p.x,
             "y": p.y,
             "terrain": p.terrain.value,
-            "world_cells": [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)],
             "world_tiles_w": wt,
             "world_tiles_h": ht,
             "grid_cells_w": gcw,
@@ -79,6 +115,10 @@ def world_public_dict(world: "World") -> dict:
             "population_density": density,
             "claim_cost_cents": claim_cost_cents_for_plot(world, p.plot_id),
         }
+        if not uniform:
+            entry["world_cells"] = [
+                {"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)
+            ]
         if p.surveyed:
             sub_view: dict[str, float] = {
                 "iron_ore_grade": p.subsurface.iron_ore_grade,
@@ -123,8 +163,20 @@ def world_public_dict(world: "World") -> dict:
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "market_intel_active": intel_active,
         "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
+        "uniform_plots": uniform,
         "plots": plots_out,
-        "world_cell_to_plot": dict(world.scenario_state.get("world_cell_to_plot") or {}),
+        # On a uniform grid, ``world_cell_to_plot`` is derivable from (x,y)
+        # via ``f"p-{x}-{y}"`` — sending 76800 strings is wasteful. Clients
+        # check the ``uniform_plots`` flag and rebuild locally when absent.
+        **(
+            {}
+            if uniform
+            else {
+                "world_cell_to_plot": dict(
+                    world.scenario_state.get("world_cell_to_plot") or {}
+                )
+            }
+        ),
         "balances_cents": balances,
         "inventory": inv,
         "parties": [str(x) for x in world.parties],
@@ -470,6 +522,272 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "open_orders": int(open_orders),
         "active_job_openings": int(active_job_openings),
         "employed_laborers": int(employed_laborers),
+    }
+
+
+def world_static_dict(world: "World") -> dict[str, Any]:
+    """Read-once tables that never change during a tick loop.
+
+    Fetched once at boot, again only after ``/dev/reset`` or a save load.
+    Includes: recipes, building/hire/chemistry catalogs, scenario id,
+    seed, ticks_per_game_day, FREE_MARKET_HISTORY_TICKS, the grid size
+    + map_layout for the map renderer, the public party-display names
+    map, and the bank plot id."""
+    from realm.actions import hire_catalog_public
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
+    from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
+    from realm.production.buildings import building_catalog_public
+
+    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
+    map_layout = scen.get("map_layout")
+    grid_w = scen.get("grid_width")
+    grid_h = scen.get("grid_height")
+
+    if grid_w is None or grid_h is None:
+        max_x = -1
+        max_y = -1
+        for p in world.plots.values():
+            if p.x > max_x:
+                max_x = p.x
+            if p.y > max_y:
+                max_y = p.y
+        if max_x >= 0 and max_y >= 0:
+            grid_w = max_x + 1
+            grid_h = max_y + 1
+
+    return {
+        "seed": world.seed,
+        "scenario_id": world.scenario_id,
+        "world_name": world.world_name,
+        "ticks_per_game_day": TICKS_PER_GAME_DAY,
+        "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
+        "map_layout": map_layout,
+        "grid_width": int(grid_w) if grid_w is not None else None,
+        "grid_height": int(grid_h) if grid_h is not None else None,
+        "uniform_plots": _grid_is_uniform(world),
+        "recipes": recipe_public_list(),
+        "building_catalog": building_catalog_public(),
+        "hire_catalog": hire_catalog_public(),
+        "chemistry_catalog": _chemistry_catalog_public(),
+        "party_display_names": dict(world.party_display_names),
+        "bank_plot_id": scen.get("bank_plot"),
+        "parties": [str(x) for x in world.parties],
+    }
+
+
+def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
+    """Everything tied to one player's view that changes during play.
+
+    Polled alongside ``/world/summary`` on the realtime tick. Includes:
+    cash + sub-accounts, full inventory for the party, owned plots
+    (with subsurface + recipe_ids), owned reports, player price alerts,
+    in-transit shipments, forward contracts, bank rates + loans, the
+    party's recipe book, the party's active production runs, and the
+    party's placed buildings + maintenance status."""
+    from realm.infrastructure.energy import ensure_powered_plots_fresh
+    from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
+    from realm.world.world import claim_cost_cents_for_plot
+
+    powered_set = ensure_powered_plots_fresh(world)
+    density_map = world.scenario_state.get("population_density") or {}
+
+    cash_acct = str(party_cash_account(party))
+    balances = world.ledger.snapshot()
+    cash_cents = int(balances.get(cash_acct, 0))
+
+    inv_party = world.inventory.stock.get(party, {})
+    inventory = {str(m): int(q) for m, q in inv_party.items()}
+
+    owned_plots: list[dict[str, Any]] = []
+    party_s = str(party)
+    for p in world.plots.values():
+        if p.owner is None or str(p.owner) != party_s:
+            continue
+        density = float(density_map.get(str(p.plot_id), 0.0))
+        entry: dict[str, Any] = {
+            "id": str(p.plot_id),
+            "x": p.x,
+            "y": p.y,
+            "terrain": p.terrain.value,
+            "surveyed": p.surveyed,
+            "deep_surveyed": getattr(p, "deep_surveyed", False),
+            "powered": str(p.plot_id) in powered_set,
+            "population_density": density,
+            "claim_cost_cents": claim_cost_cents_for_plot(world, p.plot_id),
+        }
+        if p.surveyed:
+            sub_view: dict[str, float] = {
+                "iron_ore_grade": p.subsurface.iron_ore_grade,
+                "copper_ore_grade": p.subsurface.copper_ore_grade,
+                "clay_grade": p.subsurface.clay_grade,
+                "coal_grade": p.subsurface.coal_grade,
+                "sulfur_grade": p.subsurface.sulfur_grade,
+                "saltpeter_grade": p.subsurface.saltpeter_grade,
+                "tin_grade": p.subsurface.tin_grade,
+                "lead_grade": p.subsurface.lead_grade,
+                "phosphate_grade": p.subsurface.phosphate_grade,
+                "silica_grade": p.subsurface.silica_grade,
+            }
+            if getattr(p, "deep_surveyed", False):
+                sub_view["platinum_grade"] = p.subsurface.platinum_grade
+                sub_view["oil_shale_grade"] = p.subsurface.oil_shale_grade
+                sub_view["rare_earth_grade"] = p.subsurface.rare_earth_grade
+            entry["subsurface"] = sub_view
+            entry["recipe_ids"] = recipe_ids_on_plot_for_owner(world, p)
+        if world.use_plot_output_logistics:
+            entry["output_stock"] = dict(world.plot_output_stock.get(str(p.plot_id), {}))
+        owned_plots.append(entry)
+
+    plot_buildings = [
+        {**b, "maintenance": _building_maintenance_view(world, b)}
+        for b in world.plot_buildings
+        if str(b.get("party") or "") == party_s
+    ]
+
+    active_production = [
+        {
+            "run_id": a.run_id,
+            "party": str(a.party),
+            "plot_id": str(a.plot_id),
+            "recipe_id": a.recipe_id,
+            "ticks_remaining": int(a.ticks_remaining),
+            "runs_remaining": int(getattr(a, "runs_remaining", 0)),
+        }
+        for a in world.active_production
+        if a.party == party
+    ]
+
+    in_transit = [
+        {
+            "id": s.shipment_id,
+            "shipment_id": s.shipment_id,
+            "party": str(s.party),
+            "material": str(s.material),
+            "qty": int(s.qty),
+            "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
+            "dest_plot_id": str(s.dest_plot_id),
+            "arrive_tick": int(s.arrive_tick),
+        }
+        for s in world.in_transit
+        if s.party == party
+    ]
+
+    recipe_book = sorted(world.party_recipe_books.get(party, set()))
+
+    price_alerts = list(world.scenario_state.get("player_price_alerts") or []) if party_s == "player" else []
+
+    return {
+        "tick": world.tick,
+        "party": party_s,
+        "cash_cents": cash_cents,
+        "player_accounts": _player_accounts_public(world) if party_s == "player" else [],
+        "inventory": inventory,
+        "owned_plots": owned_plots,
+        "plot_buildings": plot_buildings,
+        "active_production": active_production,
+        "in_transit": in_transit,
+        "forward_contracts": _forward_contracts_public(world, party),
+        "owned_reports": _player_owned_reports_public(world, party),
+        "price_alerts": price_alerts,
+        "bank_rates": _bank_rates_public(world) if party_s == "player" else None,
+        "bank_loans": _bank_loans_for_player(world) if party_s == "player" else [],
+        "recipe_book": [str(x) for x in recipe_book],
+    }
+
+
+def world_map_dict(world: "World") -> dict[str, Any]:
+    """Lean map-only view for the world renderer.
+
+    Per-plot fields: id, x, y, terrain, owner, surveyed, deep_surveyed,
+    powered, population_density, claim_cost_cents (+ world_tiles_w/h,
+    grid_cells_w/h, world_cells iff the grid is non-uniform).
+
+    Does NOT include per-cell subsurface (only known to surveyors;
+    delivered via ``/world/player``) or recipe_ids (computed on click).
+    Drops ``world_cell_to_plot`` on uniform grids — derivable from
+    ``(x, y)`` as ``p-{x}-{y}``."""
+    from realm.infrastructure.energy import ensure_powered_plots_fresh
+    from realm.world.world import claim_cost_cents_for_plot
+    from realm.world.plot_scale import (
+        plot_grid_side,
+        plot_world_cells_tuple,
+        plot_world_span,
+    )
+
+    powered_set = ensure_powered_plots_fresh(world)
+    density_map = world.scenario_state.get("population_density") or {}
+    uniform = _grid_is_uniform(world)
+
+    plots_out: list[dict[str, Any]] = []
+    for p in world.plots.values():
+        density = float(density_map.get(str(p.plot_id), 0.0))
+        entry: dict[str, Any] = {
+            "id": str(p.plot_id),
+            "x": p.x,
+            "y": p.y,
+            "terrain": p.terrain.value,
+            "owner": p.owner,
+            "surveyed": p.surveyed,
+            "deep_surveyed": getattr(p, "deep_surveyed", False),
+            "powered": str(p.plot_id) in powered_set,
+            "population_density": density,
+            "claim_cost_cents": claim_cost_cents_for_plot(world, p.plot_id),
+        }
+        if not uniform:
+            _, _, wt, ht = plot_world_span(p)
+            gcw, gch = plot_grid_side(p)
+            entry["world_tiles_w"] = wt
+            entry["world_tiles_h"] = ht
+            entry["grid_cells_w"] = gcw
+            entry["grid_cells_h"] = gch
+            entry["world_cells"] = [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)]
+        plots_out.append(entry)
+
+    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
+    out: dict[str, Any] = {
+        "tick": world.tick,
+        "uniform_plots": uniform,
+        "map_layout": scen.get("map_layout"),
+        "grid_width": scen.get("grid_width"),
+        "grid_height": scen.get("grid_height"),
+        "plots": plots_out,
+    }
+    if not uniform:
+        out["world_cell_to_plot"] = dict(scen.get("world_cell_to_plot") or {})
+    return out
+
+
+def world_feed_dict(world: "World", *, since_tick: int | None = None) -> dict[str, Any]:
+    """Event log + world feed + npc message tails.
+
+    With ``since_tick=None`` returns the last 120 events / 1500 feed
+    rows / 48 npc messages (matches legacy ``/world`` behaviour).
+
+    With ``since_tick=N`` returns only rows whose ``tick`` is strictly
+    greater than ``N`` — clients track their high-water mark and only
+    pull deltas, which keeps the wire small after the first load."""
+    if since_tick is not None and since_tick >= 0:
+        def _since(rows: list, n: int) -> list:
+            return [r for r in rows if int(r.get("tick", 0)) > n]
+
+        events = _since(list(world.event_log), since_tick)
+        feed = _since(list(world.world_feed_log), since_tick)
+        npc = _since(list(world.npc_messages_to_player), since_tick)
+        analytics = _since(list(world.analytics_purchases), since_tick)
+    else:
+        events = list(world.event_log[-120:])
+        feed = list(world.world_feed_log[-1500:])
+        npc = list(world.npc_messages_to_player[-48:])
+        analytics = list(world.analytics_purchases[-48:])
+
+    return {
+        "tick": world.tick,
+        "since_tick": since_tick,
+        "event_log": events,
+        "world_feed_log": feed,
+        "npc_messages": npc,
+        "analytics_purchases": analytics,
+        "intel_listings": _intel_listings_public(world),
     }
 
 

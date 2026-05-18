@@ -38,6 +38,10 @@ from realm.world.world import (  # noqa: F401
     population_density_for,
     tier1_recipe_ids,
     world_compact_dict,
+    world_feed_dict,
+    world_map_dict,
+    world_player_dict,
     world_public_dict,
+    world_static_dict,
     world_summary_dict,
 )

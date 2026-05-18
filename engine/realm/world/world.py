@@ -1198,6 +1198,10 @@ from realm.world.serialization import (  # noqa: E402,F401
     _player_owned_reports_public,
     _road_segments_public,
     world_compact_dict,
+    world_feed_dict,
+    world_map_dict,
+    world_player_dict,
     world_public_dict,
+    world_static_dict,
     world_summary_dict,
 )

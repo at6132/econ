@@ -149,6 +149,54 @@ def get_world_summary(party: Annotated[str, Query()] = "player") -> dict:
     return world_summary_dict(_state.WORLD, PartyId(str(party)))
 
 
+@router.get("/world/static")
+def get_world_static() -> dict:
+    """Read-once tables: recipes, building/hire/chemistry catalogs,
+    scenario id, seed, ticks_per_game_day, grid size + map layout,
+    party display names. Fetch once at boot and after ``/dev/reset``."""
+    from realm.world import world_static_dict
+
+    return world_static_dict(_state.WORLD)
+
+
+@router.get("/world/player")
+def get_world_player(party: Annotated[str, Query()] = "player") -> dict:
+    """Per-party realtime view: cash, accounts, full inventory, owned
+    plots (with subsurface + recipe_ids), owned reports, price alerts,
+    in-transit shipments, forward contracts, bank rates + loans, the
+    party's recipe book, active production, placed buildings.
+
+    Pair this with ``/world/summary`` on the realtime tick — together
+    they cover what the HUD and player-owned panels need without ever
+    touching the full ``/world`` payload."""
+    from realm.world import world_player_dict
+
+    return world_player_dict(_state.WORLD, PartyId(str(party)))
+
+
+@router.get("/world/map")
+def get_world_map() -> dict:
+    """Lean map-only view (terrain / owner / surveyed / powered /
+    density / claim_cost per plot). Call once at world-load and after
+    structural actions (claim, survey, buy/sell, build, place, demolish)."""
+    from realm.world import world_map_dict
+
+    return world_map_dict(_state.WORLD)
+
+
+@router.get("/world/feed")
+def get_world_feed(since_tick: Annotated[int, Query()] = -1) -> dict:
+    """Event log + world feed + npc messages.
+
+    ``since_tick < 0`` returns the legacy tails (last 120/1500/48 rows).
+    ``since_tick >= 0`` returns only rows newer than that tick — clients
+    track their high-water mark and pull deltas."""
+    from realm.world import world_feed_dict
+
+    st: int | None = since_tick if since_tick >= 0 else None
+    return world_feed_dict(_state.WORLD, since_tick=st)
+
+
 @router.get("/hire/catalog")
 def get_hire_catalog() -> dict:
     return {"roles": hire_catalog_public()}
