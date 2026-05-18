@@ -220,17 +220,16 @@ func _maybe_refresh_from_server() -> void:
 
 func _refresh_from_server() -> void:
 	_refresh_in_flight = true
-	# Three independent gets fire in parallel; ``_refresh_in_flight`` clears as
-	# the slowest (feed) returns so we don't pile up requests under load.
+	# Three independent gets fire in parallel; ``_refresh_in_flight`` clears
+	# when the slowest (feed) returns so we don't pile up requests under load.
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
-	API.get_world_feed(
-		func(f):
-			WorldState.apply_feed(f)
-			_refresh_in_flight = false
-		,
-		WorldState.feed_seen_tick,
-	)
+	API.get_world_feed(_on_feed_refreshed, WorldState.feed_seen_tick)
+
+
+func _on_feed_refreshed(data: Dictionary) -> void:
+	WorldState.apply_feed(data)
+	_refresh_in_flight = false
 
 
 ## Refresh the lean map view after a structural action (claim / survey /
