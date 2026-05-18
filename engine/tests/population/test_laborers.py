@@ -28,14 +28,14 @@ from realm.world import bootstrap_genesis
 
 
 def test_laborers_seeded_per_landmass_by_density_formula():
-    """Four-island worlds seed labor proportional to each landmass's land plots."""
+    """Continental worlds seed labor proportional to each landmass's land plots."""
     w = bootstrap_genesis(
-        seed=42, grid_width=64, grid_height=48, settler_count=4, map_layout="islands"
+        seed=42, grid_width=64, grid_height=48, settler_count=4, map_layout="continental"
     )
     plot_islands = w.scenario_state.get("plot_islands", {})
     distinct_islands = sorted({int(v) for v in plot_islands.values()})
-    assert len(distinct_islands) == 4, (
-        f"expected 4 islands, got {distinct_islands}"
+    assert len(distinct_islands) >= 2, (
+        f"expected multiple landmasses, got {distinct_islands}"
     )
     for isl in distinct_islands:
         count = laborer_count_for_island(w, isl)

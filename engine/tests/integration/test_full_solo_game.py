@@ -98,7 +98,7 @@ def solo_world():
         grid_width=24,
         grid_height=18,
         settler_count=50,
-        map_layout="islands",
+        map_layout="continental",
     )
     player, target, iid = _setup_player_coal_strategy(w)
     starting_total = w.ledger.total_cents()

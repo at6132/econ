@@ -27,13 +27,13 @@ _TICKS_PER_GAME_DAY = 1440
 
 @pytest.fixture
 def gen_world():
-    # Force the islands layout so coastal plots exist (Kessler needs one).
+    # Continental layout on a small grid (coastal plots for Kessler).
     return bootstrap_genesis(
         seed=900,
         grid_width=24,
         grid_height=18,
         settler_count=6,
-        map_layout="islands",
+        map_layout="continental",
     )
 
 

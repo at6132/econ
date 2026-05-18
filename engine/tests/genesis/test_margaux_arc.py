@@ -29,7 +29,7 @@ def gen_world():
         grid_width=20,
         grid_height=16,
         settler_count=4,
-        map_layout="islands",
+        map_layout="continental",
     )
 
 

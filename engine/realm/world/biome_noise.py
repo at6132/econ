@@ -5,8 +5,6 @@ Genesis layouts:
 * **Continental** (default on large grids) — seed-derived land lobes scattered across
   the map with ``make_rng`` placement, FBM coast wobble, and archipelago speckle.
   Same seed always yields the same coastlines (Law 9).
-* **Four islands** (legacy medium grids) — fixed quadrant ellipses; see
-  :func:`terrain_for_genesis_island_cell`.
 """
 
 from __future__ import annotations
@@ -91,76 +89,6 @@ def terrain_for_cell(seed: int, x: int, y: int) -> Terrain:
     return Terrain.PLAINS
 
 
-# ─────────────────── Genesis four-islands layout ───────────────────
-
-# Minimum map size that supports the four-island mask. Below this we fall back
-# to a regular continent map (tests with tiny grids stay valid). Tuned so each
-# island has room for FBM-driven biome variation and a coastline buffer.
-GENESIS_ISLAND_MIN_WIDTH: int = 48
-GENESIS_ISLAND_MIN_HEIGHT: int = 36
-
-# Beach (shallow water) thickness, in units of normalised ellipse distance
-# beyond the island core. d_eff < 1.0 → land; 1.0..1.0+BEACH → shallow; beyond → deep.
-_GENESIS_BEACH_BAND: float = 0.15
-
-# Magnitude of the FBM coastline wobble (in units of normalised ellipse distance).
-# Larger values produce more jagged / "organic" shorelines; smaller values are
-# closer to smooth ellipses. ±0.18 → noticeable bays + peninsulas without ruining
-# island integrity.
-_GENESIS_COAST_WOBBLE: float = 0.18
-
-
-def genesis_island_centers(width: int, height: int) -> list[tuple[int, int]]:
-    """Return the four island centre coordinates (NW, NE, SW, SE) for a w × h map.
-
-    Centres sit at the quadrant midpoints so islands are evenly spaced and the
-    cross-shaped ocean has equal arm length in each direction.
-    """
-    w = max(1, int(width))
-    h = max(1, int(height))
-    return [
-        (w // 4, h // 4),
-        (3 * w // 4, h // 4),
-        (w // 4, 3 * h // 4),
-        (3 * w // 4, 3 * h // 4),
-    ]
-
-
-def genesis_island_radii(width: int, height: int) -> tuple[int, int]:
-    """Half-axes (rx, ry) of each island ellipse for a w × h map.
-
-    Tuned so adjacent islands are separated by a non-trivial ocean gap (~10–14
-    tiles of open water) on the default 96 × 72 grid, while still occupying
-    most of their quadrant. Both axes are >= 1.
-    """
-    w = max(1, int(width))
-    h = max(1, int(height))
-    rx = max(1, w // 6)
-    ry = max(1, h // 6)
-    return (rx, ry)
-
-
-def genesis_island_layout_supported(width: int, height: int) -> bool:
-    """True if the map is big enough for the four-island layout."""
-    return int(width) >= GENESIS_ISLAND_MIN_WIDTH and int(height) >= GENESIS_ISLAND_MIN_HEIGHT
-
-
-def _nearest_island_normalised_distance(
-    x: int, y: int, centers: list[tuple[int, int]], rx: int, ry: int
-) -> float:
-    """Normalised elliptical distance to the closest island centre (0 at centre, 1 at edge)."""
-    rx_f = float(max(1, rx))
-    ry_f = float(max(1, ry))
-    best = float("inf")
-    for cx, cy in centers:
-        dx = (x - cx) / rx_f
-        dy = (y - cy) / ry_f
-        d2 = dx * dx + dy * dy
-        if d2 < best:
-            best = d2
-    return math.sqrt(best)
-
-
 # ─────────────────── Phase 10 — continental layout ───────────────────
 
 # Layered FBM produces a continental mask: large land continents, scattered
@@ -201,21 +129,22 @@ def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
         return cached
 
     rng = make_rng(int(seed), "continental_land_lobes")
-    n_major = 3 + rng.randrange(6)
-    n_minor = 6 + rng.randrange(10)
+    n_major = 5 + rng.randrange(5)
+    n_minor = 10 + rng.randrange(8)
     lobes: list[_ContinentalLobe] = []
 
     def _spacing_ok(cx: float, cy: float, radius: float) -> bool:
         for ox, oy, orad in lobes:
             gap = math.hypot(cx - ox, cy - oy)
-            if gap < (radius + orad) * 0.68:
+            min_gap = (radius + orad) * 1.05 + 0.04
+            if gap < min_gap:
                 return False
         return True
 
     def _try_place(r_lo: float, r_hi: float) -> bool:
-        for _ in range(100):
-            cx = 0.05 + rng.random() * 0.90
-            cy = 0.05 + rng.random() * 0.90
+        for _ in range(120):
+            cx = 0.06 + rng.random() * 0.88
+            cy = 0.06 + rng.random() * 0.88
             radius = r_lo + rng.random() * (r_hi - r_lo)
             if _spacing_ok(cx, cy, radius):
                 lobes.append((cx, cy, radius))
@@ -223,33 +152,34 @@ def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
         return False
 
     for _ in range(n_major):
-        _try_place(0.11, 0.21)
+        _try_place(0.07, 0.13)
     for _ in range(n_minor):
-        _try_place(0.03, 0.085)
+        _try_place(0.025, 0.055)
 
     _continental_lobes_cache[int(seed)] = lobes
     return lobes
 
 
 def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> float:
-    """Continental land mask in ``[0, 1]`` — max influence of seed-placed lobes + speckle."""
+    """Continental land mask in ``[0, 1]`` — nearest seed-placed lobe only.
+
+    Taking the max influence across all lobes merges separate landmasses into a
+    few mega-continents; assigning each cell to its nearest lobe centre keeps
+    oceans between them.
+    """
     cx = float(x) / max(1.0, float(width))
     cy = float(y) / max(1.0, float(height))
+    lobes = continental_layout_lobes(seed)
+    if not lobes:
+        return 0.0
 
-    total = 0.0
-    for lx, ly, radius in continental_layout_lobes(seed):
-        dx = cx - lx
-        dy = cy - ly
-        dist = math.hypot(dx, dy)
-        wobble = (fbm(seed + int(lx * 733) + int(ly * 991), cx * 10.0, cy * 10.0, 3) - 0.5) * 0.07
-        influence = max(0.0, 1.0 - (dist - wobble) / max(radius, 0.02))
-        total = max(total, influence)
+    nearest = min(lobes, key=lambda lb: math.hypot(cx - lb[0], cy - lb[1]))
+    lx, ly, radius = nearest
+    dist = math.hypot(cx - lx, cy - ly)
+    wobble = (fbm(seed + int(lx * 733) + int(ly * 991), cx * 10.0, cy * 10.0, 3) - 0.5) * 0.06
+    total = max(0.0, 1.0 - (dist - wobble) / max(radius, 0.02))
 
-    arch = fbm(seed + 5555, cx * 18.0, cy * 18.0, 4)
-    if arch > 0.74 and total < 0.18:
-        total = max(total, (arch - 0.74) * 2.8)
-
-    pole_penalty = abs(cy - 0.5) * 0.32
+    pole_penalty = abs(cy - 0.5) * 0.28
     return max(0.0, total - pole_penalty)
 
 
@@ -304,36 +234,3 @@ def continental_layout_terrain(
 def continental_layout_supported(width: int, height: int) -> bool:
     """True when the grid is large enough for the continental layout."""
     return int(width) * int(height) >= CONTINENTAL_LAYOUT_MIN_PLOTS
-
-
-def terrain_for_genesis_island_cell(seed: int, x: int, y: int, width: int, height: int) -> Terrain:
-    """Genesis "four islands" terrain for cell ``(x, y)`` on a ``width × height`` map.
-
-    The world is partitioned into four ellipse-shaped islands (one per quadrant)
-    separated by a cross-shaped ocean. Inside each island we delegate to
-    :func:`terrain_for_cell` for natural biome variation; any water that the
-    inland noise would have produced is coerced to PLAINS so islands feel
-    solidly land. Around each island we emit a ring of WATER_SHALLOW (the
-    "beach") that automatically makes the outer plots coastal. Beyond the beach
-    is WATER_DEEP open ocean.
-
-    Determinism: same ``(seed, x, y, width, height)`` always yields the same
-    terrain (Law 9 — the wobble FBM is seeded with a fixed offset).
-    """
-    centers = genesis_island_centers(width, height)
-    rx, ry = genesis_island_radii(width, height)
-    d = _nearest_island_normalised_distance(x, y, centers, rx, ry)
-    # Coastline wobble centred on 0 (so it can push the shoreline either way).
-    wob = fbm(seed + 911, x * 0.09, y * 0.09, 3) - 0.5
-    d_eff = d + _GENESIS_COAST_WOBBLE * 2.0 * wob
-    if d_eff >= 1.0 + _GENESIS_BEACH_BAND:
-        return Terrain.WATER_DEEP
-    if d_eff >= 1.0:
-        return Terrain.WATER_SHALLOW
-    inland = terrain_for_cell(seed, x, y)
-    if inland in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW):
-        # Keep islands solid; lakes inside the landmass would visually break the
-        # "four islands far apart" intent and would also create tiny isolated
-        # ponds the shipping market cannot meaningfully use.
-        return Terrain.PLAINS
-    return inland

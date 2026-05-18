@@ -435,9 +435,8 @@ def generate_plots(
     ``uniform_plots=True``: one deed per map cell (tests / legacy).
 
     ``terrain_fn`` is an optional callable ``(seed, x, y) -> Terrain`` that overrides the
-    default :func:`realm.world.biome_noise.terrain_for_cell`. Genesis bootstraps the four-island
-    layout by passing a closure that wraps :func:`realm.world.biome_noise.terrain_for_genesis_island_cell`
-    with the active map width/height.
+    default :func:`realm.world.biome_noise.terrain_for_cell`. Genesis continental layout
+    passes :func:`realm.world.biome_noise.continental_layout_terrain` with ``uniform_plots=True``.
     """
     from realm.world.plot_parcels import generate_plot_parcels, generate_uniform_plots
 
@@ -549,17 +548,10 @@ def bootstrap_genesis(
     neutral exchange listing (no Tier-1 / Tier-2 NPC bootstrap).
 
     Map layout (``map_layout``):
-      * ``"islands"`` — four landmasses (NW / NE / SW / SE) separated by a
-        cross-shaped deep-ocean gap. Phase 7A: ocean tiles are impassable by
-        land movement and inter-island shipments pay ``2×`` per-tile shipping
-        cost (open-ocean modifier).
-      * ``"continent"`` — legacy single-continent map (whatever ``terrain_for_cell``
-        produces for the seed); kept for backward compat in tiny-grid tests.
-      * ``"continental"`` — seed-scattered land lobes on large grids (default
-        ``GENESIS_DEFAULT_GRID_WIDTH × GENESIS_DEFAULT_GRID_HEIGHT``).
+      * ``"continental"`` — seed-scattered land lobes (default on large grids).
+      * ``"continent"`` — single-continent ``terrain_for_cell`` (tiny-grid tests).
       * ``"auto"`` (default) — continental when plot count ≥
-        ``CONTINENTAL_LAYOUT_MIN_PLOTS``, else four-island layout on medium grids,
-        else single-continent ``terrain_for_cell``.
+        ``CONTINENTAL_LAYOUT_MIN_PLOTS``, else ``continent``.
 
     Phase 7: there are no ``pop_hub_*`` parties anymore. Demand will be supplied
     by real ``LaborerNPC`` agents (Phase 7B) buying from entrepreneur-run stores
@@ -578,8 +570,6 @@ def bootstrap_genesis(
         GENESIS_DEFAULT_GRID_WIDTH,
         continental_layout_supported,
         continental_layout_terrain,
-        genesis_island_layout_supported,
-        terrain_for_genesis_island_cell,
     )
     from realm.events.event_log import log_event
     from realm.economy.market_history import record_market_snapshot
@@ -591,21 +581,16 @@ def bootstrap_genesis(
 
     human = PartyId("player")
     if map_layout == "auto":
-        # Phase 10A — three-tier auto-selection. Large grids get the new
-        # procedural continental layout; medium grids stay on the legacy
-        # four-island layout (preserves existing tests + saves); tiny grids
-        # use the single-continent ``terrain_for_cell`` fallback.
-        if continental_layout_supported(grid_width, grid_height):
-            effective_layout = "continental"
-        elif genesis_island_layout_supported(grid_width, grid_height):
-            effective_layout = "islands"
-        else:
-            effective_layout = "continent"
-    elif map_layout in ("islands", "continent", "continental"):
+        effective_layout = (
+            "continental"
+            if continental_layout_supported(grid_width, grid_height)
+            else "continent"
+        )
+    elif map_layout in ("continent", "continental"):
         effective_layout = map_layout
     else:
         raise ValueError(
-            f"unknown map_layout {map_layout!r}; expected 'auto' | 'islands' | 'continent' | 'continental'"
+            f"unknown map_layout {map_layout!r}; expected 'auto' | 'continent' | 'continental'"
         )
     if effective_layout == "continental":
         def _continental_fn(s: int, x: int, y: int) -> Terrain:
@@ -617,17 +602,7 @@ def bootstrap_genesis(
             height=grid_height,
             correlate_subsurface=True,
             terrain_fn=_continental_fn,
-        )
-    elif effective_layout == "islands":
-        def _genesis_island_fn(s: int, x: int, y: int) -> Terrain:
-            return terrain_for_genesis_island_cell(s, x, y, grid_width, grid_height)
-
-        plots = generate_plots(
-            seed=seed,
-            width=grid_width,
-            height=grid_height,
-            correlate_subsurface=True,
-            terrain_fn=_genesis_island_fn,
+            uniform_plots=True,
         )
     else:
         plots = generate_plots(
@@ -648,6 +623,7 @@ def bootstrap_genesis(
         parties={human},
         scenario_id="genesis",
     )
+    world.scenario_state["map_layout"] = effective_layout
     world.scenario_state["grid_width"] = grid_width
     world.scenario_state["grid_height"] = grid_height
     from realm.world.plot_parcels import refresh_world_cell_index
@@ -669,7 +645,7 @@ def bootstrap_genesis(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
-    if effective_layout in ("islands", "continental"):
+    if effective_layout == "continental":
         from realm.world.landmasses import compute_landmasses
 
         compute_landmasses(world)

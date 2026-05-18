@@ -27,7 +27,7 @@ def test_no_npc_shipper_routes_at_bootstrap() -> None:
 
 
 def test_uncharted_takes_2x_time_for_inter_island() -> None:
-    w = bootstrap_genesis(seed=22, settler_count=6, grid_width=24, grid_height=18, map_layout="islands")
+    w = bootstrap_genesis(seed=22, settler_count=6, grid_width=24, grid_height=18, map_layout="continental")
     w.scenario_state["route_operators"] = {}
     player = PartyId("player")
     plots_by_island: dict[int, list[PlotId]] = {}
@@ -173,7 +173,7 @@ def test_route_discovery_feed_entry() -> None:
 
 
 def test_small_vessel_blocked_on_continent_route() -> None:
-    w = bootstrap_genesis(seed=66, settler_count=4, grid_width=24, grid_height=18, map_layout="islands")
+    w = bootstrap_genesis(seed=66, settler_count=4, grid_width=24, grid_height=18, map_layout="continental")
     player = PartyId("player")
     plots_by_island: dict[int, list[PlotId]] = {}
     for pid, p in w.plots.items():

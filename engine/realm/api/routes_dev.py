@@ -103,7 +103,15 @@ def dev_reset(
         _state.WORLD.scenario_id,
         _state.WORLD.tick,
     )
-    return {"ok": True, "seed": seed, "scenario_id": _state.WORLD.scenario_id}
+    w = _state.WORLD
+    return {
+        "ok": True,
+        "seed": seed,
+        "scenario_id": w.scenario_id,
+        "map_layout": w.scenario_state.get("map_layout"),
+        "grid_width": w.scenario_state.get("grid_width"),
+        "grid_height": w.scenario_state.get("grid_height"),
+    }
 
 
 @router.post("/persistence/save")

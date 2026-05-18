@@ -108,7 +108,7 @@ def test_bootstrap_residences_only_on_dry_land() -> None:
 def test_bootstrap_houses_all_default_island_laborers():
     """Residence count scales with landmass-density labor targets per island."""
     w = bootstrap_genesis(
-        seed=42, grid_width=64, grid_height=48, settler_count=4, map_layout="islands"
+        seed=42, grid_width=64, grid_height=48, settler_count=4, map_layout="continental"
     )
     housed = sum(1 for lab in w.laborers.values() if lab.home_town)
     unhoused = sum(1 for lab in w.laborers.values() if not lab.home_town)
