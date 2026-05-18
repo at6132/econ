@@ -46,6 +46,20 @@ _last_save_kind: str = ""  # "manual" | "autosave"
 _log = logging.getLogger("uvicorn.error")
 
 
+def assign_world(world: "World") -> None:
+    """Install the authoritative in-memory world (``/dev/reset``, load, tests).
+
+    Keeps ``_world_lazy_singleton`` and the module ``WORLD`` attribute in sync
+    so ``__getattr__`` lazy bootstrap cannot shadow a freshly reset world.
+    """
+    global _world_lazy_singleton
+    _world_lazy_singleton = world
+    globals()["WORLD"] = world
+    from realm.world.plot_parcels import refresh_world_cell_index
+
+    refresh_world_cell_index(world)
+
+
 def is_world_initialized() -> bool:
     """``True`` once a ``WORLD`` exists — used by autosave to avoid triggering a
     multi-minute genesis build on a fresh process.

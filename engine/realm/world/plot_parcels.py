@@ -109,9 +109,61 @@ def generate_plot_parcels(
             )
 
     carve_l_corners(plots, assigned, rng)
+    _fill_unassigned_cells(
+        plots,
+        assigned,
+        seed=seed,
+        width=width,
+        height=height,
+        pick=pick,
+        correlate_subsurface=correlate_subsurface,
+    )
 
     clear_noise_cache()
     return plots
+
+
+def _fill_unassigned_cells(
+    plots: dict[PlotId, Plot],
+    assigned: list[list[str | None]],
+    *,
+    seed: int,
+    width: int,
+    height: int,
+    pick: Callable[[int, int, int], Terrain],
+    correlate_subsurface: bool,
+) -> None:
+    """After border splits / carve, ensure every map cell belongs to exactly one plot."""
+    covered: set[tuple[int, int]] = set()
+    for plot in plots.values():
+        covered.update(plot_world_cells_tuple(plot))
+    for y in range(height):
+        for x in range(width):
+            if (x, y) in covered:
+                continue
+            pid = PlotId(f"p-{x}-{y}")
+            assigned[y][x] = str(pid)
+            sub_rng = make_rng(seed, f"gen:{pid}")
+            terrain = pick(seed, x, y)
+            plots[pid] = Plot(
+                plot_id=pid,
+                x=x,
+                y=y,
+                terrain=terrain,
+                owner=None,
+                subsurface=_subsurface_roll(
+                    sub_rng,
+                    terrain,
+                    correlate=correlate_subsurface,
+                    seed=seed,
+                    x=x,
+                    y=y,
+                    apply_belts=correlate_subsurface,
+                ),
+                world_cells=((x, y),),
+                parcel_shape="mono",
+            )
+            covered.add((x, y))
 
 
 def build_world_cell_index(plots: dict[PlotId, Plot]) -> dict[str, str]:

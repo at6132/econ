@@ -33,17 +33,17 @@ def _build_catalog() -> list[tuple[frozenset[tuple[int, int]], float]]:
     if _CATALOG:
         return _CATALOG
     items: list[tuple[frozenset[tuple[int, int]], float]] = [
-        (_rect(1, 1), 0.10),
+        (_rect(1, 1), 0.04),
         (_rect(2, 1), 0.09),
         (_rect(1, 2), 0.09),
         (_rect(3, 1), 0.06),
         (_rect(1, 3), 0.06),
-        (_rect(2, 2), 0.14),
+        (_rect(2, 2), 0.16),
         (_rect(3, 2), 0.08),
         (_rect(2, 3), 0.07),
         (_rect(3, 3), 0.05),
         # L tromino (3 cells)
-        (_norm({(0, 0), (0, 1), (1, 0)}), 0.07),
+        (_norm({(0, 0), (0, 1), (1, 0)}), 0.09),
         # L pentomino (5 cells)
         (_norm({(0, 0), (0, 1), (0, 2), (1, 2)}), 0.06),
         (_norm({(0, 0), (1, 0), (2, 0), (2, 1)}), 0.05),

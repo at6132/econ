@@ -91,11 +91,20 @@ def dev_reset(
     _log.info("Realm: POST /dev/reset received (scenario=%r seed=%s) — building world…", scenario, seed)
     t0 = time.perf_counter()
     try:
-        _state.WORLD = bootstrap_by_scenario(seed=seed, scenario=scenario)
+        w = bootstrap_by_scenario(seed=seed, scenario=scenario)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    _state.assign_world(w)
     if name:
         _state.WORLD.world_name = name
+    from realm.api import sim_loop
+    from realm.world.sim_clock import get_sim_clock
+
+    clk = get_sim_clock()
+    clk.set_paused(False)
+    clk.set_speed(1.0)
+    sim_loop._push_to_all({"kind": "sim_status", **clk.status_dict()})
+    sim_loop._push_to_all(sim_loop.build_tick_frame())
     elapsed = time.perf_counter() - t0
     _log.info(
         "Realm: POST /dev/reset finished in %.1fs (scenario_id=%r tick=%s).",
@@ -151,9 +160,18 @@ def post_persistence_load(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     try:
-        _state.WORLD = load_snapshot(str(p))
+        w = load_snapshot(str(p))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    _state.assign_world(w)
+    from realm.api import sim_loop
+    from realm.world.sim_clock import get_sim_clock
+
+    clk = get_sim_clock()
+    clk.set_paused(False)
+    clk.set_speed(1.0)
+    sim_loop._push_to_all({"kind": "sim_status", **clk.status_dict()})
+    sim_loop._push_to_all(sim_loop.build_tick_frame())
     _log.info("Realm: POST /persistence/load read %s (tick=%s).", p.name, _state.WORLD.tick)
     return {"ok": True, "path": p.relative_to(_state._REPO_ROOT).as_posix(), "tick": _state.WORLD.tick}
 

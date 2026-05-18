@@ -78,6 +78,11 @@ func _initial_world_load() -> void:
 
 
 func _on_boot_map_loaded(data: Dictionary) -> void:
+	# Genesis payloads are ~8 MB — defer so the scene change can finish one frame first.
+	call_deferred("_apply_boot_map_loaded", data)
+
+
+func _apply_boot_map_loaded(data: Dictionary) -> void:
 	if _try_apply_map_payload(data):
 		_finish_boot_load()
 		return
@@ -105,10 +110,21 @@ func _on_boot_world_fallback(data: Dictionary) -> void:
 
 
 func _finish_boot_load() -> void:
+	API.get_sim_status(_on_boot_sim_status)
 	API.get_world_static(func(s): WorldState.apply_static(s))
 	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 	API.get_world_feed(func(f): WorldState.apply_feed(f), -1)
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
+
+
+func _on_boot_sim_status(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	WorldState.apply_sim_status(data)
+	if shell.has_method("_refresh_sim_controls"):
+		shell.call("_refresh_sim_controls")
+	if shell.has_method("_refresh_stats"):
+		shell.call("_refresh_stats")
 
 
 func _setup_map_overlay_bar() -> void:

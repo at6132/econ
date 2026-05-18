@@ -4,9 +4,11 @@ extends Control
 const MAIN_SCENE := "res://scenes/Main.tscn"
 const CreationScreenScene := preload("res://scenes/WorldCreationScreen.tscn")
 
+const DEFAULT_SCENARIO := "genesis"
+
 const SCENARIOS: Array = [
-	["frontier", "Frontier — default solo slice"],
-	["genesis", "Genesis — full 320×240 continental map"],
+	["genesis", "Genesis — full 320×240 continental map (default)"],
+	["frontier", "Frontier — small solo slice"],
 	["cartel", "Cartel"],
 	["bootstrapper", "Bootstrapper"],
 	["speculator", "Speculator"],
@@ -181,7 +183,12 @@ func _make_new_world() -> VBoxContainer:
 		var lab: String = str(row[1])
 		_scenario_opt.add_item(lab)
 		_scenario_opt.set_item_metadata(_scenario_opt.item_count - 1, sid)
-	_scenario_opt.select(0)
+	var default_idx := 0
+	for i in range(SCENARIOS.size()):
+		if str((SCENARIOS[i] as Array)[0]) == DEFAULT_SCENARIO:
+			default_idx = i
+			break
+	_scenario_opt.select(default_idx)
 	_style_primary_button(_scenario_opt)
 	row_sc.add_child(ls)
 	row_sc.add_child(_scenario_opt)
