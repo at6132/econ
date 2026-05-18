@@ -24,7 +24,8 @@ const LOD_REGION_MAX := 32.0
 const LOD_PLOT_MAX := 56.0
 ## When more than this many cells are visible, use pre-aggregated paths (see ``MapLodCache``).
 const OVERVIEW_DRAW_CELL_THRESHOLD := 1800
-const CHUNK_DRAW_CELL_THRESHOLD := 600
+## Far zoom (between overview and full mesh): per-cell rects, not 16×16 chunk blocks.
+const FAR_ALIGNED_DRAW_CELL_THRESHOLD := 600
 const ALIGNED_DRAW_CELL_THRESHOLD := 1200
 
 signal plot_clicked(plot_id: String, plot_data: Dictionary)
@@ -33,6 +34,8 @@ signal plot_clicked(plot_id: String, plot_data: Dictionary)
 
 var _mesh: MapOrganicMesh
 var _lod_cache: MapLodCache = MapLodCache.new()
+## SubViewportContainer uses nearest only while drawing the overview texture.
+var _subviewport_filter_overview: bool = false
 var _world_seed: int = DEMO_SEED
 var _selected_plot_id: String = ""
 var _selected_gx: int = -1
@@ -463,36 +466,82 @@ func _draw() -> void:
 	var sel_gx := _selected_gx
 	var sel_gy := _selected_gy
 
-	if lod <= 1 and vis_cells >= OVERVIEW_DRAW_CELL_THRESHOLD and _lod_cache.overview_ready:
+	_sync_subviewport_pixel_filter()
+
+	if _uses_overview_draw():
 		_draw_overview_terrain()
 		_draw_selection_highlight(sel_gx, sel_gy)
 		_draw_town_dots()
 		return
 
-	if lod <= 2 and vis_cells >= CHUNK_DRAW_CELL_THRESHOLD and _lod_cache.chunk_flags.size() > 0:
-		_draw_chunk_terrain()
-		_draw_selection_highlight(sel_gx, sel_gy)
-		_draw_town_dots()
-		if lod >= 2:
-			_draw_town_chrome(lod, csp)
-		return
-
-	if lod <= 2 and vis_cells >= ALIGNED_DRAW_CELL_THRESHOLD:
+	# Square map cells — matches engine hectare grid and multi-tile deeds (no wavy quads).
+	var draw_cell_strokes := lod >= 2 and vis_cells < FAR_ALIGNED_DRAW_CELL_THRESHOLD
+	if draw_cell_strokes:
+		_draw_aligned_cell_terrain_stroked(sel_gx, sel_gy, lod)
+	else:
 		_draw_aligned_cell_terrain()
-		_draw_selection_highlight(sel_gx, sel_gy)
-		_draw_town_dots()
-		_draw_town_chrome(lod, csp)
-		return
+	_draw_parcel_boundaries(lod)
+	_draw_selection_highlight(sel_gx, sel_gy)
+	_draw_town_dots()
+	_draw_town_chrome(lod, csp)
 
-	if lod <= 1:
-		_draw_aligned_cell_terrain()
-		_draw_selection_highlight(sel_gx, sel_gy)
-		_draw_town_dots()
-		return
+	if lod >= 2 and lod < 4:
+		_draw_building_dots()
+	elif lod >= 4:
+		_draw_site_layout()
 
-	# ── LOD 2+: full terrain + strokes ──
+	if lod >= 3:
+		_draw_plot_detail_labels()
+
+
+func _draw_overview_terrain() -> void:
+	var tex := _lod_cache.overview_texture
+	if tex == null:
+		return
+	var prev_filter := texture_filter
+	texture_filter = TEXTURE_FILTER_NEAREST
+	draw_texture_rect(
+		tex,
+		Rect2(0.0, 0.0, _mesh.content_width, _mesh.content_height),
+		false
+	)
+	texture_filter = prev_filter
+
+
+func _cell_rect(gx: int, gy: int) -> Rect2:
+	var cp := _mesh.cell_px
+	var pad := _mesh.pad
+	return Rect2(pad + float(gx) * cp, pad + float(gy) * cp, cp, cp)
+
+
+func _neighbor_same_parcel(gx: int, gy: int, dx: int, dy: int) -> bool:
+	var bx := _last_mesh_bounds.x
+	var by := _last_mesh_bounds.y
+	var nx := gx + dx
+	var ny := gy + dy
+	if nx < 0 or ny < 0 or nx >= bx or ny >= by:
+		return false
+	var idx := gy * bx + gx
+	var nidx := ny * bx + nx
+	if (_cell_flags[idx] & 0x1) == 0 or (_cell_flags[nidx] & 0x1) == 0:
+		return false
+	return _cell_pids[idx] == _cell_pids[nidx]
+
+
+func _draw_aligned_cell_terrain() -> void:
+	var bx := _last_mesh_bounds.x
+	for gy in range(_vis_min_y, _vis_max_y):
+		var row_off := gy * bx
+		for gx in range(_vis_min_x, _vis_max_x):
+			var idx := row_off + gx
+			if (_cell_flags[idx] & 0x1) == 0:
+				continue
+			draw_rect(_cell_rect(gx, gy), _cell_colors[idx])
+
+
+func _draw_aligned_cell_terrain_stroked(sel_gx: int, sel_gy: int, lod: int) -> void:
+	var bx := _last_mesh_bounds.x
 	var stroke_w_base := _world_line_width(1.0)
-	var stroke_w_sel := _world_line_width(3.5)
 	var stroke_w_mine := _world_line_width(1.5)
 	var stroke_w_other := _world_line_width(1.25)
 	var mine_ring_r := _mesh.cell_px * 0.28
@@ -506,23 +555,21 @@ func _draw() -> void:
 			var flags := _cell_flags[idx]
 			if (flags & 0x1) == 0:
 				continue
-			var pts := _mesh.plot_polygon(gx, gy)
-			draw_colored_polygon(pts, _cell_colors[idx])
-
+			var r := _cell_rect(gx, gy)
+			draw_rect(r, _cell_colors[idx])
 			if (flags & 0x8) != 0:
 				var tint := _cell_owner_tints[idx]
 				if tint.a > 0.01:
-					draw_colored_polygon(pts, tint)
+					draw_rect(r, tint)
 
 			var is_mine := (flags & 0x2) != 0
 			var is_sel := gx == sel_gx and gy == sel_gy
+			if is_sel:
+				continue
 
 			var stroke_w: float
 			var stroke_c: Color
-			if is_sel:
-				stroke_c = RealmColors.ACCENT
-				stroke_w = stroke_w_sel
-			elif is_mine:
+			if is_mine:
 				stroke_c = RealmColors.MAGIC
 				stroke_c.a = 0.55
 				stroke_w = stroke_w_mine
@@ -533,81 +580,22 @@ func _draw() -> void:
 			else:
 				stroke_c = default_stroke_c
 				stroke_w = stroke_w_base
-			draw_polyline(pts, stroke_c, stroke_w, true)
-			draw_line(pts[3], pts[0], stroke_c, stroke_w)
 
-			if lod >= 3 and is_mine and not is_sel:
-				var ctr := _mesh.plot_centroid(gx, gy)
+			# Only stroke deed boundaries — skip edges shared with the same parcel.
+			if not _neighbor_same_parcel(gx, gy, 0, -1):
+				draw_line(r.position, r.position + Vector2(r.size.x, 0.0), stroke_c, stroke_w)
+			if not _neighbor_same_parcel(gx, gy, 0, 1):
+				draw_line(r.end, r.end - Vector2(r.size.x, 0.0), stroke_c, stroke_w)
+			if not _neighbor_same_parcel(gx, gy, -1, 0):
+				draw_line(r.position, r.position + Vector2(0.0, r.size.y), stroke_c, stroke_w)
+			if not _neighbor_same_parcel(gx, gy, 1, 0):
+				draw_line(r.end, r.end - Vector2(0.0, r.size.y), stroke_c, stroke_w)
+
+			if lod >= 3 and is_mine:
+				var ctr := r.position + r.size * 0.5
 				var ring_c := RealmColors.MAGIC
 				ring_c.a = 0.35
 				draw_arc(ctr, mine_ring_r, 0.0, TAU, 10, ring_c, mine_ring_w)
-
-	_draw_town_chrome(lod, csp)
-
-	if lod >= 2 and lod < 4:
-		_draw_building_dots()
-	elif lod >= 4:
-		_draw_site_layout()
-
-	if lod >= 3:
-		_draw_plot_detail_labels()
-
-	if lod >= 3 and vis_cells < CHUNK_DRAW_CELL_THRESHOLD:
-		_draw_parcel_boundaries(lod)
-
-
-func _draw_overview_terrain() -> void:
-	var tex := _lod_cache.overview_texture
-	if tex == null:
-		return
-	draw_texture_rect(
-		tex,
-		Rect2(0.0, 0.0, _mesh.content_width, _mesh.content_height),
-		false
-	)
-
-
-func _draw_chunk_terrain() -> void:
-	var cs := MapLodCache.CHUNK_CELLS
-	var cp := _mesh.cell_px
-	var pad := _mesh.pad
-	var cw := _lod_cache.chunk_w
-	var bounds := _last_mesh_bounds
-	var cx0 := maxi(0, _vis_min_x / cs)
-	var cy0 := maxi(0, _vis_min_y / cs)
-	var cx1 := mini(cw, int(ceil(float(_vis_max_x) / float(cs))))
-	var cy1 := mini(_lod_cache.chunk_h, int(ceil(float(_vis_max_y) / float(cs))))
-	for cy in range(cy0, cy1):
-		var row := cy * cw
-		var gy0 := cy * cs
-		var gy1 := mini(gy0 + cs, bounds.y)
-		var y0 := pad + float(gy0) * cp
-		var h_px := float(gy1 - gy0) * cp
-		for cx in range(cx0, cx1):
-			var cidx := row + cx
-			if (_lod_cache.chunk_flags[cidx] & 0x1) == 0:
-				continue
-			var gx0 := cx * cs
-			var gx1 := mini(gx0 + cs, bounds.x)
-			var x0 := pad + float(gx0) * cp
-			draw_rect(Rect2(x0, y0, float(gx1 - gx0) * cp, h_px), _lod_cache.chunk_colors[cidx])
-
-
-func _draw_aligned_cell_terrain() -> void:
-	var bx := _last_mesh_bounds.x
-	var cp := _mesh.cell_px
-	var pad := _mesh.pad
-	for gy in range(_vis_min_y, _vis_max_y):
-		var row_off := gy * bx
-		var y0 := pad + float(gy) * cp
-		for gx in range(_vis_min_x, _vis_max_x):
-			var idx := row_off + gx
-			if (_cell_flags[idx] & 0x1) == 0:
-				continue
-			draw_rect(
-				Rect2(pad + float(gx) * cp, y0, cp, cp),
-				_cell_colors[idx]
-			)
 
 
 func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
@@ -617,18 +605,25 @@ func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
 	var sel_idx := sel_gy * bx + sel_gx
 	if (_cell_flags[sel_idx] & 0x1) == 0:
 		return
-	var lod := _lod()
 	var sw := _world_line_width(3.5)
 	var accent := RealmColors.ACCENT
-	if lod <= 2 and _visible_cell_count() >= CHUNK_DRAW_CELL_THRESHOLD:
-		var cp := _mesh.cell_px
-		var pad := _mesh.pad
-		var r := Rect2(pad + float(sel_gx) * cp, pad + float(sel_gy) * cp, cp, cp)
-		draw_rect(r, Color(accent, 0.0), false, sw)
+	var pid := _cell_pids[sel_idx]
+	if pid.is_empty():
+		draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
 		return
-	var pts := _mesh.plot_polygon(sel_gx, sel_gy)
-	draw_polyline(pts, accent, sw, true)
-	draw_line(pts[3], pts[0], accent, sw)
+	# Highlight the whole deed when it spans multiple map cells.
+	var cells_v: Variant = WorldState.plots.get(pid, {}).get("world_cells", [])
+	if cells_v is Array and (cells_v as Array).size() > 1:
+		var cell_set: Dictionary = {}
+		for c in cells_v as Array:
+			if c is Dictionary:
+				var d: Dictionary = c as Dictionary
+				cell_set["%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]] = true
+		var deed_rect := _parcel_aligned_rect(cell_set)
+		if deed_rect.size.x > 0.0:
+			draw_rect(deed_rect, Color(accent, 0.0), false, sw)
+			return
+	draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
 
 
 func _overdraw_world_rect() -> Rect2:
@@ -675,14 +670,33 @@ func _lod() -> int:
 	return 4
 
 
-## Overview texture replaces per-cell mesh; plot hit-tests are meaningless at this scale.
-func _overview_lod_active() -> bool:
+## Precomputed overview texture (max zoom-out only).
+func _uses_overview_draw() -> bool:
 	if _mesh == null or not _lod_cache.overview_ready:
 		return false
 	if _lod() > 1:
 		return false
 	_compute_visible_range_overdraw()
 	return _visible_cell_count() >= OVERVIEW_DRAW_CELL_THRESHOLD
+
+
+func _overview_lod_active() -> bool:
+	return _uses_overview_draw()
+
+
+func _sync_subviewport_pixel_filter() -> void:
+	var want_nearest := _uses_overview_draw()
+	if want_nearest == _subviewport_filter_overview:
+		return
+	_subviewport_filter_overview = want_nearest
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var container := vp.get_parent()
+	if container is SubViewportContainer:
+		container.texture_filter = (
+			TEXTURE_FILTER_NEAREST if want_nearest else TEXTURE_FILTER_LINEAR
+		)
 
 
 func _world_line_width(screen_px: float) -> float:
@@ -700,12 +714,41 @@ func _town_bounds_poly(minx: int, miny: int, maxx: int, maxy: int) -> PackedVect
 ## Terrain drawing is now inlined in ``_draw()`` using flat pre-cached arrays.
 
 
+func _parcel_aligned_rect(cell_set: Dictionary) -> Rect2:
+	if cell_set.is_empty() or _mesh == null:
+		return Rect2()
+	var min_gx := 1_000_000
+	var min_gy := 1_000_000
+	var max_gx := -1
+	var max_gy := -1
+	for key in cell_set.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var gx := int(parts[0])
+		var gy := int(parts[1])
+		min_gx = mini(min_gx, gx)
+		min_gy = mini(min_gy, gy)
+		max_gx = maxi(max_gx, gx)
+		max_gy = maxi(max_gy, gy)
+	if max_gx < min_gx:
+		return Rect2()
+	var cp := _mesh.cell_px
+	var pad := _mesh.pad
+	return Rect2(
+		pad + float(min_gx) * cp,
+		pad + float(min_gy) * cp,
+		float(max_gx - min_gx + 1) * cp,
+		float(max_gy - min_gy + 1) * cp,
+	)
+
+
 func _draw_parcel_boundaries(lod: int) -> void:
-	## Gold outline around multi-hectare deeds (Option B). Per-cell squiggles stay underneath.
+	## Gold frame around multi-hectare deeds (2×1, 2×2, …).
 	if _demo_mode or lod < 2 or _mesh == null:
 		return
-	var stroke_c := Color(0.92, 0.82, 0.45, 0.88)
-	var stroke_w := _world_line_width(2.25)
+	var stroke_c := Color(0.95, 0.78, 0.22, 0.95)
+	var stroke_w := _world_line_width(3.0)
 	for plot_id in WorldState.plots.keys():
 		var p: Dictionary = WorldState.plots[plot_id]
 		var cells_v: Variant = p.get("world_cells", [])
@@ -727,67 +770,9 @@ func _draw_parcel_boundaries(lod: int) -> void:
 				any_visible = true
 		if not any_visible:
 			continue
-		var poly := _parcel_boundary_polygon(cell_set)
-		if poly.size() >= 3:
-			draw_polyline(poly, stroke_c, stroke_w, true)
-			draw_line(poly[poly.size() - 1], poly[0], stroke_c, stroke_w)
-
-
-func _parcel_boundary_polygon(cell_set: Dictionary) -> PackedVector2Array:
-	var segments: Array = []
-	for key in cell_set.keys():
-		var parts: PackedStringArray = str(key).split(",")
-		if parts.size() != 2:
-			continue
-		var gx := int(parts[0])
-		var gy := int(parts[1])
-		var pts := _mesh.plot_polygon(gx, gy)
-		if pts.size() < 4:
-			continue
-		if not cell_set.has("%d,%d" % [gx, gy - 1]):
-			segments.append([pts[0], pts[1]])
-		if not cell_set.has("%d,%d" % [gx, gy + 1]):
-			segments.append([pts[3], pts[2]])
-		if not cell_set.has("%d,%d" % [gx - 1, gy]):
-			segments.append([pts[0], pts[3]])
-		if not cell_set.has("%d,%d" % [gx + 1, gy]):
-			segments.append([pts[1], pts[2]])
-	var loop: Array = _chain_boundary_segments(segments)
-	var poly := PackedVector2Array()
-	for v in loop:
-		if v is Vector2:
-			poly.append(v)
-	return poly
-
-
-func _chain_boundary_segments(segments: Array) -> Array:
-	if segments.is_empty():
-		return []
-	var remaining: Array = segments.duplicate()
-	var loop: Array = [remaining[0][0], remaining[0][1]]
-	remaining.remove_at(0)
-	var guard := 0
-	while not remaining.is_empty() and guard < 512:
-		guard += 1
-		var end: Vector2 = loop[loop.size() - 1]
-		var found := -1
-		var use_second := false
-		for i in range(remaining.size()):
-			var seg: Array = remaining[i]
-			if seg[0] == end:
-				found = i
-				use_second = true
-				break
-			if seg[1] == end:
-				found = i
-				use_second = false
-				break
-		if found < 0:
-			break
-		var picked: Array = remaining[found]
-		remaining.remove_at(found)
-		loop.append(picked[1] if use_second else picked[0])
-	return loop
+		var deed_rect := _parcel_aligned_rect(cell_set)
+		if deed_rect.size.x > 0.0:
+			draw_rect(deed_rect, Color(stroke_c, 0.0), false, stroke_w)
 
 
 func _draw_town_dots() -> void:
@@ -1089,6 +1074,7 @@ func _apply_pending_zoom() -> void:
 	_sync_camera_zoom()
 	camera.position += world_before - _screen_to_world(_zoom_pending_pos)
 	_clamp_camera_position()
+	_sync_subviewport_pixel_filter()
 	queue_redraw()
 
 

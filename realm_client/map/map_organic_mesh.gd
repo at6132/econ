@@ -25,8 +25,8 @@ func _init(world_seed: int, grid_w: int, grid_h: int, pad_px: float, cell_px_val
 	_grid_h = grid_h
 	pad = pad_px
 	cell_px = cell_px_val
-	# 10% corner jitter — readable grid with slight hand-drawn softness (was ~42%).
-	_amp = cell_px * 0.10
+	# Square hectare grid — jitter disabled so deeds read as land parcels, not wavy tiles.
+	_amp = 0.0
 	content_width = pad * 2.0 + float(grid_w) * cell_px
 	content_height = pad * 2.0 + float(grid_h) * cell_px
 	_precompute_corners()
