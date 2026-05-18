@@ -3,9 +3,10 @@
 [ext_resource type="Script" path="res://scenes/panels/build/BlueprintSidebar.gd" id="1_script"]
 
 [node name="BlueprintSidebar" type="VBoxContainer"]
-custom_minimum_size = Vector2(260, 0)
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 0
+size_flags_vertical = 3
 theme_override_constants/separation = 8
 script = ExtResource("1_script")
 
@@ -17,11 +18,14 @@ placeholder_text = "Search blueprints…"
 [node name="Scroll" type="ScrollContainer" parent="."]
 layout_mode = 2
 size_flags_vertical = 3
+size_flags_horizontal = 3
+horizontal_scroll_mode = 0
 
 [node name="BlueprintList" type="VBoxContainer" parent="Scroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 0
 theme_override_constants/separation = 6
 
 [node name="CreateBlueprintBtn" type="Button" parent="."]

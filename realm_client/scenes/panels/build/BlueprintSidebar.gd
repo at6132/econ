@@ -96,7 +96,10 @@ func _add_section_header(text: String) -> void:
 
 func _make_blueprint_card(bp: Dictionary) -> PanelContainer:
 	var pc := PanelContainer.new()
+	pc.custom_minimum_size = Vector2(260, 0)
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pc.add_child(vbox)
 	var bid: String = str(bp.get("blueprint_id", ""))
 	if bid == _selected_id:
@@ -105,8 +108,9 @@ func _make_blueprint_card(bp: Dictionary) -> PanelContainer:
 	var cat_icon: String = CATEGORY_ICONS.get(str(bp.get("category", "custom")), "*")
 	var name_lbl := Label.new()
 	name_lbl.text = "%s %s" % [cat_icon, str(bp.get("name", bid))]
-	name_lbl.add_theme_font_size_override("font_size", 12)
+	name_lbl.add_theme_font_size_override("font_size", 13)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header.add_child(name_lbl)
 	var fp_lbl := Label.new()
 	fp_lbl.text = "%d×%d" % [int(bp.get("footprint_w", 1)), int(bp.get("footprint_h", 1))]

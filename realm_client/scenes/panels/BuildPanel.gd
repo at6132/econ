@@ -41,9 +41,15 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	var terrain: String = str(plot_data.get("terrain", "plains"))
 	var tlabel: String = terrain.replace("_", " ").capitalize()
 	var area_m := int(plot_data.get("area_sq_metres", 10_000))
-	var wt := int(plot_data.get("world_tiles_w", 1))
-	var ht := int(plot_data.get("world_tiles_h", 1))
-	var size_lbl := "%d m² (%d×%d ha)" % [area_m, wt, ht] if wt > 1 or ht > 1 else "100m × 100m"
+	var ha := float(area_m) / 10000.0
+	var tile_n := int(plot_data.get("world_tile_count", 0))
+	if tile_n < 1:
+		var wc: Variant = plot_data.get("world_cells", [])
+		if wc is Array:
+			tile_n = (wc as Array).size()
+	var size_lbl := "%d m² (%.1f ha)" % [area_m, ha]
+	if tile_n > 1:
+		size_lbl += " · %d tiles" % tile_n
 	plot_title.text = "Build on Plot %s  ·  %s  ·  %s" % [plot_id, tlabel, size_lbl]
 	if sidebar.has_method("set_plot_id"):
 		sidebar.call("set_plot_id", plot_id)

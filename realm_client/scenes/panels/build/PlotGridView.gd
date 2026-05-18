@@ -17,8 +17,12 @@ const TERRAIN_COLORS := {
 	"swamp": Color(0.28, 0.40, 0.22),
 	"tundra": Color(0.82, 0.85, 0.88),
 }
-const LOT_LINE := Color(0.12, 0.11, 0.10, 0.92)
-const LOT_LINE_HI := Color(0.85, 0.72, 0.20, 0.55)
+const VOID_FILL := Color(0.06, 0.06, 0.08, 0.92)
+const VOID_LINE := Color(0.14, 0.14, 0.16, 0.55)
+const GRID_LINE := Color(0.18, 0.17, 0.16, 0.65)
+const TILE_LINE := Color(0.32, 0.30, 0.28, 0.85)
+const DEED_LINE := Color(0.12, 0.11, 0.10, 0.95)
+const DEED_LINE_HI := Color(0.85, 0.72, 0.20, 0.55)
 const STREET_COLOR := Color(0.28, 0.28, 0.30, 0.45)
 const OCCUPIED_COLOR := Color(0.25, 0.25, 0.30, 0.85)
 const PREVIEW_OK := Color(0.30, 0.90, 0.40, 0.55)
@@ -33,6 +37,7 @@ var _grid_h: int = 10
 var _placed_buildings: Array = []
 var _sub_plots: Array = []
 var _lots: Array = []
+var _deed_cells: Dictionary = {}  # "gx,gy" → true
 var _street_rows: Array[int] = []
 
 var _placing_blueprint_id: String = ""
@@ -68,8 +73,24 @@ func load_plot(plot_id: String, data: Dictionary) -> void:
 		_sub_plots = []
 	# Deed footprint = engine ``world_cells`` (one source of truth with the world map).
 	_lots = [_deed_lot_from_world_cells(data)]
+	_deed_cells = _deed_cell_lookup(_lots)
 	_street_rows = []
 	queue_redraw()
+
+
+func _deed_cell_lookup(lots: Array) -> Dictionary:
+	var out := {}
+	for lot in lots:
+		if not (lot is Dictionary):
+			continue
+		for c in (lot as Dictionary).get("cells", []) as Array:
+			if c is Vector2i:
+				out["%d,%d" % [c.x, c.y]] = true
+	return out
+
+
+func _in_deed(gx: int, gy: int) -> bool:
+	return _deed_cells.has("%d,%d" % [gx, gy])
 
 
 ## Build-grid cells (10m) covered by this deed — mirrors ``world_cells`` from the API.
@@ -176,11 +197,10 @@ func _draw() -> void:
 	if Time.get_ticks_msec() / 1000.0 < _error_flash_until:
 		terrain_color = terrain_color.lerp(Color(0.9, 0.2, 0.2), 0.35)
 
-	var plot_rect := _cells_rect(0, 0, _grid_w, _grid_h)
-	draw_rect(plot_rect, terrain_color)
-
+	_draw_cell_fills(terrain_color)
 	_draw_streets(cs)
-	_draw_lots(terrain_color)
+	_draw_schematic_grid(cs)
+	_draw_deed_outline()
 
 	for sp in _sub_plots:
 		if not (sp is Dictionary):
@@ -194,11 +214,13 @@ func _draw() -> void:
 		var lbl := str(sp.get("sub_plot_id", "?")).split(":")[-1]
 		_draw_text(border.position + Vector2(4, 14), lbl, 13, Color(0.85, 0.72, 0.20, 0.9))
 
-	if _hover_lot_idx >= 0 and _hover_lot_idx < _lots.size() and _placing_blueprint_id.is_empty():
-		var hover_cells: Array = (_lots[_hover_lot_idx] as Dictionary).get("cells", []) as Array
-		var hover_poly := _lot_boundary_polygon(hover_cells, _hover_lot_idx)
-		if hover_poly.size() >= 3:
-			_draw_polyline(hover_poly, LOT_LINE_HI, 2.0, true)
+	if (
+		_hover_gx >= 0
+		and _in_deed(_hover_gx, _hover_gy)
+		and _placing_blueprint_id.is_empty()
+	):
+		draw_rect(_cell_rect(_hover_gx, _hover_gy), Color(1.0, 1.0, 1.0, 0.08))
+		draw_rect(_cell_rect(_hover_gx, _hover_gy), DEED_LINE_HI, false, 1.5)
 
 	for b in _placed_buildings:
 		if not (b is Dictionary):
@@ -241,7 +263,7 @@ func _draw() -> void:
 			for dx in range(_placing_w):
 				var pgx := _hover_gx + dx
 				var pgy := _hover_gy + dy
-				if pgx < _grid_w and pgy < _grid_h:
+				if pgx < _grid_w and pgy < _grid_h and _in_deed(pgx, pgy):
 					draw_rect(_cell_rect(pgx, pgy), preview_color)
 
 	if _confirming:
@@ -256,15 +278,56 @@ func _draw() -> void:
 			RealmColors.ACCENT,
 		)
 
-	if cs > 20.0:
-		var area_m := int(_plot_data.get("area_sq_metres", _grid_w * _grid_h * 100))
+	if cs >= 6.0:
+		var area_m := int(_plot_data.get("area_sq_metres", _deed_cells.size() * 100))
+		var plot_rect := _cells_rect(0, 0, _grid_w, _grid_h)
 		_draw_text(
 			Vector2(plot_rect.position.x, size.y - 10.0),
-			"%d×%d cells (10m)  |  %d m² deed  |  %.0f cells free"
-			% [_grid_w, _grid_h, area_m, _free_cell_count()],
+			"%d×%d grid (10m)  |  %d m² deed  |  %d cells free"
+			% [_grid_w, _grid_h, area_m, int(_free_cell_count())],
 			10,
 			METRE_LABEL,
 		)
+
+
+func _draw_cell_fills(terrain_color: Color) -> void:
+	for gy in range(_grid_h):
+		for gx in range(_grid_w):
+			var r := _cell_rect(gx, gy)
+			if _in_deed(gx, gy):
+				draw_rect(r, terrain_color)
+			else:
+				draw_rect(r, VOID_FILL)
+
+
+func _draw_schematic_grid(cs: float) -> void:
+	if cs < 4.0:
+		return
+	for gx in range(_grid_w + 1):
+		var x := _grid_origin().x + gx * cs
+		var major := gx % 10 == 0
+		var col := TILE_LINE if major else GRID_LINE
+		var w := 1.5 if major else 1.0
+		var top := _grid_origin().y
+		var bottom := top + cs * _grid_h
+		draw_line(Vector2(x, top), Vector2(x, bottom), col, w, true)
+	for gy in range(_grid_h + 1):
+		var y := _grid_origin().y + gy * cs
+		var major := gy % 10 == 0
+		var col := TILE_LINE if major else GRID_LINE
+		var w := 1.5 if major else 1.0
+		var left := _grid_origin().x
+		var right := left + cs * _grid_w
+		draw_line(Vector2(left, y), Vector2(right, y), col, w, true)
+
+
+func _draw_deed_outline() -> void:
+	for i in range(_lots.size()):
+		var lot: Dictionary = _lots[i]
+		var cells: Array = lot.get("cells", []) as Array
+		var poly := _lot_boundary_polygon(cells, i, false)
+		if poly.size() >= 3:
+			_draw_polyline(poly, DEED_LINE, 2.0, true)
 
 
 func _draw_streets(_cs: float) -> void:
@@ -276,22 +339,7 @@ func _draw_streets(_cs: float) -> void:
 		draw_rect(r, STREET_COLOR)
 
 
-func _draw_lots(base_terrain: Color) -> void:
-	for i in range(_lots.size()):
-		var lot: Dictionary = _lots[i]
-		var cells: Array = lot.get("cells", []) as Array
-		var tint := base_terrain.lerp(Color(0.35, 0.32, 0.28), 0.04)
-		if str(lot.get("shape", "")) == "l":
-			tint = tint.lerp(Color(0.42, 0.38, 0.32), 0.08)
-		elif str(lot.get("shape", "")) in ["zigzag", "t", "plus", "poly"]:
-			tint = tint.lerp(Color(0.38, 0.36, 0.30), 0.05)
-		var poly := _lot_boundary_polygon(cells, i)
-		if poly.size() >= 3:
-			draw_colored_polygon(poly, tint)
-			_draw_polyline(poly, LOT_LINE, 1.6, true)
-
-
-func _lot_boundary_polygon(cells: Array, lot_idx: int) -> PackedVector2Array:
+func _lot_boundary_polygon(cells: Array, lot_idx: int, sketchy: bool = false) -> PackedVector2Array:
 	if cells.is_empty():
 		return PackedVector2Array()
 	var cell_set := {}
@@ -318,7 +366,10 @@ func _lot_boundary_polygon(cells: Array, lot_idx: int) -> PackedVector2Array:
 	var loop: Array = _chain_segments(segments)
 	var poly := PackedVector2Array()
 	for p in loop:
-		poly.append(_grid_corner_px(int(p.x), int(p.y), lot_idx))
+		if sketchy:
+			poly.append(_grid_corner_px(int(p.x), int(p.y), lot_idx))
+		else:
+			poly.append(_grid_corner_crisp(int(p.x), int(p.y)))
 	return poly
 
 
@@ -352,10 +403,14 @@ func _chain_segments(segments: Array) -> Array:
 	return loop
 
 
-func _grid_corner_px(gx: int, gy: int, lot_idx: int) -> Vector2:
+func _grid_corner_crisp(gx: int, gy: int) -> Vector2:
 	var cs := _cell_size()
 	var o := _grid_origin()
-	var base := Vector2(o.x + gx * cs, o.y + gy * cs)
+	return Vector2(o.x + gx * cs, o.y + gy * cs)
+
+
+func _grid_corner_px(gx: int, gy: int, lot_idx: int) -> Vector2:
+	var base := _grid_corner_crisp(gx, gy)
 	var j := MapHash.vertex_jitter(
 		WorldState.world_seed,
 		_plot_id.hash() ^ lot_idx,
@@ -387,13 +442,24 @@ func _can_place_at(gx: int, gy: int) -> bool:
 	var occ := _occupied_set()
 	for dy in range(_placing_h):
 		for dx in range(_placing_w):
-			if occ.has("%d,%d" % [gx + dx, gy + dy]):
+			var cx := gx + dx
+			var cy := gy + dy
+			if not _in_deed(cx, cy):
+				return false
+			if occ.has("%d,%d" % [cx, cy]):
 				return false
 	return true
 
 
 func _free_cell_count() -> float:
-	return float(_grid_w * _grid_h - _occupied_set().size())
+	if _deed_cells.is_empty():
+		return float(_grid_w * _grid_h - _occupied_set().size())
+	var occ := _occupied_set()
+	var free_n := 0
+	for key in _deed_cells.keys():
+		if not occ.has(key):
+			free_n += 1
+	return float(free_n)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -436,5 +502,7 @@ func _screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	var gx := int((screen_pos.x - o.x) / cs)
 	var gy := int((screen_pos.y - o.y) / cs)
 	if gx < 0 or gy < 0 or gx >= _grid_w or gy >= _grid_h:
+		return Vector2i(-1, -1)
+	if not _in_deed(gx, gy):
 		return Vector2i(-1, -1)
 	return Vector2i(gx, gy)
