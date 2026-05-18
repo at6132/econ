@@ -47,6 +47,7 @@ _test_client_lock = threading.Lock()
 # Live connections -- the sim loop pushes tick frames to each.
 _connections: set[socket.socket] = set()
 _connections_lock = threading.Lock()
+_solo_autosave_stop = threading.Event()
 
 
 def _socket_path() -> str:
@@ -241,6 +242,56 @@ def _unregister_connection(conn: socket.socket) -> None:
     _log.info("sim_loop: client unsubscribed (%d remaining)", len(_connections))
 
 
+def _autosave_interval_seconds() -> int:
+    raw = os.environ.get("REALM_AUTOSAVE_SECONDS", "60")
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 60
+
+
+def _solo_autosave_loop(interval: int) -> None:
+    """Wall-clock autosave for solo mode (independent of FastAPI's asyncio loop)."""
+    from realm.api import _state
+    from realm.api.persistence import save_snapshot
+
+    _log.info(
+        "Realm: solo autosave loop started (every %ds → %s).",
+        interval,
+        _state._AUTOSAVE_PATH.name,
+    )
+    while not _solo_autosave_stop.is_set():
+        if _solo_autosave_stop.wait(interval):
+            break
+        if not _state.is_world_initialized():
+            continue
+        path = _state._AUTOSAVE_PATH
+        try:
+            t0 = time.perf_counter()
+            with _state.WORLD_LOCK:
+                save_snapshot(str(path), _state.WORLD)
+                _state.record_save(str(path), "autosave")
+            _log.info(
+                "Realm: autosave wrote %s in %.2fs (tick=%s).",
+                path.name,
+                time.perf_counter() - t0,
+                _state.WORLD.tick,
+            )
+        except Exception as exc:  # autosave must never crash the solo process
+            _log.warning("Realm: autosave failed: %s", exc)
+
+
+def _start_solo_autosave() -> None:
+    from realm.api import _state
+
+    # Honour REALM_AUTOSAVE_SECONDS even when HTTP lifespan autosave is disabled.
+    interval = _autosave_interval_seconds()
+    if interval <= 0:
+        _log.info("Realm: solo autosave disabled (REALM_AUTOSAVE_SECONDS=0).")
+        return
+    threading.Thread(target=_solo_autosave_loop, args=(interval,), daemon=True).start()
+
+
 def run(host: str = "127.0.0.1", port: int = 9000) -> None:
     """
     Start the solo socket server.
@@ -261,6 +312,7 @@ def run(host: str = "127.0.0.1", port: int = 9000) -> None:
     # no clients are connected, so spawning here is safe.
     sim_loop.subscribe(_broadcast_push)
     sim_loop.start_sim_loop()
+    _start_solo_autosave()
 
     if not _is_windows():
         threading.Thread(target=_run_unix, args=(_socket_path(),), daemon=True).start()

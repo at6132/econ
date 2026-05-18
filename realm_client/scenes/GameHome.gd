@@ -352,7 +352,11 @@ func _refresh_save_list() -> void:
 		func(data: Dictionary) -> void:
 			if not bool(data.get("ok", false)):
 				var err := Label.new()
-				err.text = "Could not list saves (is the local engine running?)."
+				var reason := str(data.get("reason", "")).strip_edges()
+				if reason.is_empty():
+					err.text = "Could not list saves (solo engine on port 9000 not reachable)."
+				else:
+					err.text = "Could not list saves: %s" % reason
 				err.add_theme_color_override("font_color", RealmColors.WARN)
 				_saves_vbox.add_child(err)
 				return

@@ -46,8 +46,15 @@ func _ready() -> void:
 	_status_timer.autostart = true
 	_status_timer.timeout.connect(_refresh_save_status)
 	add_child(_status_timer)
-	_refresh_save_status()
+	_begin_save_status_poll()
 	set_process(true)
+
+
+func _begin_save_status_poll() -> void:
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		Transport.engine_ready.connect(_refresh_save_status, CONNECT_ONE_SHOT)
+	else:
+		_refresh_save_status()
 
 
 ## Pause / 1× / 2× / 4× chips in the top strip. All call ``POST /sim/control``
@@ -283,12 +290,19 @@ func flash_tick() -> void:
 
 
 func _on_save_pressed() -> void:
+	_run_save()
+
+
+func _run_save() -> void:
 	if _saving:
 		return
 	_saving = true
 	save_button.disabled = true
 	save_status.text = "saving…"
 	save_status.add_theme_color_override("font_color", RealmColors.MAGIC)
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		save_status.text = "waiting for engine…"
+		await Transport.engine_ready
 	var on_saved := func(data: Dictionary) -> void:
 		_saving = false
 		save_button.disabled = false
@@ -300,8 +314,19 @@ func _on_save_pressed() -> void:
 			_refresh_save_label()
 		else:
 			save_status.add_theme_color_override("font_color", RealmColors.DANGER)
-			save_status.text = "save failed (API on 8000?)"
+			save_status.text = _save_failure_message(data)
 	API.save_game(on_saved, SAVE_SLOT)
+
+
+func _save_failure_message(data: Dictionary) -> String:
+	if data.is_empty():
+		if Transport.mode == Transport.Mode.SOLO:
+			return "save failed — solo engine not reachable (port 9000)"
+		return "save failed — server not reachable"
+	var reason := str(data.get("reason", "")).strip_edges()
+	if reason.is_empty():
+		return "save failed"
+	return "save failed: %s" % reason
 
 
 func _refresh_save_status() -> void:

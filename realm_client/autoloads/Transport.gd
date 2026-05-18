@@ -109,6 +109,7 @@ func _connect_socket() -> void:
 		_connect_attempts += 1
 		if _connect_attempts >= MAX_CONNECT_ATTEMPTS:
 			push_error("Transport: could not connect to solo engine on %s:%d" % [SOLO_HOST, SOLO_PORT])
+			_fail_queued_requests("solo engine not running (port %d)" % SOLO_PORT)
 			engine_error.emit("Socket connect failed")
 			return
 		await get_tree().create_timer(0.25).timeout
@@ -235,6 +236,13 @@ func _fail_oldest_pending(reason: String) -> void:
 	var cb: Callable = _pending[oldest_id]
 	_pending.erase(oldest_id)
 	_safe_call(cb, {"ok": false, "reason": reason})
+
+
+func _fail_queued_requests(reason: String) -> void:
+	var fail := {"ok": false, "reason": reason}
+	while not _queued.is_empty():
+		var item: Array = _queued.pop_front()
+		_safe_call(item[3] as Callable, fail)
 
 
 func _http_get(endpoint: String, callback: Callable) -> void:

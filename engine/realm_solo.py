@@ -12,6 +12,9 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 os.environ.setdefault("REALM_LLM_DISABLE", "1")
+# FastAPI lifespan autosave uses asyncio; the solo TCP handler blocks on recv between
+# requests so that loop does not tick. socket_server.run() runs a thread autosave instead.
+os.environ.setdefault("REALM_SOLO_MODE", "1")
 
 from realm.api.solo_logging import configure_solo_logging
 from realm.api.socket_server import run

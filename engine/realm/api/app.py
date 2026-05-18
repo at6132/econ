@@ -96,8 +96,9 @@ async def _autosave_loop(interval: int) -> None:
 async def _lifespan(_app: FastAPI):
     from realm.api import _state
 
-    interval = _autosave_seconds()
-    _state.AUTOSAVE_SECONDS = interval  # type: ignore[attr-defined]
+    # Solo Godot uses socket_server thread autosave (asyncio does not run between recv).
+    interval = 0 if os.environ.get("REALM_SOLO_MODE") else _autosave_seconds()
+    _state.AUTOSAVE_SECONDS = _autosave_seconds()  # type: ignore[attr-defined]
     _log.info(
         "Realm: HTTP stack ready (this step is fast). Dev WORLD is still empty — "
         "it is built lazily on the first request that reads _state.WORLD (default "
