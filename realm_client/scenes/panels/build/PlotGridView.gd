@@ -57,6 +57,7 @@ var _error_flash_until: float = 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	focus_mode = Control.FOCUS_ALL
 	resized.connect(func() -> void: queue_redraw())
 
 
@@ -142,12 +143,45 @@ func set_placing_blueprint(blueprint_id: String, bp_data: Dictionary) -> void:
 	queue_redraw()
 
 
+func is_confirming() -> bool:
+	return _confirming
+
+
+func finish_confirm(confirmed: bool) -> void:
+	if not _confirming:
+		return
+	_confirming = false
+	var cb := _confirm_callback
+	_confirm_callback = Callable()
+	queue_redraw()
+	if cb.is_valid():
+		cb.call(confirmed)
+
+
 func show_confirm(gx: int, gy: int, callback: Callable) -> void:
 	_confirm_gx = gx
 	_confirm_gy = gy
 	_confirm_callback = callback
 	_confirming = true
+	grab_focus()
 	queue_redraw()
+
+
+func key_confirms(event: InputEventKey) -> bool:
+	return (
+		event.keycode == KEY_Y
+		or event.physical_keycode == KEY_Y
+		or event.keycode == KEY_ENTER
+		or event.keycode == KEY_KP_ENTER
+	)
+
+
+func key_cancels(event: InputEventKey) -> bool:
+	return (
+		event.keycode == KEY_N
+		or event.physical_keycode == KEY_N
+		or event.keycode == KEY_ESCAPE
+	)
 
 
 func show_error(_msg: String) -> void:
@@ -476,24 +510,24 @@ func _gui_input(event: InputEvent) -> void:
 			var gpos := _screen_to_grid(event.position)
 			if gpos.x >= 0:
 				if _confirming:
-					_confirming = false
-					queue_redraw()
+					finish_confirm(true)
+					accept_event()
 				else:
 					cell_clicked.emit(gpos.x, gpos.y)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-			_confirming = false
-			queue_redraw()
-	elif event is InputEventKey and event.pressed and _confirming:
-		if event.keycode == KEY_Y or event.keycode == KEY_ENTER:
-			if _confirm_callback.is_valid():
-				_confirm_callback.call(true)
-			_confirming = false
-			queue_redraw()
-		elif event.keycode == KEY_N or event.keycode == KEY_ESCAPE:
-			if _confirm_callback.is_valid():
-				_confirm_callback.call(false)
-			_confirming = false
-			queue_redraw()
+			if _confirming:
+				finish_confirm(false)
+				accept_event()
+			else:
+				_confirming = false
+				queue_redraw()
+	elif event is InputEventKey and event.pressed and not event.echo and _confirming:
+		if key_confirms(event as InputEventKey):
+			finish_confirm(true)
+			accept_event()
+		elif key_cancels(event as InputEventKey):
+			finish_confirm(false)
+			accept_event()
 
 
 func _screen_to_grid(screen_pos: Vector2) -> Vector2i:

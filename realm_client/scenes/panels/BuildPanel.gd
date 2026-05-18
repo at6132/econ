@@ -17,6 +17,7 @@ var _build_mode: String = "turnkey"
 
 func _ready() -> void:
 	layer = 40
+	set_process_unhandled_input(true)
 	back_btn.pressed.connect(_close)
 	if sidebar.has_signal("blueprint_selected"):
 		sidebar.blueprint_selected.connect(_on_blueprint_selected)
@@ -33,6 +34,21 @@ func _apply_theme() -> void:
 	var bg := get_node_or_null("DimBackground")
 	if bg is ColorRect:
 		(bg as ColorRect).color = Color(0.04, 0.04, 0.06, 0.92)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Keys while a sidebar button still has focus — grid ``_gui_input`` never sees them.
+	if not grid_view.has_method("is_confirming") or not grid_view.call("is_confirming"):
+		return
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	var key := event as InputEventKey
+	if grid_view.has_method("key_confirms") and grid_view.call("key_confirms", key):
+		grid_view.call("finish_confirm", true)
+		get_viewport().set_input_as_handled()
+	elif grid_view.has_method("key_cancels") and grid_view.call("key_cancels", key):
+		grid_view.call("finish_confirm", false)
+		get_viewport().set_input_as_handled()
 
 
 func open(plot_id: String, plot_data: Dictionary) -> void:
