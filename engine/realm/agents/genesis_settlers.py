@@ -122,7 +122,9 @@ def _world_dimensions(world: World) -> tuple[int, int]:
     # this 15k+ times via _settler_home_anchor (~3 s per tick wasted).
     if not world.plots:
         return (1, 1)
-    cache = world.scenario_state.get("_world_dims_cache")
+    from realm.world.runtime_cache import bucket
+
+    cache = bucket(world).get("_world_dims_cache")
     if isinstance(cache, dict) and int(cache.get("tick", -1)) == int(world.tick):
         return (int(cache["w"]), int(cache["h"]))
     max_x = 0
@@ -133,7 +135,7 @@ def _world_dimensions(world: World) -> tuple[int, int]:
         if p.y > max_y:
             max_y = p.y
     dims = (max_x + 1, max_y + 1)
-    world.scenario_state["_world_dims_cache"] = {
+    bucket(world)["_world_dims_cache"] = {
         "tick": int(world.tick),
         "w": dims[0],
         "h": dims[1],
@@ -172,11 +174,13 @@ def _scan_from_anchor(world: World, dry_scan: list[PlotId], anchor: tuple[int, i
     Cached per (tick, anchor) — there are only 4 anchors at runtime but each
     settler called this without the cache (~28 s / tick on Genesis).
     """
-    cache = world.scenario_state.get("_scan_from_anchor_cache")
+    from realm.world.runtime_cache import bucket
+
+    cache = bucket(world).get("_scan_from_anchor_cache")
     if not isinstance(cache, dict) or int(cache.get("tick", -1)) != int(world.tick):
         cache = {"tick": int(world.tick)}
-        world.scenario_state["_scan_from_anchor_cache"] = cache
-    key = (int(anchor[0]), int(anchor[1]))
+        bucket(world)["_scan_from_anchor_cache"] = cache
+    key = f"{int(anchor[0])},{int(anchor[1])}"
     cached = cache.get(key)
     if cached is not None:
         return cached

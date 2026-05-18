@@ -122,3 +122,15 @@ def test_dump_plot_buildings_decoupled_from_live_mutations() -> None:
     w.plot_buildings[0]["condition_bps"] = 123
     assert blob["plot_buildings"][0]["condition_bps"] == orig
     assert w.plot_buildings[0]["condition_bps"] == 123
+
+
+def test_genesis_json_save_after_settler_ticks() -> None:
+    """Regression: tick caches must not land in ``scenario_state`` with tuple keys."""
+    w = bootstrap_genesis(seed=42)
+    for _ in range(30):
+        advance_tick(w)
+    assert "_scan_from_anchor_cache" not in w.scenario_state
+    blob = dumps_json(w)
+    assert blob
+    w2 = loads_json(blob)
+    assert w2.tick == w.tick

@@ -41,7 +41,9 @@ def _owned_plot_count(world: World, party: PartyId) -> int:
     """Owner→count cache invalidated per tick. Genesis settler bursts call
     ``claim_plot`` ~15k× per tick; the naive sum-over-plots variant was the
     largest single line item in ``advance_tick`` (20 s)."""
-    cache = world.scenario_state.get("_owner_plot_count_cache")
+    from realm.world.runtime_cache import bucket
+
+    cache = bucket(world).get("_owner_plot_count_cache")
     if not isinstance(cache, dict) or int(cache.get("tick", -1)) != int(world.tick):
         counts: dict[str, int] = {}
         for p in world.plots.values():
@@ -50,12 +52,14 @@ def _owned_plot_count(world: World, party: PartyId) -> int:
             owner_s = str(p.owner)
             counts[owner_s] = counts.get(owner_s, 0) + 1
         cache = {"tick": int(world.tick), "counts": counts}
-        world.scenario_state["_owner_plot_count_cache"] = cache
+        bucket(world)["_owner_plot_count_cache"] = cache
     return int(cache["counts"].get(str(party), 0))
 
 
 def _bump_owned_plot_count(world: World, party: PartyId, delta: int) -> None:
-    cache = world.scenario_state.get("_owner_plot_count_cache")
+    from realm.world.runtime_cache import bucket
+
+    cache = bucket(world).get("_owner_plot_count_cache")
     if isinstance(cache, dict) and int(cache.get("tick", -1)) == int(world.tick):
         counts = cache.setdefault("counts", {})
         owner_s = str(party)

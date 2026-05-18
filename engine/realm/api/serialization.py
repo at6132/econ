@@ -40,6 +40,34 @@ def _blueprint_public_dict(bp: object) -> dict[str, Any]:
     return blueprint_public_dict(bp)  # type: ignore[arg-type]
 
 
+def _json_safe_key(key: Any) -> str:
+    if isinstance(key, str):
+        return key
+    if isinstance(key, tuple):
+        return ",".join(str(part) for part in key)
+    return str(key)
+
+
+def _json_safe_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {_json_safe_key(k): _json_safe_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe_value(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_json_safe_value(v) for v in value)
+    return value
+
+
+def _scenario_state_for_snapshot(state: dict[str, Any] | None) -> dict[str, Any]:
+    """Drop ephemeral ``_`` keys and coerce dict keys to JSON-safe strings."""
+    out: dict[str, Any] = {}
+    for key, val in (state or {}).items():
+        if str(key).startswith("_"):
+            continue
+        out[_json_safe_key(key)] = _json_safe_value(val)
+    return out
+
+
 def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
     m = 0
     for row in rows:
@@ -212,7 +240,7 @@ def dump_world(world: World) -> dict[str, Any]:
         "llm_session_output_tokens": world.llm_session_output_tokens,
         "deployed_lua_sources": copy.deepcopy(dict(world.deployed_lua_sources)),
         "party_display_names": copy.deepcopy(dict(world.party_display_names)),
-        "scenario_state": copy.deepcopy(dict(world.scenario_state)),
+        "scenario_state": _scenario_state_for_snapshot(world.scenario_state),
         "use_plot_output_logistics": world.use_plot_output_logistics,
         "plot_output_stock": copy.deepcopy(dict(world.plot_output_stock)),
         "market_seller_registered": sorted(world.market_seller_registered),
@@ -410,7 +438,10 @@ def dump_world(world: World) -> dict[str, Any]:
         "regional_advantages": {str(k): dict(v) for k, v in world.regional_advantages.items()},
         "grid_width": int(world.scenario_state.get("grid_width", 0)),
         "grid_height": int(world.scenario_state.get("grid_height", 0)),
-        "world_cell_to_plot": dict(world.scenario_state.get("world_cell_to_plot") or {}),
+        "world_cell_to_plot": {
+            _json_safe_key(k): str(v)
+            for k, v in (world.scenario_state.get("world_cell_to_plot") or {}).items()
+        },
     }
 
 
@@ -640,7 +671,7 @@ def load_world(d: dict[str, Any]) -> World:
         llm_session_output_tokens=int(d.get("llm_session_output_tokens", 0)),
         deployed_lua_sources=copy.deepcopy(dict(d.get("deployed_lua_sources", {}))),
         party_display_names=copy.deepcopy(dict(d.get("party_display_names", {}))),
-        scenario_state=copy.deepcopy(dict(d.get("scenario_state", {}))),
+        scenario_state=_scenario_state_for_snapshot(dict(d.get("scenario_state", {}))),
         use_plot_output_logistics=use_plot_logistics,
         plot_output_stock=plot_stock,
         market_seller_registered=seller_reg,
