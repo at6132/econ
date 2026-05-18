@@ -391,7 +391,7 @@ def build_on_plot(
     build_mode: str | None = None,
     construction_order_id: str | None = None,
 ) -> dict:
-    """Auto-place a blueprint on the plot grid (NPCs/scripts — players use ``place_blueprint``)."""
+    """Backward-compatible shim — implementation lives in blueprint_actions."""
     from realm.actions.blueprint_actions import build_on_plot as _bp_build
 
     return _bp_build(
