@@ -607,7 +607,10 @@ def bootstrap_genesis(
             height=grid_height,
             correlate_subsurface=True,
             terrain_fn=_continental_fn,
-            uniform_plots=True,
+            # Variable rectangular parcels (1×1 … 3×3 tiles per deed). Do not
+            # force uniform_plots here — that made every hectare identical on
+            # the map and dropped world_cells from /world/map.
+            uniform_plots=False,
         )
     else:
         plots = generate_plots(

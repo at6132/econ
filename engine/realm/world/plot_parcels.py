@@ -16,14 +16,15 @@ from realm.world.plot_scale import plot_world_cells_tuple
 from realm.world.world import Plot, Terrain, _subsurface_roll
 
 # (width, height) in world map tiles; weights for parcel size roll.
+# Rectangles only (no L-shapes on the world map — those are build-panel lots).
 _PARCEL_SHAPES: list[tuple[int, int, float]] = [
-    (1, 1, 0.42),
-    (2, 1, 0.14),
-    (1, 2, 0.14),
-    (2, 2, 0.18),
-    (3, 2, 0.06),
-    (2, 3, 0.04),
-    (3, 3, 0.02),
+    (1, 1, 0.30),
+    (2, 1, 0.16),
+    (1, 2, 0.16),
+    (2, 2, 0.22),
+    (3, 2, 0.08),
+    (2, 3, 0.05),
+    (3, 3, 0.03),
 ]
 
 
