@@ -107,12 +107,9 @@ def test_auto_list_places_order_for_workshop_output() -> None:
     party = PartyId("player")
     _ensure_cash(w, party, 5_000_000)
     # Find a forest plot to host a wood_shop and run "sawmill" (timber → lumber).
-    pid = None
-    for p_id, plot in w.plots.items():
-        if plot.owner is None and plot.terrain == Terrain.FOREST:
-            pid = p_id
-            break
-    assert pid is not None
+    from plot_helpers import first_terrain_plot_id
+
+    pid = first_terrain_plot_id(w, Terrain.FOREST)
     assert claim_plot(w, party, pid)["ok"] is True
     assert survey_plot(w, party, pid).get("ok") is True
     # Plant a wood_shop building directly (skipping the build cost path).

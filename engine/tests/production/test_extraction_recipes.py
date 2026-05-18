@@ -12,6 +12,7 @@ from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier
 
 from turnkey_fixtures import grant_turnkey_self_materials
+from plot_helpers import claimable_land_plot_id, first_terrain_plot_id
 
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
@@ -40,15 +41,14 @@ def _complete_recipe(w, recipe_id: str) -> None:
 
 def _turnkey(w, party: PartyId, pid: PlotId, building_id: str) -> None:
     grant_turnkey_self_materials(w, party, building_id)
-    r = build_on_plot(w, party, pid, building_id, build_mode="turnkey")
+    r = build_on_plot(w, party, pid, building_id, build_mode="self")
     assert r["ok"] is True, r
 
 
 def test_mine_iron_rejected_when_subsurface_below_threshold() -> None:
-    w = bootstrap_frontier(seed=9, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    w = bootstrap_frontier(seed=9, grid_width=8, grid_height=4)
     player = PartyId("player")
-    assert w.plots[pid].terrain == Terrain.MOUNTAIN
+    pid = first_terrain_plot_id(w, Terrain.MOUNTAIN)
     assert claim_plot(w, player, pid)["ok"] is True
     w.plots[pid].subsurface = SubsurfaceRoll(
         iron_ore_grade=0.2,
@@ -65,9 +65,9 @@ def test_mine_iron_rejected_when_subsurface_below_threshold() -> None:
 
 
 def test_mine_iron_completes_with_scaled_iron_ore_qty() -> None:
-    w = bootstrap_frontier(seed=9, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    w = bootstrap_frontier(seed=9, grid_width=8, grid_height=4)
     player = PartyId("player")
+    pid = first_terrain_plot_id(w, Terrain.MOUNTAIN)
     assert claim_plot(w, player, pid)["ok"] is True
     w.plots[pid].subsurface = SubsurfaceRoll(
         iron_ore_grade=0.95,
@@ -88,7 +88,7 @@ def test_mine_iron_completes_with_scaled_iron_ore_qty() -> None:
 
 def test_chop_timber_on_forest_plot() -> None:
     w = bootstrap_frontier(seed=1, grid_width=3, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     # Sprint 1: chop_timber is strict forest only — force the terrain after the claim.

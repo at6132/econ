@@ -11,6 +11,7 @@ from realm.production.recipes import RECIPES
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
+from plot_helpers import claimable_land_plot_id
 from turnkey_fixtures import grant_turnkey_self_materials
 
 
@@ -41,13 +42,13 @@ def _complete_recipe(w, recipe_id: str) -> None:
 
 def _workshop_turnkey(w, party: PartyId, pid: PlotId, building_id: str) -> None:
     grant_turnkey_self_materials(w, party, building_id)
-    r = build_on_plot(w, party, pid, building_id, build_mode="turnkey")
+    r = build_on_plot(w, party, pid, building_id, build_mode="self")
     assert r["ok"] is True, r
 
 
 def test_sawmill_completes_after_duration_ticks() -> None:
     w = bootstrap_frontier(seed=1, grid_width=3, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     _workshop_turnkey(w, PartyId("player"), pid, "wood_shop")
@@ -66,7 +67,7 @@ def test_sawmill_completes_after_duration_ticks() -> None:
 
 def test_money_conserved_across_sawmill_run() -> None:
     w = bootstrap_frontier(seed=2, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     _workshop_turnkey(w, PartyId("player"), pid, "wood_shop")
@@ -79,7 +80,7 @@ def test_money_conserved_across_sawmill_run() -> None:
 
 def test_rejects_second_production_same_plot() -> None:
     w = bootstrap_frontier(seed=3, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     _workshop_turnkey(w, PartyId("player"), pid, "power_shed")
@@ -94,7 +95,7 @@ def test_rejects_second_production_same_plot() -> None:
 
 def test_tool_cache_reduces_recipe_labor_cash() -> None:
     w = bootstrap_frontier(seed=5, grid_width=3, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
@@ -112,7 +113,7 @@ def test_stub_hire_routes_part_of_labor_to_employee() -> None:
     from realm.actions import hire_worker_stub
 
     w = bootstrap_frontier(seed=4, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     player = PartyId("player")
     emp = PartyId("t1_timber_merchant")
     assert claim_plot(w, player, pid)["ok"] is True
@@ -133,7 +134,7 @@ def test_stub_hire_routes_part_of_labor_to_employee() -> None:
 
 def test_twist_rope_completes_and_conserves_ledger() -> None:
     w = bootstrap_frontier(seed=6, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
@@ -152,7 +153,7 @@ def test_twist_rope_completes_and_conserves_ledger() -> None:
 
 def test_build_ladder_completes_and_conserves_ledger() -> None:
     w = bootstrap_frontier(seed=8, grid_width=2, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True

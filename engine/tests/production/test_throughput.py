@@ -121,25 +121,19 @@ def test_production_stalls_without_input():
     from realm.production.buildings import build_on_plot
     from realm.production.recipes import RECIPES
 
-    w = bootstrap_genesis(
-        seed=42, grid_width=12, grid_height=10, settler_count=2, map_layout="continent"
-    )
-    party = PartyId("player")
-    from realm.actions import survey_plot
+    from realm.actions import claim_plot, survey_plot
+    from realm.world import bootstrap_frontier
     from realm.world.terrain import Terrain
+    from plot_helpers import claimable_land_plot_id
+    from turnkey_fixtures import grant_turnkey_self_materials
 
-    pid = None
-    for plot_id, plot in w.plots.items():
-        if plot.owner is None and plot.terrain == Terrain.PLAINS:
-            pid = plot_id
-            break
-    assert pid is not None
-    _give_cash(w, party, 5_000_000)
+    w = bootstrap_frontier(seed=42, grid_width=8, grid_height=4)
+    party = PartyId("player")
+    pid = claimable_land_plot_id(w, party)
+    w.plots[pid].terrain = Terrain.PLAINS
     assert claim_plot(w, party, pid)["ok"]
     assert survey_plot(w, party, pid).get("ok")
-    _stock(w, party, "timber", 6)
-    _stock(w, party, "lumber", 2)
-    _stock(w, party, "coal", 2)
+    grant_turnkey_self_materials(w, party, "wood_shop")
     r = build_on_plot(w, party, pid, "wood_shop", build_mode="turnkey")
     assert r["ok"], r
     while any(
@@ -153,6 +147,10 @@ def test_production_stalls_without_input():
     # generously so timber is the limiting reagent.
     rec = RECIPES["sawmill"]
     timber_per_run = int(rec.inputs[MaterialId("timber")])
+    while w.inventory.qty(party, MaterialId("timber")) > 0:
+        w.inventory.remove(
+            party, MaterialId("timber"), w.inventory.qty(party, MaterialId("timber"))
+        )
     _stock(w, party, "timber", timber_per_run)
     _stock(w, party, "electricity", 50)
     r = start_production(w, party, pid, "sawmill", run_count=CONTINUOUS_RUN_COUNT)

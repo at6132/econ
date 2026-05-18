@@ -35,12 +35,13 @@ from realm.world import bootstrap_frontier
 from realm.world.tick import advance_tick
 
 from turnkey_fixtures import grant_turnkey_self_materials
+from plot_helpers import claimable_land_plot_id, first_land_plot_id
 
 
 def _setup_sawmill_ready(seed: int = 1) -> tuple:
     """Frontier world with a player who has a sawmill ready to run."""
     w = bootstrap_frontier(seed=seed, grid_width=3, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"]
     assert survey_plot(w, player, pid)["ok"]

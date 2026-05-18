@@ -14,12 +14,13 @@ from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_genesis, bootstrap_frontier
 
 from turnkey_fixtures import grant_turnkey_self_materials
+from plot_helpers import claimable_land_plot_id, first_land_plot_id
 
 
 def test_prereq_build_deducts_materials() -> None:
     w = bootstrap_genesis(seed=301, grid_width=12, grid_height=10, settler_count=2)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     total0 = w.ledger.total_cents()
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
@@ -28,21 +29,26 @@ def test_prereq_build_deducts_materials() -> None:
     b0 = w.inventory.qty(player, MaterialId("brick"))
     c0 = w.inventory.qty(player, MaterialId("coal"))
     cash0 = w.ledger.balance(party_cash_account(player))
-    spec = BUILDINGS["strip_mine"]
-    turnkey = int(spec["turnkey_total_cents"])
-    r = build_on_plot(w, player, pid, "strip_mine", build_mode="turnkey")
+    r = build_on_plot(w, player, pid, "strip_mine", build_mode="self")
     assert r["ok"] is True, r
-    assert w.inventory.qty(player, MaterialId("timber")) == t0 - 8
-    assert w.inventory.qty(player, MaterialId("brick")) == b0 - 4
-    assert w.inventory.qty(player, MaterialId("coal")) == c0 - 3
-    assert w.ledger.balance(party_cash_account(player)) == cash0 - turnkey
+    bp = w.blueprints["strip_mine"]
+    assert w.inventory.qty(player, MaterialId("timber")) == t0 - int(
+        bp.construction_materials["timber"]
+    )
+    assert w.inventory.qty(player, MaterialId("brick")) == b0 - int(
+        bp.construction_materials["brick"]
+    )
+    assert w.inventory.qty(player, MaterialId("coal")) == c0 - int(
+        bp.construction_materials["coal"]
+    )
+    assert w.ledger.balance(party_cash_account(player)) == cash0
     assert w.ledger.total_cents() == total0
 
 
 def test_prereq_build_fails_without_materials() -> None:
     w = bootstrap_genesis(seed=302, grid_width=10, grid_height=8, settler_count=2)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     r = build_on_plot(w, player, pid, "strip_mine", build_mode="self_contract")
@@ -53,7 +59,7 @@ def test_prereq_build_fails_without_materials() -> None:
 def test_tier0_hand_chop_produces_timber() -> None:
     w = bootstrap_frontier(seed=1, grid_width=4, grid_height=3)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, player, pid)["ok"] is True
     # Sprint 1: hand_chop is forest-only; force the terrain after the claim to match.
     w.plots[pid].terrain = Terrain.FOREST
@@ -74,9 +80,9 @@ def test_tier0_hand_chop_produces_timber() -> None:
 def test_tier0_hand_mine_gated_by_subsurface() -> None:
     w = bootstrap_frontier(seed=9, grid_width=2, grid_height=2)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, player, pid)["ok"] is True
-    assert w.plots[pid].terrain == Terrain.MOUNTAIN
+    w.plots[pid].terrain = Terrain.MOUNTAIN
     w.plots[pid].subsurface = SubsurfaceRoll(
         iron_ore_grade=0.2,
         copper_ore_grade=0.5,

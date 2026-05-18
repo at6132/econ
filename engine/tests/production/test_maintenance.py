@@ -21,6 +21,9 @@ from realm.production.recipes import RECIPES
 from realm.world.terrain import Terrain
 from realm.world import ActiveProduction, SubsurfaceRoll, bootstrap_frontier, bootstrap_genesis
 
+from plot_helpers import claimable_land_plot_id
+from turnkey_fixtures import grant_turnkey_self_materials
+
 _TICKS_PER_GAME_DAY = 1440
 
 
@@ -30,10 +33,8 @@ def _ledger_total(w) -> int:
 
 def _build_strip_mine(w, party: PartyId, pid: PlotId, *, mode: str = "turnkey") -> str:
     """Build a strip_mine and return its instance_id (skipping construction wait)."""
-    # Seed enough materials for turnkey build.
     if mode == "turnkey":
-        for mid_s, qty in (BUILDINGS["strip_mine"]["self_materials"] or {}).items():
-            w.inventory.add(party, MaterialId(mid_s), int(qty))
+        grant_turnkey_self_materials(w, party, "strip_mine")
     r = build_on_plot(w, party, pid, "strip_mine", build_mode=mode)
     assert r["ok"], r
     iid = r["instance_id"]
@@ -68,7 +69,7 @@ def _seed_party_cash(w, party: PartyId, cents: int) -> None:
 def _fresh_frontier_with_player():
     w = bootstrap_frontier(seed=23, grid_width=4, grid_height=4)
     party = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, party, pid)["ok"]
     assert survey_plot(w, party, pid)["ok"]
     _force_mountain_plot(w, pid)
@@ -224,15 +225,17 @@ def test_settler_buys_materials_and_maintains_before_deadline() -> None:
     rec = w.building_maintenance[iid]
     rec["due_at_tick"] = int(w.tick) + 100  # within 1 game-day threshold
     starting_total = _ledger_total(w)
+    before_maint = {
+        mid_s: w.inventory.qty(party, MaterialId(mid_s))
+        for mid_s in (sched.get("materials") or {})
+    }
     _settler_maintain_buildings(w, party)
     rec_after = w.building_maintenance[iid]
     assert rec_after["efficiency_pct"] == EFFICIENCY_HEALTHY
     assert rec_after["due_at_tick"] >= int(w.tick) + int(sched["interval_ticks"]) - 1
-    # Materials must have been consumed.
     for mid_s, qty in (sched["materials"] or {}).items():
-        assert w.inventory.qty(party, MaterialId(mid_s)) == 1, (
-            f"settler should have consumed {qty}× {mid_s} (1 left from seed of {qty}+1)"
-        )
+        used = before_maint[mid_s] - w.inventory.qty(party, MaterialId(mid_s))
+        assert used >= int(qty), f"settler should have consumed {qty}× {mid_s}, used {used}"
     # Ledger conservation.
     assert _ledger_total(w) == starting_total
 

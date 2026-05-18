@@ -10,6 +10,8 @@ from realm.production.spoilage import tick_material_spoilage
 from realm.production.storage_caps import party_storage_cap_units, try_add_inventory
 from realm.world import bootstrap_frontier
 
+from plot_helpers import claimable_land_plot_id, first_land_plot_id
+
 
 def test_try_add_respects_low_storage_cap(monkeypatch) -> None:
     from realm.production import storage_caps
@@ -28,7 +30,7 @@ def test_field_stockade_increases_cap(monkeypatch) -> None:
     monkeypatch.setattr(storage_caps, "BASE_PARTY_STORAGE_UNITS", 50)
     w = bootstrap_frontier(seed=91, grid_width=2, grid_height=2)
     p = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, p, pid)["ok"] is True
     assert isinstance(try_add_inventory(w, p, MaterialId("grain"), 10), MatterErr)
     assert build_on_plot(w, p, pid, "field_stockade")["ok"] is True

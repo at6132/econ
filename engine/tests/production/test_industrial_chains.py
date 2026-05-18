@@ -13,6 +13,7 @@ from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier, bootstrap_genesis
 from turnkey_fixtures import grant_turnkey_self_materials
+from plot_helpers import claimable_land_plot_id, first_land_plot_id
 
 
 def _build_and_finish(w, party: PartyId, pid: PlotId, building_id: str) -> dict:
@@ -47,7 +48,7 @@ def test_tier2_recipe_chain_conservation_pig_iron() -> None:
     """
     w = bootstrap_frontier(seed=301, grid_width=4, grid_height=3)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     _setup_mountain_plot(w, player, pid)
     _build_and_finish(w, player, pid, "blast_furnace")
     for mid, qty in (
@@ -81,17 +82,20 @@ def test_blast_furnace_build_deducts_materials() -> None:
     """Turnkey blast_furnace pulls every entry in self_materials from the builder's inventory."""
     w = bootstrap_frontier(seed=302, grid_width=4, grid_height=3)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     _setup_mountain_plot(w, player, pid)
     grant_turnkey_self_materials(w, player, "blast_furnace")
     spec = BUILDINGS["blast_furnace"]
     mats = spec["self_materials"]
     before = {k: w.inventory.qty(player, MaterialId(k)) for k in mats}
     total0 = w.ledger.total_cents()
-    r = build_on_plot(w, player, pid, "blast_furnace", build_mode="turnkey")
+    r = build_on_plot(w, player, pid, "blast_furnace", build_mode="self")
     assert r["ok"] is True
-    for k, v in mats.items():
-        assert w.inventory.qty(player, MaterialId(k)) == before[k] - int(v)
+    bp = w.blueprints["blast_furnace"]
+    for k in mats:
+        assert w.inventory.qty(player, MaterialId(k)) == before[k] - int(
+            bp.construction_materials[k]
+        )
     assert w.ledger.total_cents() == total0
 
 
@@ -99,7 +103,7 @@ def test_tool_manufacturing_chain() -> None:
     """Forge a pick_head, then assemble into a mining_pick — durable tool ready to use."""
     w = bootstrap_frontier(seed=303, grid_width=4, grid_height=3)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     _setup_mountain_plot(w, player, pid)
     _build_and_finish(w, player, pid, "forge_press")
     _build_and_finish(w, player, pid, "tool_workshop")
@@ -154,7 +158,7 @@ def test_tier2_processing_blocked_without_discovery() -> None:
     """make_bronze must remain locked until tin_ore is fully assayed."""
     w = bootstrap_frontier(seed=306, grid_width=4, grid_height=3)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     _setup_mountain_plot(w, player, pid)
     _build_and_finish(w, player, pid, "foundry")
     for mid, qty in (

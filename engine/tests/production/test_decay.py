@@ -15,6 +15,8 @@ from realm.core.ledger import party_cash_account
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
+from plot_helpers import claimable_land_plot_id, first_land_plot_id
+
 
 def test_tick_building_decay_reduces_condition() -> None:
     w = bootstrap_frontier(seed=3, grid_width=2, grid_height=2)
@@ -35,7 +37,7 @@ def test_tick_building_decay_reduces_condition() -> None:
 
 def test_maintenance_fee_is_max_of_floor_and_build_cost_fraction() -> None:
     w = bootstrap_frontier(seed=41, grid_width=3, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
@@ -51,7 +53,7 @@ def test_maintenance_fee_is_max_of_floor_and_build_cost_fraction() -> None:
 
 def test_maintain_building_restores_condition_and_conserves_ledger_total() -> None:
     w = bootstrap_frontier(seed=4, grid_width=3, grid_height=2)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from realm.actions import start_production_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.production.externalities import apply_mining_externality
+from realm.production.externalities import MINING_EXTERNALITY_RADIUS, apply_mining_externality
 from realm.production.production import tick_production
 from realm.world import World, bootstrap_frontier
 from realm.world.terrain import Terrain
@@ -16,10 +18,39 @@ def _minimal_world() -> World:
     return bootstrap_frontier(seed=900, grid_width=8, grid_height=4)
 
 
+def _first_land_plot(world: World, terrain_hint: str | None = None) -> PlotId:
+    """Return a plot coerced to land, optionally matching a terrain hint."""
+    for pid, p in sorted(world.plots.items()):
+        if "water" in str(p.terrain).lower():
+            p.terrain = Terrain.PLAINS
+        t = str(p.terrain)
+        if terrain_hint and terrain_hint.lower() not in t.lower():
+            continue
+        return PlotId(pid)
+    pid = next(iter(sorted(world.plots.keys())))
+    world.plots[pid].terrain = Terrain.PLAINS
+    return PlotId(pid)
+
+
+def _two_adjacent_land_plots(world: World) -> tuple[PlotId, PlotId]:
+    """Return two plot IDs that are adjacent (Manhattan distance = 1)."""
+    for pid1, p1 in world.plots.items():
+        for pid2, p2 in world.plots.items():
+            if pid1 == pid2:
+                continue
+            if abs(p1.x - p2.x) + abs(p1.y - p2.y) != 1:
+                continue
+            if "water" in str(p1.terrain).lower():
+                p1.terrain = Terrain.PLAINS
+            if "water" in str(p2.terrain).lower():
+                p2.terrain = Terrain.PLAINS
+            return PlotId(pid1), PlotId(pid2)
+    raise RuntimeError("no adjacent plots found in test world")
+
+
 def test_mining_degrades_adjacent_agricultural_plots() -> None:
     w = _minimal_world()
-    mine_pid = PlotId("p-2-2")
-    farm_pid = PlotId("p-3-2")
+    mine_pid, farm_pid = _two_adjacent_land_plots(w)
     mp = w.plots[mine_pid]
     fp = w.plots[farm_pid]
     mp.terrain = Terrain.MOUNTAIN
@@ -34,8 +65,16 @@ def test_mining_degrades_adjacent_agricultural_plots() -> None:
 
 def test_distant_plots_not_affected() -> None:
     w = _minimal_world()
-    mine_pid = PlotId("p-1-1")
-    far_pid = PlotId("p-7-3")
+    plots_sorted = sorted(w.plots.items(), key=lambda x: x[0])
+    mine_pid = PlotId(plots_sorted[0][0])
+    mp = plots_sorted[0][1]
+    far_pid = None
+    for pid, p in plots_sorted[1:]:
+        if abs(p.x - mp.x) + abs(p.y - mp.y) > MINING_EXTERNALITY_RADIUS + 2:
+            far_pid = PlotId(pid)
+            break
+    if far_pid is None:
+        pytest.skip("world too small for distant-plot test")
     w.plots[mine_pid].terrain = Terrain.MOUNTAIN
     w.plots[far_pid].terrain = Terrain.PLAINS
     w.plots[far_pid].surveyed = True
@@ -46,7 +85,7 @@ def test_distant_plots_not_affected() -> None:
 
 def test_soil_degradation_blocks_farming() -> None:
     w = _minimal_world()
-    pid = PlotId("p-2-2")
+    pid = _first_land_plot(w)
     pl = w.plots[pid]
     pl.terrain = Terrain.PLAINS
     pl.owner = PartyId("player")
@@ -59,7 +98,7 @@ def test_soil_degradation_blocks_farming() -> None:
 
 def test_soil_remediation_restores_grade() -> None:
     w = _minimal_world()
-    pid = PlotId("p-2-2")
+    pid = _first_land_plot(w)
     pl = w.plots[pid]
     pl.terrain = Terrain.PLAINS
     pl.owner = PartyId("player")
@@ -80,12 +119,12 @@ def test_soil_remediation_restores_grade() -> None:
 
 def test_degradation_feed_entry_at_threshold() -> None:
     w = _minimal_world()
-    farm_pid = PlotId("p-3-2")
+    mine_pid, farm_pid = _two_adjacent_land_plots(w)
     fp = w.plots[farm_pid]
     fp.terrain = Terrain.PLAINS
     fp.surveyed = True
-    fp.subsurface = replace(fp.subsurface, phosphate_grade=0.31)
+    fp.subsurface = replace(fp.subsurface, phosphate_grade=0.30005)
     pre = len(w.event_log)
-    apply_mining_externality(w, PlotId("p-2-2"))
+    apply_mining_externality(w, mine_pid)
     new = [e for e in w.event_log[pre:] if e.get("kind") == "world_feed"]
     assert new, "expected world_feed on soil threshold"

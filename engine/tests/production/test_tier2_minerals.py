@@ -16,6 +16,8 @@ from realm.world import (
     tier1_recipe_ids,
 )
 
+from plot_helpers import claimable_land_plot_id
+
 
 def test_tier2_subsurface_generated() -> None:
     """Bootstrap rolls Tier-2 grades on a meaningful share of plots."""
@@ -48,7 +50,7 @@ def test_tier2_recipe_blocked_without_discovery() -> None:
     """A Tier-2 mining recipe is rejected as undiscovered even when everything else is ready."""
     w = bootstrap_frontier(seed=103, grid_width=6, grid_height=4)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     plot = w.plots[pid]
     plot.terrain = Terrain.SWAMP
     plot.subsurface = SubsurfaceRoll(
@@ -71,7 +73,7 @@ def test_tier2_recipe_runs_after_discovery() -> None:
     """Once the recipe is in the party's book, the same call succeeds and conservation holds."""
     w = bootstrap_frontier(seed=104, grid_width=6, grid_height=4)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     plot = w.plots[pid]
     plot.terrain = Terrain.SWAMP
     plot.subsurface = SubsurfaceRoll(
@@ -99,7 +101,7 @@ def test_world_public_dict_exposes_recipe_books_and_tier2_grades() -> None:
 
     w = bootstrap_frontier(seed=105, grid_width=4, grid_height=3)
     player = PartyId("player")
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     out = world_public_dict(w)
