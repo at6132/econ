@@ -619,9 +619,9 @@ func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
 			if c is Dictionary:
 				var d: Dictionary = c as Dictionary
 				cell_set["%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]] = true
-		var deed_rect := _parcel_aligned_rect(cell_set)
-		if deed_rect.size.x > 0.0:
-			draw_rect(deed_rect, Color(accent, 0.0), false, sw)
+		var poly := _world_deed_boundary_polygon(cell_set)
+		if poly.size() >= 3:
+			_draw_polyline_world(poly, accent, sw, true)
 			return
 	draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
 
@@ -744,7 +744,7 @@ func _parcel_aligned_rect(cell_set: Dictionary) -> Rect2:
 
 
 func _draw_parcel_boundaries(lod: int) -> void:
-	## Gold frame around multi-hectare deeds (2×1, 2×2, …).
+	## Gold outline along the true deed footprint (L-shapes, zigzags, not just bbox).
 	if _demo_mode or lod < 2 or _mesh == null:
 		return
 	var stroke_c := Color(0.95, 0.78, 0.22, 0.95)
@@ -770,9 +770,76 @@ func _draw_parcel_boundaries(lod: int) -> void:
 				any_visible = true
 		if not any_visible:
 			continue
-		var deed_rect := _parcel_aligned_rect(cell_set)
-		if deed_rect.size.x > 0.0:
-			draw_rect(deed_rect, Color(stroke_c, 0.0), false, stroke_w)
+		var poly := _world_deed_boundary_polygon(cell_set)
+		if poly.size() >= 3:
+			_draw_polyline_world(poly, stroke_c, stroke_w, true)
+
+
+func _world_deed_boundary_polygon(cell_set: Dictionary) -> PackedVector2Array:
+	if cell_set.is_empty() or _mesh == null:
+		return PackedVector2Array()
+	var segments: Array = []
+	for key in cell_set.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var gx := int(parts[0])
+		var gy := int(parts[1])
+		if not cell_set.has("%d,%d" % [gx, gy - 1]):
+			var r := _cell_rect(gx, gy)
+			segments.append([r.position, r.position + Vector2(r.size.x, 0.0)])
+		if not cell_set.has("%d,%d" % [gx, gy + 1]):
+			var r2 := _cell_rect(gx, gy)
+			segments.append([r2.end, r2.end - Vector2(r2.size.x, 0.0)])
+		if not cell_set.has("%d,%d" % [gx - 1, gy]):
+			var r3 := _cell_rect(gx, gy)
+			segments.append([r3.position, r3.position + Vector2(0.0, r3.size.y)])
+		if not cell_set.has("%d,%d" % [gx + 1, gy]):
+			var r4 := _cell_rect(gx, gy)
+			segments.append([r4.end, r4.end - Vector2(0.0, r4.size.y)])
+	return _chain_world_segments(segments)
+
+
+func _chain_world_segments(segments: Array) -> PackedVector2Array:
+	if segments.is_empty():
+		return PackedVector2Array()
+	var remaining: Array = segments.duplicate()
+	var loop: Array = [remaining[0][0], remaining[0][1]]
+	remaining.remove_at(0)
+	var guard := 0
+	while not remaining.is_empty() and guard < 512:
+		guard += 1
+		var end: Vector2 = loop[loop.size() - 1]
+		var found := -1
+		var use_second := false
+		for i in range(remaining.size()):
+			var seg: Array = remaining[i]
+			if seg[0] == end:
+				found = i
+				use_second = true
+				break
+			if seg[1] == end:
+				found = i
+				use_second = false
+				break
+		if found < 0:
+			break
+		var picked: Array = remaining[found]
+		remaining.remove_at(found)
+		loop.append(picked[1] if use_second else picked[0])
+	var poly := PackedVector2Array()
+	for p in loop:
+		poly.append(p)
+	return poly
+
+
+func _draw_polyline_world(points: PackedVector2Array, color: Color, width: float, closed: bool) -> void:
+	if points.size() < 2:
+		return
+	for i in range(points.size() - 1):
+		draw_line(points[i], points[i + 1], color, width, true)
+	if closed and points.size() > 2:
+		draw_line(points[points.size() - 1], points[0], color, width, true)
 
 
 func _draw_town_dots() -> void:

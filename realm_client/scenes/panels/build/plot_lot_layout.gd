@@ -1,7 +1,8 @@
 class_name PlotLotLayout
 extends RefCounted
-## Deterministic town-plat lot partition for a 100m plot (10×10 engine cells).
-## Rectangles plus some L-shaped parcels (visual only).
+## Legacy town-plat splitter (sub-lots inside a 10×10 cell). **Not** used for
+## world-map deed geometry — that comes from engine ``world_cells`` on each plot.
+## Kept for tests / future sub-parcel tooling.
 
 const MIN_LOT_CELLS := 2
 const MAX_LOT_CELLS := 18

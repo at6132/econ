@@ -12,64 +12,14 @@ from realm.world.biome_noise import (
     terrain_for_cell,
     terrain_with_ocean_border,
 )
+from realm.world.parcel_footprints import (
+    carve_l_corners,
+    classify_parcel_shape,
+    pick_footprint_at,
+    stamp_footprint,
+)
 from realm.world.plot_scale import plot_world_cells_tuple
 from realm.world.world import Plot, Terrain, _subsurface_roll
-
-# (width, height) in world map tiles; weights for parcel size roll.
-# Rectangles only (no L-shapes on the world map — those are build-panel lots).
-_PARCEL_SHAPES: list[tuple[int, int, float]] = [
-    (1, 1, 0.30),
-    (2, 1, 0.16),
-    (1, 2, 0.16),
-    (2, 2, 0.22),
-    (3, 2, 0.08),
-    (2, 3, 0.05),
-    (3, 3, 0.03),
-]
-
-
-def _pick_shape(rng: Any) -> tuple[int, int]:
-    roll = rng.random()
-    acc = 0.0
-    for w, h, wt in _PARCEL_SHAPES:
-        acc += wt
-        if roll <= acc:
-            return w, h
-    return 1, 1
-
-
-def _fits(
-    assigned: list[list[str | None]],
-    x: int,
-    y: int,
-    w: int,
-    h: int,
-    width: int,
-    height: int,
-) -> bool:
-    if x + w > width or y + h > height:
-        return False
-    for dy in range(h):
-        for dx in range(w):
-            if assigned[y + dy][x + dx] is not None:
-                return False
-    return True
-
-
-def _stamp(
-    assigned: list[list[str | None]],
-    x: int,
-    y: int,
-    w: int,
-    h: int,
-    pid: str,
-) -> list[tuple[int, int]]:
-    cells: list[tuple[int, int]] = []
-    for dy in range(h):
-        for dx in range(w):
-            assigned[y + dy][x + dx] = pid
-            cells.append((x + dx, y + dy))
-    return cells
 
 
 def generate_plot_parcels(
@@ -81,8 +31,11 @@ def generate_plot_parcels(
     terrain_fn: Callable[[int, int, int], Terrain] | None = None,
 ) -> dict[PlotId, Plot]:
     """
-    Tile the world into non-overlapping rectangular parcels (1×1 … 3×3 tiles).
-    Each parcel is one :class:`Plot`; anchor ``(x, y)`` is the min corner.
+    Tile the world into non-overlapping **polyomino** parcels (1–9 map tiles).
+
+    Shapes include rectangles, lines, L-shapes, zigzags, T/plus — see
+    :mod:`realm.world.parcel_footprints`. ``Plot.world_cells`` is authoritative;
+    area and build-grid size derive from tile count in :mod:`realm.world.plot_scale`.
     """
     pick = terrain_fn if terrain_fn is not None else terrain_for_cell
     pick = terrain_with_ocean_border(pick, width=width, height=height)
@@ -97,8 +50,10 @@ def generate_plot_parcels(
             if assigned[y][x] is not None:
                 continue
             pid = PlotId(f"p-{x}-{y}")
-            _stamp(assigned, x, y, 1, 1, str(pid))
+            footprint = frozenset({(0, 0)})
+            stamp_footprint(assigned, x, y, footprint, str(pid))
             sub_rng = make_rng(seed, f"gen:{pid}")
+            wc = ((x, y),)
             plots[pid] = Plot(
                 plot_id=pid,
                 x=x,
@@ -114,22 +69,17 @@ def generate_plot_parcels(
                     y=y,
                     apply_belts=correlate_subsurface,
                 ),
-                world_cells=((x, y),),
+                world_cells=wc,
+                parcel_shape="mono",
             )
 
     for y in range(height):
         for x in range(width):
             if assigned[y][x] is not None:
                 continue
-            w, h = _pick_shape(rng)
-            while w > 1 and not _fits(assigned, x, y, w, h, width, height):
-                w -= 1
-            while h > 1 and not _fits(assigned, x, y, w, h, width, height):
-                h -= 1
-            if not _fits(assigned, x, y, w, h, width, height):
-                w, h = 1, 1
             pid = PlotId(f"p-{x}-{y}")
-            cells = _stamp(assigned, x, y, w, h, str(pid))
+            footprint = pick_footprint_at(rng, assigned, x, y, width, height)
+            cells = stamp_footprint(assigned, x, y, footprint, str(pid))
             anchor_terrain = pick(seed, x, y)
             sub_rng = make_rng(seed, f"gen:{pid}")
             subsurface = _subsurface_roll(
@@ -146,6 +96,7 @@ def generate_plot_parcels(
                 if t2.value.startswith("water"):
                     anchor_terrain = t2
                     break
+            wc = tuple(cells)
             plots[pid] = Plot(
                 plot_id=pid,
                 x=x,
@@ -153,8 +104,12 @@ def generate_plot_parcels(
                 terrain=anchor_terrain,
                 owner=None,
                 subsurface=subsurface,
-                world_cells=tuple(cells),
+                world_cells=wc,
+                parcel_shape=classify_parcel_shape(wc),
             )
+
+    carve_l_corners(plots, assigned, rng)
+
     clear_noise_cache()
     return plots
 
@@ -185,7 +140,7 @@ def world_map_tile_count(world: object) -> int:
     idx = world.scenario_state.get("world_cell_to_plot")
     if isinstance(idx, dict) and idx:
         return len(idx)
-    return sum(plot_world_tile_count(p) for p in world.plots.values())
+    return sum(len(plot_world_cells_tuple(p)) for p in world.plots.values())
 
 
 def generate_uniform_plots(
@@ -224,6 +179,7 @@ def generate_uniform_plots(
                 owner=None,
                 subsurface=subsurface,
                 world_cells=((x, y),),
+                parcel_shape="mono",
             )
     clear_noise_cache()
     return plots

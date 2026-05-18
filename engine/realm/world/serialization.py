@@ -119,6 +119,7 @@ def world_public_dict(world: "World") -> dict:
             entry["world_cells"] = [
                 {"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)
             ]
+            entry["parcel_shape"] = getattr(p, "parcel_shape", "") or "poly"
         if p.surveyed:
             sub_view: dict[str, float] = {
                 "iron_ore_grade": p.subsurface.iron_ore_grade,
@@ -767,6 +768,7 @@ def world_map_dict(world: "World") -> dict[str, Any]:
             entry["grid_cells_w"] = gcw
             entry["grid_cells_h"] = gch
             entry["world_cells"] = [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)]
+            entry["parcel_shape"] = getattr(p, "parcel_shape", "") or "poly"
         plots_out.append(entry)
 
     scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}

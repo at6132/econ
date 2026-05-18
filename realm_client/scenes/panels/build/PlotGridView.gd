@@ -1,5 +1,5 @@
 extends Control
-## Build view — town-plat lots over the engine's N×M cell grid (10m cells per world tile).
+## Build view — one deed footprint from engine ``world_cells`` (10m cells per world tile).
 
 signal cell_hovered(gx: int, gy: int)
 signal cell_clicked(gx: int, gy: int)
@@ -66,10 +66,38 @@ func load_plot(plot_id: String, data: Dictionary) -> void:
 	_sub_plots = data.get("sub_plots", [])
 	if _sub_plots is not Array:
 		_sub_plots = []
-	var plat_side := maxi(_grid_w, _grid_h)
-	_lots = PlotLotLayout.generate(plot_id, WorldState.world_seed, plat_side)
-	_street_rows = PlotLotLayout.street_rows(plot_id, WorldState.world_seed, plat_side)
+	# Deed footprint = engine ``world_cells`` (one source of truth with the world map).
+	_lots = [_deed_lot_from_world_cells(data)]
+	_street_rows = []
 	queue_redraw()
+
+
+## Build-grid cells (10m) covered by this deed — mirrors ``world_cells`` from the API.
+func _deed_lot_from_world_cells(data: Dictionary) -> Dictionary:
+	var cells: Array = []
+	var min_wx := 1_000_000
+	var min_wy := 1_000_000
+	var raw: Variant = data.get("world_cells", [])
+	if raw is Array and not (raw as Array).is_empty():
+		for c in raw as Array:
+			if c is Dictionary:
+				var d: Dictionary = c as Dictionary
+				min_wx = mini(min_wx, int(d.get("x", 0)))
+				min_wy = mini(min_wy, int(d.get("y", 0)))
+	else:
+		min_wx = int(data.get("x", 0))
+		min_wy = int(data.get("y", 0))
+		raw = [{"x": min_wx, "y": min_wy}]
+	for c in raw as Array:
+		if not (c is Dictionary):
+			continue
+		var wx: int = int((c as Dictionary).get("x", 0)) - min_wx
+		var wy: int = int((c as Dictionary).get("y", 0)) - min_wy
+		for dx in range(10):
+			for dy in range(10):
+				cells.append(Vector2i(wx * 10 + dx, wy * 10 + dy))
+	var shape := str(data.get("parcel_shape", "rect"))
+	return {"cells": cells, "shape": shape}
 
 
 func _set_grid_dims(data: Dictionary) -> void:
@@ -167,7 +195,7 @@ func _draw() -> void:
 		_draw_text(border.position + Vector2(4, 14), lbl, 13, Color(0.85, 0.72, 0.20, 0.9))
 
 	if _hover_lot_idx >= 0 and _hover_lot_idx < _lots.size() and _placing_blueprint_id.is_empty():
-		var hover_cells: Array = PlotLotLayout.lot_cells(_lots[_hover_lot_idx])
+		var hover_cells: Array = (_lots[_hover_lot_idx] as Dictionary).get("cells", []) as Array
 		var hover_poly := _lot_boundary_polygon(hover_cells, _hover_lot_idx)
 		if hover_poly.size() >= 3:
 			_draw_polyline(hover_poly, LOT_LINE_HI, 2.0, true)
@@ -251,10 +279,12 @@ func _draw_streets(_cs: float) -> void:
 func _draw_lots(base_terrain: Color) -> void:
 	for i in range(_lots.size()):
 		var lot: Dictionary = _lots[i]
-		var cells: Array = PlotLotLayout.lot_cells(lot)
-		var tint := base_terrain.lerp(Color(0.35, 0.32, 0.28), float(i % 5) * 0.018)
-		if PlotLotLayout.is_l_shape(lot):
-			tint = tint.lerp(Color(0.42, 0.38, 0.32), 0.06)
+		var cells: Array = lot.get("cells", []) as Array
+		var tint := base_terrain.lerp(Color(0.35, 0.32, 0.28), 0.04)
+		if str(lot.get("shape", "")) == "l":
+			tint = tint.lerp(Color(0.42, 0.38, 0.32), 0.08)
+		elif str(lot.get("shape", "")) in ["zigzag", "t", "plus", "poly"]:
+			tint = tint.lerp(Color(0.38, 0.36, 0.30), 0.05)
 		var poly := _lot_boundary_polygon(cells, i)
 		if poly.size() >= 3:
 			draw_colored_polygon(poly, tint)
@@ -372,7 +402,7 @@ func _gui_input(event: InputEvent) -> void:
 		if gpos.x >= 0:
 			_hover_gx = gpos.x
 			_hover_gy = gpos.y
-			_hover_lot_idx = PlotLotLayout.lot_at(_lots, gpos.x, gpos.y)
+			_hover_lot_idx = 0 if not _lots.is_empty() else -1
 			cell_hovered.emit(gpos.x, gpos.y)
 			queue_redraw()
 	elif event is InputEventMouseButton:

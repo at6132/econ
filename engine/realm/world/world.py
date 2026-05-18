@@ -81,6 +81,8 @@ class Plot:
     deep_surveyed: bool = False
     # World map tiles in this deed (empty → legacy single tile at ``(x, y)``).
     world_cells: tuple[tuple[int, int], ...] = ()
+    # Footprint class for map + UI: mono | line | rect | l | zigzag | t | plus | poly
+    parcel_shape: str = "mono"
 
 
 @dataclass
