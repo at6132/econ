@@ -31,6 +31,7 @@ from realm.api import (
     routes_dev,
     routes_economy_depth,
     routes_routes,
+    routes_sim,
     routes_ws,
     routes_world,
 )
@@ -139,3 +140,4 @@ app.include_router(routes_contracts.router)
 app.include_router(routes_analytics.router)
 app.include_router(routes_economy_depth.router)
 app.include_router(routes_dev.router)
+app.include_router(routes_sim.router)

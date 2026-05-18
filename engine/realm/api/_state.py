@@ -30,6 +30,14 @@ _AUTOSAVE_PATH = _SAVES_DIR / "autosave.sqlite"
 _world_lazy_singleton: World | None = None
 _world_bootstrap_lock = threading.Lock()
 
+# Re-entrant lock guarding ALL world mutation. Acquired by:
+#   * the solo sim loop around each ``advance_tick`` (one ticks per call)
+#   * action request handlers (claim, trade, build, …) for the duration of
+#     the call so they can't race the loop.
+# RLock so a request that itself calls ``advance_tick`` (e.g. ``/dev/reset``)
+# doesn't deadlock. Game logic is single-threaded under this lock.
+WORLD_LOCK = threading.RLock()
+
 # Tracked for ``GET /persistence/status`` so the UI can show "saved Ns ago".
 _last_save_at: int = 0
 _last_save_path: str = ""
