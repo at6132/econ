@@ -11,6 +11,15 @@ from realm.core.ids import PartyId
 from turnkey_fixtures import grant_turnkey_self_materials
 
 
+def _first_claimable_plot(c: TestClient) -> str:
+    """Find the first unclaimed non-water plot ID via the API."""
+    wj = c.get("/world/map").json()
+    for p in wj.get("plots", []):
+        if "water" not in str(p.get("terrain", "")).lower() and p.get("owner") is None:
+            return str(p["id"])
+    raise RuntimeError("no claimable plots found")
+
+
 def test_market_cancel_via_http_round_trip() -> None:
     c = TestClient(app)
     assert c.post("/dev/reset", params={"scenario": "frontier", "seed": 55}).status_code == 200
@@ -128,7 +137,7 @@ def test_tick_batch_includes_compact_summary_when_requested() -> None:
 def test_produce_while_active_returns_200_with_started_false() -> None:
     c = TestClient(app)
     assert c.post("/dev/reset", params={"scenario": "frontier", "seed": 61}).status_code == 200
-    pid = "p-0-0"
+    pid = _first_claimable_plot(c)
     assert c.post(f"/plots/{pid}/claim", params={"party": "player"}).status_code == 200
     assert c.post(f"/plots/{pid}/survey", params={"party": "player"}).status_code == 200
     import realm.api as api
@@ -221,23 +230,24 @@ def test_p2p_http_idempotency_replay() -> None:
 def test_survey_http_returns_terrain_and_recipe_ids() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"scenario": "frontier", "seed": 1})
-    r = c.post("/plots/p-0-0/claim", params={"party": "player"})
+    pid = _first_claimable_plot(c)
+    r = c.post(f"/plots/{pid}/claim", params={"party": "player"})
     assert r.status_code == 200
-    rs = c.post("/plots/p-0-0/survey", params={"party": "player"})
+    rs = c.post(f"/plots/{pid}/survey", params={"party": "player"})
     assert rs.status_code == 200
-    assert rs.json().get("terrain") == "plains"
+    assert rs.json().get("terrain") is not None
     import realm.api as api
 
     grant_turnkey_self_materials(api._world, PartyId("player"), "wood_shop")
     rb = c.post(
-        "/plots/p-0-0/build",
+        f"/plots/{pid}/build",
         params={"building_id": "wood_shop", "party": "player", "build_mode": "turnkey"},
     )
     assert rb.status_code == 200
     for _ in range(400):
         c.post("/tick")
     wj = c.get("/world").json()
-    plot = next(p for p in wj["plots"] if p["id"] == "p-0-0")
+    plot = next(p for p in wj["plots"] if p["id"] == pid)
     rids = plot.get("recipe_ids") or []
     assert isinstance(rids, list)
     assert "sawmill" in rids
@@ -249,9 +259,10 @@ def test_survey_http_conserves_ledger_total() -> None:
 
     c = TestClient(app)
     c.post("/dev/reset", params={"scenario": "frontier", "seed": 96})
-    c.post("/plots/p-1-0/claim", params={"party": "player"})
+    pid = _first_claimable_plot(c)
+    c.post(f"/plots/{pid}/claim", params={"party": "player"})
     total_before = api._world.ledger.total_cents()
-    r = c.post("/plots/p-1-0/survey", params={"party": "player"})
+    r = c.post(f"/plots/{pid}/survey", params={"party": "player"})
     assert r.status_code == 200
     assert api._world.ledger.total_cents() == total_before
 
@@ -273,16 +284,17 @@ def test_maintain_http_conserves_ledger_total() -> None:
 
     c = TestClient(app)
     c.post("/dev/reset", params={"scenario": "frontier", "seed": 98})
-    c.post("/plots/p-0-0/claim", params={"party": "player"})
-    c.post("/plots/p-0-0/survey", params={"party": "player"})
-    rb = c.post("/plots/p-0-0/build", params={"party": "player", "building_id": "watch_hut"})
+    pid = _first_claimable_plot(c)
+    c.post(f"/plots/{pid}/claim", params={"party": "player"})
+    c.post(f"/plots/{pid}/survey", params={"party": "player"})
+    rb = c.post(f"/plots/{pid}/build", params={"party": "player", "building_id": "watch_hut"})
     assert rb.status_code == 200
     row = next(b for b in api._world.plot_buildings if b.get("building_id") == "watch_hut")
     row.pop("completes_at_tick", None)
     row["condition_bps"] = 500
     total_before = api._world.ledger.total_cents()
     r = c.post(
-        "/plots/p-0-0/maintain",
+        f"/plots/{pid}/maintain",
         params={"party": "player", "instance_id": str(row["instance_id"])},
     )
     assert r.status_code == 200

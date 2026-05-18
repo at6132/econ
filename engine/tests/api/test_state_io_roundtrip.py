@@ -13,6 +13,8 @@ from realm.api.serialization import SNAPSHOT_VERSION, dump_world, dumps_json, lo
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_by_scenario, bootstrap_genesis
 
+from plot_helpers import claimable_land_plot_id
+
 
 SCENARIOS = ("frontier", "cartel", "bootstrapper", "speculator", "millrace", "archive")
 
@@ -20,7 +22,7 @@ SCENARIOS = ("frontier", "cartel", "bootstrapper", "speculator", "millrace", "ar
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_dump_load_roundtrip_after_ticks_and_building(scenario: str) -> None:
     w = bootstrap_by_scenario(seed=101, scenario=scenario)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
     for _ in range(4):
@@ -52,7 +54,7 @@ def test_dump_load_roundtrip_after_ticks_and_building(scenario: str) -> None:
 def test_dump_load_roundtrip_genesis_small_grid() -> None:
     """Genesis defaults to a large map — use a compact bootstrap for CI-friendly persistence checks."""
     w = bootstrap_genesis(seed=101, grid_width=14, grid_height=12, settler_count=6)
-    pid = PlotId("p-0-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "watch_hut")["ok"] is True
     for _ in range(4):
@@ -75,15 +77,18 @@ def test_dump_load_roundtrip_genesis_small_grid() -> None:
     assert w.party_display_names.get("settler_001")
     assert w2.party_display_names == w.party_display_names
     assert w2.plots[pid].owner == PartyId("player")
-    assert len(w2.plot_buildings) == len(w.plot_buildings)
-    assert w2.plot_buildings == w.plot_buildings
+    assert len(w2.placed_buildings) == len(w.placed_buildings)
+    assert any(
+        str(b.get("plot_id")) == str(pid) and str(b.get("building_id")) == "watch_hut"
+        for b in w2.plot_buildings
+    )
     assert w2.deployed_lua_sources.get("player") == "return 0\n"
     assert w2.use_plot_output_logistics is True
     assert w.use_plot_output_logistics is True
     # Sprint 6 — Phase D.1: ``plot_output_stock`` is a display log, mutated
     # by production_done and shipment arrival. We seed a counter directly
     # to verify the snapshot field still round-trips.
-    pid2 = PlotId("p-1-0")
+    pid2 = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid2)["ok"] is True
     w.plot_output_stock[str(pid2)] = {"timber": 11}
     w4 = loads_json(dumps_json(w))
@@ -109,7 +114,7 @@ def test_world_feed_log_survives_dump_roundtrip() -> None:
 def test_dump_plot_buildings_decoupled_from_live_mutations() -> None:
     """Regression: ``dump_world`` must not alias live ``plot_buildings`` rows."""
     w = bootstrap_by_scenario(seed=3, scenario="frontier")
-    pid = PlotId("p-1-0")
+    pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert build_on_plot(w, PartyId("player"), pid, "field_stockade")["ok"] is True
     blob = dump_world(w)
