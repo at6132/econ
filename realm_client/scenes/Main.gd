@@ -52,6 +52,8 @@ func _boot_shell() -> void:
 	_setup_map_overlay_bar()
 	_layout_shell()
 	_refresh_shell_hud()
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		await Transport.engine_ready
 	_initial_world_load()
 
 
@@ -60,11 +62,43 @@ func _boot_shell() -> void:
 ## (summary + player + feed deltas) — the heavy /world/map is only
 ## re-fetched when the player does a structural action.
 func _initial_world_load() -> void:
+	# Map first (~10 MB on Genesis). Other boot payloads are tiny; loading
+	# them before the map risks WorldMap painting the 48×36 demo placeholder
+	# while this request is still in flight.
+	API.get_world_map(func(m): _on_boot_map_loaded(m))
+
+
+func _on_boot_map_loaded(data: Dictionary) -> void:
+	if _try_apply_map_payload(data):
+		_finish_boot_load()
+		return
+	var reason := str(data.get("reason", "empty or invalid payload"))
+	push_warning("Realm: GET /world/map failed (%s); falling back to GET /world" % reason)
+	API.get_world(func(w): _on_boot_world_fallback(w))
+
+
+func _try_apply_map_payload(data: Dictionary) -> bool:
+	if data.is_empty() or WorldState.is_api_error_payload(data):
+		return false
+	WorldState.apply_map(data)
+	return not WorldState.plots.is_empty()
+
+
+func _on_boot_world_fallback(data: Dictionary) -> void:
+	if data.is_empty() or WorldState.is_api_error_payload(data):
+		push_error("Realm: GET /world failed: %s" % str(data.get("reason", "no data")))
+		return
+	WorldState.apply_world(data)
+	if WorldState.plots.is_empty():
+		push_error("Realm: engine returned no plots — see engine/logs/realm_solo.log")
+		return
+	_finish_boot_load()
+
+
+func _finish_boot_load() -> void:
 	API.get_world_static(func(s): WorldState.apply_static(s))
-	API.get_world_map(func(m): WorldState.apply_map(m))
 	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 	API.get_world_feed(func(f): WorldState.apply_feed(f), -1)
-	# Summary fills the HUD counters before the first /tick completes.
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 
 

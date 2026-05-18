@@ -65,6 +65,10 @@ def configure_solo_logging() -> Path:
         stderr_handler.setLevel(level)
         root.addHandler(stderr_handler)
 
+    # Per-request lines from the solo socket (GET /world/map timing, errors, …).
+    logging.getLogger("realm.socket_server.request").setLevel(level)
+    logging.getLogger("realm.socket_server").setLevel(level)
+
     _CONFIGURED = True
     logging.getLogger("realm.solo").info("solo logging → %s", log_path)
     return log_path

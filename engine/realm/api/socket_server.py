@@ -23,6 +23,7 @@ import socket
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -187,7 +188,7 @@ def run(host: str = "127.0.0.1", port: int = 9000) -> None:
     log_path = configure_solo_logging()
     if not _is_windows():
         threading.Thread(target=_run_unix, args=(_socket_path(),), daemon=True).start()
-    _run_tcp(host, port)
+    _run_tcp(host, port, log_path)
 
 
 def _run_unix(path: str) -> None:
@@ -204,7 +205,7 @@ def _run_unix(path: str) -> None:
         _handle_connection(conn)
 
 
-def _run_tcp(host: str, port: int) -> None:
+def _run_tcp(host: str, port: int, log_path: Path | str) -> None:
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((host, port))

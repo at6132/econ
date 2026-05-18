@@ -199,6 +199,11 @@ func _process(_delta: float) -> void:
 			continue
 		var parsed: Variant = JSON.parse_string(line)
 		if not parsed is Dictionary:
+			push_error(
+				"Transport: failed to parse engine response (%d chars) — map load may stall"
+				% line.length()
+			)
+			_fail_oldest_pending("JSON parse error")
 			continue
 		var resp: Dictionary = parsed
 		var rid: String = str(resp.get("id", ""))
@@ -206,6 +211,17 @@ func _process(_delta: float) -> void:
 			var cb: Callable = _pending[rid]
 			_pending.erase(rid)
 			_safe_call(cb, resp)
+		elif not _pending.is_empty():
+			push_warning("Transport: response id %s did not match a pending request" % rid)
+
+
+func _fail_oldest_pending(reason: String) -> void:
+	if _pending.is_empty():
+		return
+	var oldest_id: String = str(_pending.keys()[0])
+	var cb: Callable = _pending[oldest_id]
+	_pending.erase(oldest_id)
+	_safe_call(cb, {"ok": false, "reason": reason})
 
 
 func _http_get(endpoint: String, callback: Callable) -> void:

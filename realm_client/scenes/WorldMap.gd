@@ -118,16 +118,34 @@ func _ready() -> void:
 	# Smoothing lags behind zoom/pivot corrections and breaks zoom-to-cursor inside SubViewport.
 	camera.position_smoothing_enabled = false
 	WorldState.world_updated.connect(_on_world_updated)
+	WorldState.map_updated.connect(_on_map_ready)
 	# Player-only updates (cash, inventory, owned plots) ride on the
-	# realtime tick and don't need a 76800-cell cache rebuild. Hook a
-	# light building-cache refresh so newly-placed structures render
-	# immediately without going through ``_on_world_updated``.
+	# realtime tick and don't need a 76800-cell cache rebuild.
 	WorldState.player_updated.connect(_on_player_updated)
-	# Map data comes from the lean /world/map payload now (Main.gd kicks
-	# off the full split-payload boot in parallel). If the autoload race
-	# means we got here first, this fetch primes the cache; otherwise
-	# the apply_map already done by Main wins and this is a cheap refresh.
-	API.get_world_map(_on_world_loaded)
+	call_deferred("_bootstrap_map_view")
+
+
+func _bootstrap_map_view() -> void:
+	if not WorldState.plots.is_empty():
+		_refresh_map_view_from_world_state()
+
+
+func _on_map_ready() -> void:
+	_refresh_map_view_from_world_state()
+
+
+func _refresh_map_view_from_world_state() -> void:
+	if WorldState.plots.is_empty():
+		return
+	_loading_world = true
+	_sync_demo_mode_from_world()
+	_world_seed = int(WorldState.world_seed)
+	_rebuild_mesh()
+	_rebuild_building_cache()
+	_fit_camera_to_mesh()
+	_loading_world = false
+	queue_redraw()
+	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 
 
 func _on_player_updated() -> void:
@@ -143,50 +161,41 @@ func _on_player_updated() -> void:
 	_invalidate_draw_buffer()
 
 
-func _on_world_loaded(data: Dictionary) -> void:
-	_loading_world = true
-	if not data.is_empty():
-		WorldState.apply_map(data)
-		_world_seed = int(WorldState.world_seed)
-		_demo_mode = false
-	else:
-		_seed_demo_plots()
-		_demo_mode = true
-		WorldState.world_seed = DEMO_SEED
-		WorldState.world_updated.emit()
-	if WorldState.plots.is_empty():
-		push_warning(
-			"Realm map: world payload had no plots — using demo grid. "
-			+ "Start realm_solo.py / FastAPI and confirm GET /world returns plots."
-		)
-		_seed_demo_plots()
-		_demo_mode = true
-		WorldState.world_seed = DEMO_SEED
-		WorldState.world_updated.emit()
-	else:
-		var n_cells: int = WorldState.world_cell_to_plot.size()
-		var n_deeds: int = WorldState.plots.size()
-		if n_cells > n_deeds:
-			print("Realm map: %d deeds covering %d map cells (multi-tile parcels)" % [n_deeds, n_cells])
-	_rebuild_mesh()
-	_rebuild_building_cache()
-	_fit_camera_to_mesh()
-	_loading_world = false
-	queue_redraw()
-	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
-
-
 func _on_world_updated() -> void:
 	if _loading_world:
 		return
 	if WorldState.plots.is_empty():
 		return
-	_rebuild_building_cache()
+	_sync_demo_mode_from_world()
 	var bounds_now := _grid_bounds()
-	if bounds_now != _last_mesh_bounds:
-		_rebuild_mesh()
-		call_deferred("_fit_camera_to_mesh")
+	# Mesh must exist before the cell cache; otherwise _draw() bails out on
+	# empty ``_cell_flags`` and the viewport stays blank.
+	if _mesh == null or _cell_flags.is_empty() or bounds_now != _last_mesh_bounds:
+		_refresh_map_view_from_world_state()
+		return
+	_rebuild_building_cache_only()
 	_invalidate_draw_buffer()
+
+
+## Keep ``_demo_mode`` aligned with ``WorldState.plots`` keys. A stale
+## ``_demo_mode`` after ``apply_map`` leaves ``demo-*`` in ``_cell_pids``
+## while plots use ``p-x-y`` — click then crashes on ``plots[best_id]``.
+func _sync_demo_mode_from_world() -> void:
+	if WorldState.plots.is_empty():
+		return
+	for pid in WorldState.plots.keys():
+		if not str(pid).begins_with("demo-"):
+			_demo_mode = false
+			return
+	_demo_mode = true
+
+
+func _plot_dict_for_cell(pid: String, gx: int, gy: int) -> Dictionary:
+	var p: Dictionary = WorldState.plots.get(pid, {})
+	if not p.is_empty():
+		return p
+	var canonical := "p-%d-%d" % [gx, gy]
+	return WorldState.plots.get(canonical, {})
 
 
 func _rebuild_building_cache() -> void:
@@ -213,6 +222,7 @@ func _rebuild_building_cache_only() -> void:
 
 
 func _rebuild_cell_cache() -> void:
+	_sync_demo_mode_from_world()
 	var bx := _last_mesh_bounds.x
 	var by := _last_mesh_bounds.y
 	if bx <= 0 or by <= 0:
@@ -665,6 +675,16 @@ func _lod() -> int:
 	return 4
 
 
+## Overview texture replaces per-cell mesh; plot hit-tests are meaningless at this scale.
+func _overview_lod_active() -> bool:
+	if _mesh == null or not _lod_cache.overview_ready:
+		return false
+	if _lod() > 1:
+		return false
+	_compute_visible_range_overdraw()
+	return _visible_cell_count() >= OVERVIEW_DRAW_CELL_THRESHOLD
+
+
 func _world_line_width(screen_px: float) -> float:
 	return screen_px / maxf(0.001, camera.zoom.x)
 
@@ -1090,7 +1110,7 @@ func _screen_to_world(screen_pos: Vector2) -> Vector2:
 
 
 func _handle_plot_click(screen_pos: Vector2) -> void:
-	if _mesh == null:
+	if _mesh == null or _overview_lod_active():
 		return
 	var world_pos := _screen_to_world(screen_pos)
 	var cell := _mesh.cell_px
@@ -1119,8 +1139,14 @@ func _handle_plot_click(screen_pos: Vector2) -> void:
 				best_id = _cell_pids[idx]
 	if best_id.is_empty():
 		return
-	_selected_plot_id = best_id
+	var plot_data: Dictionary = _plot_dict_for_cell(best_id, best_gx, best_gy)
+	if plot_data.is_empty():
+		return
+	var emit_id := str(plot_data.get("id", best_id))
+	if emit_id.is_empty():
+		emit_id = best_id
+	_selected_plot_id = emit_id
 	_selected_gx = best_gx
 	_selected_gy = best_gy
 	_invalidate_draw_buffer()
-	plot_clicked.emit(best_id, WorldState.plots[best_id] as Dictionary)
+	plot_clicked.emit(emit_id, plot_data)

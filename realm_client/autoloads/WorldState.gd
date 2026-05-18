@@ -268,14 +268,28 @@ func apply_player(data: Dictionary) -> void:
 ## Lean map view from ``GET /world/map``. Replaces the ``plots`` cache
 ## with the canonical map state, then rebuilds the world-cell index.
 ## Call only after world-load or a structural action — not on the 2 s tick.
+func is_api_error_payload(data: Dictionary) -> bool:
+	return data.has("ok") and not bool(data.get("ok", true))
+
+
 func apply_map(data: Dictionary) -> void:
 	if data.is_empty():
+		return
+	if is_api_error_payload(data):
+		push_warning("WorldState.apply_map: %s" % str(data.get("reason", "request failed")))
+		return
+	var raw_plots: Variant = data.get("plots", [])
+	if not (raw_plots is Array) or (raw_plots as Array).is_empty():
+		# Socket error envelopes and failed requests often omit plots — never
+		# wipe a good map that Main already applied.
+		if not plots.is_empty():
+			return
+		push_warning("WorldState.apply_map: payload had no plots")
 		return
 	current_tick = int(data.get("tick", current_tick))
 	var uniform := bool(data.get("uniform_plots", false))
 	var grid_w := int(data.get("grid_width", 0))
 	var grid_h := int(data.get("grid_height", 0))
-	var raw_plots: Variant = data.get("plots", [])
 	# Preserve subsurface + recipe_ids from any prior player payload so a
 	# map refresh after a build action doesn't blank out per-owned-plot
 	# detail the player can already see.
