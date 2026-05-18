@@ -52,7 +52,20 @@ func _boot_shell() -> void:
 	_setup_map_overlay_bar()
 	_layout_shell()
 	_refresh_shell_hud()
-	_refresh_from_server()
+	_initial_world_load()
+
+
+## One-shot boot fetch: read-once tables, map, player view, feed tails.
+## The 2 s tick loop after this only refreshes the cheap payloads
+## (summary + player + feed deltas) — the heavy /world/map is only
+## re-fetched when the player does a structural action.
+func _initial_world_load() -> void:
+	API.get_world_static(func(s): WorldState.apply_static(s))
+	API.get_world_map(func(m): WorldState.apply_map(m))
+	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
+	API.get_world_feed(func(f): WorldState.apply_feed(f), -1)
+	# Summary fills the HUD counters before the first /tick completes.
+	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 
 
 func _setup_map_overlay_bar() -> void:
@@ -139,9 +152,23 @@ func _auto_tick() -> void:
 	)
 
 
+## Realtime refresh — runs every 2 s after each /tick. Only the three
+## cheap payloads (summary + player + feed delta). The fat /world/map
+## payload is NOT polled here — it is refreshed only after structural
+## actions (claim / survey / build / buy / sell / dispatch).
 func _refresh_from_server() -> void:
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
-	API.get_world(func(w): WorldState.apply_world(w))
+	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
+	API.get_world_feed(func(f): WorldState.apply_feed(f), WorldState.feed_seen_tick)
+
+
+## Refresh the lean map view after a structural action (claim / survey /
+## build / dispatch). Pair with ``_refresh_from_server`` callsites that
+## previously called ``API.get_world(...)`` and used the result to redraw
+## the map.
+func refresh_world_map() -> void:
+	API.get_world_map(func(m): WorldState.apply_map(m))
+	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 
 
 func _on_nav_pressed(panel_name: String) -> void:
@@ -249,7 +276,7 @@ func _on_build_panel_closed() -> void:
 	_build_return_plot_id = ""
 	_close_active_overlay()
 	if plot_id != "":
-		API.get_world(func(w): WorldState.apply_world(w))
+		refresh_world_map()
 		_open_plot_detail(plot_id)
 
 

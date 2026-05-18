@@ -36,10 +36,14 @@ func _ready() -> void:
 	plot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	plot_scroll.resized.connect(_sync_plot_list_width)
 	WorldState.world_updated.connect(_refresh_list)
+	# Owned-plot ownership/inventory updates land on the realtime tick.
+	WorldState.player_updated.connect(_refresh_list)
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	call_deferred("_sync_plot_list_width")
 	_slide_in()
-	API.get_world(func(d): WorldState.apply_world(d))
+	# Initial fetch: cheap player payload; legacy /world keeps the map +
+	# market caches warm for other tabs that haven't been migrated yet.
+	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 	_refresh_list()
 
 

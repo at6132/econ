@@ -22,12 +22,17 @@ const LOD_ISLAND_MAX := 14.0
 const LOD_REGION_MAX := 32.0
 ## Above: PLOT (labels, mine ring). At SITE and closer: per-building pads + abbrev on the parcel.
 const LOD_PLOT_MAX := 56.0
+## When more than this many cells are visible, use pre-aggregated paths (see ``MapLodCache``).
+const OVERVIEW_DRAW_CELL_THRESHOLD := 1800
+const CHUNK_DRAW_CELL_THRESHOLD := 600
+const ALIGNED_DRAW_CELL_THRESHOLD := 1200
 
 signal plot_clicked(plot_id: String, plot_data: Dictionary)
 
 @onready var camera: Camera2D = $Camera2D
 
 var _mesh: MapOrganicMesh
+var _lod_cache: MapLodCache = MapLodCache.new()
 var _world_seed: int = DEMO_SEED
 var _selected_plot_id: String = ""
 var _selected_gx: int = -1
@@ -113,14 +118,36 @@ func _ready() -> void:
 	# Smoothing lags behind zoom/pivot corrections and breaks zoom-to-cursor inside SubViewport.
 	camera.position_smoothing_enabled = false
 	WorldState.world_updated.connect(_on_world_updated)
-	API.get_world(_on_world_loaded)
+	# Player-only updates (cash, inventory, owned plots) ride on the
+	# realtime tick and don't need a 76800-cell cache rebuild. Hook a
+	# light building-cache refresh so newly-placed structures render
+	# immediately without going through ``_on_world_updated``.
+	WorldState.player_updated.connect(_on_player_updated)
+	# Map data comes from the lean /world/map payload now (Main.gd kicks
+	# off the full split-payload boot in parallel). If the autoload race
+	# means we got here first, this fetch primes the cache; otherwise
+	# the apply_map already done by Main wins and this is a cheap refresh.
+	API.get_world_map(_on_world_loaded)
+
+
+func _on_player_updated() -> void:
+	if _loading_world:
+		return
+	if WorldState.plots.is_empty():
+		return
+	# Rebuild the per-plot building counts (cheap — iterates
+	# ``plot_buildings`` which is a small list). Do NOT touch the
+	# 76800-cell colour cache here; that only changes when the map
+	# itself changes (claim / survey / build → apply_map).
+	_rebuild_building_cache_only()
+	_invalidate_draw_buffer()
 
 
 func _on_world_loaded(data: Dictionary) -> void:
 	_loading_world = true
 	if not data.is_empty():
-		WorldState.apply_world(data)
-		_world_seed = int(data.get("seed", DEMO_SEED))
+		WorldState.apply_map(data)
+		_world_seed = int(WorldState.world_seed)
 		_demo_mode = false
 	else:
 		_seed_demo_plots()
@@ -128,11 +155,19 @@ func _on_world_loaded(data: Dictionary) -> void:
 		WorldState.world_seed = DEMO_SEED
 		WorldState.world_updated.emit()
 	if WorldState.plots.is_empty():
-		push_warning("Realm map: world payload had no plots — using demo grid (check GET /world)")
+		push_warning(
+			"Realm map: world payload had no plots — using demo grid. "
+			+ "Start realm_solo.py / FastAPI and confirm GET /world returns plots."
+		)
 		_seed_demo_plots()
 		_demo_mode = true
 		WorldState.world_seed = DEMO_SEED
 		WorldState.world_updated.emit()
+	else:
+		var n_cells: int = WorldState.world_cell_to_plot.size()
+		var n_deeds: int = WorldState.plots.size()
+		if n_cells > n_deeds:
+			print("Realm map: %d deeds covering %d map cells (multi-tile parcels)" % [n_deeds, n_cells])
 	_rebuild_mesh()
 	_rebuild_building_cache()
 	_fit_camera_to_mesh()
@@ -155,6 +190,13 @@ func _on_world_updated() -> void:
 
 
 func _rebuild_building_cache() -> void:
+	_rebuild_building_cache_only()
+	_rebuild_cell_cache()
+
+
+## Just the buildings-by-plot index. Called on the realtime tick via
+## ``player_updated``; cheap (iterates a small list).
+func _rebuild_building_cache_only() -> void:
 	_plot_building_counts.clear()
 	_plot_buildings_by_plot.clear()
 	for row in WorldState.plot_buildings:
@@ -168,7 +210,6 @@ func _rebuild_building_cache() -> void:
 		if not _plot_buildings_by_plot.has(pid):
 			_plot_buildings_by_plot[pid] = []
 		(_plot_buildings_by_plot[pid] as Array).append(d)
-	_rebuild_cell_cache()
 
 
 func _rebuild_cell_cache() -> void:
@@ -233,11 +274,13 @@ func _rebuild_cell_cache() -> void:
 			if bool(p.get("surveyed", false)):
 				flags |= 0x4
 			_cell_flags[idx] = flags
+	_lod_cache.rebuild(bx, by, _cell_colors, _cell_flags, RealmColors.BG2)
 	_invalidate_draw_buffer()
 
 
 func _seed_demo_plots() -> void:
 	WorldState.plots.clear()
+	WorldState.world_cell_to_plot.clear()
 	var terrains: PackedStringArray = PackedStringArray([
 		"plains", "forest", "mountain", "desert", "tundra", "swamp",
 		"water_shallow", "water_deep", "hills", "coastal", "temperate_forest", "valley",
@@ -386,6 +429,10 @@ func _viewport_inside_drawn_buffer() -> bool:
 	return _drawn_world_rect.encloses(vr)
 
 
+func _visible_cell_count() -> int:
+	return maxi(0, (_vis_max_x - _vis_min_x) * (_vis_max_y - _vis_min_y))
+
+
 func _draw() -> void:
 	if _mesh == null or _cell_flags.is_empty():
 		return
@@ -396,6 +443,7 @@ func _draw() -> void:
 	var lod := _lod()
 	var csp := _cell_screen_px()
 	_compute_visible_range_overdraw()
+	var vis_cells := _visible_cell_count()
 
 	# Record what we drew for the overdraw buffer check.
 	_drawn_zoom = _cam_zoom
@@ -405,23 +453,30 @@ func _draw() -> void:
 	var sel_gx := _selected_gx
 	var sel_gy := _selected_gy
 
+	if lod <= 1 and vis_cells >= OVERVIEW_DRAW_CELL_THRESHOLD and _lod_cache.overview_ready:
+		_draw_overview_terrain()
+		_draw_selection_highlight(sel_gx, sel_gy)
+		_draw_town_dots()
+		return
+
+	if lod <= 2 and vis_cells >= CHUNK_DRAW_CELL_THRESHOLD and _lod_cache.chunk_flags.size() > 0:
+		_draw_chunk_terrain()
+		_draw_selection_highlight(sel_gx, sel_gy)
+		_draw_town_dots()
+		if lod >= 2:
+			_draw_town_chrome(lod, csp)
+		return
+
+	if lod <= 2 and vis_cells >= ALIGNED_DRAW_CELL_THRESHOLD:
+		_draw_aligned_cell_terrain()
+		_draw_selection_highlight(sel_gx, sel_gy)
+		_draw_town_dots()
+		_draw_town_chrome(lod, csp)
+		return
+
 	if lod <= 1:
-		# ── Fast path: fill-only, zero string ops, zero stroke draws ──
-		for gy in range(_vis_min_y, _vis_max_y):
-			var row_off := gy * bx
-			for gx in range(_vis_min_x, _vis_max_x):
-				var idx := row_off + gx
-				if (_cell_flags[idx] & 0x1) == 0:
-					continue
-				draw_colored_polygon(_mesh.plot_polygon(gx, gy), _cell_colors[idx])
-		# Single-cell selection highlight (O(1), not O(N)).
-		if sel_gx >= _vis_min_x and sel_gx < _vis_max_x and sel_gy >= _vis_min_y and sel_gy < _vis_max_y:
-			var sel_idx := sel_gy * bx + sel_gx
-			if (_cell_flags[sel_idx] & 0x1) != 0:
-				var pts := _mesh.plot_polygon(sel_gx, sel_gy)
-				var sw := _world_line_width(3.5)
-				draw_polyline(pts, RealmColors.ACCENT, sw, true)
-				draw_line(pts[3], pts[0], RealmColors.ACCENT, sw)
+		_draw_aligned_cell_terrain()
+		_draw_selection_highlight(sel_gx, sel_gy)
 		_draw_town_dots()
 		return
 
@@ -487,6 +542,84 @@ func _draw() -> void:
 	if lod >= 3:
 		_draw_plot_detail_labels()
 
+	if lod >= 3 and vis_cells < CHUNK_DRAW_CELL_THRESHOLD:
+		_draw_parcel_boundaries(lod)
+
+
+func _draw_overview_terrain() -> void:
+	var tex := _lod_cache.overview_texture
+	if tex == null:
+		return
+	draw_texture_rect(
+		tex,
+		Rect2(0.0, 0.0, _mesh.content_width, _mesh.content_height),
+		false
+	)
+
+
+func _draw_chunk_terrain() -> void:
+	var cs := MapLodCache.CHUNK_CELLS
+	var cp := _mesh.cell_px
+	var pad := _mesh.pad
+	var cw := _lod_cache.chunk_w
+	var bounds := _last_mesh_bounds
+	var cx0 := maxi(0, _vis_min_x / cs)
+	var cy0 := maxi(0, _vis_min_y / cs)
+	var cx1 := mini(cw, int(ceil(float(_vis_max_x) / float(cs))))
+	var cy1 := mini(_lod_cache.chunk_h, int(ceil(float(_vis_max_y) / float(cs))))
+	for cy in range(cy0, cy1):
+		var row := cy * cw
+		var gy0 := cy * cs
+		var gy1 := mini(gy0 + cs, bounds.y)
+		var y0 := pad + float(gy0) * cp
+		var h_px := float(gy1 - gy0) * cp
+		for cx in range(cx0, cx1):
+			var cidx := row + cx
+			if (_lod_cache.chunk_flags[cidx] & 0x1) == 0:
+				continue
+			var gx0 := cx * cs
+			var gx1 := mini(gx0 + cs, bounds.x)
+			var x0 := pad + float(gx0) * cp
+			draw_rect(Rect2(x0, y0, float(gx1 - gx0) * cp, h_px), _lod_cache.chunk_colors[cidx])
+
+
+func _draw_aligned_cell_terrain() -> void:
+	var bx := _last_mesh_bounds.x
+	var cp := _mesh.cell_px
+	var pad := _mesh.pad
+	for gy in range(_vis_min_y, _vis_max_y):
+		var row_off := gy * bx
+		var y0 := pad + float(gy) * cp
+		for gx in range(_vis_min_x, _vis_max_x):
+			var idx := row_off + gx
+			if (_cell_flags[idx] & 0x1) == 0:
+				continue
+			draw_rect(
+				Rect2(pad + float(gx) * cp, y0, cp, cp),
+				_cell_colors[idx]
+			)
+
+
+func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
+	if sel_gx < _vis_min_x or sel_gx >= _vis_max_x or sel_gy < _vis_min_y or sel_gy >= _vis_max_y:
+		return
+	var bx := _last_mesh_bounds.x
+	var sel_idx := sel_gy * bx + sel_gx
+	if (_cell_flags[sel_idx] & 0x1) == 0:
+		return
+	var lod := _lod()
+	var sw := _world_line_width(3.5)
+	var accent := RealmColors.ACCENT
+	if lod <= 2 and _visible_cell_count() >= CHUNK_DRAW_CELL_THRESHOLD:
+		var cp := _mesh.cell_px
+		var pad := _mesh.pad
+		var r := Rect2(pad + float(sel_gx) * cp, pad + float(sel_gy) * cp, cp, cp)
+		draw_rect(r, Color(accent, 0.0), false, sw)
+		return
+	var pts := _mesh.plot_polygon(sel_gx, sel_gy)
+	draw_polyline(pts, accent, sw, true)
+	draw_line(pts[3], pts[0], accent, sw)
+
 
 func _overdraw_world_rect() -> Rect2:
 	var z := maxf(_cam_zoom, FIT_ZOOM_EPS)
@@ -545,6 +678,96 @@ func _town_bounds_poly(minx: int, miny: int, maxx: int, maxy: int) -> PackedVect
 
 
 ## Terrain drawing is now inlined in ``_draw()`` using flat pre-cached arrays.
+
+
+func _draw_parcel_boundaries(lod: int) -> void:
+	## Gold outline around multi-hectare deeds (Option B). Per-cell squiggles stay underneath.
+	if _demo_mode or lod < 2 or _mesh == null:
+		return
+	var stroke_c := Color(0.92, 0.82, 0.45, 0.88)
+	var stroke_w := _world_line_width(2.25)
+	for plot_id in WorldState.plots.keys():
+		var p: Dictionary = WorldState.plots[plot_id]
+		var cells_v: Variant = p.get("world_cells", [])
+		if not (cells_v is Array):
+			continue
+		var cells_arr: Array = cells_v as Array
+		if cells_arr.size() <= 1:
+			continue
+		var cell_set: Dictionary = {}
+		var any_visible := false
+		for c in cells_arr:
+			if not (c is Dictionary):
+				continue
+			var d: Dictionary = c as Dictionary
+			var gx := int(d.get("x", 0))
+			var gy := int(d.get("y", 0))
+			cell_set["%d,%d" % [gx, gy]] = true
+			if gx >= _vis_min_x and gx < _vis_max_x and gy >= _vis_min_y and gy < _vis_max_y:
+				any_visible = true
+		if not any_visible:
+			continue
+		var poly := _parcel_boundary_polygon(cell_set)
+		if poly.size() >= 3:
+			draw_polyline(poly, stroke_c, stroke_w, true)
+			draw_line(poly[poly.size() - 1], poly[0], stroke_c, stroke_w)
+
+
+func _parcel_boundary_polygon(cell_set: Dictionary) -> PackedVector2Array:
+	var segments: Array = []
+	for key in cell_set.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var gx := int(parts[0])
+		var gy := int(parts[1])
+		var pts := _mesh.plot_polygon(gx, gy)
+		if pts.size() < 4:
+			continue
+		if not cell_set.has("%d,%d" % [gx, gy - 1]):
+			segments.append([pts[0], pts[1]])
+		if not cell_set.has("%d,%d" % [gx, gy + 1]):
+			segments.append([pts[3], pts[2]])
+		if not cell_set.has("%d,%d" % [gx - 1, gy]):
+			segments.append([pts[0], pts[3]])
+		if not cell_set.has("%d,%d" % [gx + 1, gy]):
+			segments.append([pts[1], pts[2]])
+	var loop: Array = _chain_boundary_segments(segments)
+	var poly := PackedVector2Array()
+	for v in loop:
+		if v is Vector2:
+			poly.append(v)
+	return poly
+
+
+func _chain_boundary_segments(segments: Array) -> Array:
+	if segments.is_empty():
+		return []
+	var remaining: Array = segments.duplicate()
+	var loop: Array = [remaining[0][0], remaining[0][1]]
+	remaining.remove_at(0)
+	var guard := 0
+	while not remaining.is_empty() and guard < 512:
+		guard += 1
+		var end: Vector2 = loop[loop.size() - 1]
+		var found := -1
+		var use_second := false
+		for i in range(remaining.size()):
+			var seg: Array = remaining[i]
+			if seg[0] == end:
+				found = i
+				use_second = true
+				break
+			if seg[1] == end:
+				found = i
+				use_second = false
+				break
+		if found < 0:
+			break
+		var picked: Array = remaining[found]
+		remaining.remove_at(found)
+		loop.append(picked[1] if use_second else picked[0])
+	return loop
 
 
 func _draw_town_dots() -> void:

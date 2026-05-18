@@ -31,6 +31,33 @@ func get_world_summary(party: String = "player", cb: Callable = Callable()) -> v
 	get_request("/world/summary?party=%s" % party.uri_encode(), cb)
 
 
+## Read-once tables (recipes, catalogs, scenario constants, grid size).
+## Fetched on boot + after /dev/reset.
+func get_world_static(cb: Callable) -> void:
+	get_request("/world/static", cb)
+
+
+## Per-party realtime view (cash, inventory, owned plots, in-transit,
+## forward contracts, bank rates/loans, active production). Cheap.
+func get_world_player(cb: Callable, party: String = "player") -> void:
+	get_request("/world/player?party=%s" % party.uri_encode(), cb)
+
+
+## Lean map-only view (terrain/owner/surveyed/powered/density/claim cost).
+## Fetched on world-load and after structural actions only.
+func get_world_map(cb: Callable) -> void:
+	get_request("/world/map", cb)
+
+
+## Event log + world feed + npc messages. Pass ``since_tick=-1`` for the
+## legacy tails; pass a high-water tick to only fetch deltas.
+func get_world_feed(cb: Callable, since_tick: int = -1) -> void:
+	get_request("/world/feed?since_tick=%d" % int(since_tick), cb)
+
+
+## Legacy "everything in one shot" payload. Heavy (~27 MB on Genesis).
+## Prefer the split endpoints above; keep this only for panels that
+## haven't been migrated yet.
 func get_world(cb: Callable) -> void:
 	get_request("/world", cb)
 

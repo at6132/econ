@@ -16,6 +16,8 @@ func _ready() -> void:
 	call_deferred("_sync_inventory_width")
 	WorldState.world_updated.connect(_refresh)
 	WorldState.summary_updated.connect(_refresh)
+	# Inventory + owned-plot HUD ticks every 2 s with /world/player.
+	WorldState.player_updated.connect(_refresh)
 	_refresh()
 
 

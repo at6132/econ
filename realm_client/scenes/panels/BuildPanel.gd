@@ -132,7 +132,10 @@ func _confirm_placement(gx: int, gy: int) -> void:
 					if bool(data.get("ok", false)):
 						_refresh_plot_data()
 						API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
-						API.get_world(func(w): WorldState.apply_world(w))
+						# Placing a building mutates owned-plot state + map
+						# (powered flag may flip). Refresh both lean payloads.
+						API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
+						API.get_world_map(func(m): WorldState.apply_map(m))
 					elif grid_view.has_method("show_error"):
 						grid_view.call("show_error", str(data.get("reason", "Placement failed"))),
 			),

@@ -66,10 +66,21 @@ var market_asks: Dictionary = {}
 var market_bids: Dictionary = {}
 var price_history: Dictionary = {}
 
+## Latest tick observed in any of the feed/event/npc tails. Used as the
+## ``since_tick`` high-water mark on the next ``/world/feed`` poll so the
+## server only sends new rows.
+var feed_seen_tick: int = -1
+
+## True once ``apply_static`` has populated the read-once tables.
+var static_loaded: bool = false
+
 signal summary_updated
 signal world_updated
 signal feed_updated
 signal market_updated
+signal map_updated
+signal player_updated
+signal static_updated
 
 
 ## Updates HUD time fields from an authoritative engine tick (e.g. ``POST /tick`` body).
@@ -117,6 +128,7 @@ func apply_world(data: Dictionary) -> void:
 
 	var wc: Variant = data.get("world_cell_to_plot", {})
 	world_cell_to_plot = wc if wc is Dictionary else {}
+	_ensure_world_cell_index()
 
 	_rebuild_town_markers_from_world(data)
 
@@ -182,6 +194,182 @@ func apply_world(data: Dictionary) -> void:
 	feed_updated.emit()
 
 
+## Load the read-once tables from ``GET /world/static``. Safe to call
+## repeatedly (after ``/dev/reset`` for example) — overwrites the cached
+## catalogs and constants in place without touching plot or feed state.
+func apply_static(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	ticks_per_game_day = int(data.get("ticks_per_game_day", ticks_per_game_day))
+	market_history_free_window_ticks = int(data.get("market_history_free_window_ticks", market_history_free_window_ticks))
+	world_seed = int(data.get("seed", world_seed))
+	scenario_id = str(data.get("scenario_id", scenario_id))
+	var pdn: Variant = data.get("party_display_names", {})
+	if pdn is Dictionary:
+		party_display_names = pdn
+	var rec_raw: Variant = data.get("recipes", [])
+	if rec_raw is Array:
+		recipes = rec_raw
+	var bc_raw: Variant = data.get("building_catalog", [])
+	if bc_raw is Array:
+		building_catalog = bc_raw
+	static_loaded = true
+	static_updated.emit()
+
+
+## Per-party realtime view from ``GET /world/player``. Populates cash,
+## inventory, owned plots (and their subsurface/recipe_ids), placed
+## buildings, active production, in-transit, forward contracts, bank
+## rates/loans, owned reports, price alerts. Does NOT touch the map.
+func apply_player(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	current_tick = int(data.get("tick", current_tick))
+	player_cash_cents = int(data.get("cash_cents", player_cash_cents))
+	var inv: Variant = data.get("inventory", {})
+	player_inventory = inv if inv is Dictionary else {}
+	var own_raw: Variant = data.get("owned_plots", [])
+	if own_raw is Array:
+		for entry in own_raw:
+			if not (entry is Dictionary):
+				continue
+			var pid := str(entry.get("id", ""))
+			if pid == "":
+				continue
+			# Merge the rich (subsurface + recipe_ids) view onto whatever
+			# the map endpoint left us — don't replace, the map dict has
+			# the canonical (x, y) and population_density even for plots
+			# we don't own.
+			var merged: Dictionary = (plots.get(pid, {}) as Dictionary).duplicate(true)
+			for k in (entry as Dictionary).keys():
+				merged[k] = entry[k]
+			plots[pid] = merged
+	var pb_raw: Variant = data.get("plot_buildings", [])
+	plot_buildings = pb_raw if pb_raw is Array else []
+	var ap_raw: Variant = data.get("active_production", [])
+	active_production = ap_raw if ap_raw is Array else []
+	var it: Variant = data.get("in_transit", [])
+	in_transit = it if it is Array else []
+	var fc: Variant = data.get("forward_contracts", [])
+	forward_contracts = fc if fc is Array else []
+	var por: Variant = data.get("owned_reports", [])
+	player_owned_reports = por if por is Array else []
+	var pa: Variant = data.get("price_alerts", [])
+	player_price_alerts = pa if pa is Array else []
+	_update_time_from_tick()
+	player_updated.emit()
+	# DELIBERATELY does NOT emit world_updated — that signal triggers a
+	# full ``_rebuild_cell_cache`` in WorldMap (76800 cells on Genesis).
+	# Panels that need to react to per-tick player-state changes (owned
+	# plots, in_transit, active production) should listen to
+	# ``player_updated`` instead.
+
+
+## Lean map view from ``GET /world/map``. Replaces the ``plots`` cache
+## with the canonical map state, then rebuilds the world-cell index.
+## Call only after world-load or a structural action — not on the 2 s tick.
+func apply_map(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	current_tick = int(data.get("tick", current_tick))
+	var uniform := bool(data.get("uniform_plots", false))
+	var grid_w := int(data.get("grid_width", 0))
+	var grid_h := int(data.get("grid_height", 0))
+	var raw_plots: Variant = data.get("plots", [])
+	# Preserve subsurface + recipe_ids from any prior player payload so a
+	# map refresh after a build action doesn't blank out per-owned-plot
+	# detail the player can already see.
+	var preserved: Dictionary = {}
+	for pid in plots.keys():
+		var existing: Dictionary = plots[pid]
+		if existing.has("subsurface") or existing.has("recipe_ids") or existing.has("output_stock"):
+			preserved[pid] = existing
+	plots.clear()
+	if raw_plots is Array:
+		for p in raw_plots:
+			if p is Dictionary:
+				var pid_s := str(p.get("id", ""))
+				if pid_s == "":
+					continue
+				var merged: Dictionary = (p as Dictionary).duplicate(true)
+				if preserved.has(pid_s):
+					var prior: Dictionary = preserved[pid_s]
+					for k in ["subsurface", "recipe_ids", "output_stock"]:
+						if prior.has(k):
+							merged[k] = prior[k]
+				plots[pid_s] = merged
+	# /world/map omits world_cell_to_plot on uniform grids — rebuild it.
+	world_cell_to_plot.clear()
+	var wc: Variant = data.get("world_cell_to_plot", {})
+	if wc is Dictionary and not (wc as Dictionary).is_empty():
+		world_cell_to_plot = wc
+	else:
+		if uniform:
+			for pid in plots.keys():
+				var pd: Dictionary = plots[pid]
+				world_cell_to_plot["%d,%d" % [int(pd.get("x", 0)), int(pd.get("y", 0))]] = str(pid)
+		else:
+			_ensure_world_cell_index()
+	population_density_map.clear()
+	for pid in plots.keys():
+		var pd2: Dictionary = plots[pid]
+		population_density_map[str(pid)] = float(pd2.get("population_density", 0.0))
+	# Surface grid dims for the map renderer (used by Phase 2 LOD cache).
+	if grid_w > 0 and grid_h > 0:
+		set_meta("grid_width", grid_w)
+		set_meta("grid_height", grid_h)
+	_update_time_from_tick()
+	map_updated.emit()
+	world_updated.emit()
+
+
+## Feed / event / npc-message deltas from ``GET /world/feed``. With
+## ``since_tick=-1`` the server returns legacy tails (used on first load);
+## subsequent polls pass ``feed_seen_tick`` so the server only sends new
+## rows, which we append in place (keeping the last 2000 events / 4000
+## feed rows / 200 npc messages to bound memory growth).
+func apply_feed(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	current_tick = int(data.get("tick", current_tick))
+	var since: int = int(data.get("since_tick", -1))
+	var events: Variant = data.get("event_log", [])
+	var feed: Variant = data.get("world_feed_log", [])
+	var npc: Variant = data.get("npc_messages", [])
+	if since < 0:
+		event_log = events if events is Array else []
+		world_feed_log = feed if feed is Array else []
+		npc_messages = npc if npc is Array else []
+	else:
+		if events is Array:
+			event_log.append_array(events)
+		if feed is Array:
+			world_feed_log.append_array(feed)
+		if npc is Array:
+			npc_messages.append_array(npc)
+	_trim_feed_caches()
+	_advance_feed_seen_tick()
+	_update_time_from_tick()
+	feed_updated.emit()
+
+
+func _trim_feed_caches() -> void:
+	if event_log.size() > 2000:
+		event_log = event_log.slice(event_log.size() - 2000)
+	if world_feed_log.size() > 4000:
+		world_feed_log = world_feed_log.slice(world_feed_log.size() - 4000)
+	if npc_messages.size() > 200:
+		npc_messages = npc_messages.slice(npc_messages.size() - 200)
+
+
+func _advance_feed_seen_tick() -> void:
+	# We push the high-water mark forward to current_tick (any rows added
+	# in this batch had tick <= current_tick on the server) so the next
+	# /world/feed call only returns strictly-newer rows.
+	if current_tick > feed_seen_tick:
+		feed_seen_tick = current_tick
+
+
 func apply_market(data: Dictionary) -> void:
 	if data.is_empty():
 		return
@@ -195,6 +383,23 @@ func apply_cpi(data: Dictionary) -> void:
 		return
 	cpi_current = float(data.get("current", 100.0))
 	summary_updated.emit()
+
+
+func _ensure_world_cell_index() -> void:
+	## Solo/API may omit the index on older saves; rebuild from per-plot ``world_cells``.
+	if not world_cell_to_plot.is_empty():
+		return
+	for pid in plots.keys():
+		var p: Dictionary = plots[pid]
+		var cells: Variant = p.get("world_cells", [])
+		if cells is Array and not (cells as Array).is_empty():
+			for c in cells as Array:
+				if c is Dictionary:
+					var d: Dictionary = c as Dictionary
+					var key := "%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]
+					world_cell_to_plot[key] = str(pid)
+		else:
+			world_cell_to_plot["%d,%d" % [int(p.get("x", 0)), int(p.get("y", 0))]] = str(pid)
 
 
 func _rebuild_town_markers_from_world(data: Dictionary) -> void:

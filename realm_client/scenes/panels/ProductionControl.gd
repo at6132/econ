@@ -34,12 +34,16 @@ func _ready() -> void:
 	margin_spinbox.editable = false
 	margin_spinbox.tooltip_text = "Listing margin is fixed server-side for now."
 	WorldState.world_updated.connect(_on_world_refreshed)
+	# Active production countdown comes from /world/player on the tick.
+	WorldState.player_updated.connect(_on_world_refreshed)
 	WS.tick_event.connect(_on_ws_tick)
 
 
 func _exit_tree() -> void:
 	if WorldState.world_updated.is_connected(_on_world_refreshed):
 		WorldState.world_updated.disconnect(_on_world_refreshed)
+	if WorldState.player_updated.is_connected(_on_world_refreshed):
+		WorldState.player_updated.disconnect(_on_world_refreshed)
 	if WS.tick_event.is_connected(_on_ws_tick):
 		WS.tick_event.disconnect(_on_ws_tick)
 
@@ -211,7 +215,7 @@ func _on_start() -> void:
 		func(data: Dictionary) -> void:
 			start_btn.disabled = false
 			if bool(data.get("ok", false)):
-				API.get_world(func(w): WorldState.apply_world(w))
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 				_refresh_status()
 			else:
 				_set_stalled(str(data.get("reason", "Failed to start")))

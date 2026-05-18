@@ -388,12 +388,17 @@ func _on_claim_confirm() -> void:
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
 				claim_section.hide()
-				API.get_world(
-					func(w: Dictionary) -> void:
-						WorldState.apply_world(w)
-						_plot_data = WorldState.get_plot_ui(_plot_id)
-						_populate(WorldState.plots.get(_plot_id, _plot_data))
-						_refresh_buildings()
+				API.get_world_map(
+					func(m: Dictionary) -> void:
+						WorldState.apply_map(m)
+						API.get_world_player(
+							func(pdata: Dictionary) -> void:
+								WorldState.apply_player(pdata)
+								_plot_data = WorldState.get_plot_ui(_plot_id)
+								_populate(WorldState.plots.get(_plot_id, _plot_data))
+								_refresh_buildings(),
+							WorldState.party_id,
+						)
 				)
 				API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 			else:
@@ -414,14 +419,19 @@ func _on_survey() -> void:
 			survey_btn.text = "Survey this plot (%s)" % survey_cost
 			if bool(data.get("ok", false)):
 				survey_section.hide()
-				API.get_world(
-					func(w: Dictionary) -> void:
-						WorldState.apply_world(w)
+				# Survey reveals subsurface — that data lives on /world/player.
+				# Refresh the map so the surveyed flag flips, then player so
+				# the subsurface grades land in the owned-plots entry.
+				API.get_world_map(func(m): WorldState.apply_map(m))
+				API.get_world_player(
+					func(pdata: Dictionary) -> void:
+						WorldState.apply_player(pdata)
 						_plot_data = WorldState.get_plot_ui(_plot_id)
 						var base: Dictionary = WorldState.plots.get(_plot_id, {})
 						_populate(base)
 						_populate_subsurface(WorldState.subsurface_for_plot_ui(_plot_id, base))
-						subsurface_section.show()
+						subsurface_section.show(),
+					WorldState.party_id,
 				)
 			else:
 				_show_error(str(data.get("reason", "Survey failed")))
@@ -469,7 +479,7 @@ func _on_list_for_sale() -> void:
 			list_for_sale_btn.disabled = false
 			if bool(data.get("ok", false)):
 				API.get_plot_value(_plot_id, _on_plot_value_response)
-				API.get_world(func(w): WorldState.apply_world(w))
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 			else:
 				_show_error(str(data.get("reason", "Listing failed"))),
 	)
@@ -493,9 +503,9 @@ func _on_maintain(b: Dictionary) -> void:
 		instance_id,
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
-				API.get_world(
-					func(w: Dictionary) -> void:
-						WorldState.apply_world(w)
+				API.get_world_player(
+					func(pdata: Dictionary) -> void:
+						WorldState.apply_player(pdata)
 						_plot_data = WorldState.get_plot_ui(_plot_id)
 						_refresh_buildings()
 				)
