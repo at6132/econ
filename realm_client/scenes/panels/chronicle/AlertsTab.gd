@@ -120,16 +120,10 @@ func _on_add() -> void:
 		return
 	var mat: String = str(_mat_select.get_item_metadata(idx))
 	var thresh: int = int(_threshold.value)
-	API.post_price_alert(
-		mat,
-		_condition,
-		thresh,
-		func(d: Dictionary) -> void:
-			if bool(d.get("ok", false)):
-				_load_alerts()
-				MainFeedback.toast("Price alert added")
-			else:
-				MainFeedback.toast(str(d.get("reason", "Alert failed")), true)
-		,
-		WorldState.party_id,
-	)
+	var cb := func(d: Dictionary) -> void:
+		if bool(d.get("ok", false)):
+			_load_alerts()
+			MainFeedback.toast("Price alert added")
+		else:
+			MainFeedback.toast(str(d.get("reason", "Alert failed")), true)
+	API.post_price_alert(mat, _condition, thresh, cb, WorldState.party_id)
