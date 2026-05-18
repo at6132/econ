@@ -120,11 +120,9 @@ def test_claim_cost_scales_with_density() -> None:
         settler_count=4,
         starting_cash_cents=10_000_000,
     )
-    # Phase 7A: pop hubs are gone so every plot has the same baseline density;
-    # the bootstrap-side claim cost is therefore the *uniform* frontier cost
-    # for every land plot. We assert the pure pricing function still scales
-    # monotonically (above) and that the world's frontier-baseline plot costs
-    # land in the expected low band.
+    # Phase 7A: pop hubs are gone so every plot has the same baseline density,
+    # but claim fees on that baseline still use market valuation (size, terrain,
+    # minerals) — not the cheap density curve meant for hub-adjacent land.
     candidates = [
         p
         for p in w.plots.values()
@@ -133,9 +131,7 @@ def test_claim_cost_scales_with_density() -> None:
     assert candidates
     sample = candidates[0].plot_id
     cost = claim_cost_cents_for_plot(w, sample)
-    # Frontier density (~0.05) costs ~500¢; allow up to ~1100¢ for any creep.
-    assert cost <= 1100, f"unexpected high baseline claim cost: {cost}¢"
-    assert cost >= 500, f"unexpected low baseline claim cost: {cost}¢"
+    assert cost >= 50_000, f"frontier claim should use market floor: {cost}¢"
 
 
 def test_regional_buyer_preference() -> None:

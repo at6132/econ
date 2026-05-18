@@ -152,7 +152,9 @@ func apply_summary(data: Dictionary) -> void:
 		return
 	player_cash_cents = int(data.get("cash", 0))
 	player_net_worth_cents = int(data.get("net_worth_estimate", 0))
-	current_tick = int(data.get("tick", current_tick))
+	# Summary polls must not rewind the clock below the last push frame.
+	var summary_tick := int(data.get("tick", current_tick))
+	current_tick = maxi(current_tick, summary_tick)
 	var ap: Variant = data.get("active_production", [])
 	active_production_count = int(ap.size()) if ap is Array else 0
 	var mw: Variant = data.get("maintenance_warnings", [])
@@ -282,10 +284,15 @@ func apply_static(data: Dictionary) -> void:
 ## inventory, owned plots (and their subsurface/recipe_ids), placed
 ## buildings, active production, in-transit, forward contracts, bank
 ## rates/loans, owned reports, price alerts. Does NOT touch the map.
+func _merge_server_tick(server_tick: int) -> void:
+	# Poll responses can finish after a newer tick push — never rewind the HUD.
+	current_tick = maxi(current_tick, server_tick)
+
+
 func apply_player(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	current_tick = int(data.get("tick", current_tick))
+	_merge_server_tick(int(data.get("tick", current_tick)))
 	player_cash_cents = int(data.get("cash_cents", player_cash_cents))
 	var inv: Variant = data.get("inventory", {})
 	player_inventory = inv if inv is Dictionary else {}
@@ -347,8 +354,12 @@ func apply_map(data: Dictionary) -> void:
 			return
 		push_warning("WorldState.apply_map: payload had no plots")
 		return
-	current_tick = int(data.get("tick", current_tick))
+	_merge_server_tick(int(data.get("tick", current_tick)))
 	var uniform := bool(data.get("uniform_plots", false))
+	if uniform:
+		push_warning(
+			"World map is uniform 1×1 plots — run dev reset for varied parcel shapes (L, zigzag, multi-hectare)."
+		)
 	var grid_w := int(data.get("grid_width", 0))
 	var grid_h := int(data.get("grid_height", 0))
 	# Preserve subsurface + recipe_ids from any prior player payload so a
@@ -366,13 +377,16 @@ func apply_map(data: Dictionary) -> void:
 				var pid_s := str(p.get("id", ""))
 				if pid_s == "":
 					continue
-				var merged: Dictionary = (p as Dictionary).duplicate(true)
 				if preserved.has(pid_s):
+					var merged: Dictionary = (p as Dictionary).duplicate(true)
 					var prior: Dictionary = preserved[pid_s]
 					for k in ["subsurface", "recipe_ids", "output_stock"]:
 						if prior.has(k):
 							merged[k] = prior[k]
-				plots[pid_s] = merged
+					plots[pid_s] = merged
+				else:
+					# Genesis map payloads are huge — avoid deep-copying every plot on first load.
+					plots[pid_s] = p as Dictionary
 	# /world/map omits world_cell_to_plot on uniform grids — rebuild it.
 	world_cell_to_plot.clear()
 	var wc: Variant = data.get("world_cell_to_plot", {})
@@ -406,7 +420,7 @@ func apply_map(data: Dictionary) -> void:
 func apply_feed(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	current_tick = int(data.get("tick", current_tick))
+	_merge_server_tick(int(data.get("tick", current_tick)))
 	var since: int = int(data.get("since_tick", -1))
 	var events: Variant = data.get("event_log", [])
 	var feed: Variant = data.get("world_feed_log", [])

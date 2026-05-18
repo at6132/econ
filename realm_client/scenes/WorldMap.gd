@@ -27,6 +27,10 @@ const OVERVIEW_DRAW_CELL_THRESHOLD := 1800
 ## Far zoom (between overview and full mesh): per-cell rects, not 16×16 chunk blocks.
 const FAR_ALIGNED_DRAW_CELL_THRESHOLD := 600
 const ALIGNED_DRAW_CELL_THRESHOLD := 1200
+## Genesis (320×240): build the cell cache over many frames; never 17k parcel polygons at once.
+const LARGE_MAP_CELLS := 6000
+const MAX_PARCEL_POLYGON_PLOTS := 1200
+const CELL_CACHE_ROWS_PER_FRAME := 16
 
 signal plot_clicked(plot_id: String, plot_data: Dictionary)
 
@@ -74,6 +78,10 @@ var _cell_owner_accents: PackedColorArray = PackedColorArray()
 var _cell_flags: PackedInt32Array = PackedInt32Array()
 ## String IDs (for selection check and higher LOD lookups). Flat indexed like above.
 var _cell_pids: PackedStringArray = PackedStringArray()
+## One filled polygon per plot (deed), built from engine ``world_cells`` — not per-hectare squares.
+var _parcel_entries: Array = []
+var _cell_cache_chunk_row: int = 0
+var _cell_cache_chunking: bool = false
 
 ## Overdraw buffer: we draw a region larger than the viewport, then skip redraws while the camera stays inside it.
 const OVERDRAW_FACTOR := 1.8
@@ -144,11 +152,30 @@ func _refresh_map_view_from_world_state() -> void:
 	_sync_demo_mode_from_world()
 	_world_seed = int(WorldState.world_seed)
 	_rebuild_mesh()
-	_rebuild_building_cache()
+	_rebuild_building_cache_only()
+	_rebuild_cell_cache()
+	if not _cell_cache_chunking:
+		_finish_map_view_refresh()
+	else:
+		queue_redraw()
+
+
+func _finish_map_view_refresh() -> void:
 	_fit_camera_to_mesh()
 	_loading_world = false
 	queue_redraw()
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
+
+
+func _map_cell_count() -> int:
+	return _last_mesh_bounds.x * _last_mesh_bounds.y
+
+
+func _is_large_map() -> bool:
+	return (
+		_map_cell_count() > LARGE_MAP_CELLS
+		or WorldState.plots.size() > MAX_PARCEL_POLYGON_PLOTS
+	)
 
 
 func _on_player_updated() -> void:
@@ -236,11 +263,24 @@ func _rebuild_cell_cache() -> void:
 	_cell_owner_accents.resize(total)
 	_cell_flags.resize(total)
 	_cell_pids.resize(total)
+	if _is_large_map():
+		_parcel_entries.clear()
+		_cell_cache_chunk_row = 0
+		_cell_cache_chunking = true
+		call_deferred("_rebuild_cell_cache_chunk_step")
+		return
+	_rebuild_cell_cache_fill_rows(0, by)
+	_finish_cell_cache_rebuild()
+
+
+func _rebuild_cell_cache_fill_rows(y0: int, y1: int) -> void:
+	var bx := _last_mesh_bounds.x
 	var my_party := WorldState.party_id
 	var transparent := Color(0.0, 0.0, 0.0, 0.0)
-	for gy in range(by):
+	for gy in range(y0, y1):
+		var row_off := gy * bx
 		for gx in range(bx):
-			var idx := gy * bx + gx
+			var idx := row_off + gx
 			var pid: String
 			if _demo_mode:
 				pid = "demo-%d-%d" % [gx, gy]
@@ -287,8 +327,150 @@ func _rebuild_cell_cache() -> void:
 			if bool(p.get("surveyed", false)):
 				flags |= 0x4
 			_cell_flags[idx] = flags
+
+
+func _finish_cell_cache_rebuild() -> void:
+	var bx := _last_mesh_bounds.x
+	var by := _last_mesh_bounds.y
 	_lod_cache.rebuild(bx, by, _cell_colors, _cell_flags, RealmColors.BG2)
+	if not _is_large_map():
+		_rebuild_parcel_draw_cache()
 	_invalidate_draw_buffer()
+
+
+func _rebuild_cell_cache_chunk_step() -> void:
+	if not _cell_cache_chunking:
+		return
+	var by := _last_mesh_bounds.y
+	var y0 := _cell_cache_chunk_row
+	var y1 := mini(y0 + CELL_CACHE_ROWS_PER_FRAME, by)
+	_rebuild_cell_cache_fill_rows(y0, y1)
+	_cell_cache_chunk_row = y1
+	queue_redraw()
+	if y1 < by:
+		call_deferred("_rebuild_cell_cache_chunk_step")
+		return
+	_cell_cache_chunking = false
+	_finish_cell_cache_rebuild()
+	if _loading_world:
+		_finish_map_view_refresh()
+
+
+func _plot_cell_set(p: Dictionary, plot_id: String = "") -> Dictionary:
+	var cell_set: Dictionary = {}
+	var cells_v: Variant = p.get("world_cells", [])
+	if cells_v is Array and not (cells_v as Array).is_empty():
+		for c in cells_v as Array:
+			if c is Dictionary:
+				var d: Dictionary = c as Dictionary
+				cell_set["%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]] = true
+	# When the map payload omits per-plot lists, rebuild from ``world_cell_to_plot``.
+	if cell_set.is_empty() and plot_id != "" and not WorldState.world_cell_to_plot.is_empty():
+		for key in WorldState.world_cell_to_plot.keys():
+			if str(WorldState.world_cell_to_plot[key]) == plot_id:
+				cell_set[str(key)] = true
+	if cell_set.is_empty():
+		cell_set["%d,%d" % [int(p.get("x", 0)), int(p.get("y", 0))]] = true
+	return cell_set
+
+
+func _cell_set_visible(cell_set: Dictionary) -> bool:
+	for key in cell_set.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var gx := int(parts[0])
+		var gy := int(parts[1])
+		if gx >= _vis_min_x and gx < _vis_max_x and gy >= _vis_min_y and gy < _vis_max_y:
+			return true
+	return false
+
+
+func _parcel_centroid(cell_set: Dictionary) -> Vector2:
+	if _mesh == null or cell_set.is_empty():
+		return Vector2.ZERO
+	var sum := Vector2.ZERO
+	var n := 0
+	for key in cell_set.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var gx := int(parts[0])
+		var gy := int(parts[1])
+		sum += _mesh.plot_centroid(gx, gy)
+		n += 1
+	return sum / float(maxi(n, 1))
+
+
+func _rebuild_parcel_draw_cache() -> void:
+	_parcel_entries.clear()
+	if _mesh == null or _demo_mode:
+		return
+	var my_party := WorldState.party_id
+	var transparent := Color(0.0, 0.0, 0.0, 0.0)
+	for plot_id in WorldState.plots.keys():
+		var p: Dictionary = WorldState.plots[plot_id]
+		if p.is_empty():
+			continue
+		var cell_set := _plot_cell_set(p, str(plot_id))
+		if cell_set.is_empty():
+			continue
+		var poly := _world_deed_boundary_polygon(cell_set)
+		if poly.size() < 3:
+			var parts: PackedStringArray = str(cell_set.keys()[0]).split(",")
+			if parts.size() == 2:
+				var gx := int(parts[0])
+				var gy := int(parts[1])
+				var r := _cell_rect(gx, gy)
+				poly = PackedVector2Array([
+					r.position,
+					r.position + Vector2(r.size.x, 0.0),
+					r.end,
+					r.position + Vector2(0.0, r.size.y),
+				])
+			else:
+				continue
+		var terrain: String = str(p.get("terrain", "plains"))
+		var fill: Color = RealmColors.terrain_color(terrain)
+		if bool(p.get("surveyed", false)):
+			fill = fill.lightened(0.06)
+		if p.get("powered", true) == false:
+			fill = fill.darkened(0.22)
+		var ov := MapOverlays.overlay_tint_for_plot(_overlay_mode, p, my_party, _overlay_mineral)
+		if ov.a > 0.01:
+			fill = fill.lerp(ov, clampf(ov.a, 0.0, 1.0))
+		var flags := 0x1
+		var owner_tint := transparent
+		var owner_accent := transparent
+		var owner_v: Variant = p.get("owner", null)
+		if owner_v != null:
+			flags |= 0x8
+			var ov_str := str(owner_v)
+			if ov_str == my_party:
+				flags |= 0x2
+			owner_tint = MapHash.owner_tint_color(ov_str)
+			owner_accent = MapHash.owner_accent_color(ov_str)
+		if bool(p.get("surveyed", false)):
+			flags |= 0x4
+		_parcel_entries.append({
+			"pid": str(plot_id),
+			"poly": poly,
+			"cell_set": cell_set,
+			"n_cells": cell_set.size(),
+			"fill": fill,
+			"owner_tint": owner_tint,
+			"owner_accent": owner_accent,
+			"flags": flags,
+		})
+
+
+func _uses_parcel_polygon_draw() -> bool:
+	return (
+		not _demo_mode
+		and not _is_large_map()
+		and not WorldState.plots.is_empty()
+		and not WorldState.world_cell_to_plot.is_empty()
+	)
 
 
 func _seed_demo_plots() -> void:
@@ -474,13 +656,23 @@ func _draw() -> void:
 		_draw_town_dots()
 		return
 
-	# Square map cells — matches engine hectare grid and multi-tile deeds (no wavy quads).
-	var draw_cell_strokes := lod >= 2 and vis_cells < FAR_ALIGNED_DRAW_CELL_THRESHOLD
-	if draw_cell_strokes:
-		_draw_aligned_cell_terrain_stroked(sel_gx, sel_gy, lod)
-	else:
+	# Frontier: one polygon per plot. Genesis: flat fills, no grid strokes (cache builds in chunks).
+	if _uses_parcel_polygon_draw():
+		if _parcel_entries.is_empty():
+			_rebuild_parcel_draw_cache()
+		_draw_parcel_fills()
+		if lod >= 2:
+			_draw_parcel_edges(lod)
+	elif _is_large_map():
 		_draw_aligned_cell_terrain()
-	_draw_parcel_boundaries(lod)
+		if lod >= 2:
+			_draw_parcel_boundaries_large_map(lod)
+	else:
+		var draw_cell_strokes := lod >= 2 and vis_cells < FAR_ALIGNED_DRAW_CELL_THRESHOLD
+		if draw_cell_strokes:
+			_draw_aligned_cell_terrain_stroked(sel_gx, sel_gy, lod)
+		else:
+			_draw_aligned_cell_terrain()
 	_draw_selection_highlight(sel_gx, sel_gy)
 	_draw_town_dots()
 	_draw_town_chrome(lod, csp)
@@ -528,6 +720,56 @@ func _neighbor_same_parcel(gx: int, gy: int, dx: int, dy: int) -> bool:
 	return _cell_pids[idx] == _cell_pids[nidx]
 
 
+func _draw_parcel_fills() -> void:
+	for entry in _parcel_entries:
+		var cell_set: Dictionary = entry.get("cell_set", {})
+		if not _cell_set_visible(cell_set):
+			continue
+		var poly: PackedVector2Array = entry.get("poly", PackedVector2Array())
+		if poly.size() < 3:
+			continue
+		var fill: Color = entry.get("fill", RealmColors.BG2)
+		draw_colored_polygon(poly, fill)
+		var tint: Color = entry.get("owner_tint", Color(0, 0, 0, 0))
+		if tint.a > 0.01:
+			draw_colored_polygon(poly, tint)
+
+
+func _draw_parcel_edges(lod: int) -> void:
+	## Outlines for multi-hectare parcels and owned land — never stroke every 1×1 hectare
+	## (that recreates the chessboard the player should not see).
+	if _mesh == null:
+		return
+	var multi_c := Color(0.95, 0.78, 0.22, 0.92)
+	var mine_c := RealmColors.MAGIC
+	mine_c.a = 0.55
+	for entry in _parcel_entries:
+		var cell_set: Dictionary = entry.get("cell_set", {})
+		if not _cell_set_visible(cell_set):
+			continue
+		var poly: PackedVector2Array = entry.get("poly", PackedVector2Array())
+		if poly.size() < 3:
+			continue
+		var n_cells: int = int(entry.get("n_cells", 1))
+		var flags: int = int(entry.get("flags", 0))
+		var stroke_c: Color
+		var stroke_w: float
+		var draw_outline := false
+		if (flags & 0x2) != 0:
+			stroke_c = mine_c
+			stroke_w = _world_line_width(2.0)
+			draw_outline = true
+		elif n_cells > 1:
+			stroke_c = multi_c
+			stroke_w = _world_line_width(2.75)
+			draw_outline = true
+		if draw_outline:
+			_draw_polyline_world(poly, stroke_c, stroke_w, true)
+		if lod >= 3 and (flags & 0x2) != 0:
+			var ctr := _parcel_centroid(cell_set)
+			draw_arc(ctr, _mesh.cell_px * 0.32, 0.0, TAU, 12, mine_c, _world_line_width(1.25))
+
+
 func _draw_aligned_cell_terrain() -> void:
 	var bx := _last_mesh_bounds.x
 	for gy in range(_vis_min_y, _vis_max_y):
@@ -537,6 +779,67 @@ func _draw_aligned_cell_terrain() -> void:
 			if (_cell_flags[idx] & 0x1) == 0:
 				continue
 			draw_rect(_cell_rect(gx, gy), _cell_colors[idx])
+
+
+## Genesis-scale maps skip the full parcel polygon cache; draw only visible
+## deed edges (O(visible cells)) so parcel shapes stay readable when zoomed.
+func _draw_parcel_boundaries_large_map(lod: int) -> void:
+	if _mesh == null:
+		return
+	var bx := _last_mesh_bounds.x
+	var default_c := Color(0.08, 0.10, 0.12, 0.48)
+	var multi_c := Color(0.95, 0.78, 0.22, 0.85)
+	var mine_c := RealmColors.MAGIC
+	mine_c.a = 0.55
+	var stroke_w := _world_line_width(1.0)
+	var stroke_w_multi := _world_line_width(2.0)
+	var multicell_cache: Dictionary = {}
+
+	for gy in range(_vis_min_y, _vis_max_y):
+		var row_off := gy * bx
+		for gx in range(_vis_min_x, _vis_max_x):
+			var idx := row_off + gx
+			if (_cell_flags[idx] & 0x1) == 0:
+				continue
+			var r := _cell_rect(gx, gy)
+			var flags := _cell_flags[idx]
+			var pid := _cell_pids[idx]
+			var n_cells := 1
+			if not multicell_cache.has(pid):
+				var p: Dictionary = WorldState.plots.get(pid, {})
+				var wc: Variant = p.get("world_cells", [])
+				if wc is Array:
+					n_cells = maxi(1, (wc as Array).size())
+				elif p.has("world_tiles_w") and p.has("world_tiles_h"):
+					n_cells = maxi(
+						1,
+						int(p.get("world_tiles_w", 1)) * int(p.get("world_tiles_h", 1))
+					)
+				multicell_cache[pid] = n_cells
+			else:
+				n_cells = int(multicell_cache[pid])
+
+			var edge_c := default_c
+			var edge_w := stroke_w
+			if (flags & 0x2) != 0:
+				edge_c = mine_c
+				edge_w = _world_line_width(1.5)
+			elif n_cells > 1:
+				edge_c = multi_c
+				edge_w = stroke_w_multi
+
+			if not _neighbor_same_parcel(gx, gy, 0, -1):
+				draw_line(r.position, r.position + Vector2(r.size.x, 0.0), edge_c, edge_w)
+			if not _neighbor_same_parcel(gx, gy, 0, 1):
+				draw_line(r.end, r.end - Vector2(r.size.x, 0.0), edge_c, edge_w)
+			if not _neighbor_same_parcel(gx, gy, -1, 0):
+				draw_line(r.position, r.position + Vector2(0.0, r.size.y), edge_c, edge_w)
+			if not _neighbor_same_parcel(gx, gy, 1, 0):
+				draw_line(r.end, r.end - Vector2(0.0, r.size.y), edge_c, edge_w)
+
+			if lod >= 3 and (flags & 0x2) != 0:
+				var ctr := r.position + r.size * 0.5
+				draw_arc(ctr, _mesh.cell_px * 0.28, 0.0, TAU, 10, mine_c, _world_line_width(1.0))
 
 
 func _draw_aligned_cell_terrain_stroked(sel_gx: int, sel_gy: int, lod: int) -> void:
@@ -611,14 +914,10 @@ func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
 	if pid.is_empty():
 		draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
 		return
-	# Highlight the whole deed when it spans multiple map cells.
-	var cells_v: Variant = WorldState.plots.get(pid, {}).get("world_cells", [])
-	if cells_v is Array and (cells_v as Array).size() > 1:
-		var cell_set: Dictionary = {}
-		for c in cells_v as Array:
-			if c is Dictionary:
-				var d: Dictionary = c as Dictionary
-				cell_set["%d,%d" % [int(d.get("x", 0)), int(d.get("y", 0))]] = true
+	# Highlight the whole plot footprint (L-shapes, multi-hectare, not one cell).
+	var p_sel: Dictionary = WorldState.plots.get(pid, {})
+	var cell_set := _plot_cell_set(p_sel, pid)
+	if cell_set.size() > 1 or _uses_parcel_polygon_draw():
 		var poly := _world_deed_boundary_polygon(cell_set)
 		if poly.size() >= 3:
 			_draw_polyline_world(poly, accent, sw, true)
@@ -741,38 +1040,6 @@ func _parcel_aligned_rect(cell_set: Dictionary) -> Rect2:
 		float(max_gx - min_gx + 1) * cp,
 		float(max_gy - min_gy + 1) * cp,
 	)
-
-
-func _draw_parcel_boundaries(lod: int) -> void:
-	## Gold outline along the true deed footprint (L-shapes, zigzags, not just bbox).
-	if _demo_mode or lod < 2 or _mesh == null:
-		return
-	var stroke_c := Color(0.95, 0.78, 0.22, 0.95)
-	var stroke_w := _world_line_width(3.0)
-	for plot_id in WorldState.plots.keys():
-		var p: Dictionary = WorldState.plots[plot_id]
-		var cells_v: Variant = p.get("world_cells", [])
-		if not (cells_v is Array):
-			continue
-		var cells_arr: Array = cells_v as Array
-		if cells_arr.size() <= 1:
-			continue
-		var cell_set: Dictionary = {}
-		var any_visible := false
-		for c in cells_arr:
-			if not (c is Dictionary):
-				continue
-			var d: Dictionary = c as Dictionary
-			var gx := int(d.get("x", 0))
-			var gy := int(d.get("y", 0))
-			cell_set["%d,%d" % [gx, gy]] = true
-			if gx >= _vis_min_x and gx < _vis_max_x and gy >= _vis_min_y and gy < _vis_max_y:
-				any_visible = true
-		if not any_visible:
-			continue
-		var poly := _world_deed_boundary_polygon(cell_set)
-		if poly.size() >= 3:
-			_draw_polyline_world(poly, stroke_c, stroke_w, true)
 
 
 func _world_deed_boundary_polygon(cell_set: Dictionary) -> PackedVector2Array:
@@ -907,6 +1174,20 @@ func _draw_town_chrome(lod: int, csp: float) -> void:
 
 func _draw_building_dots() -> void:
 	var dot_r := _world_line_width(2.5)
+	if _uses_parcel_polygon_draw():
+		for entry in _parcel_entries:
+			var pid: String = str(entry.get("pid", ""))
+			if pid.is_empty() or not _plot_building_counts.has(pid):
+				continue
+			var cell_set: Dictionary = entry.get("cell_set", {})
+			if not _cell_set_visible(cell_set):
+				continue
+			var ctr := _parcel_centroid(cell_set)
+			var is_mine := (int(entry.get("flags", 0)) & 0x2) != 0
+			var dot_col := RealmColors.ACCENT if is_mine else RealmColors.MUTED
+			dot_col.a = 0.85
+			draw_circle(ctr, dot_r, dot_col)
+		return
 	var bx := _last_mesh_bounds.x
 	for gy in range(_vis_min_y, _vis_max_y):
 		var row_off := gy * bx
@@ -925,14 +1206,66 @@ func _draw_building_dots() -> void:
 
 
 func _plot_aabb_from_poly(poly: PackedVector2Array) -> Rect2:
+	if poly.is_empty():
+		return Rect2()
 	var mn := poly[0]
 	var mx := poly[0]
-	for k in range(1, 4):
+	for k in range(1, poly.size()):
 		mn.x = minf(mn.x, poly[k].x)
 		mn.y = minf(mn.y, poly[k].y)
 		mx.x = maxf(mx.x, poly[k].x)
 		mx.y = maxf(mx.y, poly[k].y)
 	return Rect2(mn, mx - mn)
+
+
+func _draw_site_layout_in_bbox(
+	pid: String,
+	entry: Dictionary,
+	bbox: Rect2,
+	font: Font,
+	pad_w: float,
+	label_fs: int,
+) -> void:
+	var inset := _mesh.cell_px * 0.12
+	bbox = bbox.grow(-inset)
+	if bbox.size.x < 4.0 or bbox.size.y < 4.0:
+		return
+	var rows: Array = _plot_buildings_by_plot[pid] as Array
+	var n := rows.size()
+	if n < 1:
+		return
+	var is_mine := (int(entry.get("flags", 0)) & 0x2) != 0
+	var cols_i := maxi(1, int(ceil(sqrt(float(n)))))
+	var nrows_i := maxi(1, int(ceil(float(n) / float(cols_i))))
+	var gap := _mesh.cell_px * 0.06
+	var cell_w := (bbox.size.x - gap * float(cols_i - 1)) / float(cols_i)
+	var cell_h := (bbox.size.y - gap * float(nrows_i - 1)) / float(nrows_i)
+	cell_w = maxf(cell_w, _mesh.cell_px * 0.08)
+	cell_h = maxf(cell_h, _mesh.cell_px * 0.08)
+	for i in range(n):
+		var row: Dictionary = rows[i] as Dictionary
+		var row_i := int(floor(float(i) / float(cols_i)))
+		var col_i := i % cols_i
+		var x0 := bbox.position.x + float(col_i) * (cell_w + gap)
+		var y0 := bbox.position.y + float(row_i) * (cell_h + gap)
+		var pad := Rect2(Vector2(x0, y0), Vector2(cell_w, cell_h))
+		var fill_c := RealmColors.PANEL
+		fill_c.a = 0.72 if is_mine else 0.5
+		var stroke_c := RealmColors.ACCENT if is_mine else RealmColors.BORDER_LIT
+		stroke_c.a = 0.95 if is_mine else 0.65
+		draw_rect(pad, fill_c, true)
+		draw_rect(pad, stroke_c, false, pad_w)
+		var bid := str(row.get("building_id", "?"))
+		var abbrev := _abbrev_building_id(bid)
+		if font != null and not abbrev.is_empty():
+			var tc := RealmColors.TEXT
+			tc.a = 0.92
+			var sz := font.get_string_size(abbrev, HORIZONTAL_ALIGNMENT_CENTER, -1, label_fs)
+			var tp := Vector2(
+				pad.position.x + (pad.size.x - sz.x) * 0.5,
+				pad.position.y + (pad.size.y - sz.y) * 0.5
+			)
+			draw_string(font, tp, abbrev, HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, tc)
 
 
 func _abbrev_building_id(building_id: String) -> String:
@@ -950,6 +1283,20 @@ func _draw_site_layout() -> void:
 	var font: Font = RealmFonts.font_body
 	var pad_w := _world_line_width(1.25)
 	var label_fs := clampi(int(_world_line_width(10.0)), 6, 20)
+	if _uses_parcel_polygon_draw():
+		for entry in _parcel_entries:
+			var pid: String = str(entry.get("pid", ""))
+			if pid.is_empty() or not _plot_buildings_by_plot.has(pid):
+				continue
+			var cell_set: Dictionary = entry.get("cell_set", {})
+			if not _cell_set_visible(cell_set):
+				continue
+			var poly: PackedVector2Array = entry.get("poly", PackedVector2Array())
+			if poly.size() < 3:
+				continue
+			var bbox := _plot_aabb_from_poly(poly)
+			_draw_site_layout_in_bbox(pid, entry, bbox, font, pad_w, label_fs)
+		return
 	var bx := _last_mesh_bounds.x
 	for gy in range(_vis_min_y, _vis_max_y):
 		var row_off := gy * bx
@@ -966,54 +1313,8 @@ func _draw_site_layout() -> void:
 			var poly := _mesh.plot_polygon(gx, gy)
 			var pts := PackedVector2Array([poly[0], poly[1], poly[2], poly[3]])
 			var bbox := _plot_aabb_from_poly(pts)
-			var inset := _mesh.cell_px * 0.12
-			bbox = bbox.grow(-inset)
-			if bbox.size.x < 4.0 or bbox.size.y < 4.0:
-				continue
-			var rows: Array = _plot_buildings_by_plot[pid] as Array
-			var n := rows.size()
-			if n < 1:
-				continue
-			var is_mine := (_cell_flags[idx] & 0x2) != 0
-			var cols_i := maxi(1, int(ceil(sqrt(float(n)))))
-			var nrows_i := maxi(1, int(ceil(float(n) / float(cols_i))))
-			var gap := _mesh.cell_px * 0.06
-			var cell_w := (bbox.size.x - gap * float(cols_i - 1)) / float(cols_i)
-			var cell_h := (bbox.size.y - gap * float(nrows_i - 1)) / float(nrows_i)
-			cell_w = maxf(cell_w, _mesh.cell_px * 0.08)
-			cell_h = maxf(cell_h, _mesh.cell_px * 0.08)
-			for i in range(n):
-				var row: Dictionary = rows[i] as Dictionary
-				var row_i := int(floor(float(i) / float(cols_i)))
-				var col_i := i % cols_i
-				var x0 := bbox.position.x + float(col_i) * (cell_w + gap)
-				var y0 := bbox.position.y + float(row_i) * (cell_h + gap)
-				var pad := Rect2(Vector2(x0, y0), Vector2(cell_w, cell_h))
-				var fill_c := RealmColors.PANEL
-				fill_c.a = 0.72 if is_mine else 0.5
-				var stroke_c := RealmColors.ACCENT if is_mine else RealmColors.BORDER_LIT
-				stroke_c.a = 0.95 if is_mine else 0.65
-				draw_rect(pad, fill_c, true)
-				draw_rect(pad, stroke_c, false, pad_w)
-				var bid := str(row.get("building_id", "?"))
-				var abbrev := _abbrev_building_id(bid)
-				if font != null and not abbrev.is_empty():
-					var tc := RealmColors.TEXT
-					tc.a = 0.92
-					var sz := font.get_string_size(abbrev, HORIZONTAL_ALIGNMENT_CENTER, -1, label_fs)
-					var tp := Vector2(
-						pad.position.x + (pad.size.x - sz.x) * 0.5,
-						pad.position.y + (pad.size.y - sz.y) * 0.5
-					)
-					draw_string(
-						font,
-						tp,
-						abbrev,
-						HORIZONTAL_ALIGNMENT_LEFT,
-						-1,
-						label_fs,
-						tc
-					)
+			var entry := {"flags": _cell_flags[idx]}
+			_draw_site_layout_in_bbox(pid, entry, bbox, font, pad_w, label_fs)
 
 
 func _draw_plot_detail_labels() -> void:
@@ -1039,6 +1340,44 @@ func _draw_plot_detail_labels() -> void:
 		["oil_shale_grade", "Oil"],
 		["rare_earth_grade", "RE"],
 	]
+
+	if _uses_parcel_polygon_draw():
+		for entry in _parcel_entries:
+			var flags: int = int(entry.get("flags", 0))
+			if (flags & 0x3) != 0x3:
+				continue
+			var pid: String = str(entry.get("pid", ""))
+			var cell_set: Dictionary = entry.get("cell_set", {})
+			if not _cell_set_visible(cell_set):
+				continue
+			var ctr := _parcel_centroid(cell_set)
+			var bcount: int = int(_plot_building_counts.get(pid, 0))
+			if bcount > 0:
+				var badge := "⚙%d" % bcount
+				var badge_col := RealmColors.ACCENT
+				badge_col.a = 0.9
+				var bpos := ctr + Vector2(_world_line_width(-6.0), _world_line_width(-4.0))
+				draw_string(font, bpos, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, badge_col)
+			if (flags & 0x4) == 0:
+				continue
+			var p: Dictionary = WorldState.plots.get(pid, {})
+			var sub: Dictionary = WorldState.subsurface_for_plot_ui(pid, p)
+			var best_grade := 0.0
+			var best_name := ""
+			for pair in grade_keys:
+				var fld := str((pair as Array)[0])
+				var abbrev := str((pair as Array)[1])
+				var g := float(sub.get(fld, 0.0))
+				if g > best_grade:
+					best_grade = g
+					best_name = abbrev
+			if best_grade >= 0.15:
+				var grade_text := "%s %.0f%%" % [best_name, best_grade * 100.0]
+				var grade_col := Color(0.4, 1.0, 0.4) if best_grade >= 0.5 else Color(0.9, 0.85, 0.3)
+				grade_col.a = 0.85
+				var gpos := ctr + Vector2(_world_line_width(-8.0), _world_line_width(6.0))
+				draw_string(font, gpos, grade_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, grade_col)
+		return
 
 	var bx := _last_mesh_bounds.x
 	for gy in range(_vis_min_y, _vis_max_y):

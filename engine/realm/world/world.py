@@ -405,10 +405,13 @@ def claim_cost_cents_for_plot(world: "World", plot_id: PlotId) -> int:
     density = population_density_for(world, plot_id)
     market_cost = max(50_000, int(compute_plot_value(world, plot_id)))
     if density <= 0.0:
-        return market_cost if market_cost > 50_000 else 0
+        return market_cost
     density_cost = claim_cost_cents_from_density(density)
+    # Genesis / frontier bootstrap stamps every plot at the hub baseline
+    # (~0.05). That density curve is only for *settled* land; unclaimed
+    # frontier parcels price from terrain, size, and subsurface instead.
     if density <= POPULATION_FRONTIER_DENSITY_BASELINE + 0.01:
-        return density_cost
+        return market_cost
     return max(density_cost, market_cost)
 
 
@@ -461,6 +464,25 @@ def generate_plots(
             terrain_fn=terrain_fn,
         )
     enforce_map_ocean_border(plots, width, height, seed=seed)
+    if not uniform_plots:
+        from realm.world.plot_parcels import _fill_unassigned_cells
+        from realm.world.biome_noise import terrain_for_cell, terrain_with_ocean_border
+
+        pick = terrain_fn if terrain_fn is not None else terrain_for_cell
+        pick = terrain_with_ocean_border(pick, width=width, height=height)
+        assigned: list[list[str | None]] = [[None for _ in range(width)] for _ in range(height)]
+        for pid, plot in plots.items():
+            for cx, cy in plot.world_cells:
+                assigned[cy][cx] = str(pid)
+        _fill_unassigned_cells(
+            plots,
+            assigned,
+            seed=seed,
+            width=width,
+            height=height,
+            pick=pick,
+            correlate_subsurface=correlate_subsurface,
+        )
     return plots
 
 
