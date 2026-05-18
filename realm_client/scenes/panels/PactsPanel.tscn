@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3 uid="uid://realm_pacts_panel"]
+
+[ext_resource type="PackedScene" uid="uid://realm_tabbed_slide_panel" path="res://scenes/panels/TabbedSlidePanel.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scenes/panels/PactsPanel.gd" id="2_script"]
+
+[node name="PactsPanel" instance=ExtResource("1_base")]
+script = ExtResource("2_script")
