@@ -237,12 +237,18 @@ def buy_plot_market(world: World, buyer: PartyId, plot_id: PlotId) -> dict[str, 
 
 
 def plot_market_summary(world: World, plot_id: PlotId) -> dict[str, object]:
+    from realm.world.world import claim_cost_cents_for_plot
+
     fair = compute_plot_value(world, plot_id)
     listing = (world.scenario_state.get("plots_for_sale") or {}).get(str(plot_id))
     npc_bids = (world.scenario_state.get("plot_npc_bids") or {}).get(str(plot_id), [])
     top_npc = max((int(b["bid_cents"]) for b in npc_bids), default=0)
+    # ``claim_cost_cents`` used to ride on every plot in /world; that
+    # forced the real-estate valuation graph to run 76800x on Genesis.
+    # It's now computed lazily here when the PlotDetail panel opens.
     return {
         "fair_value_cents": fair,
+        "claim_cost_cents": claim_cost_cents_for_plot(world, plot_id),
         "listed_for_sale": listing is not None,
         "ask_price_cents": int(listing["ask_price_cents"]) if listing else None,
         "top_npc_bid_cents": top_npc,

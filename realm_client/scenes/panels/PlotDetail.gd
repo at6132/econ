@@ -201,9 +201,17 @@ func _populate(p: Dictionary) -> void:
 	claim_btn.show()
 	if is_unclaimed:
 		claim_info_label.text = "This plot is unclaimed."
-		var cost: int = int(p.get("claim_cost_cents", 500))
-		claim_cost_label.text = "Cost: %s" % WorldState.format_money(cost)
-		claim_confirm_label.text = "Claim for %s?" % WorldState.format_money(cost)
+		# claim_cost_cents is fetched lazily via /plots/{id}/value when
+		# this panel opens (used to ride on /world for every plot, but
+		# that forced a 9 s build for 76800-plot Genesis). The button
+		# starts with a "…" placeholder until the value lands.
+		var cost: int = int(p.get("claim_cost_cents", -1))
+		if cost >= 0:
+			claim_cost_label.text = "Cost: %s" % WorldState.format_money(cost)
+			claim_confirm_label.text = "Claim for %s?" % WorldState.format_money(cost)
+		else:
+			claim_cost_label.text = "Cost: …"
+			claim_confirm_label.text = "Claim?"
 
 	survey_section.visible = is_mine and not is_surveyed
 	var survey_cost := WorldState.format_money(WorldState.SURVEY_COST_CENTS)
@@ -444,6 +452,16 @@ func _on_plot_value_response(data: Dictionary) -> void:
 	if data.is_empty():
 		return
 	_plot_data["market"] = data
+	# Lazy claim-cost fetch (see _populate above for why it's not on the
+	# /world/map payload anymore). Update the button label as soon as
+	# this response lands.
+	var cc: Variant = data.get("claim_cost_cents", null)
+	if cc != null:
+		_plot_data["claim_cost_cents"] = int(cc)
+		var owner_v: Variant = _plot_data.get("owner", null)
+		if owner_v == null:
+			claim_cost_label.text = "Cost: %s" % WorldState.format_money(int(cc))
+			claim_confirm_label.text = "Claim for %s?" % WorldState.format_money(int(cc))
 	var fair := int(data.get("fair_value_cents", 0))
 	plot_value_label.text = "Fair value: %s" % WorldState.format_money(fair)
 	var listed := bool(data.get("listed_for_sale", false))

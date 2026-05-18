@@ -698,16 +698,25 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
 def world_map_dict(world: "World") -> dict[str, Any]:
     """Lean map-only view for the world renderer.
 
-    Per-plot fields: id, x, y, terrain, owner, surveyed, deep_surveyed,
-    powered, population_density, claim_cost_cents (+ world_tiles_w/h,
-    grid_cells_w/h, world_cells iff the grid is non-uniform).
+    Per-plot fields kept (cheap):
+      id, x, y, terrain, owner, surveyed, deep_surveyed, powered,
+      population_density
 
-    Does NOT include per-cell subsurface (only known to surveyors;
-    delivered via ``/world/player``) or recipe_ids (computed on click).
-    Drops ``world_cell_to_plot`` on uniform grids — derivable from
-    ``(x, y)`` as ``p-{x}-{y}``."""
+    Per-plot fields intentionally OMITTED:
+      * ``claim_cost_cents`` — computed by ``claim_cost_cents_for_plot``,
+        which calls the real-estate valuation graph. Doing that 76800
+        times for Genesis adds ~9 seconds to the payload build. Fetched
+        on demand via ``GET /plots/{id}/value`` when the player opens
+        the PlotDetail panel.
+      * ``subsurface`` — surveyor-private; delivered via ``/world/player``
+        for plots the party owns / has reports for.
+      * ``recipe_ids`` — small derivative computation that lives in the
+        plot's recipe book; ``/world/player`` carries it for owned plots,
+        the PlotDetail panel can refetch otherwise.
+
+    Drops ``world_cell_to_plot`` and per-plot ``world_cells`` on uniform
+    grids — derivable from ``(x, y)`` as ``p-{x}-{y}``."""
     from realm.infrastructure.energy import ensure_powered_plots_fresh
-    from realm.world.world import claim_cost_cents_for_plot
     from realm.world.plot_scale import (
         plot_grid_side,
         plot_world_cells_tuple,
@@ -728,11 +737,14 @@ def world_map_dict(world: "World") -> dict[str, Any]:
             "terrain": p.terrain.value,
             "owner": p.owner,
             "surveyed": p.surveyed,
-            "deep_surveyed": getattr(p, "deep_surveyed", False),
             "powered": str(p.plot_id) in powered_set,
-            "population_density": density,
-            "claim_cost_cents": claim_cost_cents_for_plot(world, p.plot_id),
         }
+        # Boolean / numeric defaults are omitted to keep the JSON tiny on
+        # Genesis (~76800 plots, most are unsurveyed + unpowered + empty).
+        if getattr(p, "deep_surveyed", False):
+            entry["deep_surveyed"] = True
+        if density > 0.0:
+            entry["population_density"] = density
         if not uniform:
             _, _, wt, ht = plot_world_span(p)
             gcw, gch = plot_grid_side(p)
