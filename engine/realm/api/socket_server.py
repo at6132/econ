@@ -124,19 +124,29 @@ def _dispatch(method: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
 
     client = _get_test_client()
     method_u = method.upper()
+    # World bootstrap can take 30–120s on genesis; do not hold WORLD_LOCK for the
+    # whole build (sim_loop + autosave would stall). The route pauses the sim and
+    # only swaps WORLD under the lock after bootstrap returns.
+    long_bootstrap = method_u == "POST" and path_only == "/dev/reset"
     try:
-        with _state.WORLD_LOCK:
-            if method_u == "GET":
-                response = client.get(path_only, params=params)
-            elif method_u == "POST":
-                if json_body:
-                    response = client.post(path_only, params=query, json=json_body)
-                else:
-                    response = client.post(path_only, params=params)
-            elif method_u == "DELETE":
-                response = client.delete(path_only, params=params)
+        if long_bootstrap:
+            if json_body:
+                response = client.post(path_only, params=query, json=json_body)
             else:
-                return {"ok": False, "reason": f"unsupported method {method}"}
+                response = client.post(path_only, params=params)
+        else:
+            with _state.WORLD_LOCK:
+                if method_u == "GET":
+                    response = client.get(path_only, params=params)
+                elif method_u == "POST":
+                    if json_body:
+                        response = client.post(path_only, params=query, json=json_body)
+                    else:
+                        response = client.post(path_only, params=params)
+                elif method_u == "DELETE":
+                    response = client.delete(path_only, params=params)
+                else:
+                    return {"ok": False, "reason": f"unsupported method {method}"}
     except Exception as exc:
         _log.exception("socket_server dispatch error: %s %s", method, path_only)
         return {"ok": False, "reason": str(exc)}

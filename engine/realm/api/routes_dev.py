@@ -89,38 +89,51 @@ def dev_reset(
 ) -> dict:
     """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive, genesis."""
     _log.info("Realm: POST /dev/reset received (scenario=%r seed=%s) — building world…", scenario, seed)
-    t0 = time.perf_counter()
-    try:
-        w = bootstrap_by_scenario(seed=seed, scenario=scenario)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    _state.assign_world(w)
-    if name:
-        _state.WORLD.world_name = name
-    from realm.api import sim_loop
     from realm.world.sim_clock import get_sim_clock
 
     clk = get_sim_clock()
-    clk.set_paused(False)
-    clk.set_speed(1.0)
-    sim_loop._push_to_all({"kind": "sim_status", **clk.status_dict()})
-    sim_loop._push_to_all(sim_loop.build_tick_frame())
-    elapsed = time.perf_counter() - t0
-    _log.info(
-        "Realm: POST /dev/reset finished in %.1fs (scenario_id=%r tick=%s).",
-        elapsed,
-        _state.WORLD.scenario_id,
-        _state.WORLD.tick,
-    )
-    w = _state.WORLD
-    return {
-        "ok": True,
-        "seed": seed,
-        "scenario_id": w.scenario_id,
-        "map_layout": w.scenario_state.get("map_layout"),
-        "grid_width": w.scenario_state.get("grid_width"),
-        "grid_height": w.scenario_state.get("grid_height"),
-    }
+    was_paused = clk.paused
+    clk.set_paused(True)
+    t0 = time.perf_counter()
+    try:
+        try:
+            w = bootstrap_by_scenario(seed=seed, scenario=scenario)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        with _state.WORLD_LOCK:
+            _state.assign_world(w)
+            if name:
+                _state.WORLD.world_name = name
+        from realm.api import sim_loop
+
+        clk.set_speed(1.0)
+        sim_loop._push_to_all({"kind": "sim_status", **clk.status_dict()})
+        sim_loop._push_to_all(sim_loop.build_tick_frame())
+        elapsed = time.perf_counter() - t0
+        _log.info(
+            "Realm: POST /dev/reset finished in %.1fs (scenario_id=%r tick=%s).",
+            elapsed,
+            _state.WORLD.scenario_id,
+            _state.WORLD.tick,
+        )
+        from realm.core.ids import PartyId
+        from realm.core.ledger import party_cash_account
+        from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
+
+        player_cash = int(w.ledger.balance(party_cash_account(PartyId("player"))))
+        return {
+            "ok": True,
+            "seed": seed,
+            "scenario_id": w.scenario_id,
+            "map_layout": w.scenario_state.get("map_layout"),
+            "grid_width": w.scenario_state.get("grid_width"),
+            "grid_height": w.scenario_state.get("grid_height"),
+            "player_cash_cents": player_cash,
+            "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
+        }
+    finally:
+        if not was_paused:
+            clk.set_paused(False)
 
 
 @router.post("/persistence/save")

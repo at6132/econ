@@ -37,6 +37,9 @@ def test_dev_reset_applies_scenario_params(
     assert j.get("ok") is True
     assert j["scenario_id"] == scenario
     assert j["seed"] == 123
+    assert j["player_cash_cents"] == expected_player_cents
+    if scenario in ("frontier", "cartel", "genesis"):
+        assert j["player_starting_cash_cents"] == PLAYER_STARTING_CASH_CENTS
 
     world = _state.WORLD
     assert world_map_tile_count(world) == expected_map_tiles
