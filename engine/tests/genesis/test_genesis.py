@@ -5,6 +5,10 @@ from __future__ import annotations
 from realm.core.ids import MaterialId, PartyId
 from realm.economy.markets import MARKET_SELLER_REGISTRATION_CENTS
 from realm.core.ledger import party_cash_account, system_reserve_account
+from realm.core.player_economy import (
+    GENESIS_SETTLER_STARTING_CASH_CENTS,
+    PLAYER_STARTING_CASH_CENTS,
+)
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
@@ -13,7 +17,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     w = bootstrap_genesis(seed=11, grid_width=10, grid_height=8, settler_count=4)
     assert w.ledger.total_cents() == 100_000_000_000
     player = party_cash_account(PartyId("player"))
-    assert w.ledger.balance(player) == 1_000_000
+    assert w.ledger.balance(player) == PLAYER_STARTING_CASH_CENTS
     # genesis_exchange now lists Tier-2 raws / processed / tool components alongside the
     # original staples & tools — count the materials actually registered so the test
     # tracks bootstrap changes without re-hardcoding the number.
@@ -78,8 +82,8 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_road_builders = 1 if FRONTIER_ROADS_PARTY_ID in w.parties else 0
     n_insurer = 1 if PartyId("frontier_insurance_co") in w.parties else 0
     reserved_out = (
-        1_000_000  # player
-        + 4 * 1_000_000  # settlers
+        PLAYER_STARTING_CASH_CENTS  # player
+        + 4 * GENESIS_SETTLER_STARTING_CASH_CENTS  # settlers
         # Phase 7A: pop_hub_e/w are removed — no more $50k × 2 cash injections.
         + 88_000  # Tier-3 Margaux (Genesis)
         + 25_000_000  # genesis_exchange operating cash (from reserve)

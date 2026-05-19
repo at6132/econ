@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, Any
 from realm.core.ids import PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
+from realm.core.player_economy import (
+    GENESIS_SETTLER_STARTING_CASH_CENTS,
+    PLAYER_STARTING_CASH_CENTS,
+)
 from realm.materials import MaterialId
 from realm.production.recipes import recipe_public_list
 from realm.world.biome_noise import clear_noise_cache, terrain_for_cell
@@ -568,7 +572,8 @@ def bootstrap_genesis(
     grid_height: int | None = None,
     settler_count: int | None = None,
     settler_spawn_cap: int | None = None,
-    starting_cash_cents: int = 1_000_000,
+    player_starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS,
+    settler_starting_cash_cents: int = GENESIS_SETTLER_STARTING_CASH_CENTS,
     system_reserve_cents: int = 100_000_000_000,
     map_layout: str = "auto",
 ) -> World:
@@ -675,7 +680,7 @@ def bootstrap_genesis(
     tr = world.ledger.transfer(
         debit=system_reserve_account(),
         credit=pcash,
-        amount_cents=starting_cash_cents,
+        amount_cents=player_starting_cash_cents,
     )
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
@@ -712,7 +717,7 @@ def bootstrap_genesis(
         trs = world.ledger.transfer(
             debit=system_reserve_account(),
             credit=acct,
-            amount_cents=starting_cash_cents,
+            amount_cents=settler_starting_cash_cents,
         )
         if isinstance(trs, MoneyErr):
             raise ValueError(trs.reason)
@@ -720,7 +725,7 @@ def bootstrap_genesis(
     gst["settler_cycle_enabled"] = cycle_enabled
     gst["settler_cap"] = settler_cap
     gst["next_settler_seq"] = initial_n + 1
-    gst["starting_settler_cents"] = starting_cash_cents
+    gst["starting_settler_cents"] = settler_starting_cash_cents
     gst["broke_ticks"] = {}
     gst["boot_settler_count"] = initial_n
     # Phase 7B — seed LaborerNPCs per landmass (density-scaled). Each laborer gets a real
@@ -1013,7 +1018,7 @@ def bootstrap_frontier(
     seed: int,
     grid_width: int = 48,
     grid_height: int = 36,
-    starting_cash_cents: int = 1_000_000,  # $10,000.00
+    starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS,
     system_reserve_cents: int = 100_000_000_000,  # $1B — unallocated pool
     scenario_id: str = "frontier",
     uniform_plots: bool = False,

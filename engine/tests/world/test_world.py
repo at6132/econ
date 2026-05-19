@@ -1,5 +1,6 @@
 from realm.core.ids import PartyId
 from realm.core.ledger import party_cash_account, system_reserve_account
+from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
 from realm.world import bootstrap_frontier, generate_plots
 
 
@@ -10,7 +11,7 @@ def test_frontier_bootstrap_money_total() -> None:
     player = party_cash_account(PartyId("player"))
     consumer = party_cash_account(PartyId("t1_consumer"))
     lumber_buyer = party_cash_account(PartyId("t1_lumber_buyer"))
-    assert w.ledger.balance(player) == 1_000_000
+    assert w.ledger.balance(player) == PLAYER_STARTING_CASH_CENTS
     assert w.ledger.balance(consumer) == 25_000
     assert w.ledger.balance(lumber_buyer) == 50_000
     assert w.ledger.balance(party_cash_account(PartyId("t1_electricity_buyer"))) == 30_000
@@ -18,7 +19,7 @@ def test_frontier_bootstrap_money_total() -> None:
     tier3_cash = 88_000
     assert w.ledger.balance(system_reserve_account()) == (
         100_000_000_000
-        - 1_000_000
+        - PLAYER_STARTING_CASH_CENTS
         - 25_000
         - 50_000
         - 30_000

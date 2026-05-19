@@ -8,19 +8,20 @@ from fastapi.testclient import TestClient
 from realm.api import _state, app
 from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
+from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
 from realm.world.plot_parcels import world_map_tile_count
 
 
 @pytest.mark.parametrize(
     "scenario,expected_map_tiles,expected_player_cents,expect_cartel_cell",
     [
-        ("frontier", 48 * 36, 1_000_000, False),
+        ("frontier", 48 * 36, PLAYER_STARTING_CASH_CENTS, False),
         ("bootstrapper", 32 * 24, 485_000, False),
         ("speculator", 40 * 30, 2_050_000, False),
-        ("cartel", 48 * 36, 1_000_000, True),
+        ("cartel", 48 * 36, PLAYER_STARTING_CASH_CENTS, True),
         ("millrace", 42 * 28, 975_000, False),
         ("archive", 48 * 36, 1_080_000, False),
-        ("genesis", 320 * 240, 1_000_000, False),
+        ("genesis", 320 * 240, PLAYER_STARTING_CASH_CENTS, False),
     ],
 )
 def test_dev_reset_applies_scenario_params(
