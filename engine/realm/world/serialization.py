@@ -542,6 +542,7 @@ def world_static_dict(world: "World") -> dict[str, Any]:
         TICKS_PER_GAME_DAY,
         TICKS_PER_REAL_SECOND_AT_1X,
     )
+    from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
     from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
     from realm.production.buildings import building_catalog_public
 
@@ -585,6 +586,7 @@ def world_static_dict(world: "World") -> dict[str, Any]:
         "party_display_names": dict(world.party_display_names),
         "bank_plot_id": scen.get("bank_plot"),
         "parties": [str(x) for x in world.parties],
+        "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
     }
 
 
