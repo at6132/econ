@@ -290,6 +290,220 @@ def _maybe_buffer_buy(world: World, party: PartyId) -> None:
                 )
 
 
+_STALE_ORDER_DAYS = 3
+_PRICE_DOWN_PCT = 0.08
+
+
+def _plot_archetype_score(
+    world: World, pid: PlotId, plot: object, archetype: object
+) -> float:
+    from realm.agents.settler_archetypes import Archetype
+    from realm.world.real_estate import _min_town_distance
+
+    score = 0.0
+    terrain = str(getattr(plot, "terrain", "")).lower()
+
+    if archetype == Archetype.MINER:
+        if "mountain" in terrain or "hill" in terrain:
+            score += 3.0
+        sub = getattr(plot, "subsurface", None)
+        if sub is not None:
+            for attr in ("iron_ore_grade", "coal_grade", "copper_ore_grade"):
+                score += float(getattr(sub, attr, 0.0)) * 5.0
+
+    elif archetype == Archetype.PROCESSOR:
+        if "plain" in terrain or "valley" in terrain:
+            score += 2.0
+
+    elif archetype == Archetype.MERCHANT:
+        dist = _min_town_distance(world, plot)
+        score += max(0.0, 10.0 - dist)
+
+    elif archetype == Archetype.LANDLORD:
+        if "coastal" in terrain:
+            score += 4.0
+        score += max(0.0, 8.0 - _min_town_distance(world, plot))
+
+    elif archetype == Archetype.RESEARCHER:
+        sub = getattr(plot, "subsurface", None)
+        if sub is not None:
+            for attr in ("au_grade", "nd_grade", "platinum_ore_grade"):
+                score += float(getattr(sub, attr, 0.0)) * 10.0
+
+    return score
+
+
+def _maybe_expand_capital(world: World, party: PartyId) -> bool:
+    from realm.actions.plot_actions import claim_plot
+    from realm.agents.market_oracle import get_oracle
+    from realm.agents.settler_archetypes import (
+        ARCHETYPE_EXPANSION_THRESHOLD,
+        get_archetype,
+    )
+    from realm.world.real_estate import compute_plot_value
+
+    archetype = get_archetype(party)
+    threshold = ARCHETYPE_EXPANSION_THRESHOLD[archetype]
+    cash = int(world.ledger.balance(party_cash_account(party)))
+    if cash < threshold:
+        return False
+
+    owned = [pid for pid, p in world.plots.items() if p.owner == party]
+    if len(owned) >= 2:
+        return False
+
+    get_oracle(world)
+    candidates: list[tuple[float, PlotId]] = []
+    for pid, plot in world.plots.items():
+        if plot.owner is not None:
+            continue
+        terr = str(plot.terrain)
+        if terr.startswith("water") or terr == "water_shallow":
+            continue
+        value = compute_plot_value(world, pid)
+        if value > cash * 0.6:
+            continue
+        score = _plot_archetype_score(world, pid, plot, archetype)
+        candidates.append((score, pid))
+
+    if not candidates:
+        return False
+
+    candidates.sort(reverse=True)
+    best_pid = candidates[0][1]
+    r = claim_plot(world, party, best_pid)
+    if r.get("ok"):
+        log_event(
+            world,
+            "settler_expanded",
+            f"{party} claimed 2nd plot {best_pid} (archetype: {archetype.value})",
+            party=str(party),
+        )
+        return True
+    return False
+
+
+def _maybe_reprice_stale_orders(world: World, party: PartyId) -> None:
+    from realm.agents.market_oracle import get_oracle
+    from realm.economy.markets import cancel_party_asks_for_material, place_sell_order
+
+    oracle = get_oracle(world)
+    stale_tracker: dict[str, dict[str, object]] = world.scenario_state.setdefault(
+        "settler_stale_orders", {}
+    )
+    party_key = str(party)
+
+    ask_mats: dict[str, tuple[int, int]] = {}
+    for mat, asks in world.market_asks_by_material.items():
+        for ask in asks:
+            if ask.party != party:
+                continue
+            mid = str(mat)
+            if mid not in ask_mats:
+                ask_mats[mid] = (int(ask.price_per_unit_cents), 0)
+            old_price, old_qty = ask_mats[mid]
+            ask_mats[mid] = (old_price, old_qty + int(ask.qty))
+
+    for mid, (price, qty) in ask_mats.items():
+        tracker_key = f"{party_key}:{mid}"
+        tracker = dict(stale_tracker.get(tracker_key, {"days_listed": 0, "price": price}))
+        tracker["days_listed"] = int(tracker.get("days_listed", 0)) + 1
+
+        if int(tracker["days_listed"]) >= _STALE_ORDER_DAYS:
+            new_price = int(price * (1 - _PRICE_DOWN_PCT))
+            best_bid = int(oracle.best_bid.get(mid, 0))
+            if new_price > best_bid * 0.9 and new_price >= 1 and qty > 0:
+                mat = MaterialId(mid)
+                cancelled = cancel_party_asks_for_material(world, party, mat)
+                if cancelled > 0:
+                    place_sell_order(world, party, mat, qty=qty, price_per_unit_cents=new_price)
+                    tracker = {"days_listed": 0, "price": new_price}
+                    log_event(
+                        world,
+                        "settler_repriced",
+                        f"{party} lowered {mid} from {price}c to {new_price}c (stale)",
+                        party=str(party),
+                    )
+
+        stale_tracker[tracker_key] = tracker
+
+
+def _maybe_update_merchant_store_prices(world: World, party: PartyId) -> None:
+    from realm.agents.market_oracle import get_oracle
+    from realm.agents.settler_archetypes import Archetype, get_archetype
+
+    if get_archetype(party) != Archetype.MERCHANT:
+        return
+
+    oracle = get_oracle(world)
+    store_plots: set[str] = set()
+    for b in world.plot_buildings:
+        if str(b.get("party")) != str(party):
+            continue
+        if str(b.get("building_id")) != "store":
+            continue
+        if int(b.get("completes_at_tick", 0)) > int(world.tick):
+            continue
+        store_plots.add(str(b.get("plot_id", "")))
+
+    for pid in store_plots:
+        store_inv = world.store_inventories.get(pid, {})
+        store_prices = world.store_prices.get(pid, {})
+        if not store_prices:
+            continue
+        for mat_id, price in list(store_prices.items()):
+            stock = int(store_inv.get(mat_id, 0))
+            best_ask = int(oracle.best_ask.get(str(mat_id), price))
+            if stock == 0:
+                store_prices[mat_id] = min(int(price * 1.05), int(best_ask * 1.1))
+            elif stock > 50:
+                new_price = max(int(price * 0.92), int(best_ask * 0.85))
+                store_prices[mat_id] = max(1, new_price)
+
+
+def _maybe_subdivide_and_lease(world: World, party: PartyId) -> bool:
+    from realm.actions.plot_actions import subdivide_plot
+    from realm.agents.settler_archetypes import Archetype, get_archetype
+    from realm.world.real_estate import compute_plot_value
+
+    if get_archetype(party) != Archetype.LANDLORD:
+        return False
+
+    cash = int(world.ledger.balance(party_cash_account(party)))
+    if cash < 500_000:
+        return False
+
+    owned = [pid for pid, p in world.plots.items() if p.owner == party]
+    unbuilt = [
+        pid
+        for pid in owned
+        if not world.plot_placed_buildings.get(str(pid))
+        and not any(sp.parent_plot_id == str(pid) for sp in world.sub_plots.values())
+    ]
+    if not unbuilt:
+        return False
+
+    pid = unbuilt[0]
+    partitions = [
+        {"grid_x": 0, "grid_y": 0, "grid_w": 10, "grid_h": 5},
+        {"grid_x": 0, "grid_y": 5, "grid_w": 10, "grid_h": 5},
+    ]
+    r = subdivide_plot(world, party, pid, partitions)
+    if not r.get("ok"):
+        return False
+
+    listings = world.scenario_state.setdefault("sub_plot_listings", {})
+    value = compute_plot_value(world, pid)
+    rent = max(500, int(value * 0.02))
+    for sp_id in r.get("sub_plot_ids", []):
+        listings[str(sp_id)] = {
+            "lessor": str(party),
+            "rent_per_7days": rent,
+            "available": True,
+        }
+    return True
+
+
 def tick_settler_margin_review(world: World) -> None:
     """Once per game-week, evaluate every settler's vertical-integration triggers
     and run buffer-buy logic for materials whose price is rising fast.
@@ -313,3 +527,7 @@ def tick_settler_margin_review(world: World) -> None:
             if _maybe_trigger_upgrade(world, party, path):
                 break
         _maybe_buffer_buy(world, party)
+        _maybe_expand_capital(world, party)
+        _maybe_reprice_stale_orders(world, party)
+        _maybe_update_merchant_store_prices(world, party)
+        _maybe_subdivide_and_lease(world, party)

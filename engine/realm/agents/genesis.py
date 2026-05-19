@@ -29,6 +29,7 @@ from realm.contracts.forward import (
 from realm.genesis.shippers import tick_npc_shippers
 from realm.population.labor import tick_labor_migration, tick_labor_transport_arrivals
 from realm.genesis.settler_upgrades import tick_settler_margin_review
+from realm.agents.settler_archetypes import tick_researcher_experiments
 from realm.contracts.tenders import (
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
@@ -42,6 +43,7 @@ def tick_genesis_agents(world: World) -> None:
     tick_genesis_settler_lifecycle(world)
     tick_settler_business(world)
     tick_settler_margin_review(world)
+    tick_researcher_experiments(world)
     tick_settler_tender_bidding(world)
     tick_tender_lifecycle(world)
     tick_consolidator(world)
