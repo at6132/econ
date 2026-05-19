@@ -65,6 +65,10 @@ def advance_tick(world: World) -> None:
     tick_tier3_llm_agents(world)
     tick_npc_plot_demand(world)
     world.tick += 1
+    if int(world.tick) % 1440 == 0:
+        from realm.agents.market_oracle import get_oracle
+
+        get_oracle(world)
     # Phase 8 — Sub-phase 8A: seasonal narration fires on day boundaries.
     # Cheap no-op on every tick except the few days a year that announce
     # spring/summer/autumn/harvest-decline/winter to the world feed.
