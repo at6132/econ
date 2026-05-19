@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from realm.actions.blueprint_actions import create_blueprint, place_blueprint
+from realm.actions.blueprint_actions import (
+    blueprints_visible_to,
+    compute_turnkey_cost_cents,
+    create_blueprint,
+    place_blueprint,
+)
 from realm.actions.plot_actions import claim_plot
 from realm.core.conservation import (
     ConservationSnapshot,
     assert_money_conserved,
 )
-from realm.core.ids import PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.ledger import party_cash_account
 from realm.production.blueprints import SEEDED_BLUEPRINTS, seed_world_blueprints
 from realm.production.buildings import build_on_plot
 from realm.world import bootstrap_frontier
@@ -167,6 +173,41 @@ def test_license_fee_paid_on_place() -> None:
     pr = place_blueprint(world, buyer, pid, bid, 0, 0, build_mode="self")
     assert pr["ok"]
     assert_money_conserved(world.ledger, snap.ledger_total_cents)
+
+
+def test_turnkey_cost_uses_fair_value_when_book_empty() -> None:
+    world = bootstrap_frontier(seed=14)
+    seed_world_blueprints(world)
+    world.market_asks_by_material.clear()
+    bp = world.blueprints["blast_furnace"]
+    cost = compute_turnkey_cost_cents(world, bp)
+    assert cost < 2_000_000
+    assert cost > bp.construction_labor_cents
+    rows = blueprints_visible_to(world, PartyId("player"))
+    row = next(r for r in rows if r["blueprint_id"] == "blast_furnace")
+    assert row["turnkey_estimate_cents"] == cost
+    assert row["turnkey_pricing"] == "fair_value"
+
+
+def test_turnkey_place_without_market_uses_fair_value() -> None:
+    world = bootstrap_frontier(seed=15)
+    seed_world_blueprints(world)
+    world.market_asks_by_material.clear()
+    party = PartyId("player")
+    pid = _unclaimed_land(world)
+    claim_plot(world, party, pid)
+    bp = world.blueprints["field_stockade"]
+    need = compute_turnkey_cost_cents(world, bp)
+    cash_acct = party_cash_account(party)
+    from realm.core.ledger import system_reserve_account
+
+    world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=cash_acct,
+        amount_cents=max(0, need - world.ledger.balance(cash_acct) + 1_000),
+    )
+    r = place_blueprint(world, party, pid, "field_stockade", 0, 0, build_mode="turnkey")
+    assert r["ok"], r
 
 
 def test_backward_compat_build_on_plot() -> None:

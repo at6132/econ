@@ -5,9 +5,10 @@ from __future__ import annotations
 from realm.actions._shared import ActionResult
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
-from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.core.ledger import AccountId, MoneyErr, party_cash_account, system_reserve_account
 from realm.core.time_scale import BUILD_CONTRACTED_TICKS, BUILD_SIMPLE_TICKS
 from realm.economy.markets import market_buy
+from realm.economy.pricing import fair_value_cents
 from realm.events.event_log import log_event
 from realm.production.blueprints import Blueprint, blueprint_public_dict
 from realm.production.buildings import BUILDINGS
@@ -20,6 +21,96 @@ from realm.world.plot_scale import (
     plot_deed_grid_cells,
     plot_grid_side_for_id,
 )
+
+
+def _turnkey_unit_price_cents(world: World, mat_id: str) -> int:
+    """Best ask on the book, else fair-value anchor (never a punitive placeholder)."""
+    mid = MaterialId(mat_id)
+    asks = world.market_asks_by_material.get(str(mat_id), [])
+    if not asks:
+        asks = world.market_asks_by_material.get(mid, [])
+    if asks:
+        return min(int(a.price_per_unit_cents) for a in asks)
+    return int(fair_value_cents(mid) or 100)
+
+
+def compute_turnkey_cost_cents(world: World, bp: Blueprint) -> int:
+    """Cash needed for turnkey: labor plus materials (market or fair-value estimate)."""
+    total = int(bp.construction_labor_cents)
+    for mat_id, qty in bp.construction_materials.items():
+        q = int(qty)
+        if q > 0:
+            total += _turnkey_unit_price_cents(world, str(mat_id)) * q
+    return total
+
+
+def turnkey_cost_public(world: World, bp: Blueprint) -> dict[str, int | str | dict[str, int]]:
+    """UI-facing turnkey breakdown (matches ``place_blueprint`` turnkey charging)."""
+    labor = int(bp.construction_labor_cents)
+    mat_total = 0
+    lines: dict[str, int] = {}
+    uses_market = True
+    for mat_id, qty in bp.construction_materials.items():
+        q = int(qty)
+        if q <= 0:
+            continue
+        mid = MaterialId(mat_id)
+        asks = world.market_asks_by_material.get(str(mat_id), [])
+        if not asks:
+            asks = world.market_asks_by_material.get(mid, [])
+        if asks:
+            unit = min(int(a.price_per_unit_cents) for a in asks)
+        else:
+            uses_market = False
+            unit = int(fair_value_cents(mid) or 100)
+        line = unit * q
+        lines[str(mat_id)] = line
+        mat_total += line
+    return {
+        "turnkey_estimate_cents": labor + mat_total,
+        "turnkey_labor_cents": labor,
+        "turnkey_materials_cents": mat_total,
+        "turnkey_material_lines_cents": lines,
+        "turnkey_pricing": "market" if uses_market else "fair_value",
+    }
+
+
+def _settle_turnkey_materials(
+    world: World, party: PartyId, bp: Blueprint, cash: AccountId
+) -> ActionResult | None:
+    """Buy construction inputs from the book or pay fair-value into the system reserve."""
+    for mat_id, qty in bp.construction_materials.items():
+        q = int(qty)
+        if q <= 0:
+            continue
+        mid = MaterialId(mat_id)
+        asks = world.market_asks_by_material.get(str(mat_id), [])
+        if not asks:
+            asks = world.market_asks_by_material.get(mid, [])
+        if asks:
+            br = market_buy(
+                world,
+                party,
+                mid,
+                q,
+                max_price_per_unit_cents=999_999,
+            )
+            if not br.get("ok"):
+                return {
+                    "ok": False,
+                    "reason": str(br.get("reason", "market buy failed")),
+                }
+        else:
+            unit = int(fair_value_cents(mid) or 100)
+            cost = unit * q
+            tr = world.ledger.transfer(
+                debit=cash,
+                credit=system_reserve_account(),
+                amount_cents=cost,
+            )
+            if isinstance(tr, MoneyErr):
+                return {"ok": False, "reason": tr.reason}
+    return None
 
 
 def _next_blueprint_id(world: World) -> str:
@@ -210,17 +301,17 @@ def place_blueprint(
         mode = "self"
 
     if mode == "turnkey":
-        turnkey_cost = bp.construction_labor_cents
-        for mat_id, qty in bp.construction_materials.items():
-            asks = world.market_asks_by_material.get(mat_id, [])
-            if asks:
-                best = min(int(a.price_per_unit_cents) for a in asks)
-                turnkey_cost += best * int(qty)
-            else:
-                turnkey_cost += 999_999 * int(qty)
+        turnkey_cost = compute_turnkey_cost_cents(world, bp)
         cash = party_cash_account(party)
-        if world.ledger.balance(cash) < turnkey_cost:
-            return {"ok": False, "reason": f"need ${turnkey_cost / 100:.2f} for turnkey build"}
+        balance = world.ledger.balance(cash)
+        if balance < turnkey_cost:
+            return {
+                "ok": False,
+                "reason": (
+                    f"need ${turnkey_cost / 100:.2f} for turnkey build "
+                    f"(have ${balance / 100:.2f})"
+                ),
+            }
         if bp.construction_labor_cents > 0:
             tr = world.ledger.transfer(
                 debit=cash,
@@ -229,18 +320,9 @@ def place_blueprint(
             )
             if isinstance(tr, MoneyErr):
                 return {"ok": False, "reason": tr.reason}
-        for mat_id, qty in bp.construction_materials.items():
-            if int(qty) <= 0:
-                continue
-            br = market_buy(
-                world,
-                party,
-                MaterialId(mat_id),
-                int(qty),
-                max_price_per_unit_cents=999_999,
-            )
-            if not br.get("ok"):
-                return {"ok": False, "reason": str(br.get("reason", "market buy failed"))}
+        mat_err = _settle_turnkey_materials(world, party, bp, cash)
+        if mat_err is not None:
+            return mat_err
     elif mode == "self":
         for mat_id, qty in bp.construction_materials.items():
             have = world.inventory.qty(party, MaterialId(mat_id))
@@ -383,9 +465,13 @@ def blueprints_visible_to(world: World, party: PartyId | None) -> list[dict]:
     out: list[dict] = []
     for bp in world.blueprints.values():
         if bp.is_public or bp.is_seeded:
-            out.append(blueprint_public_dict(bp))
+            row = blueprint_public_dict(bp)
+            row.update(turnkey_cost_public(world, bp))
+            out.append(row)
         elif party is not None and bp.creator_party == str(party):
-            out.append(blueprint_public_dict(bp))
+            row = blueprint_public_dict(bp)
+            row.update(turnkey_cost_public(world, bp))
+            out.append(row)
     out.sort(key=lambda r: str(r.get("blueprint_id", "")))
     return out
 
