@@ -93,28 +93,74 @@ _PRIMARY_RECIPES = frozenset(
 SETTLER_PIPELINE_BURST = 16
 
 
+_plot_scan_cache: dict[int, tuple[list[PlotId], list[PlotId]]] = {}
+_owned_plots_cache: dict[tuple[int, int], dict[PartyId, tuple[PlotId, ...]]] = {}
+_plot_cache_gen: dict[int, int] = {}
+
+SETTLER_TICK_STRIDE: int = 8
+
+
+def invalidate_settler_plot_caches() -> None:
+    """Call when plot ownership or the plots map changes (e.g. claim_plot)."""
+    _plot_scan_cache.clear()
+    _owned_plots_cache.clear()
+    pid_keys = list(_plot_cache_gen.keys())
+    for pid in pid_keys:
+        _plot_cache_gen[pid] = int(_plot_cache_gen.get(pid, 0)) + 1
+
+
 def _owned_plots_by_party(world: World) -> dict[PartyId, tuple[PlotId, ...]]:
-    """Single pass over the map — used once per tick for staged-output lookups."""
+    """Single pass over the map — cached until a plot is claimed."""
+    plots_id = id(world.plots)
+    gen = int(_plot_cache_gen.get(plots_id, 0))
+    cache_key = (plots_id, gen)
+    cached = _owned_plots_cache.get(cache_key)
+    if cached is not None:
+        return cached
     buckets: defaultdict[PartyId, list[PlotId]] = defaultdict(list)
     for pl in world.plots.values():
         o = pl.owner
         if o is not None:
             buckets[o].append(pl.plot_id)
-    return {p: tuple(sorted(ids, key=str)) for p, ids in buckets.items()}
+    result = {p: tuple(sorted(ids, key=str)) for p, ids in buckets.items()}
+    if len(_owned_plots_cache) > 6:
+        _owned_plots_cache.clear()
+    _owned_plots_cache[cache_key] = result
+    return result
+
+
+def _plot_scan_bundle(world: World) -> tuple[list[PlotId], list[PlotId]]:
+    cache_key = id(world.plots)
+    cached = _plot_scan_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    if not world.plots:
+        bundle: tuple[list[PlotId], list[PlotId]] = ([], [])
+    else:
+        xs = [p.x for p in world.plots.values()]
+        ys = [p.y for p in world.plots.values()]
+        cx = (min(xs) + max(xs)) // 2
+        cy = (min(ys) + max(ys)) // 2
+        ordered = sorted(
+            world.plots.values(),
+            key=lambda p: (abs(p.x - cx) + abs(p.y - cy), p.x, p.y),
+        )
+        order = [p.plot_id for p in ordered]
+        dry = [
+            pid
+            for pid in order
+            if terrain_allows_workshop(world.plots[pid].terrain)
+        ]
+        bundle = (order, dry)
+    if len(_plot_scan_cache) > 3:
+        _plot_scan_cache.clear()
+    _plot_scan_cache[cache_key] = bundle
+    return bundle
 
 
 def _plots_manhattan_order(world: World) -> list[PlotId]:
-    if not world.plots:
-        return []
-    xs = [p.x for p in world.plots.values()]
-    ys = [p.y for p in world.plots.values()]
-    cx = (min(xs) + max(xs)) // 2
-    cy = (min(ys) + max(ys)) // 2
-    ordered = sorted(
-        world.plots.values(),
-        key=lambda p: (abs(p.x - cx) + abs(p.y - cy), p.x, p.y),
-    )
-    return [p.plot_id for p in ordered]
+    order, _ = _plot_scan_bundle(world)
+    return order
 
 
 def _world_dimensions(world: World) -> tuple[int, int]:
@@ -398,6 +444,10 @@ def _settler_probabilistic_discovery(world: World, party: PartyId) -> None:
             mineral=mineral_id,
             recipe_count=len(new_for_party),
         )
+        from realm.agents.settler_archetypes import maybe_create_discovery_blueprint
+
+        for rid in new_for_party:
+            maybe_create_discovery_blueprint(world, party, rid)
 
 
 def _settler_has_book_recipe(world: World, party: PartyId, recipe_id: str) -> bool:
@@ -892,9 +942,18 @@ def _recipe_rank_score(
     *,
     rng: random.Random,
 ) -> float:
+    from realm.agents.market_oracle import get_oracle
+    from realm.agents.settler_archetypes import (
+        ARCHETYPE_RECIPE_AVOID,
+        ARCHETYPE_RECIPE_BONUS,
+        get_archetype,
+    )
+
     rec = RECIPES.get(recipe_id)
     if rec is None:
         return -1e9
+    oracle = get_oracle(world)
+    archetype = get_archetype(party)
     nw = _workshop_type_count_on_plot(world, party, plot_id)
     prim = recipe_id in _PRIMARY_RECIPES
     miss = 0
@@ -904,7 +963,38 @@ def _recipe_rank_score(
             miss -= short
     labor_ok = 1.0 if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents else -50.0
     bonus = 3.8 if (nw >= 2 and not prim) else (1.6 if prim else 2.4)
-    return bonus + labor_ok - miss * 0.38 + rng.random() * 0.06
+
+    margin = oracle.recipe_margins.get(recipe_id, 0.0)
+    margin_bonus = 0.0
+    if margin > 0.20:
+        margin_bonus = 2.5
+    elif margin > 0.05:
+        margin_bonus = 1.0
+    elif margin < -0.20:
+        margin_bonus = -3.0
+    elif margin < 0:
+        margin_bonus = -1.0
+    for out_mat in rec.outputs:
+        if str(out_mat) in oracle.scarce:
+            margin_bonus += 1.5
+    for out_mat in rec.outputs:
+        if str(out_mat) in oracle.flooded:
+            margin_bonus -= 2.0
+
+    arch_bonus = 0.0
+    if recipe_id in ARCHETYPE_RECIPE_BONUS.get(archetype, set()):
+        arch_bonus = 2.0
+    if recipe_id in ARCHETYPE_RECIPE_AVOID.get(archetype, set()):
+        arch_bonus = -2.5
+
+    return (
+        bonus
+        + labor_ok
+        - miss * 0.38
+        + margin_bonus
+        + arch_bonus
+        + rng.random() * 0.06
+    )
 
 
 def _pick_recipe_to_start(
@@ -1192,11 +1282,14 @@ def tick_settler_business(world: World) -> None:
     if world.scenario_id != "genesis":
         return
     owned_by_party = _owned_plots_by_party(world)
-    scan = _plots_manhattan_order(world)
-    dry_scan = [pid for pid in scan if terrain_allows_workshop(world.plots[pid].terrain)]
+    _, dry_scan = _plot_scan_bundle(world)
     settlers = sorted((p for p in world.parties if str(p).startswith("settler_")), key=str)
+    tick_slot = int(world.tick) % SETTLER_TICK_STRIDE
+    slice_settlers = [
+        s for i, s in enumerate(settlers) if i % SETTLER_TICK_STRIDE == tick_slot
+    ]
     rng = world.rng(f"gen:settler_order:{world.tick}")
-    order = settlers.copy()
+    order = slice_settlers.copy()
     rng.shuffle(order)
     for party in order:
         _tick_one_settler(world, party, dry_scan, owned_by_party)

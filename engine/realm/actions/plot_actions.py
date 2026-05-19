@@ -114,6 +114,9 @@ def claim_plot(world: World, party: PartyId, plot_id: PlotId) -> ActionResult:
         if isinstance(tr, MoneyErr):
             return ActionErr(ok=False, reason=tr.reason)
     plot.owner = party
+    from realm.agents.genesis_settlers import invalidate_settler_plot_caches
+
+    invalidate_settler_plot_caches()
     world.parties.add(party)
     _bump_owned_plot_count(world, party, 1)
     from realm.world import ensure_party_recipe_book
