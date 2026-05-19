@@ -52,6 +52,10 @@ var _target_progress: float = 0.0
 var _done: bool = false
 var _done_delay: float = 0.0
 var _stage_timer: float = 0.0
+var _waiting_for_engine: bool = false
+var _engine_wait_elapsed: float = 0.0
+var _engine_wait_timeout: float = 120.0
+var _genesis_slow: bool = false
 
 @onready var _title_label: Label = $VBox/TitleLabel
 @onready var _scenario_label: Label = $VBox/ScenarioLabel
@@ -72,7 +76,27 @@ func _details() -> Array:
 func open(scenario: String) -> void:
 	_mode = Mode.CREATE
 	_subtitle = scenario
+	_genesis_slow = scenario == "genesis"
 	_reset_state()
+
+
+func begin_waiting_for_engine(timeout_seconds: float = 120.0) -> void:
+	_waiting_for_engine = true
+	_engine_wait_elapsed = 0.0
+	_engine_wait_timeout = maxf(30.0, timeout_seconds)
+	var stages := _stages()
+	if not stages.is_empty():
+		_stage_idx = stages.size() - 1
+	_target_progress = 0.4
+	_update_labels()
+
+
+func end_waiting_for_engine() -> void:
+	_waiting_for_engine = false
+	_update_labels()
+
+
+signal engine_wait_timed_out
 
 
 func open_load(save_name: String) -> void:
@@ -87,6 +111,8 @@ func _reset_state() -> void:
 	_target_progress = 0.0
 	_done = false
 	_done_delay = 0.0
+	_waiting_for_engine = false
+	_engine_wait_elapsed = 0.0
 	_t = 0.0
 	_stage_timer = 0.0
 	visible = true
@@ -113,13 +139,28 @@ func _process(dt: float) -> void:
 
 	var stages := _stages()
 	if not _done:
-		var interval := 0.32 if _mode == Mode.CREATE else 0.2
-		_stage_timer += dt
-		if _stage_timer > interval and _stage_idx < stages.size() - 1:
-			_stage_timer = 0.0
-			_stage_idx += 1
-			_target_progress = float(_stage_idx + 1) / float(stages.size()) * 0.92
-			_update_labels()
+		if _waiting_for_engine:
+			_engine_wait_elapsed += dt
+			if _engine_wait_elapsed >= _engine_wait_timeout:
+				engine_wait_timed_out.emit()
+				return
+			# Hold the bar below "done" until the engine acknowledges dev_reset.
+			var wait_cap := 0.88 if _genesis_slow else 0.92
+			var wait_frac := clampf(_engine_wait_elapsed / _engine_wait_timeout, 0.0, 1.0)
+			_target_progress = lerpf(0.35, wait_cap, wait_frac)
+			if _genesis_slow and int(_engine_wait_elapsed) % 4 == 0:
+				_update_labels()
+		else:
+			var interval := 0.32 if _mode == Mode.CREATE else 0.2
+			if _genesis_slow:
+				interval = 1.1
+			_stage_timer += dt
+			var max_stage := stages.size() - 2 if _mode == Mode.CREATE else stages.size() - 1
+			if _stage_timer > interval and _stage_idx < max_stage:
+				_stage_timer = 0.0
+				_stage_idx += 1
+				_target_progress = float(_stage_idx + 1) / float(stages.size()) * 0.35
+				_update_labels()
 	else:
 		_done_delay += dt
 		if _done_delay > 0.4:
@@ -152,6 +193,12 @@ func _update_labels() -> void:
 		var dtxt: String = details[_stage_idx] if _stage_idx < details.size() else ""
 		if _done:
 			dtxt = "Entering simulation…"
+		elif _waiting_for_engine:
+			if _genesis_slow:
+				var secs := int(_engine_wait_elapsed)
+				dtxt = "Building the 320x240 map and seeding settlers — typically 30-90s (%ds)…" % secs
+			else:
+				dtxt = "Waiting for the simulation engine…"
 		_detail_label.text = dtxt
 
 

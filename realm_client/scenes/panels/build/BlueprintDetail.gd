@@ -59,17 +59,37 @@ func show_blueprint(bp: Dictionary) -> void:
 	]
 	desc_label.text = str(bp.get("description", ""))
 	var labor := int(bp.get("construction_labor_cents", 0))
-	cost_label.text = "Labor: %s" % WorldState.format_money(labor)
+	var turnkey_est := int(bp.get("turnkey_estimate_cents", 0))
+	var mat_est := int(bp.get("turnkey_materials_cents", 0))
+	if build_mode == "turnkey" and turnkey_est > 0:
+		cost_label.text = "Turnkey total: %s" % WorldState.format_money(turnkey_est)
+		var pricing := str(bp.get("turnkey_pricing", "market"))
+		var price_note := "market asks" if pricing == "market" else "fair-value estimate (no asks)"
+		cost_label.text += "\nLabor %s · Materials ~%s (%s)" % [
+			WorldState.format_money(labor),
+			WorldState.format_money(mat_est),
+			price_note,
+		]
+	else:
+		cost_label.text = "Labor: %s" % WorldState.format_money(labor)
 	var mats: Dictionary = bp.get("construction_materials", {}) as Dictionary
+	var mat_lines: Dictionary = bp.get("turnkey_material_lines_cents", {}) as Dictionary
 	if mats.is_empty():
 		materials_label.text = "Materials: none (labor only)"
 	else:
 		var parts: PackedStringArray = []
 		for mat in mats.keys():
-			parts.append("%s × %d" % [str(mat), int(mats[mat])])
-		materials_label.text = "Materials (self-build): %s" % ", ".join(parts)
+			var line := "%s × %d" % [str(mat), int(mats[mat])]
+			if build_mode == "turnkey" and mat_lines.has(mat):
+				line += " (~%s)" % WorldState.format_money(int(mat_lines[mat]))
+			parts.append(line)
+		materials_label.text = (
+			"Materials (self-build): %s"
+			if build_mode != "turnkey"
+			else "Materials (turnkey): %s"
+		) % ", ".join(parts)
 	if build_mode == "turnkey":
-		materials_label.text += "\nTurnkey: buys materials from market when available."
+		materials_label.text += "\nTurnkey buys from the market when listed; otherwise fair-value."
 	materials_label.show()
 	var recipes: Array = bp.get("enabled_recipe_ids", [])
 	if recipes is Array and not recipes.is_empty():

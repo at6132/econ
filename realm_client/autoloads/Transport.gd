@@ -13,6 +13,8 @@ const SOLO_PORT := 9000
 var _stream: StreamPeerTCP = null
 var _read_buf: String = ""
 var _pending: Dictionary = {}  # request_id → Callable
+var _pending_started_ms: Dictionary = {}  # request_id → msec timestamp
+const REQUEST_TIMEOUT_MS := 300_000  # genesis bootstrap can take 2+ minutes
 var _queued: Array = []  # [method, path, body, callback]
 var _next_id: int = 1
 var _python_pid: int = -1
@@ -42,6 +44,22 @@ func use_solo_mode() -> void:
 	if _ready_flag:
 		return
 	_spawn_python_async()
+
+
+## Kill and respawn the solo Python child so code changes apply and no stale
+## in-memory world survives between "New world" runs.
+func restart_solo_engine() -> void:
+	if mode != Mode.SOLO:
+		return
+	_kill_python()
+	_stream = null
+	_read_buf = ""
+	_pending.clear()
+	_queued.clear()
+	_ready_flag = false
+	_connect_attempts = 0
+	await get_tree().create_timer(0.75).timeout
+	await _spawn_python_async()
 
 
 func use_server_mode(base_url: String) -> void:
@@ -129,7 +147,10 @@ func _flush_queued() -> void:
 
 func _kill_python() -> void:
 	if _python_pid > 0:
-		OS.kill(_python_pid)
+		if OS.get_name() == "Windows":
+			OS.execute("taskkill", ["/PID", str(_python_pid), "/F", "/T"], [], false)
+		else:
+			OS.kill(_python_pid)
 		_python_pid = -1
 
 
@@ -173,6 +194,7 @@ func _socket_request(method: String, path: String, body: Dictionary, callback: C
 	var req_id := str(_next_id)
 	_next_id += 1
 	_pending[req_id] = callback
+	_pending_started_ms[req_id] = Time.get_ticks_msec()
 
 	var msg := JSON.stringify({
 		"id": req_id,
@@ -187,8 +209,12 @@ func _process(_delta: float) -> void:
 	if mode != Mode.SOLO or _stream == null:
 		return
 	_stream.poll()
-	if _stream.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+	var status := _stream.get_status()
+	if status != StreamPeerTCP.STATUS_CONNECTED:
+		if _ready_flag:
+			_on_solo_disconnected("engine socket closed")
 		return
+	_check_pending_timeouts()
 	var available := _stream.get_available_bytes()
 	if available <= 0:
 		return
@@ -220,6 +246,7 @@ func _process(_delta: float) -> void:
 		if _pending.has(rid):
 			var cb: Callable = _pending[rid]
 			_pending.erase(rid)
+			_pending_started_ms.erase(rid)
 			_safe_call(cb, resp)
 		elif resp.has("kind"):
 			# Push frame whose ``id`` accidentally collided with an unused
@@ -235,7 +262,44 @@ func _fail_oldest_pending(reason: String) -> void:
 	var oldest_id: String = str(_pending.keys()[0])
 	var cb: Callable = _pending[oldest_id]
 	_pending.erase(oldest_id)
+	_pending_started_ms.erase(oldest_id)
 	_safe_call(cb, {"ok": false, "reason": reason})
+
+
+func _fail_all_pending(reason: String) -> void:
+	var fail := {"ok": false, "reason": reason}
+	var ids: Array = _pending.keys()
+	for rid in ids:
+		var cb: Callable = _pending[rid]
+		_pending.erase(rid)
+		_pending_started_ms.erase(rid)
+		_safe_call(cb, fail)
+
+
+func _check_pending_timeouts() -> void:
+	if _pending.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	var timed_out: Array[String] = []
+	for rid in _pending_started_ms.keys():
+		var started: int = int(_pending_started_ms.get(rid, now))
+		if now - started > REQUEST_TIMEOUT_MS:
+			timed_out.append(str(rid))
+	for rid in timed_out:
+		if not _pending.has(rid):
+			continue
+		var cb: Callable = _pending[rid]
+		_pending.erase(rid)
+		_pending_started_ms.erase(rid)
+		_safe_call(cb, {"ok": false, "reason": "request timed out"})
+
+
+func _on_solo_disconnected(reason: String) -> void:
+	_ready_flag = false
+	_stream = null
+	_read_buf = ""
+	_fail_all_pending(reason)
+	engine_error.emit(reason)
 
 
 func _fail_queued_requests(reason: String) -> void:

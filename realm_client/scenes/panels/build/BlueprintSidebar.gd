@@ -127,7 +127,18 @@ func _make_blueprint_card(bp: Dictionary) -> PanelContainer:
 		pc.modulate.a = 0.5
 	else:
 		var cost_lbl := Label.new()
-		cost_lbl.text = WorldState.format_money(int(bp.get("construction_labor_cents", 0)))
+		var turnkey_est := int(bp.get("turnkey_estimate_cents", 0))
+		var labor := int(bp.get("construction_labor_cents", 0))
+		if turnkey_est > 0:
+			cost_lbl.text = "Turnkey ~%s" % WorldState.format_money(turnkey_est)
+			if turnkey_est > labor and labor > 0:
+				var sub := Label.new()
+				sub.text = "Labor %s + materials" % WorldState.format_money(labor)
+				sub.add_theme_font_size_override("font_size", 9)
+				sub.modulate = Color(0.65, 0.65, 0.7)
+				vbox.add_child(sub)
+		else:
+			cost_lbl.text = WorldState.format_money(labor)
 		cost_lbl.add_theme_font_size_override("font_size", 10)
 		cost_lbl.modulate = Color(0.85, 0.72, 0.20)
 		vbox.add_child(cost_lbl)

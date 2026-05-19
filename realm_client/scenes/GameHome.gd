@@ -433,26 +433,49 @@ func _on_start_new_world() -> void:
 	_creation_screen = CreationScreenScene.instantiate()
 	add_child(_creation_screen)
 	_creation_screen.open(scenario)
-	_creation_screen.creation_finished.connect(_on_creation_screen_done)
+	_creation_screen.creation_finished.connect(_on_creation_screen_done, CONNECT_ONE_SHOT)
+	_creation_screen.engine_wait_timed_out.connect(
+		func() -> void:
+			_abort_creation_screen(
+				"World creation timed out. Quit Godot, reopen, and try again "
+				+ "(check engine/logs/realm_solo.log)."
+			),
+		CONNECT_ONE_SHOT,
+	)
+
+	var reset_timeout_s := 240.0 if scenario == "genesis" else 90.0
+	_creation_screen.begin_waiting_for_engine(reset_timeout_s)
 
 	API.dev_reset(
 		seed_val,
 		scenario,
 		func(data: Dictionary) -> void:
+			if is_instance_valid(_creation_screen):
+				_creation_screen.end_waiting_for_engine()
 			if bool(data.get("ok", false)):
+				var cash := int(data.get("player_cash_cents", 0))
+				if cash > 0:
+					WorldState.player_cash_cents = cash
+					WorldState.summary_updated.emit()
 				if is_instance_valid(_creation_screen):
 					_creation_screen.mark_done()
 				else:
 					get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
 			else:
-				if is_instance_valid(_creation_screen):
-					_creation_screen.visible = false
-					_creation_screen.queue_free()
-					_creation_screen = null
-				_dialog.dialog_text = "World creation failed: %s" % str(data)
-				_dialog.popup_centered(),
+				_abort_creation_screen(
+					"World creation failed: %s" % str(data.get("reason", data))
+				),
 		wname,
 	)
+
+
+func _abort_creation_screen(message: String) -> void:
+	if is_instance_valid(_creation_screen):
+		_creation_screen.visible = false
+		_creation_screen.queue_free()
+		_creation_screen = null
+	_dialog.dialog_text = message
+	_dialog.popup_centered()
 
 
 func _on_creation_screen_done() -> void:
