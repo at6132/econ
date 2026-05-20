@@ -136,6 +136,9 @@ def build_road(
         last_maintenance_tick=int(world.tick),
     )
     world.road_segments.append(seg)
+    from realm.infrastructure.road_connectivity import invalidate_road_cache
+
+    invalidate_road_cache()
     log_event(
         world,
         "road_built",

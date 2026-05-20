@@ -26,6 +26,19 @@ def _party(pid: str) -> PartyId:
     return PartyId(str(pid))
 
 
+@router.get("/economy/power")
+def get_power_grid() -> dict[str, Any]:
+    """Regional grid overview: capacity, load, clearing price per road component."""
+    from realm.infrastructure.power_grid import compute_grid_regions, serialize_regions
+
+    regions = compute_grid_regions(_state.WORLD)
+    return {
+        "regions": serialize_regions(regions),
+        "total_capacity_per_day": sum(r.capacity_per_day for r in regions.values()),
+        "total_load_per_day": sum(r.load_per_day for r in regions.values()),
+    }
+
+
 @router.get("/economy/cpi")
 def get_cpi() -> dict[str, Any]:
     w = _state.WORLD

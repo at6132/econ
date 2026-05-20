@@ -44,6 +44,18 @@ def _ag_recipe_id(rid: str) -> bool:
     return rid.startswith("grow_") or rid == "bake_bread"
 
 
+def _building_blueprint_on_plot(world: World, plot_id: PlotId) -> str | None:
+    """Blueprint/building id for production on this plot (placed grid or legacy row)."""
+    pid = str(plot_id)
+    for pb in world.placed_buildings.values():
+        if str(pb.plot_id) == pid:
+            return str(pb.blueprint_id)
+    for row in world.plot_buildings:
+        if str(row.get("plot_id", "")) == pid:
+            return str(row.get("building_id") or row.get("blueprint_id") or "") or None
+    return None
+
+
 # Basis points: share of recipe labor paid out to hired workers (rest + remainder → system reserve).
 EMPLOYMENT_LABOR_TO_WORKERS_BPS = 4000  # 40%
 
@@ -557,24 +569,30 @@ def start_production(
     ev_blocked, ev_reason = recipe_blocked_by_active_event(world, recipe_id, plot)
     if ev_blocked:
         return {"ok": False, "reason": ev_reason}
-    # Sprint 3 — Phase A: electricity-requiring recipes need either a grid
-    # source within coverage or staged electricity to draw from.
+    from realm.infrastructure.road_connectivity import require_road_access
+
+    road_err = require_road_access(
+        world,
+        plot_id,
+        recipe_id,
+        blueprint_id=_building_blueprint_on_plot(world, plot_id),
+    )
+    if road_err is not None:
+        return road_err
     electricity_mid = MaterialId("electricity")
     needs_electricity = int(recipe.inputs.get(electricity_mid, 0)) > 0
-    powered_by_grid = False
+    elec_units_needed = int(recipe.inputs.get(electricity_mid, 0))
     if needs_electricity:
-        from realm.infrastructure.energy import is_plot_powered
-
-        powered_by_grid = is_plot_powered(world, plot_id)
-        if not powered_by_grid:
-            inv_e = world.inventory.qty(party, electricity_mid)
-            if inv_e < int(recipe.inputs[electricity_mid]):
-                return {
-                    "ok": False,
-                    "reason": (
-                        "no power source within range — build a power_shed or ship electricity"
-                    ),
-                }
+        inv_e = world.inventory.qty(party, electricity_mid)
+        if inv_e < elec_units_needed:
+            return {
+                "ok": False,
+                "reason": (
+                    f"need {elec_units_needed} electricity to run {recipe_id} — "
+                    f"you have {inv_e}. Generate electricity with a coal_generator or "
+                    f"tidal_mill, or buy it on the market."
+                ),
+            }
     labor_bps = _labor_bps_for_plot(world, party, plot_id)
     labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)
@@ -582,20 +600,11 @@ def start_production(
         return {"ok": False, "reason": "insufficient cash for labor"}
     consumed_inv: dict[MaterialId, int] = {}
     consumed_plot: dict[MaterialId, int] = {}
-    # When the plot sits on the energy grid, the electricity input is satisfied
-    # by the grid (the power_shed's owner ate the fuel cost). Skip that material
-    # in both the precondition check and the consumption loop.
-    def _is_waived_input(material: MaterialId) -> bool:
-        return needs_electricity and powered_by_grid and material == electricity_mid
 
     for mid, qty in recipe.inputs.items():
-        if _is_waived_input(mid):
-            continue
         if world.inventory.qty(party, mid) < qty:
             return {"ok": False, "reason": f"insufficient {mid}"}
     for mid, qty in recipe.inputs.items():
-        if _is_waived_input(mid):
-            continue
         rm = world.inventory.remove(party, mid, int(qty))
         if isinstance(rm, MatterErr):
             _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
@@ -622,6 +631,10 @@ def start_production(
             runs_remaining=queued,
         )
     )
+    if elec_units_needed > 0:
+        from realm.infrastructure.power_grid import record_electricity_consumed
+
+        record_electricity_consumed(world, plot_id, elec_units_needed)
     log_event(
         world,
         "production_start",

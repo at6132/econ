@@ -9,7 +9,7 @@ from realm.contracts.stubs import (
     tick_service_subscriptions,
 )
 from realm.core.conservation import ConservationSnapshot, assert_money_conserved
-from realm.core.ids import PartyId, PlotId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.world import bootstrap_frontier
 
 
@@ -86,10 +86,15 @@ def test_service_breach_on_provider_losing_route_prorata_refund() -> None:
 
 
 def test_power_supply_breach_when_plot_unpowered() -> None:
-    from realm.infrastructure.energy import recompute_powered_plots
+    from realm.infrastructure.power_grid import plot_has_grid_capacity
+    from realm.infrastructure.roads import build_road
 
     w = bootstrap_frontier(seed=905, grid_width=12, grid_height=10)
-    shed = next(iter(w.plots))
+    plots = sorted(w.plots.keys(), key=str)
+    shed = plots[0]
+    target = plots[1]
+    w.plots[shed].owner = PartyId("player")
+    w.plots[target].owner = PartyId("player")
     w.next_building_instance_seq += 1
     iid = f"b{w.next_building_instance_seq:06d}"
     w.plot_buildings.append(
@@ -110,10 +115,11 @@ def test_power_supply_breach_when_plot_unpowered() -> None:
         "missed_cycles": 0,
         "efficiency_pct": 100,
     }
-    recompute_powered_plots(w)
-    powered = list(w.scenario_state["energy_grid"]["powered_plots"])
-    assert powered
-    target = PlotId(powered[0])
+    player = PartyId("player")
+    w.inventory.add(player, MaterialId("lumber"), 4)
+    w.inventory.add(player, MaterialId("stone"), 4)
+    assert build_road(w, player, shed, target)["ok"]
+    assert plot_has_grid_capacity(w, target)
     pr = propose_service_sub(
         w,
         PartyId("player"),
@@ -127,7 +133,7 @@ def test_power_supply_breach_when_plot_unpowered() -> None:
     snap = ConservationSnapshot.of(w.ledger, w.inventory)
     assert accept_service_sub(w, PartyId("t1_consumer"), cid)["ok"] is True
     w.building_maintenance[iid]["efficiency_pct"] = 0
-    recompute_powered_plots(w)
+    assert not plot_has_grid_capacity(w, target)
     w.tick = 50
     tick_service_subscriptions(w)
     c = next(x for x in w.contracts if x.get("id") == cid)

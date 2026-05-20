@@ -76,13 +76,19 @@ def world_public_dict(world: "World") -> dict:
     from realm.actions import hire_catalog_public
     from realm.economy.intel import FREE_MARKET_HISTORY_TICKS
     from realm.economy.markets import market_bids_public, market_book_public
-    from realm.infrastructure.energy import ensure_powered_plots_fresh
+    from realm.infrastructure.power_grid import compute_grid_regions
     from realm.production.buildings import building_catalog_public
     from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
     from realm.core.time_scale import TICKS_PER_GAME_DAY
     from realm.world.world import claim_cost_cents_for_plot
 
-    powered_set = ensure_powered_plots_fresh(world)
+    _regions = compute_grid_regions(world)
+    powered_set = {
+        pid
+        for rid, reg in _regions.items()
+        if reg.capacity_per_day > 0 and not rid.startswith("grid_iso_")
+        for pid in reg.plot_ids
+    }
     density_map = world.scenario_state.get("population_density") or {}
     from realm.world.plot_scale import (
         plot_area_sq_metres,
@@ -599,11 +605,17 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
     in-transit shipments, forward contracts, bank rates + loans, the
     party's recipe book, the party's active production runs, and the
     party's placed buildings + maintenance status."""
-    from realm.infrastructure.energy import ensure_powered_plots_fresh
+    from realm.infrastructure.power_grid import compute_grid_regions
     from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
     from realm.world.world import claim_cost_cents_for_plot
 
-    powered_set = ensure_powered_plots_fresh(world)
+    _regions = compute_grid_regions(world)
+    powered_set = {
+        pid
+        for rid, reg in _regions.items()
+        if reg.capacity_per_day > 0 and not rid.startswith("grid_iso_")
+        for pid in reg.plot_ids
+    }
     density_map = world.scenario_state.get("population_density") or {}
 
     cash_acct = str(party_cash_account(party))
@@ -731,16 +743,20 @@ def world_map_dict(world: "World") -> dict[str, Any]:
 
     Drops ``world_cell_to_plot`` and per-plot ``world_cells`` on uniform
     grids — derivable from ``(x, y)`` as ``p-{x}-{y}``."""
-    from realm.infrastructure.energy import ensure_powered_plots_fresh
-    from realm.world.biome_noise import ensure_world_ocean_border
+    from realm.infrastructure.power_grid import compute_grid_regions
     from realm.world.plot_scale import (
         plot_grid_side,
         plot_world_cells_tuple,
         plot_world_span,
     )
 
-    ensure_world_ocean_border(world)
-    powered_set = ensure_powered_plots_fresh(world)
+    _regions = compute_grid_regions(world)
+    powered_set = {
+        pid
+        for rid, reg in _regions.items()
+        if reg.capacity_per_day > 0 and not rid.startswith("grid_iso_")
+        for pid in reg.plot_ids
+    }
     density_map = world.scenario_state.get("population_density") or {}
     uniform = _grid_is_uniform(world)
 

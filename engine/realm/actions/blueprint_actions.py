@@ -286,9 +286,10 @@ def place_blueprint(
         if not plot_is_coastal(world, plot):
             return {"ok": False, "reason": "requires coastal terrain"}
     if bp.requires_power:
-        powered = world.scenario_state.get("powered_plots") or set()
-        if plot_key not in powered:
-            return {"ok": False, "reason": "plot is not within power grid range"}
+        from realm.infrastructure.power_grid import get_plot_power_info
+
+        if not get_plot_power_info(world, PlotId(plot_key)).get("powered", False):
+            return {"ok": False, "reason": "plot is not on a road-connected grid with power capacity"}
 
     if not cells_free(plot_key, world, abs_gx, abs_gy, bp.footprint_w, bp.footprint_h):
         return {

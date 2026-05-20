@@ -124,29 +124,13 @@ def get_throughput(
 
 @router.get("/plots/{plot_id}/energy")
 def get_plot_energy(plot_id: str) -> dict:
-    """Power-coverage report for a single plot (UI: powered/unpowered detail)."""
-    from realm.infrastructure.energy import (
-        POWER_COVERAGE_RADIUS,
-        is_plot_powered,
-        nearest_power_source,
-        power_sources_for_plot,
-    )
+    """Regional power market status for a single plot."""
+    from realm.infrastructure.power_grid import get_plot_power_info
 
     pid = PlotId(plot_id)
-    plot = _state.WORLD.plots.get(pid)
-    if plot is None:
+    if _state.WORLD.plots.get(pid) is None:
         raise HTTPException(status_code=404, detail="unknown plot")
-    powered = is_plot_powered(_state.WORLD, pid)
-    sources = power_sources_for_plot(_state.WORLD, pid) if powered else []
-    nearest = None if powered else nearest_power_source(_state.WORLD, pid)
-    return {
-        "ok": True,
-        "plot_id": str(pid),
-        "powered": bool(powered),
-        "coverage_radius_tiles": POWER_COVERAGE_RADIUS,
-        "power_sources": sources,
-        "nearest_power_source": nearest,
-    }
+    return get_plot_power_info(_state.WORLD, pid)
 
 
 @router.post("/plots/{plot_id}/survey")

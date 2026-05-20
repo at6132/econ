@@ -26,7 +26,6 @@ from realm.contracts.social import tick_liens, tick_supply_contract_breaches
 from realm.genesis.home_builders import tick_home_builders
 from realm.population.towns import tick_assign_homeless_laborers
 from realm.contracts.stubs import tick_phase2_financial_contracts
-from realm.infrastructure.energy import ensure_powered_plots_fresh
 from realm.genesis.bank import tick_bank_loans
 from realm.genesis.road_builders import tick_frontier_roads
 from realm.genesis.margaux_sprint5 import (
@@ -50,7 +49,6 @@ def advance_tick(world: World) -> None:
     tick_building_decay(world)
     tick_building_maintenance(world)
     tick_road_decay(world)
-    ensure_powered_plots_fresh(world)
     tick_production(world)
     tick_production_auto_restart(world)
     tick_material_spoilage(world)
@@ -67,8 +65,10 @@ def advance_tick(world: World) -> None:
     world.tick += 1
     if int(world.tick) % 1440 == 0:
         from realm.agents.market_oracle import get_oracle
+        from realm.infrastructure.power_grid import tick_power_grid
 
         get_oracle(world)
+        tick_power_grid(world)
     # Phase 8 — Sub-phase 8A: seasonal narration fires on day boundaries.
     # Cheap no-op on every tick except the few days a year that announce
     # spring/summer/autumn/harvest-decline/winter to the world feed.

@@ -531,3 +531,28 @@ def tick_settler_margin_review(world: World) -> None:
         _maybe_reprice_stale_orders(world, party)
         _maybe_update_merchant_store_prices(world, party)
         _maybe_subdivide_and_lease(world, party)
+        _maybe_list_excess_electricity(world, party)
+
+
+def _maybe_list_excess_electricity(world: World, party: PartyId) -> None:
+    """Generators with excess electricity list it at the regional clearing price."""
+    from realm.economy.markets import place_sell_order
+
+    elec = world.inventory.qty(party, MaterialId("electricity"))
+    if elec < 5:
+        return
+
+    regions = world.scenario_state.get("power_regions", [])
+    ref_price = 40
+    if regions:
+        ref_price = max(int(r.get("clearing_price_cents", 40)) for r in regions)
+
+    sell_qty = elec - 3
+    if sell_qty >= 1:
+        place_sell_order(
+            world,
+            party,
+            MaterialId("electricity"),
+            qty=sell_qty,
+            price_per_unit_cents=ref_price,
+        )

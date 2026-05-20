@@ -4,8 +4,8 @@ Bootstraps a Genesis world (50 settlers, seed 42), runs ~1.5 game-days of
 ``advance_tick`` plus a manual coastal dispatch, and asserts each Sprint-3
 phase's end-to-end behaviour:
 
-1. Energy grid — ≥ 70 % of plots within 12 tiles of a power_shed are powered.
-2. Frontier — ≥ 20 plots are out of range of any power source.
+1. Power grid — road-connected regions include NPC generator capacity.
+2. Frontier — many plots lack road-linked grid capacity (isolated micro-regions).
 3. Mineral clustering — iron_ore subsurface variance between regions exceeds
    the average within-region variance.
 4. Labor — frontier regions have a smaller labor pool than hub-adjacent ones.
@@ -21,11 +21,7 @@ from __future__ import annotations
 
 import statistics
 
-from realm.infrastructure.energy import (
-    POWER_COVERAGE_RADIUS,
-    ensure_powered_plots_fresh,
-    nearest_power_source,
-)
+from realm.infrastructure.power_grid import compute_grid_regions, get_plot_power_info
 from realm.genesis.energy import NPC_ENERGY_IDS
 from realm.genesis.shippers import NPC_SHIPPER_IDS
 from realm.core.ids import MaterialId, PartyId, PlotId
@@ -59,28 +55,17 @@ def test_sprint3_integration_end_to_end() -> None:
     for _ in range(60):
         advance_tick(w)
 
-    # ─── 1 + 2. Energy coverage + frontier exclusion ────────────────────────
-    powered = ensure_powered_plots_fresh(w)
-    plots_in_range: list[PlotId] = []
-    plots_out_of_range: list[PlotId] = []
-    for plot in w.plots.values():
-        nearest = nearest_power_source(w, plot.plot_id)
-        if nearest is None:
-            plots_out_of_range.append(plot.plot_id)
-            continue
-        if int(nearest["distance_tiles"]) <= POWER_COVERAGE_RADIUS:
-            plots_in_range.append(plot.plot_id)
-        else:
-            plots_out_of_range.append(plot.plot_id)
-    assert plots_in_range, "expected NPC energy companies to spawn power_sheds"
-    powered_within_range = sum(1 for pid in plots_in_range if str(pid) in powered)
-    coverage_rate = powered_within_range / len(plots_in_range)
-    assert coverage_rate >= 0.70, (
-        f"only {coverage_rate:.0%} of in-range plots were marked powered "
-        f"({powered_within_range}/{len(plots_in_range)})"
+    # ─── 1 + 2. Road-linked power regions + frontier isolation ─────────────
+    regions = compute_grid_regions(w)
+    with_capacity = [r for r in regions.values() if r.capacity_per_day > 0]
+    assert len(with_capacity) >= 1, "expected NPC energy sheds on road network"
+    no_capacity = sum(
+        1
+        for p in w.plots
+        if not get_plot_power_info(w, p).get("powered", False)
     )
-    assert len(plots_out_of_range) >= 20, (
-        f"expected ≥20 frontier plots outside power range, got {len(plots_out_of_range)}"
+    assert no_capacity >= 20, (
+        f"expected ≥20 plots without road-linked grid capacity, got {no_capacity}"
     )
 
     # ─── 3. Mineral clustering: belts are detectable across regions ────────

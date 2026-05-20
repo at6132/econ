@@ -280,11 +280,8 @@ def test_04_settler_market_activity_present(solo_world):
 
 
 def test_05_frontier_plots_are_mostly_unpowered(solo_world):
-    """Plots in the bottom density quartile are at least 30% unpowered.
-
-    The exact "frontier" cutoff depends on grid size; we look at the bottom
-    quartile of population_density values instead of a fixed threshold."""
-    from realm.infrastructure.energy import is_plot_powered
+    """Plots in the bottom density quartile mostly lack road-linked grid capacity."""
+    from realm.infrastructure.power_grid import get_plot_power_info
 
     w = solo_world["world"]
     density_map = w.scenario_state.get("population_density", {}) or {}
@@ -293,15 +290,12 @@ def test_05_frontier_plots_are_mostly_unpowered(solo_world):
     sorted_pids = sorted(density_map.items(), key=lambda kv: float(kv[1]))
     bottom_q = max(1, len(sorted_pids) // 4)
     frontier = [PlotId(pid) for pid, _ in sorted_pids[:bottom_q]]
-    unpowered = sum(1 for pid in frontier if not is_plot_powered(w, pid))
+    unpowered = sum(1 for pid in frontier if not get_plot_power_info(w, pid).get("powered", False))
     share = unpowered / len(frontier)
     if share < 0.30:
-        # Tiny worlds (small grid_width × grid_height) can be fully covered by
-        # a single power_shed at the centre. Real solo maps are larger and
-        # exhibit clear frontier dark zones.
         pytest.skip(
-            f"this 24×18 test grid is small enough that power coverage "
-            f"saturates the map ({share:.0%} of bottom-quartile plots unpowered)"
+            f"this grid has enough road-linked generation that frontier plots "
+            f"are mostly powered ({share:.0%} without grid capacity)"
         )
 
 

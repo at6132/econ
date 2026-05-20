@@ -3,8 +3,8 @@
 Two named energy operators spawn near the map's geographic centre, each
 with a pre-built ``power_shed`` and a starting cash buffer for coal. Their
 buildings provide grid coverage immediately (warmup window of one game-hour
-applies), so plots within :data:`realm.infrastructure.energy.POWER_COVERAGE_RADIUS` of
-either operator can run electricity-requiring recipes for free.
+applies), so plots on the same road network as either operator can participate
+in the regional electricity market (consumers still pay for electricity material).
 
 Daily loop:
 
@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import Final
 
 from realm.actions import start_production_on_plot
-from realm.infrastructure.energy import POWER_COVERAGE_RADIUS
+_POWER_STAGGER_TILES: int = 12
 from realm.events.event_log import log_event
 from realm.economy.pricing import exchange_ask_cents
 from realm.core.ids import MaterialId, PartyId, PlotId
@@ -109,11 +109,9 @@ def seed_npc_energy(world: World, *, starting_cash_cents: int | None = None) -> 
     )
     w_, h_ = _bounds(world)
     cx, cy = w_ // 2, h_ // 2
-    # Two stagger points roughly POWER_COVERAGE_RADIUS apart so their grids
-    # tile the central band without too much overlap.
     targets = [
-        (cx - POWER_COVERAGE_RADIUS // 2, cy - POWER_COVERAGE_RADIUS // 4),
-        (cx + POWER_COVERAGE_RADIUS // 2, cy + POWER_COVERAGE_RADIUS // 4),
+        (cx - _POWER_STAGGER_TILES // 2, cy - _POWER_STAGGER_TILES // 4),
+        (cx + _POWER_STAGGER_TILES // 2, cy + _POWER_STAGGER_TILES // 4),
     ]
     created: list[str] = []
     exclude: set[str] = set()

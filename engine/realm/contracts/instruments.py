@@ -7,7 +7,7 @@ from typing import Any, Final
 from realm.events.event_log import log_event
 from realm.core.ids import PartyId, PlotId
 from realm.core.ledger import MoneyErr, party_cash_account
-from realm.infrastructure.energy import ensure_powered_plots_fresh
+from realm.infrastructure.power_grid import plot_has_grid_capacity
 from realm.population.laborers import TICKS_PER_GAME_DAY
 from realm.world import World
 
@@ -338,8 +338,7 @@ def validate_service_delivery(world: World, c: dict[str, Any]) -> str | None:
     elif service_id == "power_supply":
         plot_id_s = str(params.get("plot_id", ""))
         if plot_id_s:
-            powered = ensure_powered_plots_fresh(world)
-            if plot_id_s not in powered:
+            if not plot_has_grid_capacity(world, PlotId(plot_id_s)):
                 return "plot is no longer powered by provider"
     elif service_id == "labor_supply":
         min_count = int(params.get("min_laborers", 1))
