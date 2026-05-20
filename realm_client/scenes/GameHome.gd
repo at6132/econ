@@ -431,9 +431,6 @@ var _creation_screen: Control = null
 
 func _on_start_new_world() -> void:
 	await _ensure_engine_ready()
-	# Fresh Python process so bootstrap bytecode matches disk (avoids stale $10k seed).
-	await Transport.restart_solo_engine()
-	await _ensure_engine_ready()
 	var scenario: String = str(_scenario_opt.get_item_metadata(_scenario_opt.selected))
 	var seed_val := int(_seed_spin.value)
 	var wname: String = _name_edit.text.strip_edges() if is_instance_valid(_name_edit) else ""
@@ -453,9 +450,52 @@ func _on_start_new_world() -> void:
 		CONNECT_ONE_SHOT,
 	)
 
-	var reset_timeout_s := 240.0 if scenario == "genesis" else 90.0
+	var reset_timeout_s := 180.0 if scenario == "genesis" else 90.0
 	_creation_screen.begin_waiting_for_engine(reset_timeout_s)
 
+	# Hit /version FIRST so we fail fast if a stale realm_solo.py is on :9000.
+	API.get_version(
+		func(version_resp: Dictionary) -> void:
+			var stale_msg := _stale_engine_message(version_resp)
+			if not stale_msg.is_empty():
+				_abort_creation_screen(stale_msg)
+				return
+			API.get_request(
+				"/health",
+				func(health_resp: Dictionary) -> void:
+					if str(health_resp.get("status", "")) != "ok":
+						_abort_creation_screen(
+							"Solo engine not responding on port 9000. Quit Godot, reopen, try again."
+						)
+						return
+					_send_dev_reset(seed_val, scenario, wname),
+			),
+	)
+
+
+func _stale_engine_message(version_resp: Dictionary) -> String:
+	if not bool(version_resp.get("ok", false)):
+		return (
+			"Solo engine on port 9000 is too old (no /version endpoint).\n\n"
+			+ "An orphaned realm_solo.py from a previous run is winning the bind. "
+			+ "Quit Godot, end any python.exe processes in Task Manager, then reopen."
+		)
+	var engine_starting := WorldState.variant_to_int(
+		version_resp.get("player_starting_cash_cents", 0), 0
+	)
+	if engine_starting != WorldState.PLAYER_STARTING_CASH_CENTS:
+		return (
+			"Solo engine reports starting cash %s but this build expects %s.\n\n"
+			% [
+				WorldState.format_money(engine_starting),
+				WorldState.format_money(WorldState.PLAYER_STARTING_CASH_CENTS),
+			]
+			+ "Stale realm_solo.py is bound to :9000. Quit Godot, end every python.exe in Task Manager, then reopen."
+		)
+	return ""
+
+
+func _send_dev_reset(seed_val: int, scenario: String, wname: String) -> void:
 	API.dev_reset(
 		seed_val,
 		scenario,
@@ -463,21 +503,22 @@ func _on_start_new_world() -> void:
 			if is_instance_valid(_creation_screen):
 				_creation_screen.end_waiting_for_engine()
 			if bool(data.get("ok", false)):
-				var cash := int(data.get("player_cash_cents", 0))
-				var expected := int(data.get("player_starting_cash_cents", 0))
+				var expected := WorldState.variant_to_int(
+					data.get("player_starting_cash_cents", 0), 0
+				)
 				if expected > 0:
 					WorldState.player_starting_cash_cents = expected
-				var mismatch := _starting_cash_mismatch_message(cash, expected)
-				if not mismatch.is_empty():
-					_abort_creation_screen(mismatch)
+				var cash := WorldState.variant_to_int(data.get("player_cash_cents", 0), 0)
+				# Older solo builds omit player_cash_cents; read the ledger before blocking.
+				if cash <= 0:
+					API.get_world_summary(
+						WorldState.party_id,
+						func(summary: Dictionary) -> void:
+							var ledger_cash := WorldState.variant_to_int(summary.get("cash", 0), 0)
+							_finish_dev_reset_cash_check(data, ledger_cash)
+					)
 					return
-				if cash > 0:
-					WorldState.player_cash_cents = cash
-					WorldState.summary_updated.emit()
-				if is_instance_valid(_creation_screen):
-					_creation_screen.mark_done()
-				else:
-					get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
+				_finish_dev_reset_cash_check(data, cash)
 			else:
 				_abort_creation_screen(
 					"World creation failed: %s" % str(data.get("reason", data))
@@ -486,10 +527,31 @@ func _on_start_new_world() -> void:
 	)
 
 
+func _finish_dev_reset_cash_check(data: Dictionary, cash_cents: int) -> void:
+	var expected := WorldState.variant_to_int(data.get("player_starting_cash_cents", 0), 0)
+	var mismatch := _starting_cash_mismatch_message(cash_cents, expected)
+	if not mismatch.is_empty():
+		_abort_creation_screen(mismatch)
+		return
+	if cash_cents > 0:
+		WorldState.player_cash_cents = cash_cents
+		WorldState.summary_updated.emit()
+	if is_instance_valid(_creation_screen):
+		_creation_screen.mark_done()
+	else:
+		get_tree().call_deferred("change_scene_to_file", MAIN_SCENE)
+
+
 func _starting_cash_mismatch_message(actual_cents: int, expected_cents: int) -> String:
 	var canon := expected_cents if expected_cents > 0 else WorldState.PLAYER_STARTING_CASH_CENTS
 	if actual_cents == canon:
 		return ""
+	if actual_cents <= 0:
+		return (
+			"The solo engine did not report your starting cash after New world "
+			+ "(often an outdated realm_solo.py still on port 9000).\n\n"
+			+ "Quit Godot completely, end any Python processes, reopen, and try New world again."
+		)
 	return (
 		"Solo engine started you at %s but this build expects %s.\n\n"
 		% [WorldState.format_money(actual_cents), WorldState.format_money(canon)]

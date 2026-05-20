@@ -196,7 +196,9 @@ func _update_labels() -> void:
 		elif _waiting_for_engine:
 			if _genesis_slow:
 				var secs := int(_engine_wait_elapsed)
-				dtxt = "Building the 320x240 map and seeding settlers — typically 30-90s (%ds)…" % secs
+				dtxt = "Engine is building Genesis (320×240) — usually 20–40s (%ds)…" % secs
+				if secs >= 90:
+					dtxt += " Still going? Check engine/logs/realm_solo.log for POST /dev/reset."
 			else:
 				dtxt = "Waiting for the simulation engine…"
 		_detail_label.text = dtxt
