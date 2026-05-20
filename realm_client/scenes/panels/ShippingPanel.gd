@@ -10,8 +10,12 @@ func _build_tabs() -> void:
 	_add_api_tab("Routes", func(cb): API.get_routes(cb))
 	_add_api_tab("Uncharted", func(cb): API.get_routes_uncharted(cb))
 	_add_api_tab("Active shipments", func(cb):
-		API.get_world(func(w: Dictionary) -> void:
-			cb.call({"ok": true, "in_transit": w.get("in_transit", [])})
+		API.get_world_player(
+			func(p: Dictionary) -> void:
+				if not cb.is_valid():
+					return
+				cb.call({"ok": true, "in_transit": p.get("in_transit", [])}),
+			WorldState.party_id,
 		)
 	)
 	_add_api_tab("Roads", func(cb): API.get_roads(cb))

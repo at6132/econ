@@ -20,12 +20,23 @@ func _ready() -> void:
 
 
 func refresh() -> void:
-	var sc: ScrollContainer = get_node("Scroll") as ScrollContainer
+	if not is_inside_tree():
+		return
+	var sc: ScrollContainer = get_node_or_null("Scroll") as ScrollContainer
+	if sc == null:
+		return
 	var list := PanelUI.list_inner(sc)
 	PanelUI.clear_children(list)
 	if not fetch_callable.is_valid():
 		return
-	fetch_callable.call(func(data: Dictionary) -> void: _render(list, data))
+	fetch_callable.call(func(data: Dictionary) -> void: _deliver(list, data))
+
+
+func _deliver(list: VBoxContainer, data: Dictionary) -> void:
+	# Tab may be closed while a nested API call (e.g. GET /world) is in flight.
+	if not is_instance_valid(self) or not is_instance_valid(list):
+		return
+	_render(list, data)
 
 
 func _render(list: VBoxContainer, data: Dictionary) -> void:
