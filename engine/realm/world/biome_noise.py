@@ -16,8 +16,11 @@ from realm.core.ids import PlotId
 from realm.core.rng import make_rng
 from realm.world.terrain import Terrain
 
-## Deep-ocean ring around the world map (cells from each edge).
+## Legacy: optional deep-ocean ring at map edges (no longer applied during worldgen).
 MAP_OCEAN_BORDER_DEPTH: int = 2
+
+## Continental / large-grid layouts must be at least this fraction solid land (not water).
+MIN_MAP_LAND_FRACTION: float = 0.50
 
 _n01_cache: dict[tuple[int, int, int], float] = {}
 
@@ -36,6 +39,12 @@ def clear_noise_cache() -> None:
     """Release memory after worldgen completes."""
     _n01_cache.clear()
     _continental_lobes_cache.clear()
+    _continental_land_boost_cache.clear()
+
+
+def is_solid_land_terrain(terrain: Terrain) -> bool:
+    """``True`` when the cell is dry land (not ocean or shallow water)."""
+    return terrain not in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW)
 
 
 def _smooth(seed: int, fx: float, fy: float) -> float:
@@ -86,7 +95,7 @@ def is_world_map_edge(
     height: int,
     depth: int = MAP_OCEAN_BORDER_DEPTH,
 ) -> bool:
-    """True when ``(x, y)`` lies in the ocean border band (map must not end on land)."""
+    """True when ``(x, y)`` lies in the legacy ocean border band (not used in worldgen)."""
     d = map_ocean_border_depth(width, height, depth)
     return x < d or y < d or x >= width - d or y >= height - d
 
@@ -199,30 +208,8 @@ def enforce_map_ocean_border(
 
 
 def ensure_world_ocean_border(world: object) -> None:
-    """Apply :func:`enforce_map_ocean_border` to a live :class:`World`."""
-    from realm.world.plot_scale import plot_world_cells_tuple
-    from realm.world.world import World
-
-    if not isinstance(world, World):
-        return
-    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
-    gw = int(scen.get("grid_width", 0))
-    gh = int(scen.get("grid_height", 0))
-    if gw <= 0 or gh <= 0:
-        gw = 0
-        gh = 0
-        for plot in world.plots.values():
-            for cx, cy in plot_world_cells_tuple(plot):
-                gw = max(gw, cx + 1)
-                gh = max(gh, cy + 1)
-    if gw <= 0 or gh <= 0:
-        return
-    scen["grid_width"] = gw
-    scen["grid_height"] = gh
-    enforce_map_ocean_border(world.plots, gw, gh, seed=int(world.seed))
-    from realm.world.plot_parcels import refresh_world_cell_index
-
-    refresh_world_cell_index(world)
+    """No-op — perimeter ocean border removed from worldgen (kept for API compat)."""
+    _ = world
 
 
 def terrain_with_ocean_border(
@@ -231,11 +218,10 @@ def terrain_with_ocean_border(
     width: int,
     height: int,
 ) -> Callable[[int, int, int], Terrain]:
-    """Wrap a terrain picker so the map perimeter is always deep ocean."""
+    """Pass-through terrain picker (perimeter ocean border removed from worldgen)."""
+    _ = (width, height)
 
     def wrapped(seed: int, x: int, y: int) -> Terrain:
-        if is_world_map_edge(x, y, width, height):
-            return Terrain.WATER_DEEP
         return pick(seed, x, y)
 
     return wrapped
@@ -282,14 +268,142 @@ GENESIS_DEFAULT_GRID_HEIGHT: int = 240
 CONTINENTAL_LAYOUT_MIN_PLOTS: int = 10_000
 
 # Mask thresholds (after FBM): below LAND_THRESHOLD is ocean, between LAND_
-# and SHALLOW_THRESHOLD is the beach band, above is land.
-_CONTINENTAL_LAND_THRESHOLD: float = 0.25
-_CONTINENTAL_SHALLOW_THRESHOLD: float = 0.30
+# and SHALLOW_THRESHOLD is the beach band, above is land. Boost cells (see
+# ``continental_land_boost_cells``) can promote high-mask ocean to land so every
+# seed meets ``MIN_MAP_LAND_FRACTION``.
+_CONTINENTAL_LAND_THRESHOLD: float = 0.10
+_CONTINENTAL_SHALLOW_THRESHOLD: float = 0.14
+
+_ContinentalLandKey = tuple[int, int, int]
+_ContinentalLandParams = tuple[frozenset[tuple[int, int]], float]
+_continental_land_boost_cache: dict[_ContinentalLandKey, _ContinentalLandParams] = {}
 
 
 # (cx, cy, radius) in normalized map coords — cached per seed.
 _ContinentalLobe = tuple[float, float, float]
 _continental_lobes_cache: dict[int, list[_ContinentalLobe]] = {}
+
+
+def _continental_cell_is_solid_land(mask: float, *, promoted: bool) -> bool:
+    if promoted:
+        return True
+    return mask >= _CONTINENTAL_SHALLOW_THRESHOLD
+
+
+def continental_land_boost_cells(
+    seed: int,
+    width: int,
+    height: int,
+    *,
+    min_fraction: float = MIN_MAP_LAND_FRACTION,
+) -> frozenset[tuple[int, int]]:
+    """Ocean cells promoted to land so the map meets ``min_fraction`` dry coverage."""
+    key: _ContinentalLandKey = (int(seed), int(width), int(height))
+    cached = _continental_land_boost_cache.get(key)
+    if cached is not None:
+        return cached[0]
+
+    total = int(width) * int(height)
+    target = int(math.ceil(float(min_fraction) * float(total)))
+    land_n = 0
+    ocean_ranked: list[tuple[float, int, int]] = []
+    for y in range(int(height)):
+        for x in range(int(width)):
+            mask = _continental_mask(seed, x, y, width, height)
+            if _continental_cell_is_solid_land(mask, promoted=False):
+                land_n += 1
+            else:
+                ocean_ranked.append((mask, x, y))
+    need = max(0, target - land_n)
+    if need <= 0:
+        boost: frozenset[tuple[int, int]] = frozenset()
+    else:
+        ocean_ranked.sort(reverse=True)
+        boost = frozenset((x, y) for _, x, y in ocean_ranked[:need])
+    _continental_land_boost_cache[key] = (boost, _CONTINENTAL_LAND_THRESHOLD)
+    return boost
+
+
+def enforce_plot_map_min_land_fraction(
+    plots: dict[PlotId, Plot],
+    *,
+    seed: int,
+    width: int,
+    height: int,
+    min_fraction: float = MIN_MAP_LAND_FRACTION,
+) -> None:
+    """Promote water plots to plains until solid-land cells meet ``min_fraction``.
+
+    Parcel generation can merge coastal cells into water-anchored deeds; this pass
+    restores the continental land budget without changing the outer seed.
+    """
+    from realm.world.plot_scale import plot_world_cells_tuple
+
+    total = int(width) * int(height)
+    if total <= 0:
+        return
+    target = int(math.ceil(float(min_fraction) * float(total)))
+
+    def land_cell_count() -> int:
+        n = 0
+        for plot in plots.values():
+            if not is_solid_land_terrain(plot.terrain):
+                continue
+            n += len(plot_world_cells_tuple(plot))
+        return n
+
+    if land_cell_count() >= target:
+        return
+
+    cell_to_pid: dict[tuple[int, int], PlotId] = {}
+    for pid, plot in plots.items():
+        for cx, cy in plot_world_cells_tuple(plot):
+            cell_to_pid[(cx, cy)] = pid
+
+    ocean_ranked: list[tuple[float, int, int]] = []
+    for y in range(int(height)):
+        for x in range(int(width)):
+            pid = cell_to_pid.get((x, y))
+            if pid is None:
+                continue
+            if is_solid_land_terrain(plots[pid].terrain):
+                continue
+            ocean_ranked.append(
+                (_continental_mask(seed, x, y, width, height), x, y)
+            )
+    ocean_ranked.sort(reverse=True)
+
+    promoted: set[PlotId] = set()
+    for _, x, y in ocean_ranked:
+        if land_cell_count() >= target:
+            break
+        pid = cell_to_pid.get((x, y))
+        if pid is None or pid in promoted:
+            continue
+        plot = plots[pid]
+        if is_solid_land_terrain(plot.terrain):
+            continue
+        plot.terrain = Terrain.PLAINS
+        promoted.add(pid)
+
+
+def map_land_fraction(
+    seed: int,
+    width: int,
+    height: int,
+    terrain_fn: Callable[..., Terrain],
+) -> float:
+    """Fraction of map cells that are solid land for a terrain picker (tests / validation)."""
+    land = 0
+    total = int(width) * int(height)
+    if total <= 0:
+        return 0.0
+    for y in range(int(height)):
+        for x in range(int(width)):
+            t = terrain_fn(seed, x, y, width, height)
+            if is_solid_land_terrain(t):
+                land += 1
+    return float(land) / float(total)
 
 
 def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
@@ -305,9 +419,9 @@ def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
         return cached
 
     rng = make_rng(int(seed), "continental_land_lobes")
-    # Few large continents + a sprinkle of islets — not a 15-island archipelago.
-    n_major = 2 + rng.randrange(2)  # 2–3 continent-scale lobes
-    n_minor = rng.randrange(3)  # 0–2 small islands
+    # Few large continents + a sprinkle of islets — sized for ~50% land after boost.
+    n_major = 3 + rng.randrange(2)  # 3–4 continent-scale lobes
+    n_minor = 1 + rng.randrange(2)  # 1–2 small islands
     lobes: list[_ContinentalLobe] = []
 
     def _spacing_ok(cx: float, cy: float, radius: float) -> bool:
@@ -329,9 +443,9 @@ def continental_layout_lobes(seed: int) -> list[_ContinentalLobe]:
         return False
 
     for _ in range(n_major):
-        _try_place(0.14, 0.24)
+        _try_place(0.20, 0.32)
     for _ in range(n_minor):
-        _try_place(0.035, 0.07)
+        _try_place(0.05, 0.10)
 
     _continental_lobes_cache[int(seed)] = lobes
     return lobes
@@ -356,7 +470,7 @@ def _continental_mask(seed: int, x: int, y: int, width: int, height: int) -> flo
     wobble = (fbm(seed + int(lx * 733) + int(ly * 991), cx * 10.0, cy * 10.0, 3) - 0.5) * 0.06
     total = max(0.0, 1.0 - (dist - wobble) / max(radius, 0.02))
 
-    pole_penalty = abs(cy - 0.5) * 0.28
+    pole_penalty = abs(cy - 0.5) * 0.18
     return max(0.0, total - pole_penalty)
 
 
@@ -366,26 +480,24 @@ def continental_layout_terrain(
     """Procedural continental terrain via layered FBM noise (Phase 10).
 
     Produces a small number of large continents, several medium islands, a
-    sprinkle of islets, and ocean covering most of the map. Each seed gives a
-    different layout but the structural pattern (continents + ocean + islands)
-    always emerges.
+    sprinkle of islets, and ocean between them. At least ``MIN_MAP_LAND_FRACTION``
+    of cells are solid land (see ``continental_land_boost_cells``). Map edges
+    may be land or water — there is no forced ocean perimeter ring.
 
     Below ``CONTINENTAL_LAYOUT_MIN_PLOTS`` callers should fall back to
     :func:`terrain_for_cell` (the single-continent legacy map) — tiny test
     grids do not have room for the FBM stack to settle into recognisable
     landmasses.
     """
-    if is_world_map_edge(x, y, width, height):
-        return Terrain.WATER_DEEP
+    boost = continental_land_boost_cells(seed, width, height)
     mask = _continental_mask(seed, x, y, width, height)
-    if mask < _CONTINENTAL_LAND_THRESHOLD:
-        # Most of the world is ocean. Deeper ocean offshore, shallow ocean
-        # in a narrow band right next to continents (the FBM hands us a
-        # gradient automatically — values between 0.15 and 0.25 are the
-        # offshore band).
-        return Terrain.WATER_DEEP if mask < 0.15 else Terrain.WATER_SHALLOW
-    if mask < _CONTINENTAL_SHALLOW_THRESHOLD:
+    promoted = (x, y) in boost
+    if mask < _CONTINENTAL_LAND_THRESHOLD and not promoted:
+        return Terrain.WATER_DEEP if mask < 0.06 else Terrain.WATER_SHALLOW
+    if mask < _CONTINENTAL_SHALLOW_THRESHOLD and not promoted:
         return Terrain.WATER_SHALLOW
+    if promoted and mask < _CONTINENTAL_LAND_THRESHOLD:
+        mask = _CONTINENTAL_LAND_THRESHOLD
     cx = float(x) / max(1.0, float(width))
     cy = float(y) / max(1.0, float(height))
     chaos = 0.6 + fbm(seed + 9999, 0.0, 0.0, 1) * 0.8

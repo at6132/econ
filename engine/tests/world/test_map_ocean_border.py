@@ -1,77 +1,41 @@
-"""World map perimeter must be deep ocean on every layout."""
+"""Legacy ``enforce_map_ocean_border`` helper (optional; not applied during worldgen)."""
 
 from __future__ import annotations
 
-from realm.world import bootstrap_genesis, generate_plots
-from realm.world.biome_noise import (
-    MAP_OCEAN_BORDER_DEPTH,
-    continental_layout_terrain,
-    is_world_map_edge,
-    map_ocean_border_depth,
-    terrain_for_cell,
-)
+from realm.core.ids import PlotId
+from realm.world.biome_noise import enforce_map_ocean_border, is_world_map_edge
 from realm.world.plot_parcels import plot_world_cells_tuple
 from realm.world.terrain import Terrain
+from realm.world.world import Plot, SubsurfaceRoll
 
 
-def _assert_border_cells_water(plots: dict, width: int, height: int) -> None:
-    depth = map_ocean_border_depth(width, height)
-    for gx in range(width):
-        for gy in range(height):
-            if not is_world_map_edge(gx, gy, width, height):
+def test_enforce_map_ocean_border_splits_multicell_deed() -> None:
+    w, h = 8, 8
+    big = Plot(
+        plot_id=PlotId("p-1-3"),
+        x=1,
+        y=3,
+        terrain=Terrain.PLAINS,
+        owner=None,
+        subsurface=SubsurfaceRoll(0, 0, 0, 0),
+        world_cells=((1, 3), (2, 3), (1, 4), (2, 4)),
+    )
+    plots = {big.plot_id: big}
+    enforce_map_ocean_border(plots, w, h, seed=1)
+
+    remnant = plots[PlotId("p-2-3")]
+    assert remnant.terrain == Terrain.PLAINS
+    assert set(plot_world_cells_tuple(remnant)) == {(2, 3), (2, 4)}
+
+    for cx, cy in ((1, 3), (1, 4)):
+        op = plots[PlotId(f"p-{cx}-{cy}")]
+        assert op.terrain == Terrain.WATER_DEEP
+        assert plot_world_cells_tuple(op) == ((cx, cy),)
+
+    for gx in range(w):
+        for gy in range(h):
+            if not is_world_map_edge(gx, gy, w, h):
                 continue
-            found_water = False
-            for plot in plots.values():
-                if plot.terrain not in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW):
-                    continue
-                for cx, cy in plot_world_cells_tuple(plot):
-                    if cx == gx and cy == gy:
-                        found_water = True
-                        break
-                if found_water:
-                    break
-            assert found_water, f"border cell ({gx},{gy}) has no water deed (depth={depth})"
-    for pid, plot in plots.items():
-        for cx, cy in plot_world_cells_tuple(plot):
-            if is_world_map_edge(cx, cy, width, height):
-                assert plot.terrain in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW), (
-                    f"border cell ({cx},{cy}) plot {pid} is {plot.terrain!r}"
-                )
-
-
-def test_border_depth_is_at_least_two_on_genesis_grid() -> None:
-    assert map_ocean_border_depth(320, 240) >= MAP_OCEAN_BORDER_DEPTH
-
-
-def test_uniform_grid_border_is_deep_ocean() -> None:
-    w, h = 48, 36
-    plots = generate_plots(seed=7, width=w, height=h, uniform_plots=True)
-    _assert_border_cells_water(plots, w, h)
-
-
-def test_parcel_grid_border_is_deep_ocean() -> None:
-    w, h = 32, 24
-    plots = generate_plots(seed=11, width=w, height=h)
-    _assert_border_cells_water(plots, w, h)
-
-
-def test_continental_layout_border_is_deep_ocean() -> None:
-    w, h = 160, 120
-
-    def terrain_fn(s: int, x: int, y: int) -> Terrain:
-        return continental_layout_terrain(s, x, y, w, h)
-
-    plots = generate_plots(seed=19, width=w, height=h, terrain_fn=terrain_fn, uniform_plots=True)
-    _assert_border_cells_water(plots, w, h)
-
-
-def test_genesis_default_world_has_ocean_border() -> None:
-    world = bootstrap_genesis(seed=592510244, settler_count=0)
-    gw = int(world.scenario_state.get("grid_width", 0))
-    gh = int(world.scenario_state.get("grid_height", 0))
-    assert gw > 0 and gh > 0
-    _assert_border_cells_water(world.plots, gw, gh)
-
-
-def test_interior_noise_unchanged_off_border() -> None:
-    assert terrain_for_cell(99, 5, 5) == terrain_for_cell(99, 5, 5)
+            pid = PlotId(f"p-{gx}-{gy}")
+            assert pid in plots
+            assert plots[pid].terrain == Terrain.WATER_DEEP

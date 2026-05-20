@@ -33,7 +33,7 @@ def test_multi_tile_parcel_grid_scales() -> None:
 
 
 def test_bootstrap_world_cell_index_and_public_dict() -> None:
-    # Interior must be large enough for multi-tile parcels inside the ocean border band.
+    # Grid large enough for multi-tile parcels.
     world = bootstrap_frontier(seed=5, grid_width=12, grid_height=10)
     assert world_map_tile_count(world) == 120
     assert len(world.plots) < 120

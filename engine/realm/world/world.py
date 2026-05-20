@@ -449,8 +449,6 @@ def generate_plots(
     """
     from realm.world.plot_parcels import generate_plot_parcels, generate_uniform_plots
 
-    from realm.world.biome_noise import enforce_map_ocean_border
-
     if uniform_plots:
         plots = generate_uniform_plots(
             seed=seed,
@@ -467,13 +465,11 @@ def generate_plots(
             correlate_subsurface=correlate_subsurface,
             terrain_fn=terrain_fn,
         )
-    enforce_map_ocean_border(plots, width, height, seed=seed)
     if not uniform_plots:
         from realm.world.plot_parcels import _fill_unassigned_cells
-        from realm.world.biome_noise import terrain_for_cell, terrain_with_ocean_border
+        from realm.world.biome_noise import terrain_for_cell
 
         pick = terrain_fn if terrain_fn is not None else terrain_for_cell
-        pick = terrain_with_ocean_border(pick, width=width, height=height)
         assigned: list[list[str | None]] = [[None for _ in range(width)] for _ in range(height)]
         for pid, plot in plots.items():
             for cx, cy in plot.world_cells:
@@ -486,6 +482,15 @@ def generate_plots(
             height=height,
             pick=pick,
             correlate_subsurface=correlate_subsurface,
+        )
+    from realm.world.biome_noise import (
+        continental_layout_supported,
+        enforce_plot_map_min_land_fraction,
+    )
+
+    if continental_layout_supported(width, height):
+        enforce_plot_map_min_land_fraction(
+            plots, seed=seed, width=width, height=height
         )
     return plots
 
@@ -666,9 +671,6 @@ def bootstrap_genesis(
     from realm.world.plot_parcels import refresh_world_cell_index
 
     refresh_world_cell_index(world)
-    from realm.world.biome_noise import ensure_world_ocean_border
-
-    ensure_world_ocean_border(world)
     from realm.production.blueprints import seed_world_blueprints
 
     seed_world_blueprints(world)
@@ -1052,9 +1054,6 @@ def bootstrap_frontier(
     from realm.world.plot_parcels import refresh_world_cell_index
 
     refresh_world_cell_index(world)
-    from realm.world.biome_noise import ensure_world_ocean_border
-
-    ensure_world_ocean_border(world)
     res = world.ledger.seed_system_reserve(system_reserve_cents)
     if isinstance(res, MoneyErr):
         raise ValueError(res.reason)

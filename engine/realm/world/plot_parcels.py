@@ -6,12 +6,7 @@ from typing import Any, Callable
 
 from realm.core.ids import PlotId
 from realm.core.rng import make_rng
-from realm.world.biome_noise import (
-    clear_noise_cache,
-    is_world_map_edge,
-    terrain_for_cell,
-    terrain_with_ocean_border,
-)
+from realm.world.biome_noise import clear_noise_cache, terrain_for_cell, terrain_with_ocean_border
 from realm.world.parcel_footprints import (
     carve_l_corners,
     classify_parcel_shape,
@@ -42,36 +37,6 @@ def generate_plot_parcels(
     assigned: list[list[str | None]] = [[None for _ in range(width)] for _ in range(height)]
     plots: dict[PlotId, Plot] = {}
     rng = make_rng(seed, "plot_parcels")
-
-    for y in range(height):
-        for x in range(width):
-            if not is_world_map_edge(x, y, width, height):
-                continue
-            if assigned[y][x] is not None:
-                continue
-            pid = PlotId(f"p-{x}-{y}")
-            footprint = frozenset({(0, 0)})
-            stamp_footprint(assigned, x, y, footprint, str(pid))
-            sub_rng = make_rng(seed, f"gen:{pid}")
-            wc = ((x, y),)
-            plots[pid] = Plot(
-                plot_id=pid,
-                x=x,
-                y=y,
-                terrain=Terrain.WATER_DEEP,
-                owner=None,
-                subsurface=_subsurface_roll(
-                    sub_rng,
-                    Terrain.WATER_DEEP,
-                    correlate=correlate_subsurface,
-                    seed=seed,
-                    x=x,
-                    y=y,
-                    apply_belts=correlate_subsurface,
-                ),
-                world_cells=wc,
-                parcel_shape="mono",
-            )
 
     for y in range(height):
         for x in range(width):
