@@ -92,6 +92,7 @@ func _ready() -> void:
 	build_btn.pressed.connect(_on_build_btn)
 	list_for_sale_btn.pressed.connect(_on_list_for_sale)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	WorldState.player_updated.connect(_on_world_state_player_updated)
 
 
 func _on_viewport_resized() -> void:
@@ -141,7 +142,22 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 
 
 func close() -> void:
+	if WorldState.player_updated.is_connected(_on_world_state_player_updated):
+		WorldState.player_updated.disconnect(_on_world_state_player_updated)
 	_slide_out()
+
+
+func _on_world_state_player_updated() -> void:
+	if _plot_id.is_empty() or not is_inside_tree():
+		return
+	_refresh_plot_panel_from_state()
+
+
+func _refresh_plot_panel_from_state() -> void:
+	_plot_data = WorldState.get_plot_ui(_plot_id)
+	var base: Dictionary = WorldState.plots.get(_plot_id, _plot_data)
+	_populate(base)
+	_refresh_buildings()
 
 
 func _slide_in() -> void:
@@ -395,25 +411,29 @@ func _on_claim_confirm() -> void:
 		_plot_id,
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
-				claim_section.hide()
-				API.get_world_map(
-					func(m: Dictionary) -> void:
-						WorldState.apply_map(m)
-						API.get_world_player(
-							func(pdata: Dictionary) -> void:
-								WorldState.apply_player(pdata)
-								_plot_data = WorldState.get_plot_ui(_plot_id)
-								_populate(WorldState.plots.get(_plot_id, _plot_data))
-								_refresh_buildings(),
-							WorldState.party_id,
-						)
-				)
+				var owner := str(data.get("owner", WorldState.party_id))
+				if owner.is_empty():
+					owner = WorldState.party_id
+				_apply_claimed_ui(owner)
+				MainFeedback.toast("Plot %s claimed" % _plot_id)
 				API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
+				API.get_world_player(
+					func(pdata: Dictionary) -> void:
+						WorldState.apply_player(pdata)
+						_refresh_plot_panel_from_state(),
+					WorldState.party_id,
+				)
+				API.get_world_map(func(m: Dictionary) -> void: WorldState.apply_map(m))
 			else:
 				claim_btn.disabled = false
 				claim_btn.text = "Claim plot"
 				_show_error(str(data.get("reason", "Claim failed")))
 	)
+
+
+func _apply_claimed_ui(owner: String) -> void:
+	WorldState.set_plot_owner(_plot_id, owner)
+	_refresh_plot_panel_from_state()
 
 
 func _on_survey() -> void:

@@ -16,7 +16,11 @@ static func variant_to_int(v: Variant, default_val: int = 0) -> int:
 
 
 # ── Player state ─────────────────────────────────────────────────────────────
+## Must match ``engine/realm/core/player_economy.PLAYER_STARTING_CASH_CENTS``.
+const PLAYER_STARTING_CASH_CENTS: int = 10_000_000
 var player_cash_cents: int = 0
+## Canon starting balance for a fresh human (from ``GET /world/static`` / ``/dev/reset``).
+var player_starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS
 var player_net_worth_cents: int = 0
 var party_id: String = "player"
 var display_name: String = "Player"
@@ -104,6 +108,8 @@ signal world_updated
 signal feed_updated
 signal market_updated
 signal map_updated
+## Single-plot owner change (claim, purchase) — cheap map tint refresh only.
+signal plot_owner_changed(plot_id: String)
 signal player_updated
 signal static_updated
 
@@ -272,6 +278,10 @@ func apply_world(data: Dictionary) -> void:
 func apply_static(data: Dictionary) -> void:
 	if data.is_empty():
 		return
+	player_starting_cash_cents = variant_to_int(
+		data.get("player_starting_cash_cents", player_starting_cash_cents),
+		player_starting_cash_cents,
+	)
 	ticks_per_game_day = variant_to_int(data.get("ticks_per_game_day", ticks_per_game_day), ticks_per_game_day)
 	real_seconds_per_game_day = variant_to_int(data.get("real_seconds_per_game_day", real_seconds_per_game_day), real_seconds_per_game_day)
 	if data.has("sim_speed_presets"):
@@ -615,6 +625,19 @@ func subsurface_for_plot_ui(plot_id: String, plot_dict: Dictionary) -> Dictionar
 		var g: Variant = rep.get("grades", {})
 		return g if g is Dictionary else {}
 	return {}
+
+
+func set_plot_owner(plot_id: String, owner: String) -> void:
+	if plot_id.is_empty():
+		return
+	var row: Dictionary
+	if plots.has(plot_id):
+		row = (plots[plot_id] as Dictionary).duplicate(true)
+	else:
+		row = {"id": plot_id}
+	row["owner"] = owner
+	plots[plot_id] = row
+	plot_owner_changed.emit(plot_id)
 
 
 func get_plot_ui(plot_id: String) -> Dictionary:

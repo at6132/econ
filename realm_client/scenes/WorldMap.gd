@@ -8,9 +8,10 @@ const MESH_PAD := 12.0
 ## ``1.0`` = cannot zoom out past that cover zoom (map always fills the map panel; excess crops top/bottom or sides).
 const FIT_ZOOM_EPS := 1e-9
 const ZOOM_RELATIVE_MIN := 1.0
-## Enough headroom to multiply tiny overview zooms up to street-level; bounded below by hard max.
-const ZOOM_RELATIVE_MAX := 65536.0
-const CAM_ZOOM_ABS_MAX := 16384.0
+## Max zoom-in vs fit-to-viewport (matches web ``MAP_ZOOM_MAX`` = 6.8).
+const ZOOM_RELATIVE_MAX := 6.8
+## Hard ceiling on Camera2D.zoom; normal play hits ``ZOOM_RELATIVE_MAX`` first.
+const CAM_ZOOM_ABS_MAX := 256.0
 const WHEEL_ZOOM_STEP := 1.18
 const DEMO_SEED := 42
 const DEMO_W := 48
@@ -117,6 +118,41 @@ func reset_view() -> void:
 	_fit_camera_to_mesh()
 
 
+## Pan/zoom to ``plot_id`` at max zoom-in, select it, and draw the gold deed highlight.
+func focus_plot(plot_id: String) -> void:
+	if _mesh == null or plot_id.is_empty():
+		return
+	var p: Dictionary = WorldState.plots.get(plot_id, {})
+	if p.is_empty():
+		return
+	var cell_set := _plot_cell_set(p, plot_id)
+	if cell_set.is_empty():
+		return
+	var centroid := _parcel_centroid(cell_set)
+	var anchor_gx := -1
+	var anchor_gy := -1
+	for key in cell_set.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		anchor_gx = int(parts[0])
+		anchor_gy = int(parts[1])
+		break
+	if anchor_gx < 0:
+		return
+	_selected_plot_id = plot_id
+	_selected_gx = anchor_gx
+	_selected_gy = anchor_gy
+	var z_fit := _min_zoom_viewport_cover_map()
+	_fit_ref_zoom = z_fit
+	var z_max := minf(z_fit * ZOOM_RELATIVE_MAX, CAM_ZOOM_ABS_MAX)
+	_cam_zoom = z_max
+	_sync_camera_zoom()
+	camera.position = centroid
+	_clamp_camera_position()
+	_invalidate_draw_buffer()
+
+
 func set_overlay_mode(mode: String, mineral: String = "coal") -> void:
 	_overlay_mode = mode
 	if mineral != "":
@@ -132,6 +168,7 @@ func _ready() -> void:
 	camera.position_smoothing_enabled = false
 	WorldState.world_updated.connect(_on_world_updated)
 	WorldState.map_updated.connect(_on_map_ready)
+	WorldState.plot_owner_changed.connect(_on_plot_owner_changed)
 	# Player-only updates (cash, inventory, owned plots) ride on the
 	# realtime tick and don't need a 76800-cell cache rebuild.
 	WorldState.player_updated.connect(_on_player_updated)
@@ -178,6 +215,41 @@ func _is_large_map() -> bool:
 		_map_cell_count() > LARGE_MAP_CELLS
 		or WorldState.plots.size() > MAX_PARCEL_POLYGON_PLOTS
 	)
+
+
+func _on_plot_owner_changed(plot_id: String) -> void:
+	if _loading_world or _mesh == null or _cell_flags.is_empty():
+		return
+	_patch_plot_owner_flags(plot_id)
+	_invalidate_draw_buffer()
+
+
+func _patch_plot_owner_flags(plot_id: String) -> void:
+	var p: Dictionary = WorldState.plots.get(plot_id, {})
+	if p.is_empty():
+		return
+	var my_party := WorldState.party_id
+	var transparent := Color(0, 0, 0, 0)
+	var total := _cell_flags.size()
+	for idx in range(total):
+		if _cell_pids[idx] != plot_id:
+			continue
+		var flags := _cell_flags[idx] | 0x1
+		flags &= ~0xE  # clear owner / mine / surveyed bits; keep has_plot
+		var owner_v: Variant = p.get("owner", null)
+		if owner_v != null and str(owner_v) != "":
+			flags |= 0x8
+			var ov_str := str(owner_v)
+			if ov_str == my_party:
+				flags |= 0x2
+			_cell_owner_tints[idx] = MapHash.owner_tint_color(ov_str)
+			_cell_owner_accents[idx] = MapHash.owner_accent_color(ov_str)
+		else:
+			_cell_owner_tints[idx] = transparent
+			_cell_owner_accents[idx] = transparent
+		if bool(p.get("surveyed", false)):
+			flags |= 0x4
+		_cell_flags[idx] = flags
 
 
 func _on_player_updated() -> void:
