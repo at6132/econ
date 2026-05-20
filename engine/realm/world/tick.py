@@ -65,9 +65,11 @@ def advance_tick(world: World) -> None:
     world.tick += 1
     if int(world.tick) % 1440 == 0:
         from realm.agents.market_oracle import get_oracle
+        from realm.economy.markets import tick_order_expiry
         from realm.infrastructure.power_grid import tick_power_grid
 
         get_oracle(world)
+        tick_order_expiry(world)
         tick_power_grid(world)
     # Phase 8 — Sub-phase 8A: seasonal narration fires on day boundaries.
     # Cheap no-op on every tick except the few days a year that announce

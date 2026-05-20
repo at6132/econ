@@ -450,6 +450,27 @@ def delete_price_alert(alert_id: str) -> dict:
 # ─────────────────── Sprint 6 — Phase C: supply chain visibility ───────────────────
 
 
+@router.get("/market/depth")
+def get_market_depth() -> dict:
+    from realm.agents.market_oracle import get_oracle
+
+    oracle = get_oracle(_state.WORLD)
+    mats = set(oracle.ask_depth.keys()) | set(oracle.bid_depth.keys())
+    return {
+        "ok": True,
+        "tick": int(_state.WORLD.tick),
+        "depth": {
+            mat: {
+                "ask_depth": int(oracle.ask_depth.get(mat, 0)),
+                "bid_depth": int(oracle.bid_depth.get(mat, 0)),
+                "seller_count": int(oracle.ask_seller_count.get(mat, 0)),
+                "spread_pct": float(oracle.price_spread_pct.get(mat, 0.0)),
+            }
+            for mat in sorted(mats)
+        },
+    }
+
+
 @router.get("/market/signals")
 def get_market_signals() -> dict:
     """Aggregated public signals: per-material region activity + trade-flow overlay."""

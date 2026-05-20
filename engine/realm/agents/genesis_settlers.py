@@ -980,6 +980,12 @@ def _recipe_rank_score(
     for out_mat in rec.outputs:
         if str(out_mat) in oracle.flooded:
             margin_bonus -= 2.0
+    if rec.outputs:
+        out_depth = min(oracle.bid_depth.get(str(m), 0) for m in rec.outputs)
+        if out_depth > 50:
+            margin_bonus += 0.5
+        elif out_depth < 5:
+            margin_bonus -= 0.5
 
     arch_bonus = 0.0
     if recipe_id in ARCHETYPE_RECIPE_BONUS.get(archetype, set()):

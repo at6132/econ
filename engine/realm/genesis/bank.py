@@ -30,6 +30,8 @@ __all__ = [
     "LOAN_CYCLE_TICKS",
     "BANK_RATE_TIERS",
     "rate_tier_for_reputation",
+    "_cpi_rate_adjustment_bps",
+    "effective_rate_bps",
     "seed_first_bank",
     "apply_bank_loan",
     "repay_bank_loan",
@@ -86,11 +88,56 @@ def rate_tier_for_reputation(honored: int) -> dict:
     return chosen
 
 
+def _cpi_rate_adjustment_bps(world: World) -> int:
+    """
+    If CPI is rising, the bank raises rates to fight inflation.
+    If CPI is falling (deflation), bank lowers rates to stimulate.
+    Returns basis points to add/subtract from base rate.
+    """
+    cpi = float(world.scenario_state.get("cpi_current", 100.0))
+    history = world.scenario_state.get("cpi_history", [])
+    if len(history) < 2:
+        return 0
+    prev_cpi = float(history[-2].get("cpi", 100.0))
+    weekly_change_pct = (cpi - prev_cpi) / max(1.0, prev_cpi) * 100.0
+    inflation_gap = weekly_change_pct - 0.5
+    if abs(inflation_gap) < 0.1:
+        return 0
+    adj = int(inflation_gap * 50)
+    return max(-200, min(400, adj))
+
+
+def effective_rate_bps(world: World, base_rate_bps: int) -> int:
+    """Base tier rate plus CPI adjustment (floor 1%)."""
+    adj = _cpi_rate_adjustment_bps(world)
+    return max(100, int(base_rate_bps) + adj)
+
+
+def _maybe_announce_cpi_rate_change(world: World, cpi_adj: int) -> None:
+    last = int(world.scenario_state.get("bank_cpi_adj_last_announced_bps", 0))
+    if abs(cpi_adj - last) <= 100:
+        return
+    world.scenario_state["bank_cpi_adj_last_announced_bps"] = int(cpi_adj)
+    direction = "raised" if cpi_adj > 0 else "lowered"
+    macro = "inflation" if cpi_adj > 0 else "deflation"
+    sign = "+" if cpi_adj >= 0 else ""
+    log_event(
+        world,
+        "world_feed",
+        f"🏦 First Bank {direction} lending rates by {abs(cpi_adj) / 100:.1f}% "
+        f"in response to {macro}. Current adjustment: {sign}{cpi_adj / 100:.1f}%",
+        cpi_adjustment_bps=int(cpi_adj),
+        cpi_current=float(world.scenario_state.get("cpi_current", 100.0)),
+    )
+
+
 def bank_rates_view(world: World, party: PartyId | None = None) -> dict:
     """Public rates table for the bank UI."""
     rep = world.reputation.get(str(party) if party else "player", {}) or {}
     honored = int(rep.get("honored", 0))
     current = rate_tier_for_reputation(honored)
+    cpi_adj = _cpi_rate_adjustment_bps(world)
+    _maybe_announce_cpi_rate_change(world, cpi_adj)
     return {
         "tiers": [
             {
@@ -98,6 +145,9 @@ def bank_rates_view(world: World, party: PartyId | None = None) -> dict:
                 "min_honored": int(t["min_honored"]),
                 "max_honored": t["max_honored"],
                 "rate_bps_per_cycle": int(t["rate_bps_per_cycle"]),
+                "effective_rate_bps_per_cycle": effective_rate_bps(
+                    world, int(t["rate_bps_per_cycle"])
+                ),
                 "rate_pct_per_cycle": int(t["rate_bps_per_cycle"]) / 100.0,
                 "max_principal_cents": int(t["max_principal_cents"]),
                 "current_for_party": t["tier"] == current["tier"],
@@ -107,6 +157,8 @@ def bank_rates_view(world: World, party: PartyId | None = None) -> dict:
         "cycle_ticks": LOAN_CYCLE_TICKS,
         "honored_for_party": honored,
         "current_tier": current["tier"],
+        "cpi_adjustment_bps": int(cpi_adj),
+        "cpi_current": float(world.scenario_state.get("cpi_current", 100.0)),
     }
 
 
@@ -198,9 +250,11 @@ def _principal_share_cents(loan: dict) -> int:
     return max(0, principal // cycles)
 
 
-def cycle_payment_cents(loan: dict) -> int:
+def cycle_payment_cents(loan: dict, *, world: World | None = None) -> int:
     """Per-cycle payment: principal share + flat interest on original principal."""
     rate_bps = int(loan.get("interest_rate_bps", 0))
+    if world is not None and str(loan.get("lender")) == str(FIRST_BANK_PARTY_ID):
+        rate_bps = effective_rate_bps(world, rate_bps)
     principal = int(loan.get("principal_cents", 0))
     interest = (principal * rate_bps) // 10000
     share = _principal_share_cents(loan)
@@ -295,11 +349,12 @@ def apply_bank_loan(
     )
     if isinstance(tr, MoneyErr):
         return {"ok": False, "reason": tr.reason}
-    rate_bps = (
+    base_rate_bps = (
         int(rate_bps_override)
         if rate_bps_override is not None
         else int(tier["rate_bps_per_cycle"])
     )
+    rate_bps = int(base_rate_bps)
     cy_ticks = int(cycle_ticks) if cycle_ticks is not None else LOAN_CYCLE_TICKS
     loan_id = _loan_id(world)
     loan = {
@@ -324,7 +379,7 @@ def apply_bank_loan(
         world,
         "bank_loan_apply",
         f"{lender_pid} disbursed ${principal_cents / 100:,.2f} loan {loan_id} "
-        f"to {borrower} at {rate_bps / 100:.2f}%/cycle × {num_cycles}",
+        f"to {borrower} at {effective_rate_bps(world, rate_bps) / 100:.2f}%/cycle × {num_cycles}",
         contract_id=loan_id,
         lender=str(lender_pid),
         borrower=str(borrower),
@@ -332,16 +387,21 @@ def apply_bank_loan(
         rate_bps=int(rate_bps),
         num_cycles=int(num_cycles),
     )
+    eff = (
+        effective_rate_bps(world, rate_bps)
+        if lender_pid == FIRST_BANK_PARTY_ID
+        else int(rate_bps)
+    )
     return {
         "ok": True,
         "loan_id": loan_id,
         "principal_cents": int(principal_cents),
-        "rate_bps_per_cycle": int(rate_bps),
+        "rate_bps_per_cycle": int(eff),
         "num_cycles": int(num_cycles),
         "cycle_ticks": int(cy_ticks),
         "next_due_tick": int(loan["next_due_tick"]),
         "tier": tier["tier"],
-        "payment_per_cycle_cents": cycle_payment_cents(loan),
+        "payment_per_cycle_cents": cycle_payment_cents(loan, world=world),
     }
 
 
@@ -361,7 +421,7 @@ def repay_bank_loan(world: World, borrower: PartyId, loan_id: str) -> dict:
         return {"ok": False, "reason": "not your loan"}
     if loan.get("status") != "active":
         return {"ok": False, "reason": f"loan is {loan.get('status')}"}
-    payment = cycle_payment_cents(loan)
+    payment = cycle_payment_cents(loan, world=world)
     borrower_cash = party_cash_account(borrower)
     if world.ledger.balance(borrower_cash) < payment:
         return {"ok": False, "reason": "insufficient cash for repayment"}
@@ -416,7 +476,7 @@ def _auto_deduct_loan_payment(world: World, loan: dict) -> bool:
     borrower's cash; ``False`` if they can't cover it (caller treats this
     as a missed payment).
     """
-    payment = cycle_payment_cents(loan)
+    payment = cycle_payment_cents(loan, world=world)
     borrower = PartyId(str(loan["borrower"]))
     borrower_cash = party_cash_account(borrower)
     if world.ledger.balance(borrower_cash) < payment:

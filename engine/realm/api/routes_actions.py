@@ -504,6 +504,7 @@ def list_laborers(
                 "display_name": lab.display_name,
                 "skill_level": int(lab.skill_level),
                 "health": float(lab.health),
+                "needs": {k: float(v) for k, v in lab.needs.items()},
                 "home_town": lab.home_town,
                 "employed": lab.employer is not None,
                 "employer": str(lab.employer) if lab.employer else None,

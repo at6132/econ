@@ -3,8 +3,8 @@
 Bids lock cash in ``system:market_escrow`` up to qty × limit price.
 Crossing: incoming bid lifts resting asks at ask price; incoming ask lifts resting bids at bid limit.
 
-**Matching:** at each price level, resting orders are **FIFO** by ``order_id`` (lexicographic order
-matches creation order for ``ord-{seq}`` ids).
+**Matching:** at each price level, resting orders are **FIFO** by ``posted_at_tick``, then
+``order_id`` for determinism.
 
 **Iceberg:** optional ``iceberg_display_qty`` (peak); hidden size refills the visible clip when depleted.
 **Reputation gate:** optional ``min_counterparty_honored`` on bids/asks — no cross unless both parties
@@ -82,6 +82,9 @@ def ensure_market_seller_registration(world: World, party: PartyId, material: Ma
     return {"ok": True}
 
 
+ORDER_TTL_TICKS: Final[int] = 43_200  # 30 game-days
+
+
 @dataclass
 class AskOrder:
     order_id: str
@@ -89,6 +92,7 @@ class AskOrder:
     material: MaterialId
     qty: int
     price_per_unit_cents: int
+    posted_at_tick: int = 0
     iceberg_peak: int = 0  # 0 = not iceberg; else max visible clip size
     iceberg_hidden_qty: int = 0  # units not yet shown at this price
     min_counterparty_honored: int = 0
@@ -102,6 +106,7 @@ class BidOrder:
     qty: int
     max_price_per_unit_cents: int
     escrow_cents: int
+    posted_at_tick: int = 0
     iceberg_peak: int = 0
     iceberg_hidden_qty: int = 0
     min_counterparty_honored: int = 0
@@ -122,11 +127,54 @@ def _bids(world: World, material: MaterialId) -> list[BidOrder]:
 
 
 def _sort_asks(lst: list[AskOrder]) -> None:
-    lst.sort(key=lambda o: (o.price_per_unit_cents, o.order_id))
+    lst.sort(
+        key=lambda o: (
+            o.price_per_unit_cents,
+            int(getattr(o, "posted_at_tick", 0)),
+            str(o.order_id),
+        )
+    )
 
 
 def _sort_bids(lst: list[BidOrder]) -> None:
-    lst.sort(key=lambda o: (-o.max_price_per_unit_cents, o.order_id))
+    lst.sort(
+        key=lambda o: (
+            -o.max_price_per_unit_cents,
+            int(getattr(o, "posted_at_tick", 0)),
+            str(o.order_id),
+        )
+    )
+
+
+def tick_order_expiry(world: World) -> None:
+    """Remove ask and bid orders older than ORDER_TTL_TICKS. Runs daily."""
+    if int(world.tick) % 1440 != 0:
+        return
+    cutoff = int(world.tick) - ORDER_TTL_TICKS
+    genesis = PartyId("genesis_exchange")
+    expired_count = 0
+    for mat, asks in list(world.market_asks_by_material.items()):
+        before = len(asks)
+        world.market_asks_by_material[mat] = [
+            a
+            for a in asks
+            if int(getattr(a, "posted_at_tick", 0)) >= cutoff
+            or a.party == genesis
+        ]
+        expired_count += before - len(world.market_asks_by_material[mat])
+    for mat, bids in list(world.market_bids_by_material.items()):
+        before = len(bids)
+        world.market_bids_by_material[mat] = [
+            b for b in bids if int(getattr(b, "posted_at_tick", 0)) >= cutoff
+        ]
+        expired_count += before - len(world.market_bids_by_material[mat])
+    if expired_count > 0:
+        log_event(
+            world,
+            "orders_expired",
+            f"{expired_count} stale market orders expired (>30 game-days old)",
+            count=expired_count,
+        )
 
 
 def best_resting_ask_cents(world: World, material: MaterialId) -> int | None:
@@ -466,6 +514,7 @@ def place_sell_order(
         material=material,
         qty=vis,
         price_per_unit_cents=price_per_unit_cents,
+        posted_at_tick=int(world.tick),
         iceberg_peak=ice_peak,
         iceberg_hidden_qty=ice_hid,
         min_counterparty_honored=min_counterparty_honored,
@@ -577,6 +626,7 @@ def place_buy_order(
         qty=vis,
         max_price_per_unit_cents=max_price_per_unit_cents,
         escrow_cents=escrow_need,
+        posted_at_tick=int(world.tick),
         iceberg_peak=ice_peak,
         iceberg_hidden_qty=ice_hid,
         min_counterparty_honored=min_counterparty_honored,
@@ -1025,6 +1075,7 @@ def market_book_public(world: World) -> list[dict]:
                     "iceberg_peak": o.iceberg_peak,
                     "iceberg_hidden_qty": o.iceberg_hidden_qty,
                     "min_counterparty_honored": o.min_counterparty_honored,
+                    "posted_at_tick": int(getattr(o, "posted_at_tick", 0)),
                 }
             )
     return rows
@@ -1048,6 +1099,7 @@ def market_bids_public(world: World) -> list[dict]:
                     "iceberg_peak": b.iceberg_peak,
                     "iceberg_hidden_qty": b.iceberg_hidden_qty,
                     "min_counterparty_honored": b.min_counterparty_honored,
+                    "posted_at_tick": int(getattr(b, "posted_at_tick", 0)),
                 }
             )
     return rows

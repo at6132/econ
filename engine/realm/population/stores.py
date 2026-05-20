@@ -65,7 +65,7 @@ NEED_RESTORATION_PER_UNIT: Final[dict[str, float]] = {
     "fuel": FUEL_PER_UNIT,
 }
 
-SPENDING_TRIGGER_NEED: Final[float] = 0.70
+SPENDING_TRIGGER_NEED: Final[float] = 0.93
 """A laborer visits a store for a need when their level drops below this."""
 
 NEED_TARGET_AFTER_PURCHASE: Final[float] = 1.00
