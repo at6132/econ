@@ -405,6 +405,13 @@ func _on_pick_save(relative_path: String) -> void:
 		relative_path,
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
+				var cash := int(data.get("player_cash_cents", 0))
+				if cash > 0:
+					WorldState.player_cash_cents = cash
+					WorldState.summary_updated.emit()
+				var expected := int(data.get("player_starting_cash_cents", 0))
+				if expected > 0:
+					WorldState.player_starting_cash_cents = expected
 				if is_instance_valid(_creation_screen):
 					_creation_screen.mark_done()
 				else:
@@ -423,6 +430,9 @@ var _creation_screen: Control = null
 
 
 func _on_start_new_world() -> void:
+	await _ensure_engine_ready()
+	# Fresh Python process so bootstrap bytecode matches disk (avoids stale $10k seed).
+	await Transport.restart_solo_engine()
 	await _ensure_engine_ready()
 	var scenario: String = str(_scenario_opt.get_item_metadata(_scenario_opt.selected))
 	var seed_val := int(_seed_spin.value)
@@ -454,6 +464,13 @@ func _on_start_new_world() -> void:
 				_creation_screen.end_waiting_for_engine()
 			if bool(data.get("ok", false)):
 				var cash := int(data.get("player_cash_cents", 0))
+				var expected := int(data.get("player_starting_cash_cents", 0))
+				if expected > 0:
+					WorldState.player_starting_cash_cents = expected
+				var mismatch := _starting_cash_mismatch_message(cash, expected)
+				if not mismatch.is_empty():
+					_abort_creation_screen(mismatch)
+					return
 				if cash > 0:
 					WorldState.player_cash_cents = cash
 					WorldState.summary_updated.emit()
@@ -466,6 +483,18 @@ func _on_start_new_world() -> void:
 					"World creation failed: %s" % str(data.get("reason", data))
 				),
 		wname,
+	)
+
+
+func _starting_cash_mismatch_message(actual_cents: int, expected_cents: int) -> String:
+	var canon := expected_cents if expected_cents > 0 else WorldState.PLAYER_STARTING_CASH_CENTS
+	if actual_cents == canon:
+		return ""
+	return (
+		"Solo engine started you at %s but this build expects %s.\n\n"
+		% [WorldState.format_money(actual_cents), WorldState.format_money(canon)]
+		+ "Quit Godot completely (close the window), reopen, and use New world — not Continue. "
+		+ "Continue loads old saves that still have the previous balance."
 	)
 
 
