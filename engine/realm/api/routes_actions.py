@@ -88,7 +88,7 @@ def post_claim(plot_id: str, party: Annotated[str, Query()] = "player") -> dict:
     r = claim_plot(_state.WORLD, party_id, PlotId(plot_id))
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
-    return dict(r)
+    return {"ok": True, "plot_id": plot_id, "owner": str(party)}
 
 
 @router.post("/plots/{plot_id}/produce")
