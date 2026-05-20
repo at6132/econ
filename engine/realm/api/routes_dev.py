@@ -104,6 +104,16 @@ def dev_reset(
             _state.assign_world(w)
             if name:
                 _state.WORLD.world_name = name
+        from realm.core.player_economy import ensure_player_starting_cash
+
+        player_cash_after_ensure = ensure_player_starting_cash(_state.WORLD)
+        # Drop stale autosave so Continue cannot resurrect a pre-reset $10k world.
+        try:
+            if _state._AUTOSAVE_PATH.is_file():
+                _state._AUTOSAVE_PATH.unlink()
+                _log.info("Realm: removed stale autosave %s after /dev/reset.", _state._AUTOSAVE_PATH.name)
+        except OSError as e:
+            _log.warning("Realm: could not remove autosave after reset: %s", e)
         from realm.api import sim_loop
 
         clk.set_speed(1.0)
@@ -120,7 +130,6 @@ def dev_reset(
         from realm.core.ledger import party_cash_account
         from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
 
-        player_cash = int(w.ledger.balance(party_cash_account(PartyId("player"))))
         return {
             "ok": True,
             "seed": seed,
@@ -128,7 +137,7 @@ def dev_reset(
             "map_layout": w.scenario_state.get("map_layout"),
             "grid_width": w.scenario_state.get("grid_width"),
             "grid_height": w.scenario_state.get("grid_height"),
-            "player_cash_cents": player_cash,
+            "player_cash_cents": player_cash_after_ensure,
             "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
         }
     finally:
@@ -178,6 +187,8 @@ def post_persistence_load(
         raise HTTPException(status_code=404, detail=str(e)) from e
     _state.assign_world(w)
     from realm.api import sim_loop
+    from realm.core.ledger import party_cash_account
+    from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
     from realm.world.sim_clock import get_sim_clock
 
     clk = get_sim_clock()
@@ -185,8 +196,15 @@ def post_persistence_load(
     clk.set_speed(1.0)
     sim_loop._push_to_all({"kind": "sim_status", **clk.status_dict()})
     sim_loop._push_to_all(sim_loop.build_tick_frame())
+    player_cash = int(w.ledger.balance(party_cash_account(PartyId("player"))))
     _log.info("Realm: POST /persistence/load read %s (tick=%s).", p.name, _state.WORLD.tick)
-    return {"ok": True, "path": p.relative_to(_state._REPO_ROOT).as_posix(), "tick": _state.WORLD.tick}
+    return {
+        "ok": True,
+        "path": p.relative_to(_state._REPO_ROOT).as_posix(),
+        "tick": _state.WORLD.tick,
+        "player_cash_cents": player_cash,
+        "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
+    }
 
 
 @router.get("/persistence/list")

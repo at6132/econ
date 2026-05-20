@@ -144,6 +144,9 @@ def __getattr__(name: str):
                     )
                     t0 = time.perf_counter()
                     _world_lazy_singleton = bootstrap_by_scenario(seed=_seed, scenario=_scenario)
+                    from realm.core.player_economy import ensure_player_starting_cash
+
+                    ensure_player_starting_cash(_world_lazy_singleton)
                     elapsed = time.perf_counter() - t0
                     _log.info(
                         "Realm: lazy WORLD bootstrap finished in %.1fs (world.tick=%s).",
