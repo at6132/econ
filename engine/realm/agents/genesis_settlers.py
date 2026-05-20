@@ -1215,6 +1215,17 @@ def _settler_pipeline_step(
     _settler_maintain_buildings(world, party)
     _liquidate_settler_stockpiles(world, party, owned_plot_ids)
 
+    from realm.infrastructure.npc_self_roads import try_party_self_roads
+
+    if try_party_self_roads(
+        world,
+        party,
+        owned_plot_ids,
+        buy_material=_settler_market_buy,
+        max_attempts=1,
+    ):
+        return True
+
     if plot_has_active_production(world, owned):
         run = _active_run(world, party, owned)
         recipe = RECIPES.get(run.recipe_id) if run else None
