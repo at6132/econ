@@ -14,7 +14,7 @@ func post_request(endpoint: String, payload: Dictionary = {}, callback: Callable
 		endpoint,
 		payload,
 		func(data: Dictionary) -> void:
-			if require_dict_ok and not bool(data.get("ok", true)):
+			if require_dict_ok and not bool(data.get("ok", false)):
 				push_warning("API POST %s failed: %s" % [endpoint, str(data)])
 			if callback.is_valid():
 				callback.call(data)
@@ -26,6 +26,12 @@ func delete_request(endpoint: String, callback: Callable = Callable()) -> void:
 
 
 # ── World ───────────────────────────────────────────────────────────────────
+
+## Engine build identity. Lets the menu refuse to start when an old realm_solo.py
+## is still bound to :9000 (Windows allows multiple SO_REUSEADDR listeners).
+func get_version(cb: Callable) -> void:
+	get_request("/version", cb)
+
 
 func get_world_summary(party: String = "player", cb: Callable = Callable()) -> void:
 	get_request("/world/summary?party=%s" % party.uri_encode(), cb)

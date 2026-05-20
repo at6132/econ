@@ -55,6 +55,7 @@ func restart_solo_engine() -> void:
 	_stream = null
 	_read_buf = ""
 	_pending.clear()
+	_pending_started_ms.clear()
 	_queued.clear()
 	_ready_flag = false
 	_connect_attempts = 0
@@ -77,10 +78,15 @@ func _spawn_python_async() -> void:
 		engine_error.emit("Engine not found")
 		return
 
+	# Always purge anything still bound to :9000 before starting a fresh Python.
+	# Windows allows multiple processes to bind the same port (SO_REUSEADDR), and
+	# orphaned realm_solo workers running OLD bytecode silently win the race.
+	_free_solo_listen_port()
+	await get_tree().create_timer(0.4).timeout
+
 	var python := _find_python()
 	var err := OS.create_process(python, PackedStringArray([engine_path]), false)
 	if err == -1:
-		# Godot 4.2+ returns pid from create_process; older builds used err code.
 		push_error("Transport: failed to spawn Python engine")
 		engine_error.emit("Failed to spawn engine")
 		return
@@ -152,6 +158,46 @@ func _kill_python() -> void:
 		else:
 			OS.kill(_python_pid)
 		_python_pid = -1
+	_free_solo_listen_port()
+
+
+func _free_solo_listen_port() -> void:
+	# Orphan realm_solo children can keep :9000 while Godot talks to a stuck bootstrap.
+	if OS.get_name() == "Windows":
+		OS.execute(
+			"powershell",
+			[
+				"-NoProfile",
+				"-Command",
+				(
+					"Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue "
+					+ "| ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+				)
+				% SOLO_PORT,
+			],
+			[],
+			true,
+		)
+	elif OS.get_name() == "macOS":
+		OS.execute(
+			"sh",
+			[
+				"-c",
+				"lsof -ti tcp:%d | xargs kill -9 2>/dev/null || true" % SOLO_PORT,
+			],
+			[],
+			true,
+		)
+	elif OS.get_name() == "Linux":
+		OS.execute(
+			"sh",
+			[
+				"-c",
+				"fuser -k %d/tcp 2>/dev/null || true" % SOLO_PORT,
+			],
+			[],
+			true,
+		)
 
 
 func _notification(what: int) -> void:
