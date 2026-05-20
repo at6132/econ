@@ -233,6 +233,21 @@ func _build_market_series(mat: String) -> Dictionary:
 	return {"asks": asks, "bids": bids}
 
 
+func _material_ask_depth(mat: String) -> Dictionary:
+	var total := 0
+	var sellers: Dictionary = {}
+	for row in WorldState.market_asks_rows:
+		if not (row is Dictionary):
+			continue
+		var d: Dictionary = row as Dictionary
+		if str(d.get("material", "")) != mat:
+			continue
+		var q := _ask_qty(d)
+		total += q
+		sellers[str(d.get("party", ""))] = true
+	return {"total": total, "sellers": sellers.size()}
+
+
 func _make_ask_row(ask: Dictionary) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var price: int = int(ask.get("price_per_unit_cents", 0))
@@ -247,11 +262,25 @@ func _make_ask_row(ask: Dictionary) -> HBoxContainer:
 	price_lbl.add_theme_color_override("font_color", Color(0.92, 0.9, 0.84))
 	row.add_child(price_lbl)
 
+	var depth := _material_ask_depth(_selected_material)
 	var qty_lbl := Label.new()
-	qty_lbl.text = "×%d" % qty
-	qty_lbl.custom_minimum_size.x = 48
+	var depth_suffix := ""
+	if depth.total > qty:
+		depth_suffix = " (%d sellers)" % depth.sellers
+	qty_lbl.text = "×%d%s" % [qty, depth_suffix]
+	qty_lbl.custom_minimum_size.x = 72
 	qty_lbl.add_theme_color_override("font_color", Color(0.85, 0.83, 0.78))
 	row.add_child(qty_lbl)
+
+	var depth_lbl := Label.new()
+	depth_lbl.add_theme_font_size_override("font_size", 9)
+	depth_lbl.modulate = Color(0.5, 0.5, 0.5)
+	var tpgd := maxi(1, WorldState.ticks_per_game_day)
+	var days_old := int(WorldState.current_tick - int(ask.get("posted_at_tick", 0))) / tpgd
+	if days_old > 20:
+		depth_lbl.text = "⏳"
+		depth_lbl.modulate = Color(1.0, 0.6, 0.2)
+	row.add_child(depth_lbl)
 
 	var seller_lbl := Label.new()
 	seller_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -294,6 +323,17 @@ func _make_bid_row(bid: Dictionary) -> HBoxContainer:
 	qty_lbl.custom_minimum_size.x = 48
 	qty_lbl.add_theme_color_override("font_color", Color(0.85, 0.83, 0.78))
 	row.add_child(qty_lbl)
+
+	var depth_lbl := Label.new()
+	depth_lbl.add_theme_font_size_override("font_size", 9)
+	var tpgd := maxi(1, WorldState.ticks_per_game_day)
+	var days_old := int(WorldState.current_tick - int(bid.get("posted_at_tick", 0))) / tpgd
+	if days_old > 20:
+		depth_lbl.text = "⏳"
+		depth_lbl.modulate = Color(1.0, 0.6, 0.2)
+	else:
+		depth_lbl.modulate = Color(0.5, 0.5, 0.5)
+	row.add_child(depth_lbl)
 
 	var buyer_lbl := Label.new()
 	buyer_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
