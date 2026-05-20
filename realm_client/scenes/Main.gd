@@ -14,6 +14,7 @@ const SciencePanelScene := preload("res://scenes/panels/SciencePanel.tscn")
 const EconomicsPanelScene := preload("res://scenes/panels/EconomicsPanel.tscn")
 const TendersPanelScene := preload("res://scenes/panels/TendersPanel.tscn")
 const ProfilePanelScene := preload("res://scenes/panels/ProfilePanel.tscn")
+const TerritoryPanelScene := preload("res://scenes/panels/TerritoryPanel.tscn")
 
 const OVERLAY_LAYER := 32
 
@@ -22,7 +23,6 @@ const OVERLAY_LAYER := 32
 @onready var sub_viewport: SubViewport = $UILayer/UIRoot/MapViewport/SubViewport
 @onready var world_map: Node2D = $UILayer/UIRoot/MapViewport/SubViewport/WorldMap
 @onready var shell: CanvasLayer = $CommandShell
-@onready var sidebar: PanelContainer = $UILayer/UIRoot/TerritorySidebar
 var _overlay_bar: HBoxContainer
 
 var _active_overlay: Node = null
@@ -155,16 +155,7 @@ func _layout_shell() -> void:
 	var top_h: float = 96.0
 	if shell.has_method("shell_top_height"):
 		top_h = float(shell.call("shell_top_height"))
-	var side_w: float = 400.0
-	if shell.has_method("sidebar_width"):
-		side_w = float(shell.call("sidebar_width"))
-	sidebar.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	sidebar.offset_left = -side_w
-	sidebar.offset_top = top_h
-	sidebar.offset_right = 0.0
-	sidebar.offset_bottom = 0.0
-	sidebar.z_index = 10
-	# Map fills the playfield; sidebar and slide-in panels draw on top (no hard clip).
+	# Map fills the playfield; slide-in panels draw on top (no hard clip).
 	map_viewport.z_index = 0
 	map_viewport.stretch = true
 	map_viewport.clip_children = CanvasItem.CLIP_CHILDREN_DISABLED
@@ -265,6 +256,7 @@ func _on_nav_pressed(panel_name: String) -> void:
 			_open_bazaar()
 		return
 	if panel_name == "territory":
+		_toggle_overlay(TerritoryPanelScene)
 		return
 	if panel_name == "chronicle":
 		_toggle_overlay(ChroniclePanelScene)
@@ -400,8 +392,32 @@ func _mount_overlay(node: Node, close_first: bool = true) -> void:
 	_active_overlay = node
 	if node is CanvasLayer:
 		(node as CanvasLayer).layer = OVERLAY_LAYER
+	_wire_territory_panel_signals(node)
 	add_child(node)
 	node.tree_exited.connect(_on_overlay_tree_exited.bind(node), CONNECT_ONE_SHOT)
+
+
+func _wire_territory_panel_signals(node: Node) -> void:
+	if node.has_signal("plot_selected") and not node.is_connected("plot_selected", _on_territory_plot_selected):
+		node.plot_selected.connect(_on_territory_plot_selected)
+	if node.has_signal("plot_locate_requested") and not node.is_connected(
+		"plot_locate_requested", _on_territory_plot_locate
+	):
+		node.plot_locate_requested.connect(_on_territory_plot_locate)
+
+
+func _on_territory_plot_selected(plot_id: String, _plot_data: Dictionary) -> void:
+	_open_plot_detail(plot_id)
+
+
+func _on_territory_plot_locate(plot_id: String) -> void:
+	_close_active_overlay()
+	focus_plot_on_map(plot_id)
+
+
+func focus_plot_on_map(plot_id: String) -> void:
+	if world_map.has_method("focus_plot"):
+		world_map.call("focus_plot", plot_id)
 
 
 func _on_overlay_tree_exited(node: Node) -> void:
