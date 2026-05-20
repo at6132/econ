@@ -30,3 +30,20 @@ def test_ensure_player_starting_cash_idempotent_at_target() -> None:
     world = bootstrap_genesis(seed=8)
     assert ensure_player_starting_cash(world) == PLAYER_STARTING_CASH_CENTS
     assert ensure_player_starting_cash(world) == PLAYER_STARTING_CASH_CENTS
+
+
+def test_ensure_player_starting_cash_refunds_excess_to_target() -> None:
+    """Force-reconcile: if bootstrap accidentally over-funds the player, the
+    helper refunds the surplus to the system reserve."""
+    world = bootstrap_genesis(seed=9)
+    player = PartyId("player")
+    acct = party_cash_account(player)
+    extra = 5_000_000
+    world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=acct,
+        amount_cents=extra,
+    )
+    assert int(world.ledger.balance(acct)) == PLAYER_STARTING_CASH_CENTS + extra
+    bal = ensure_player_starting_cash(world)
+    assert bal == PLAYER_STARTING_CASH_CENTS
