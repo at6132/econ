@@ -56,6 +56,25 @@ const CATEGORY_FALLBACK: Dictionary = {
 }
 
 
+static func texture_for(bp: Dictionary) -> Texture2D:
+	var bid := str(bp.get("blueprint_id", ""))
+	if bid.is_empty():
+		return null
+	var path := "res://assets/icons/buildings/%s.png" % bid
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
+
+
+static func texture_for_id(blueprint_id: String) -> Texture2D:
+	if blueprint_id.is_empty():
+		return null
+	var path := "res://assets/icons/buildings/%s.png" % blueprint_id
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
+
+
 static func icon_for(bp: Dictionary) -> String:
 	var bid := str(bp.get("blueprint_id", ""))
 	if BLUEPRINT_ICONS.has(bid):

@@ -68,18 +68,22 @@ var _road_drag_active: bool = false
 var _road_last_cell: Vector2i = Vector2i(-1, -1)
 var _road_paint_stroke: Dictionary = {}
 var _world_link_edges: Array = []
+var _terrain_textures: Dictionary = {}
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
+	set_process_input(true)
 	resized.connect(func() -> void: queue_redraw())
+	_load_terrain_textures()
 
 
 func load_plot(plot_id: String, data: Dictionary) -> void:
 	_plot_id = plot_id
 	_plot_data = data
 	_terrain = str(data.get("terrain", "plains"))
+	_load_terrain_textures()
 	_set_grid_dims(data)
 	_placed_buildings = data.get("placed_buildings", [])
 	if _placed_buildings is not Array:
@@ -112,30 +116,34 @@ func _in_deed(gx: int, gy: int) -> bool:
 	return _deed_cells.has("%d,%d" % [gx, gy])
 
 
-## Build-grid cells (10m) covered by this deed — mirrors ``world_cells`` from the API.
+## Build-grid cells (10m) covered by this deed — mirrors engine ``plot_deed_grid_cells``.
 func _deed_lot_from_world_cells(data: Dictionary) -> Dictionary:
 	var cells: Array = []
-	var min_wx := 1_000_000
-	var min_wy := 1_000_000
 	var raw: Variant = data.get("world_cells", [])
 	if raw is Array and not (raw as Array).is_empty():
+		var min_wx := 1_000_000
+		var min_wy := 1_000_000
 		for c in raw as Array:
 			if c is Dictionary:
 				var d: Dictionary = c as Dictionary
 				min_wx = mini(min_wx, int(d.get("x", 0)))
 				min_wy = mini(min_wy, int(d.get("y", 0)))
+		for c in raw as Array:
+			if not (c is Dictionary):
+				continue
+			var wx: int = int((c as Dictionary).get("x", 0)) - min_wx
+			var wy: int = int((c as Dictionary).get("y", 0)) - min_wy
+			for dx in range(10):
+				for dy in range(10):
+					cells.append(Vector2i(wx * 10 + dx, wy * 10 + dy))
 	else:
-		min_wx = int(data.get("x", 0))
-		min_wy = int(data.get("y", 0))
-		raw = [{"x": min_wx, "y": min_wy}]
-	for c in raw as Array:
-		if not (c is Dictionary):
-			continue
-		var wx: int = int((c as Dictionary).get("x", 0)) - min_wx
-		var wy: int = int((c as Dictionary).get("y", 0)) - min_wy
-		for dx in range(10):
-			for dy in range(10):
-				cells.append(Vector2i(wx * 10 + dx, wy * 10 + dy))
+		var wt := maxi(1, int(data.get("world_tiles_w", 1)))
+		var ht := maxi(1, int(data.get("world_tiles_h", 1)))
+		for ty in range(ht):
+			for tx in range(wt):
+				for dx in range(10):
+					for dy in range(10):
+						cells.append(Vector2i(tx * 10 + dx, ty * 10 + dy))
 	var shape := str(data.get("parcel_shape", "rect"))
 	return {"cells": cells, "shape": shape}
 
@@ -170,7 +178,7 @@ func set_placing_blueprint(blueprint_id: String, bp_data: Dictionary) -> void:
 
 
 func _is_road_paint_mode() -> bool:
-	return _interaction_mode == "roads" and _placing_blueprint_id == "road_segment"
+	return _interaction_mode == "roads"
 
 
 func is_confirming() -> bool:
@@ -351,6 +359,9 @@ func _draw() -> void:
 		var r := _cell_rect(int(parts[0]), int(parts[1]))
 		draw_rect(r, ROAD_PREVIEW)
 
+	if _is_road_paint_mode() and _hover_gx >= 0 and _in_deed(_hover_gx, _hover_gy) and not _road_drag_active:
+		draw_rect(_cell_rect(_hover_gx, _hover_gy), ROAD_PREVIEW.lerp(Color(1, 1, 1, 0.15), 0.35))
+
 	if not _placing_blueprint_id.is_empty() and _hover_gx >= 0 and not _is_road_paint_mode():
 		var can_place := _can_place_at(_hover_gx, _hover_gy)
 		var preview_color := PREVIEW_OK if can_place else PREVIEW_BLOCK
@@ -423,12 +434,35 @@ func _draw_error_banner() -> void:
 	)
 
 
+func _terrain_texture_key() -> String:
+	match _terrain:
+		"temperate_forest":
+			return "forest"
+		_:
+			return _terrain
+
+
+func _load_terrain_textures() -> void:
+	var terrains := [
+		"plains", "forest", "mountain", "hills", "desert",
+		"tundra", "coastal", "valley", "swamp", "tropical",
+	]
+	for t in terrains:
+		var path := "res://assets/icons/terrain/%s.png" % t
+		if ResourceLoader.exists(path):
+			_terrain_textures[t] = load(path) as Texture2D
+
+
 func _draw_cell_fills(terrain_color: Color) -> void:
+	var tex: Texture2D = _terrain_textures.get(_terrain_texture_key()) as Texture2D
 	for gy in range(_grid_h):
 		for gx in range(_grid_w):
 			var r := _cell_rect(gx, gy)
 			if _in_deed(gx, gy):
-				draw_rect(r, terrain_color)
+				if tex != null:
+					draw_texture_rect(tex, r, false)
+				else:
+					draw_rect(r, terrain_color)
 			else:
 				draw_rect(r, VOID_FILL)
 
@@ -709,9 +743,15 @@ func _draw_road_links(road_cells: Dictionary, cs: float) -> void:
 func _stroke_add_cell(gx: int, gy: int) -> void:
 	if not _in_deed(gx, gy):
 		return
-	if _occupied_set().has("%d,%d" % [gx, gy]):
-		return
-	_road_paint_stroke["%d,%d" % [gx, gy]] = true
+	var key := "%d,%d" % [gx, gy]
+	var occ := _occupied_set()
+	if occ.has(key):
+		var b: Variant = occ[key]
+		if b is Dictionary:
+			var bid := str((b as Dictionary).get("blueprint_id", (b as Dictionary).get("building_id", "")))
+			if bid != "road_segment":
+				return
+	_road_paint_stroke[key] = true
 
 
 func _stroke_line_to(gx: int, gy: int) -> void:
@@ -746,6 +786,49 @@ func _finish_road_stroke() -> void:
 		road_path_painted.emit(cells)
 
 
+func _begin_road_drag(gx: int, gy: int) -> void:
+	_road_drag_active = true
+	_road_last_cell = Vector2i(-1, -1)
+	_stroke_line_to(gx, gy)
+	grab_focus()
+	queue_redraw()
+
+
+func _cancel_road_drag() -> void:
+	_road_drag_active = false
+	_road_paint_stroke.clear()
+	_road_last_cell = Vector2i(-1, -1)
+	queue_redraw()
+
+
+func _end_road_drag() -> void:
+	_road_drag_active = false
+	_finish_road_stroke()
+	queue_redraw()
+
+
+func _input(event: InputEvent) -> void:
+	if not _road_drag_active or not _is_road_paint_mode():
+		return
+	if event is InputEventMouseMotion:
+		var gpos := _screen_to_grid_paint(get_local_mouse_position())
+		if gpos.x >= 0:
+			_stroke_line_to(gpos.x, gpos.y)
+		var hover := _screen_to_grid(get_local_mouse_position())
+		if hover.x >= 0:
+			_hover_gx = hover.x
+			_hover_gy = hover.y
+		queue_redraw()
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			_end_road_drag()
+			get_viewport().set_input_as_handled()
+		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+			_cancel_road_drag()
+			get_viewport().set_input_as_handled()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var gpos := _screen_to_grid(event.position)
@@ -755,7 +838,14 @@ func _gui_input(event: InputEvent) -> void:
 			_hover_lot_idx = 0 if not _lots.is_empty() else -1
 			cell_hovered.emit(gpos.x, gpos.y)
 			if _is_road_paint_mode() and _road_drag_active:
-				_stroke_line_to(gpos.x, gpos.y)
+				var paint_pos := _screen_to_grid_paint(event.position)
+				if paint_pos.x >= 0:
+					_stroke_line_to(paint_pos.x, paint_pos.y)
+			elif _is_road_paint_mode():
+				var paint_pos := _screen_to_grid_paint(event.position)
+				if paint_pos.x >= 0:
+					_hover_gx = paint_pos.x
+					_hover_gy = paint_pos.y
 			queue_redraw()
 	elif event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -768,8 +858,7 @@ func _gui_input(event: InputEvent) -> void:
 			var gpos := _screen_to_grid(event.position)
 			if gpos.x >= 0:
 				if _is_road_paint_mode():
-					_road_drag_active = true
-					_stroke_line_to(gpos.x, gpos.y)
+					_begin_road_drag(gpos.x, gpos.y)
 					accept_event()
 				elif _confirming:
 					finish_confirm(true)
@@ -778,15 +867,11 @@ func _gui_input(event: InputEvent) -> void:
 					cell_clicked.emit(gpos.x, gpos.y)
 		elif not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			if _road_drag_active:
-				_road_drag_active = false
-				_finish_road_stroke()
+				_end_road_drag()
 				accept_event()
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 			if _road_drag_active:
-				_road_drag_active = false
-				_road_paint_stroke.clear()
-				_road_last_cell = Vector2i(-1, -1)
-				queue_redraw()
+				_cancel_road_drag()
 				accept_event()
 			elif _confirming:
 				finish_confirm(false)
@@ -803,13 +888,17 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 
 
-func _screen_to_grid(screen_pos: Vector2) -> Vector2i:
+func _screen_to_grid(screen_pos: Vector2, require_deed: bool = true) -> Vector2i:
 	var cs := _cell_size()
 	var o := _grid_origin()
 	var gx := int((screen_pos.x - o.x) / cs)
 	var gy := int((screen_pos.y - o.y) / cs)
 	if gx < 0 or gy < 0 or gx >= _grid_w or gy >= _grid_h:
 		return Vector2i(-1, -1)
-	if not _in_deed(gx, gy):
+	if require_deed and not _in_deed(gx, gy):
 		return Vector2i(-1, -1)
 	return Vector2i(gx, gy)
+
+
+func _screen_to_grid_paint(screen_pos: Vector2) -> Vector2i:
+	return _screen_to_grid(screen_pos, false)

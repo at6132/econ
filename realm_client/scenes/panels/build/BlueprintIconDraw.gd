@@ -11,6 +11,12 @@ func setup(bp: Dictionary) -> void:
 
 
 func _draw() -> void:
+	var tex := BlueprintIcons.texture_for(_blueprint)
+	if tex != null:
+		var pad := Vector2(2, 2)
+		var r := Rect2(pad, size - pad * 2.0)
+		draw_texture_rect(tex, r, false)
+		return
 	var bid := str(_blueprint.get("blueprint_id", ""))
 	var cat := str(_blueprint.get("category", "custom"))
 	var accent: Color = BlueprintIcons.color_for(_blueprint)
