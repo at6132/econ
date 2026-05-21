@@ -28,8 +28,16 @@ var _scenario_opt: OptionButton
 var _seed_spin: SpinBox
 var _name_edit: LineEdit
 var _footer: Label
-var _saves_scroll: ScrollContainer
-var _saves_vbox: VBoxContainer
+var _worlds_scroll: ScrollContainer
+var _worlds_vbox: VBoxContainer
+var _saves_detail_heading: Label
+var _saves_detail_scroll: ScrollContainer
+var _saves_detail_vbox: VBoxContainer
+var _selected_world_key: String = ""
+var _grouped_slots: Dictionary = {}
+var _world_row_buttons: Dictionary = {}
+var _pending_new_world_name: String = ""
+var _pending_new_world_id: String = ""
 
 var _dialog: AcceptDialog
 var _confirm_clear_saves: ConfirmationDialog
@@ -146,10 +154,18 @@ func _make_root_menu() -> VBoxContainer:
 	var b_multi := _menu_button("Multiplayer", true)
 	b_multi.pressed.connect(_on_coming_soon_pressed.bind("Multiplayer"))
 
-	v.add_child(b_settings)
+	var b_quit := _menu_button("Quit game", false)
+	b_quit.pressed.connect(_on_quit_game_pressed)
+
 	v.add_child(b_solo)
 	v.add_child(b_multi)
+	v.add_child(b_settings)
+	v.add_child(b_quit)
 	return v
+
+
+func _on_quit_game_pressed() -> void:
+	get_tree().quit()
 
 
 func _make_solo_menu() -> VBoxContainer:
@@ -333,7 +349,7 @@ func _make_settings() -> VBoxContainer:
 	row_slot.add_theme_constant_override("separation", 12)
 	row_slot.add_child(_settings_field_label("Save slot"))
 	_edit_save_slot = LineEdit.new()
-	_edit_save_slot.placeholder_text = "current"
+	_edit_save_slot.placeholder_text = "world id (default)"
 	_edit_save_slot.custom_minimum_size.x = 200
 	_edit_save_slot.max_length = 48
 	_edit_save_slot.add_theme_stylebox_override("normal", RealmColors.style_btn_normal())
@@ -345,6 +361,12 @@ func _make_settings() -> VBoxContainer:
 	_edit_save_slot.focus_exited.connect(func() -> void: _on_save_slot_committed())
 	row_slot.add_child(_edit_save_slot)
 	v.add_child(row_slot)
+	v.add_child(
+		_settings_hint_label(
+			"Blank = manual saves go to this world's id file (not shared «current»). "
+			+ "Autosave is separate: <id>_autosave.sqlite."
+		)
+	)
 
 	# ── Live sim (engine must be up) ──
 	v.add_child(_menu_heading("Simulation"))
@@ -396,22 +418,56 @@ func _make_continue() -> VBoxContainer:
 	v.add_theme_constant_override("separation", 12)
 	v.add_child(_menu_heading("Continue"))
 
-	_saves_scroll = ScrollContainer.new()
-	_saves_scroll.custom_minimum_size = Vector2(0, 280)
-	_saves_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_saves_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_saves_vbox = VBoxContainer.new()
-	_saves_vbox.add_theme_constant_override("separation", 8)
-	_saves_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_saves_scroll.add_child(_saves_vbox)
-	v.add_child(_saves_scroll)
+	var split := HBoxContainer.new()
+	split.add_theme_constant_override("separation", 14)
+	split.custom_minimum_size = Vector2(0, 320)
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var worlds_col := VBoxContainer.new()
+	worlds_col.custom_minimum_size.x = 228
+	worlds_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	worlds_col.size_flags_stretch_ratio = 1.0
+	worlds_col.add_child(_continue_side_heading("Worlds"))
+	_worlds_scroll = ScrollContainer.new()
+	_worlds_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_worlds_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_worlds_vbox = VBoxContainer.new()
+	_worlds_vbox.add_theme_constant_override("separation", 8)
+	_worlds_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_worlds_scroll.add_child(_worlds_vbox)
+	worlds_col.add_child(_worlds_scroll)
+
+	var saves_col := VBoxContainer.new()
+	saves_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	saves_col.size_flags_stretch_ratio = 1.15
+	saves_col.add_child(_continue_side_heading("Saves"))
+	_saves_detail_heading = Label.new()
+	_saves_detail_heading.text = "Select a world on the left."
+	_saves_detail_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_saves_detail_heading.add_theme_color_override("font_color", RealmColors.MUTED)
+	if RealmFonts.font_body:
+		_saves_detail_heading.add_theme_font_override("font", RealmFonts.font_body)
+		_saves_detail_heading.add_theme_font_size_override("font_size", 15)
+	saves_col.add_child(_saves_detail_heading)
+	_saves_detail_scroll = ScrollContainer.new()
+	_saves_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_saves_detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_saves_detail_vbox = VBoxContainer.new()
+	_saves_detail_vbox.add_theme_constant_override("separation", 8)
+	_saves_detail_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_saves_detail_scroll.add_child(_saves_detail_vbox)
+	saves_col.add_child(_saves_detail_scroll)
+
+	split.add_child(worlds_col)
+	split.add_child(saves_col)
+	v.add_child(split)
 
 	var b_back := _menu_button("Back", false)
 	b_back.pressed.connect(func(): _show_panel("solo"))
 	v.add_child(b_back)
 
 	var hint2 := Label.new()
-	hint2.text = "Lists *.sqlite under the repo saves/ folder."
+	hint2.text = "Pick a world, then a save slot to load."
 	hint2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint2.add_theme_color_override("font_color", RealmColors.MUTED)
 	if RealmFonts.font_body:
@@ -419,6 +475,16 @@ func _make_continue() -> VBoxContainer:
 		hint2.add_theme_font_size_override("font_size", 15)
 	v.add_child(hint2)
 	return v
+
+
+func _continue_side_heading(txt: String) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_color_override("font_color", RealmColors.DIM)
+	if RealmFonts.font_body:
+		l.add_theme_font_override("font", RealmFonts.font_body)
+		l.add_theme_font_size_override("font_size", 16)
+	return l
 
 
 func _menu_heading(txt: String) -> Label:
@@ -610,7 +676,7 @@ func _on_save_slot_committed() -> void:
 	if not is_instance_valid(_edit_save_slot):
 		return
 	var slot := _edit_save_slot.text.strip_edges()
-	RealmSettings.default_save_slot = "current" if slot.is_empty() else slot
+	RealmSettings.default_save_slot = "" if slot.is_empty() or slot == "current" else slot
 	RealmSettings.persist()
 
 
@@ -700,58 +766,319 @@ func _on_continue_pressed() -> void:
 
 
 func _continue_load_list() -> void:
+	_set_continue_list_loading()
 	await _ensure_engine_ready()
+	if not is_instance_valid(self) or not _panel_continue.visible:
+		return
 	_refresh_save_list()
 
 
+func _set_continue_list_loading() -> void:
+	for c in _worlds_vbox.get_children():
+		c.queue_free()
+	for c in _saves_detail_vbox.get_children():
+		c.queue_free()
+	_world_row_buttons.clear()
+	_grouped_slots.clear()
+	_selected_world_key = ""
+	if is_instance_valid(_saves_detail_heading):
+		_saves_detail_heading.text = "Loading saves…"
+	var loading := Label.new()
+	loading.text = "Loading saves…"
+	loading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loading.add_theme_color_override("font_color", RealmColors.DIM)
+	_worlds_vbox.add_child(loading)
+
+
 func _ensure_engine_ready() -> void:
-	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
-		await Transport.engine_ready
+	if Transport.mode != Transport.Mode.SOLO or Transport.is_engine_ready():
+		return
+	# Poll instead of awaiting engine_ready — avoids hanging if the signal already fired.
+	var deadline_ms := Time.get_ticks_msec() + 120_000
+	while not Transport.is_engine_ready():
+		if Time.get_ticks_msec() > deadline_ms:
+			push_warning("GameHome: solo engine not ready after 120s (Continue list)")
+			return
+		var tree := get_tree()
+		if tree == null:
+			return
+		await tree.create_timer(0.2).timeout
 
 
 func _refresh_save_list() -> void:
-	for c in _saves_vbox.get_children():
+	_refresh_continue_worlds_list()
+
+
+func _world_group_key(slot: Dictionary) -> String:
+	var wid := str(slot.get("world_id", "")).strip_edges()
+	if not wid.is_empty():
+		return "id:%s" % wid
+	# Pre–world_id saves: one row per file until re-saved with metadata.
+	var path := str(slot.get("path", "")).strip_edges()
+	if not path.is_empty():
+		return "path:%s" % path
+	var name := str(slot.get("name", "")).strip_edges()
+	if not name.is_empty():
+		return "name:%s" % name
+	var wn := str(slot.get("world_name", "")).strip_edges()
+	var scenario := str(slot.get("scenario_id", "")).strip_edges()
+	var seed := int(slot.get("seed", 0))
+	if not wn.is_empty():
+		return "legacy:%s|%s|%d" % [wn, scenario, seed]
+	return "legacy:%s|%d" % [scenario, seed]
+
+
+func _world_title_from_slot(slot: Dictionary) -> String:
+	var wn := str(slot.get("world_name", "")).strip_edges()
+	if not wn.is_empty():
+		return wn
+	var file_name := str(slot.get("name", "")).strip_edges()
+	if not file_name.is_empty() and file_name not in ["current", "autosave"]:
+		return file_name.replace("_", " ")
+	var scenario := str(slot.get("scenario_id", "")).strip_edges()
+	if scenario.is_empty():
+		if not file_name.is_empty():
+			return file_name.replace("_", " ")
+		scenario = "unknown"
+	return "Unnamed · %s" % scenario.replace("_", " ").capitalize()
+
+
+func _world_subtitle_from_slots(slots: Array) -> String:
+	if slots.is_empty():
+		return ""
+	var first: Dictionary = slots[0] as Dictionary
+	var scenario := str(first.get("scenario_id", "")).strip_edges()
+	var seed := int(first.get("seed", 0))
+	var wid := str(first.get("world_id", "")).strip_edges()
+	var parts: PackedStringArray = PackedStringArray()
+	if not scenario.is_empty():
+		parts.append(scenario.replace("_", " ").capitalize())
+	if seed != 0:
+		parts.append("seed %d" % seed)
+	if not wid.is_empty():
+		parts.append(wid)
+	parts.append("%d save%s" % [slots.size(), "" if slots.size() == 1 else "s"])
+	return " · ".join(parts)
+
+
+func _format_save_label(slot: Dictionary) -> String:
+	var file_name := str(slot.get("name", ""))
+	if file_name.is_empty():
+		file_name = str(slot.get("path", "")).get_file().get_basename()
+	var tick := int(slot.get("tick", 0))
+	var saved_at := int(slot.get("saved_at", 0))
+	var when := ""
+	if saved_at > 0:
+		var ago := maxi(0, int(Time.get_unix_time_from_system()) - saved_at)
+		if ago < 120:
+			when = "%d s ago" % ago
+		elif ago < 7200:
+			when = "%d min ago" % int(ago / 60)
+		elif ago < 172800:
+			when = "%d h ago" % int(ago / 3600)
+		else:
+			when = "%d d ago" % int(ago / 86400)
+	if when.is_empty():
+		return "%s  ·  tick %d" % [file_name, tick]
+	return "%s  ·  tick %d  ·  %s" % [file_name, tick, when]
+
+
+func _refresh_continue_worlds_list() -> void:
+	for c in _worlds_vbox.get_children():
 		c.queue_free()
+	for c in _saves_detail_vbox.get_children():
+		c.queue_free()
+	_world_row_buttons.clear()
+	_grouped_slots.clear()
+	_selected_world_key = ""
+	if is_instance_valid(_saves_detail_heading):
+		_saves_detail_heading.text = "Select a world on the left."
+
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		_show_continue_list_message(
+			"Solo engine still starting… try again in a few seconds, or use Settings → Restart solo engine.",
+			RealmColors.WARN,
+		)
+		return
+
 	API.persistence_list(
 		func(data: Dictionary) -> void:
-			if not bool(data.get("ok", false)):
-				var err := Label.new()
-				var reason := str(data.get("reason", "")).strip_edges()
-				if reason.is_empty():
-					err.text = "Could not list saves (solo engine on port 9000 not reachable)."
-				else:
-					err.text = "Could not list saves: %s" % reason
-				err.add_theme_color_override("font_color", RealmColors.WARN)
-				_saves_vbox.add_child(err)
+			if not is_instance_valid(_worlds_vbox):
 				return
-			var slots: Variant = data.get("slots", [])
-			if not (slots is Array) or (slots as Array).is_empty():
-				var empty := Label.new()
-				empty.text = "No saves yet. Use in-game save to write saves/*.sqlite."
-				empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-				empty.add_theme_color_override("font_color", RealmColors.DIM)
-				_saves_vbox.add_child(empty)
-				return
-			for row in slots as Array:
-				if not (row is Dictionary):
-					continue
-				var d: Dictionary = row
-				var path: String = str(d.get("path", ""))
-				var wname: String = str(d.get("world_name", ""))
-				var scenario: String = str(d.get("scenario_id", ""))
-				var tick: int = int(d.get("tick", 0))
-				var label: String
-				if not wname.is_empty():
-					label = wname
-					if not scenario.is_empty():
-						label += "  ·  %s" % scenario
-					label += "  ·  tick %d" % tick
+			var slots: Array = []
+			if bool(data.get("ok", false)):
+				var raw: Variant = data.get("slots", [])
+				if raw is Array:
+					slots = raw as Array
+			if slots.is_empty():
+				slots = _list_saves_from_disk()
+			if slots.is_empty():
+				if not bool(data.get("ok", false)):
+					var reason := str(data.get("reason", "")).strip_edges()
+					if reason.is_empty():
+						reason = "solo engine on port 9000 not reachable"
+					_show_continue_list_message(
+						"Could not list saves: %s.\n\nCheck Settings → Restart solo engine." % reason,
+						RealmColors.WARN,
+					)
 				else:
-					label = "%s  ·  %s  ·  tick %d" % [d.get("name", path), scenario, tick]
-				var btn := _menu_button(label, false)
-				btn.pressed.connect(_on_pick_save.bind(path))
-				_saves_vbox.add_child(btn)
+					_show_continue_list_message(
+						"No saves yet. Start a New world (each run creates a named save) or save in-game.",
+						RealmColors.DIM,
+					)
+				return
+			_populate_continue_from_slots(slots)
 	)
+
+
+func _show_continue_list_message(text: String, color: Color) -> void:
+	for c in _worlds_vbox.get_children():
+		c.queue_free()
+	var msg := Label.new()
+	msg.text = text
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	msg.add_theme_color_override("font_color", color)
+	_worlds_vbox.add_child(msg)
+
+
+func _list_saves_from_disk() -> Array:
+	var out: Array = []
+	var dir_path := Transport.repo_saves_dir()
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var file := dir.get_next()
+	while file != "":
+		if not dir.current_is_dir() and file.ends_with(".sqlite"):
+			var full := dir_path.path_join(file)
+			var mtime := 0
+			if FileAccess.file_exists(full):
+				mtime = int(FileAccess.get_modified_time(full))
+			out.append(
+				{
+					"path": "saves/%s" % file,
+					"name": file.get_basename(),
+					"mtime": mtime,
+					"saved_at": mtime,
+					"tick": 0,
+					"scenario_id": "",
+					"seed": 0,
+					"world_name": "",
+				}
+			)
+		file = dir.get_next()
+	dir.list_dir_end()
+	out.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a.get("mtime", 0)) > int(b.get("mtime", 0))
+	)
+	return out
+
+
+func _populate_continue_from_slots(slots: Array) -> void:
+	for c in _worlds_vbox.get_children():
+		c.queue_free()
+	_grouped_slots.clear()
+	_world_row_buttons.clear()
+	for row in slots:
+		if not (row is Dictionary):
+			continue
+		var d: Dictionary = row as Dictionary
+		var key := _world_group_key(d)
+		if not _grouped_slots.has(key):
+			_grouped_slots[key] = []
+		(_grouped_slots[key] as Array).append(d)
+
+	var world_keys: Array = _grouped_slots.keys()
+	world_keys.sort_custom(
+		func(a: String, b: String) -> bool:
+			return _world_group_latest_mtime(a) > _world_group_latest_mtime(b)
+	)
+
+	for key in world_keys:
+		var group: Array = _grouped_slots[key] as Array
+		group.sort_custom(
+			func(a: Dictionary, b: Dictionary) -> bool:
+				return int(a.get("saved_at", 0)) > int(b.get("saved_at", 0))
+		)
+		var sample: Dictionary = group[0] as Dictionary
+		var title := _world_title_from_slot(sample)
+		var subtitle := _world_subtitle_from_slots(group)
+		var btn := _menu_button("%s\n%s" % [title, subtitle], false)
+		btn.pressed.connect(_on_world_selected.bind(key))
+		_worlds_vbox.add_child(btn)
+		_world_row_buttons[key] = btn
+
+	if not world_keys.is_empty():
+		_on_world_selected(world_keys[0] as String)
+
+
+func _world_group_latest_mtime(world_key: String) -> int:
+	var group: Variant = _grouped_slots.get(world_key, [])
+	if not (group is Array):
+		return 0
+	var best := 0
+	for row in group as Array:
+		if row is Dictionary:
+			best = maxi(best, int((row as Dictionary).get("saved_at", 0)))
+			best = maxi(best, int((row as Dictionary).get("mtime", 0)))
+	return best
+
+
+func _on_world_selected(world_key: String) -> void:
+	_selected_world_key = world_key
+	_style_world_rows()
+	var group: Variant = _grouped_slots.get(world_key, [])
+	if not (group is Array) or (group as Array).is_empty():
+		_populate_saves_for_world([])
+		return
+	var sample: Dictionary = (group as Array)[0] as Dictionary
+	if is_instance_valid(_saves_detail_heading):
+		_saves_detail_heading.text = _world_title_from_slot(sample)
+	_populate_saves_for_world(group as Array)
+
+
+func _style_world_rows() -> void:
+	for key in _world_row_buttons.keys():
+		var btn: Button = _world_row_buttons[key] as Button
+		var selected := str(key) == _selected_world_key
+		if selected:
+			btn.add_theme_stylebox_override("normal", _world_row_stylebox_selected())
+			btn.add_theme_color_override("font_color", RealmColors.ACCENT)
+		else:
+			btn.add_theme_stylebox_override("normal", RealmColors.style_btn_normal())
+			btn.add_theme_color_override("font_color", RealmColors.TEXT)
+
+
+func _world_row_stylebox_selected() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.14, 0.13, 0.10)
+	sb.set_border_width_all(2)
+	sb.border_color = RealmColors.ACCENT
+	sb.set_corner_radius_all(4)
+	return sb
+
+
+func _populate_saves_for_world(slots: Array) -> void:
+	for c in _saves_detail_vbox.get_children():
+		c.queue_free()
+	if slots.is_empty():
+		var empty := Label.new()
+		empty.text = "No saves for this world."
+		empty.add_theme_color_override("font_color", RealmColors.DIM)
+		_saves_detail_vbox.add_child(empty)
+		return
+	for row in slots:
+		if not (row is Dictionary):
+			continue
+		var d: Dictionary = row as Dictionary
+		var path := str(d.get("path", ""))
+		if path.is_empty():
+			continue
+		var btn := _menu_button(_format_save_label(d), false)
+		btn.pressed.connect(_on_pick_save.bind(path))
+		_saves_detail_vbox.add_child(btn)
 
 
 func _on_pick_save(relative_path: String) -> void:
@@ -769,6 +1096,9 @@ func _on_pick_save(relative_path: String) -> void:
 		relative_path,
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
+				var wid := str(data.get("world_id", "")).strip_edges()
+				if not wid.is_empty():
+					WorldState.world_id = wid
 				var cash := int(data.get("player_cash_cents", 0))
 				if cash > 0:
 					WorldState.player_cash_cents = cash
@@ -859,7 +1189,49 @@ func _stale_engine_message(version_resp: Dictionary) -> String:
 	return ""
 
 
+func _generate_world_id() -> String:
+	var crypto := Crypto.new()
+	return "w_%s" % crypto.generate_random_bytes(6).hex_encode()
+
+
+func _sanitize_save_slot(raw: String) -> String:
+	var s := raw.strip_edges()
+	if s.is_empty():
+		return ""
+	var out := ""
+	for i in s.length():
+		var c := s[i]
+		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c in "_-":
+			out += c
+		elif c == " ":
+			out += "_"
+	if out.is_empty():
+		return ""
+	return out.substr(0, 48)
+
+
+func _snapshot_slot_for_new_world(wname: String, scenario: String, seed_val: int) -> String:
+	var base := _sanitize_save_slot(wname)
+	if base.is_empty():
+		base = _sanitize_save_slot(scenario)
+	if base.is_empty():
+		base = "world"
+	return "%s_%d" % [base, seed_val]
+
+
+func _autosave_new_world_snapshot(data: Dictionary) -> void:
+	var wid := str(data.get("world_id", _pending_new_world_id)).strip_edges()
+	var slot := wid
+	if slot.is_empty():
+		var scenario := str(data.get("scenario_id", "")).strip_edges()
+		var seed_val := int(data.get("seed", 0))
+		slot = _snapshot_slot_for_new_world(_pending_new_world_name, scenario, seed_val)
+	API.save_game(Callable(), slot)
+
+
 func _send_dev_reset(seed_val: int, scenario: String, wname: String) -> void:
+	_pending_new_world_name = wname.strip_edges()
+	_pending_new_world_id = _generate_world_id()
 	API.dev_reset(
 		seed_val,
 		scenario,
@@ -867,6 +1239,9 @@ func _send_dev_reset(seed_val: int, scenario: String, wname: String) -> void:
 			if is_instance_valid(_creation_screen):
 				_creation_screen.end_waiting_for_engine()
 			if bool(data.get("ok", false)):
+				var wid := str(data.get("world_id", _pending_new_world_id)).strip_edges()
+				if not wid.is_empty():
+					WorldState.world_id = wid
 				var expected := WorldState.variant_to_int(
 					data.get("player_starting_cash_cents", 0), 0
 				)
@@ -888,6 +1263,7 @@ func _send_dev_reset(seed_val: int, scenario: String, wname: String) -> void:
 					"World creation failed: %s" % str(data.get("reason", data))
 				),
 		wname,
+		_pending_new_world_id,
 	)
 
 
@@ -900,6 +1276,7 @@ func _finish_dev_reset_cash_check(data: Dictionary, cash_cents: int) -> void:
 	if cash_cents > 0:
 		WorldState.player_cash_cents = cash_cents
 		WorldState.summary_updated.emit()
+	_autosave_new_world_snapshot(data)
 	if is_instance_valid(_creation_screen):
 		_creation_screen.mark_done()
 	else:

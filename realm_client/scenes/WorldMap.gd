@@ -777,9 +777,9 @@ func _draw() -> void:
 
 	if _uses_overview_draw():
 		_draw_overview_terrain()
-		_draw_selection_highlight(sel_gx, sel_gy)
 		_draw_town_dots()
 		_draw_vector_overlays()
+		_draw_selection_highlight(sel_gx, sel_gy)
 		return
 
 	# Frontier: one polygon per plot. Genesis: flat fills, no grid strokes (cache builds in chunks).
@@ -799,7 +799,6 @@ func _draw() -> void:
 			_draw_aligned_cell_terrain_stroked(sel_gx, sel_gy, lod)
 		else:
 			_draw_aligned_cell_terrain()
-	_draw_selection_highlight(sel_gx, sel_gy)
 	_draw_town_dots()
 	_draw_town_chrome(lod, csp)
 
@@ -811,6 +810,7 @@ func _draw() -> void:
 	if lod >= 3:
 		_draw_plot_detail_labels()
 	_draw_vector_overlays()
+	_draw_selection_highlight(sel_gx, sel_gy)
 
 
 func _draw_vector_overlays() -> void:
@@ -1089,27 +1089,25 @@ func _draw_aligned_cell_terrain_stroked(sel_gx: int, sel_gy: int, lod: int) -> v
 
 
 func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
+	if sel_gx < 0 or sel_gy < 0:
+		return
 	if sel_gx < _vis_min_x or sel_gx >= _vis_max_x or sel_gy < _vis_min_y or sel_gy >= _vis_max_y:
 		return
 	var sel_idx := _cell_index_safe(sel_gx, sel_gy)
 	if sel_idx < 0 or (_cell_flags[sel_idx] & 0x1) == 0:
 		return
-	var sw := _world_line_width(3.5)
+	var sw := maxf(_world_line_width(3.5), 1.0 / maxf(0.001, camera.zoom.x))
 	var accent := RealmColors.ACCENT
+	accent.a = 1.0
 	var pid := _cell_pids[sel_idx]
-	if pid.is_empty():
-		draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
-		return
-	if _is_large_map():
-		draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
-		return
-	var p_sel: Dictionary = WorldState.plots.get(pid, {})
+	var p_sel: Dictionary = WorldState.plots.get(pid, {}) if not pid.is_empty() else {}
 	var cell_set := _plot_cell_set(p_sel, pid)
-	if cell_set.size() > 1 or _uses_parcel_polygon_draw():
-		var poly := _world_deed_boundary_polygon(cell_set)
-		if poly.size() >= 3:
-			_draw_polyline_world(poly, accent, sw, true)
-			return
+	if cell_set.is_empty():
+		cell_set["%d,%d" % [sel_gx, sel_gy]] = true
+	var poly := _world_deed_boundary_polygon(cell_set)
+	if poly.size() >= 3:
+		_draw_polyline_world(poly, accent, sw, true)
+		return
 	draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
 
 

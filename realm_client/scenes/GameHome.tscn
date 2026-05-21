@@ -39,7 +39,7 @@ layout_mode = 2
 theme_override_constants/separation = 32
 
 [node name="LeftColumn" type="VBoxContainer" parent="Margin/HBox"]
-custom_minimum_size = Vector2(520, 0)
+custom_minimum_size = Vector2(580, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 
