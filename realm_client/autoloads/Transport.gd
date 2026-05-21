@@ -216,9 +216,8 @@ func _notification(what: int) -> void:
 func _safe_call(callback: Callable, data: Dictionary) -> void:
 	if not callback.is_valid():
 		return
+	# Lambdas and other unbound callables have no ``get_object()`` — still invoke.
 	var obj := callback.get_object()
-	if obj == null:
-		return
 	if obj is Node:
 		var n := obj as Node
 		if not is_instance_valid(n) or not n.is_inside_tree():

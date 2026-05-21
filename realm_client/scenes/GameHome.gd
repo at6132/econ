@@ -767,6 +767,10 @@ func _on_continue_pressed() -> void:
 
 func _continue_load_list() -> void:
 	_set_continue_list_loading()
+	# Show anything on disk immediately (don't wait on solo engine / socket).
+	var disk_early := _list_saves_from_disk()
+	if not disk_early.is_empty():
+		_populate_continue_from_slots(disk_early)
 	await _ensure_engine_ready()
 	if not is_instance_valid(self) or not _panel_continue.visible:
 		return
@@ -901,34 +905,40 @@ func _refresh_continue_worlds_list() -> void:
 		)
 		return
 
-	API.persistence_list(
-		func(data: Dictionary) -> void:
-			if not is_instance_valid(_worlds_vbox):
-				return
-			var slots: Array = []
-			if bool(data.get("ok", false)):
-				var raw: Variant = data.get("slots", [])
-				if raw is Array:
-					slots = raw as Array
-			if slots.is_empty():
-				slots = _list_saves_from_disk()
-			if slots.is_empty():
-				if not bool(data.get("ok", false)):
-					var reason := str(data.get("reason", "")).strip_edges()
-					if reason.is_empty():
-						reason = "solo engine on port 9000 not reachable"
-					_show_continue_list_message(
-						"Could not list saves: %s.\n\nCheck Settings → Restart solo engine." % reason,
-						RealmColors.WARN,
-					)
-				else:
-					_show_continue_list_message(
-						"No saves yet. Start a New world (each run creates a named save) or save in-game.",
-						RealmColors.DIM,
-					)
-				return
-			_populate_continue_from_slots(slots)
-	)
+	API.persistence_list(_on_persistence_list_loaded)
+
+
+func _on_persistence_list_loaded(data: Dictionary) -> void:
+	if not is_instance_valid(_worlds_vbox):
+		return
+	var slots: Array = []
+	if bool(data.get("ok", false)):
+		var raw: Variant = data.get("slots", [])
+		if raw is Array:
+			slots = raw as Array
+	if slots.is_empty():
+		slots = _list_saves_from_disk()
+	if slots.is_empty():
+		if not _grouped_slots.is_empty():
+			return
+		var saves_dir := Transport.repo_saves_dir()
+		if not bool(data.get("ok", false)):
+			var reason := str(data.get("reason", "")).strip_edges()
+			if reason.is_empty():
+				reason = "solo engine on port 9000 not reachable"
+			_show_continue_list_message(
+				"Could not list saves: %s.\n\nFolder: %s\n\nRestart solo engine in Settings."
+				% [reason, saves_dir],
+				RealmColors.WARN,
+			)
+		else:
+			_show_continue_list_message(
+				"No .sqlite files in:\n%s\n\nPlay a New world (autosaves on quit) or Save in-game."
+				% saves_dir,
+				RealmColors.DIM,
+			)
+		return
+	_populate_continue_from_slots(slots)
 
 
 func _show_continue_list_message(text: String, color: Color) -> void:
@@ -944,8 +954,11 @@ func _show_continue_list_message(text: String, color: Color) -> void:
 func _list_saves_from_disk() -> Array:
 	var out: Array = []
 	var dir_path := Transport.repo_saves_dir()
+	if not DirAccess.dir_exists_absolute(dir_path):
+		return out
 	var dir := DirAccess.open(dir_path)
 	if dir == null:
+		push_warning("GameHome: cannot open saves dir: %s" % dir_path)
 		return out
 	dir.list_dir_begin()
 	var file := dir.get_next()

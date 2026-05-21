@@ -451,7 +451,7 @@ func open_production_workflow(plot_id: String, building: Dictionary, plot_data: 
 			func(d: Dictionary) -> void:
 				WorldState.merge_blueprints_list(d.get("blueprints", []))
 				if is_instance_valid(_production_workflow) and _production_workflow.has_method("open"):
-					_production_workflow.call("open", plot_id, building, plot_data)
+					_production_workflow.call("open", plot_id, building, plot_data),
 			WorldState.party_id,
 		)
 
