@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "realm-assets": {
+      "command": "python",
+      "args": ["server.py"],
+      "cwd": "${workspaceFolder}/realm_assets_mcp"
+    }
+  }
+}

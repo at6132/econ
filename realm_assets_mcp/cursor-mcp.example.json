@@ -1,0 +1,7 @@
+{
+  "realm-assets": {
+    "command": "python",
+    "args": ["server.py"],
+    "cwd": "C:/Users/avita/econ/realm_assets_mcp"
+  }
+}
