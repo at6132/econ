@@ -631,7 +631,9 @@ def start_production(
                 f"completes around tick {ct}."
             ),
         }
-    recipe = RECIPES.get(recipe_id)
+    from realm.production.custom_content import get_recipe
+
+    recipe = get_recipe(world, recipe_id)
     if recipe is None:
         return {"ok": False, "reason": "unknown recipe"}
     if not world.can_party_run_recipe(party, recipe_id):
@@ -858,7 +860,9 @@ def tick_production(world: World) -> None:
         if run.ticks_remaining > 0:
             still.append(run)
             continue
-        recipe = RECIPES.get(run.recipe_id)
+        from realm.production.custom_content import get_recipe
+
+        recipe = get_recipe(world, run.recipe_id)
         if recipe is None:
             continue
         eff_out = effective_outputs_for_completion(world, run, recipe)
@@ -1059,7 +1063,9 @@ def _building_for_run(world: World, run: ActiveProduction) -> dict | None:
 
     Hand recipes have no workshop; this returns ``None``.
     """
-    recipe = RECIPES.get(run.recipe_id)
+    from realm.production.custom_content import get_recipe
+
+    recipe = get_recipe(world, run.recipe_id)
     if recipe is None or not recipe.requires_building_id:
         return None
     req = recipe.requires_building_id
@@ -1221,7 +1227,9 @@ def _maybe_schedule_auto_restart(world: World, run: ActiveProduction) -> None:
 
 def _workshop_below_auto_restart_threshold(world: World, run: ActiveProduction) -> bool:
     """Return True when the workshop on this plot is at < 60% efficiency."""
-    recipe = RECIPES.get(run.recipe_id)
+    from realm.production.custom_content import get_recipe
+
+    recipe = get_recipe(world, run.recipe_id)
     if recipe is None:
         return False
     req = recipe.requires_building_id
@@ -1292,8 +1300,10 @@ def throughput_breakdown(
     from realm.production.decay import EFFICIENCY_HEALTHY
     from realm.population.labor import effective_output_bps_for_run
 
+    from realm.production.custom_content import get_recipe
+
     plot = world.plots.get(plot_id)
-    recipe = RECIPES.get(recipe_id)
+    recipe = get_recipe(world, recipe_id)
     if plot is None or recipe is None:
         return {"ok": False, "reason": "unknown plot or recipe"}
     # Maintenance efficiency (taken from the workshop instance if present).

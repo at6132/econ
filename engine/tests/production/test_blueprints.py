@@ -140,6 +140,44 @@ def test_place_terrain_gate() -> None:
     assert not r["ok"]
 
 
+def test_dock_rejects_inland_placement_on_coastal_parcel() -> None:
+    """Coastal deed with room inland: dock must overlap waterfront cells."""
+    from realm.core.ids import PlotId
+    from realm.production.recipe_sites import footprint_borders_water, waterfront_build_cells
+    from realm.world.plot_parcels import refresh_world_cell_index
+    from realm.world.terrain import Terrain
+    from realm.world.plot_scale import cells_free
+
+    world = bootstrap_frontier(seed=21, grid_width=8, grid_height=8, uniform_plots=True)
+    seed_world_blueprints(world)
+    plot = world.plots[PlotId("p-2-2")]
+    plot.terrain = Terrain.PLAINS
+    plot.world_cells = ((2, 2), (3, 2), (2, 3), (3, 3))
+    world.plots[PlotId("p-1-2")].terrain = Terrain.WATER_SHALLOW
+    world.plots[PlotId("p-1-3")].terrain = Terrain.WATER_SHALLOW
+    refresh_world_cell_index(world)
+    front = waterfront_build_cells(world, plot)
+    assert front
+    party = PartyId("player")
+    claim_plot(world, party, PlotId("p-2-2"))
+    inland: tuple[int, int] | None = None
+    for gy in range(20):
+        for gx in range(20):
+            if not cells_free(str(plot.plot_id), world, gx, gy, 4, 2):
+                continue
+            if not footprint_borders_water(world, plot, gx, gy, 4, 2):
+                inland = (gx, gy)
+                break
+        if inland is not None:
+            break
+    assert inland is not None
+    r = place_blueprint(
+        world, party, plot.plot_id, "dock", inland[0], inland[1], build_mode="self"
+    )
+    assert not r["ok"]
+    assert "waterfront" in str(r.get("reason", ""))
+
+
 def test_license_fee_paid_on_place() -> None:
     world = bootstrap_frontier(seed=12)
     seed_world_blueprints(world)

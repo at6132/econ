@@ -141,6 +141,20 @@ def _find_free_position(
     return None
 
 
+def find_free_blueprint_position(
+    world: World, plot_id: PlotId, blueprint_id: str
+) -> tuple[int, int] | None:
+    """First free grid cell (row-major) for ``blueprint_id`` on ``plot_id``."""
+    if blueprint_id not in world.blueprints:
+        from realm.production.blueprints import seed_world_blueprints
+
+        seed_world_blueprints(world)
+    bp = world.blueprints.get(blueprint_id)
+    if bp is None:
+        return None
+    return _find_free_position(world, str(plot_id), bp)
+
+
 def create_blueprint(
     world: World,
     creator: PartyId,
@@ -169,9 +183,10 @@ def create_blueprint(
         return {"ok": False, "reason": "blueprint footprint exceeds maximum plot area (100 cells)"}
     if not name or len(name) > 60:
         return {"ok": False, "reason": "name must be 1–60 characters"}
-    custom = world.scenario_state.get("custom_recipes") or {}
+    from realm.production.custom_content import get_recipe
+
     for recipe_id in enabled_recipe_ids:
-        if recipe_id not in RECIPES and recipe_id not in custom:
+        if get_recipe(world, recipe_id) is None:
             return {"ok": False, "reason": f"unknown recipe_id: {recipe_id}"}
 
     reg_fee = 20_000 + footprint_cells * 5_000
@@ -210,6 +225,12 @@ def create_blueprint(
         requires_power=requires_power,
     )
     world.blueprints[bid] = bp
+    from realm.production.custom_content import custom_recipes_store
+
+    for rid in enabled_recipe_ids:
+        row = custom_recipes_store(world).get(rid)
+        if isinstance(row, dict) and str(row.get("creator_party", "")) == str(creator):
+            row["requires_building_id"] = bid
     log_event(
         world,
         "blueprint_created",
@@ -285,10 +306,17 @@ def place_blueprint(
             "reason": f"requires terrain: {bp.terrain_requirements}",
         }
     if bp.requires_coastal:
-        from realm.production.recipe_sites import plot_is_coastal
+        from realm.production.recipe_sites import footprint_borders_water, plot_is_coastal
 
         if not plot_is_coastal(world, plot):
             return {"ok": False, "reason": "requires coastal terrain"}
+        if not footprint_borders_water(
+            world, plot, abs_gx, abs_gy, bp.footprint_w, bp.footprint_h
+        ):
+            return {
+                "ok": False,
+                "reason": "must be placed on the waterfront (footprint touching water)",
+            }
     if bp.requires_power:
         from realm.infrastructure.power_grid import get_plot_power_info
 
@@ -569,6 +597,13 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
         plot_site_roads_link_world,
         plot_world_link_edges,
     )
+    from realm.production.recipe_sites import plot_is_coastal, waterfront_build_cells
+
+    waterfront: list[str] = []
+    if plot is not None:
+        waterfront = [
+            f"{gx},{gy}" for gx, gy in sorted(waterfront_build_cells(world, plot))
+        ]
 
     return {
         "grid_cells_w": grid_w,
@@ -585,6 +620,8 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
         "site_roads_connect_workshops": plot_site_roads_connect_workshops(world, plot_id),
         "site_roads_link_world": plot_site_roads_link_world(world, plot_id),
         "world_link_edges": plot_world_link_edges(world, plot_id),
+        "is_coastal": plot_is_coastal(world, plot) if plot is not None else False,
+        "waterfront_cells": waterfront,
     }
 
 
@@ -631,10 +668,19 @@ def available_positions(
     bp = world.blueprints.get(blueprint_id)
     if bp is None:
         return []
+    plot = world.plots.get(plot_id)
     gw, gh = plot_grid_side_for_id(world, plot_id)
     out: list[dict[str, int]] = []
     for gy in range(gh):
         for gx in range(gw):
-            if cells_free(str(plot_id), world, gx, gy, bp.footprint_w, bp.footprint_h):
-                out.append({"grid_x": gx, "grid_y": gy})
+            if not cells_free(str(plot_id), world, gx, gy, bp.footprint_w, bp.footprint_h):
+                continue
+            if bp.requires_coastal and plot is not None:
+                from realm.production.recipe_sites import footprint_borders_water
+
+                if not footprint_borders_water(
+                    world, plot, gx, gy, bp.footprint_w, bp.footprint_h
+                ):
+                    continue
+            out.append({"grid_x": gx, "grid_y": gy})
     return out

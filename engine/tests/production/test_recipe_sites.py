@@ -85,3 +85,48 @@ def test_mountain_foundry_unlocks_smelt_in_recipe_ids() -> None:
     _advance_until_building_ready(w, player, pid, "foundry")
     ids = recipe_ids_on_plot_for_owner(w, w.plots[pid])
     assert "smelt_iron" in ids and "steel_alloy" in ids and "sawmill" not in ids
+
+
+def test_custom_blueprint_enabled_recipe_workshop() -> None:
+    """Player blueprint can run seeded recipes via ``enabled_recipe_ids`` (not only ``requires_building_id``)."""
+    from realm.actions.blueprint_actions import create_blueprint, place_blueprint
+    from realm.production.blueprints import seed_world_blueprints
+    from realm.production.recipe_workshops import plot_has_workshop_for_recipe
+    from turnkey_fixtures import grant_turnkey_self_materials
+
+    w = bootstrap_frontier(seed=12, grid_width=8, grid_height=4)
+    seed_world_blueprints(w)
+    pid = first_terrain_plot_id(w, Terrain.MOUNTAIN)
+    player = PartyId("player")
+    assert claim_plot(w, player, pid)["ok"] is True
+    assert survey_plot(w, player, pid)["ok"] is True
+    r = create_blueprint(
+        w,
+        player,
+        name="Mountain Smelter",
+        description="custom foundry line",
+        footprint_w=4,
+        footprint_h=4,
+        construction_materials={"brick": 4, "coal": 2},
+        construction_labor_cents=50_000,
+        construction_ticks=60,
+        enabled_recipe_ids=["smelt_iron"],
+        maintenance_interval_ticks=0,
+        maintenance_materials={},
+        maintenance_grace_ticks=0,
+        is_public=False,
+        license_fee_cents=0,
+        category="processing",
+        terrain_requirements=["mountain"],
+        requires_coastal=False,
+        requires_power=False,
+    )
+    assert r["ok"], r
+    custom_bid = str(r["blueprint_id"])
+    grant_turnkey_self_materials(w, player, custom_bid)
+    pr = place_blueprint(w, player, pid, custom_bid, 0, 0, build_mode="turnkey")
+    assert pr["ok"], pr
+    _advance_until_building_ready(w, player, pid, custom_bid)
+    assert plot_has_workshop_for_recipe(w, player, pid, "smelt_iron")
+    ids = recipe_ids_on_plot_for_owner(w, w.plots[pid])
+    assert "smelt_iron" in ids

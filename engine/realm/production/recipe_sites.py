@@ -177,19 +177,74 @@ def recipe_allowed_on_terrain(terrain: Terrain, recipe_id: str) -> bool:
     return terrain in terrains
 
 
-def plot_is_coastal(world, plot: Plot) -> bool:
-    """A plot is coastal when it is dry land directly adjacent (4-neighbour) to a water tile."""
-    if not terrain_allows_workshop(plot.terrain):
-        return False
-    deltas = ((1, 0), (-1, 0), (0, 1), (0, -1))
-    for dx, dy in deltas:
-        from realm.core.ids import PlotId
+def _world_cell_is_water(world, x: int, y: int) -> bool:
+    """True when ``(x, y)`` is off-map, unclaimed, or a water terrain tile."""
+    from realm.core.ids import PlotId
+    from realm.world.plot_parcels import build_world_cell_index
 
-        nb = world.plots.get(PlotId(f"p-{plot.x + dx}-{plot.y + dy}"))
-        if nb is None:
-            continue
-        if nb.terrain in _WATER:
-            return True
+    idx = world.scenario_state.get("world_cell_to_plot")
+    if not isinstance(idx, dict) or not idx:
+        idx = build_world_cell_index(world.plots)
+    owner = idx.get(f"{x},{y}")
+    if owner is None:
+        return True
+    wp = world.plots.get(PlotId(str(owner)))
+    if wp is None:
+        return True
+    return wp.terrain in _WATER
+
+
+def plot_is_coastal(world, plot: Plot) -> bool:
+    """True when any world tile in the deed borders water or the map edge.
+
+    Uses the full ``world_cells`` polyomino (not just the anchor ``x,y``), so
+    multi-tile coastal parcels classify correctly for docks, fishing, and routes.
+    """
+    return bool(waterfront_build_cells(world, plot))
+
+
+def waterfront_build_cells(world, plot: Plot) -> frozenset[tuple[int, int]]:
+    """10m build-grid cells on this deed with a world-tile neighbour that is water.
+
+    Used to gate dock / shipyard placement: the footprint must overlap at least one
+    of these cells so a large coastal parcel cannot host a dock entirely inland.
+    """
+    if not plot_allows_structure(plot):
+        return frozenset()
+    from realm.world.plot_scale import (
+        CELLS_PER_WORLD_TILE,
+        plot_deed_grid_cells,
+        plot_world_span,
+    )
+
+    min_x, min_y, _, _ = plot_world_span(plot)
+    out: set[tuple[int, int]] = set()
+    for cx, cy in plot_deed_grid_cells(plot):
+        wx = min_x + cx // CELLS_PER_WORLD_TILE
+        wy = min_y + cy // CELLS_PER_WORLD_TILE
+        for ddx, ddy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if _world_cell_is_water(world, wx + ddx, wy + ddy):
+                out.add((cx, cy))
+                break
+    return frozenset(out)
+
+
+def footprint_borders_water(
+    world,
+    plot: Plot,
+    grid_x: int,
+    grid_y: int,
+    footprint_w: int,
+    footprint_h: int,
+) -> bool:
+    """True when at least one cell of the footprint sits on the deed's waterfront."""
+    front = waterfront_build_cells(world, plot)
+    if not front:
+        return False
+    for dx in range(int(footprint_w)):
+        for dy in range(int(footprint_h)):
+            if (int(grid_x) + dx, int(grid_y) + dy) in front:
+                return True
     return False
 
 
