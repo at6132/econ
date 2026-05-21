@@ -854,37 +854,12 @@ _WORKSHOP_BUILDING_IDS = _PRIMARY_WORKSHOPS | _SECONDARY_WORKSHOPS | _TIER2_WORK
 
 
 def _maybe_post_settler_job_opening(world: World, party: PartyId, plot_id: PlotId) -> None:
-    """Post one wage job when a settler workshop is operational (Phase 7E hook)."""
+    """Post wage jobs for all active settler workshops (Phase 7E hook)."""
     if world.scenario_id != "genesis" or not str(party).startswith("settler_"):
         return
-    now = int(world.tick)
-    has_workshop = any(
-        b.get("party") == str(party)
-        and b.get("plot_id") == str(plot_id)
-        and int(b.get("completes_at_tick", 0)) <= now
-        and str(b.get("building_id", "")) in _WORKSHOP_BUILDING_IDS
-        for b in world.plot_buildings
-    )
-    if not has_workshop:
-        return
-    for op in world.job_openings:
-        if op.employer == party and op.plot_id == plot_id and op.filled_by is None:
-            return
-    from realm.population.employment import (
-        DEFAULT_WAGE_PER_GAME_DAY_CENTS,
-        post_job_opening,
-    )
+    from realm.genesis.settler_upgrades import _maybe_post_job_openings
 
-    wage_reserve = DEFAULT_WAGE_PER_GAME_DAY_CENTS * 7
-    if world.ledger.balance(party_cash_account(party)) < wage_reserve:
-        return
-    post_job_opening(
-        world,
-        party,
-        plot_id,
-        skill_min=0,
-        wage_per_day_cents=DEFAULT_WAGE_PER_GAME_DAY_CENTS,
-    )
+    _maybe_post_job_openings(world, party)
 
 
 def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id: str) -> bool:

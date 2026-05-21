@@ -60,6 +60,11 @@ def invalidate_road_cache() -> None:
     _endpoint_cache.clear()
 
 
+def get_road_endpoint_plots(world: World) -> list[str]:
+    """Plot ids that are endpoints of at least one road segment (sorted)."""
+    return sorted(_get_road_endpoints(world))
+
+
 def _footprint_cells_on_plot(
     world: World, plot_id: str, blueprint_id: str, grid_x: int, grid_y: int
 ) -> set[tuple[int, int]]:

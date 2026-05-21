@@ -51,6 +51,12 @@ __all__ = [
     "tick_settler_margin_review",
     "VERTICAL_TRIGGER_RATIO_BPS",
     "VERTICAL_CASH_BUFFER_BPS",
+    "ROAD_BUILD_CASH_THRESHOLD",
+    "JOB_POSTING_CASH_THRESHOLD",
+    "JOB_WAGE_CENTS_PER_DAY",
+    "_maybe_post_job_openings",
+    "_maybe_build_settler_road",
+    "_maybe_build_power_shed",
 ]
 
 
@@ -59,6 +65,19 @@ VERTICAL_CASH_BUFFER_BPS: int = 15_000  # cash ≥ turnkey × 1.5
 
 _TICKS_PER_GAME_DAY: int = 1440
 _REVIEW_INTERVAL_TICKS: int = 7 * _TICKS_PER_GAME_DAY
+_TICKS_PER_GAME_WEEK: int = 7 * _TICKS_PER_GAME_DAY
+_TICKS_PER_GAME_MONTH: int = 30 * _TICKS_PER_GAME_DAY
+
+ROAD_BUILD_CASH_THRESHOLD: int = 300_000
+ROAD_BUILD_MATERIALS_PER_SEGMENT: dict[str, int] = {
+    "lumber": 2,
+    "stone": 2,
+}
+_MAX_ROAD_SEGMENTS_PER_WEEK: int = 3
+_POWER_SHED_CASH_THRESHOLD: int = 500_000
+
+JOB_POSTING_CASH_THRESHOLD: int = 100_000
+JOB_WAGE_CENTS_PER_DAY: int = 800
 
 
 # (upstream_building, upstream_material, downstream_building, downstream_recipe,
@@ -504,6 +523,132 @@ def _maybe_subdivide_and_lease(world: World, party: PartyId) -> bool:
     return True
 
 
+def _maybe_post_job_openings(world: World, party: PartyId) -> int:
+    from realm.population.employment import maybe_post_job_openings_for_party
+
+    return maybe_post_job_openings_for_party(world, party)
+
+
+def _maybe_build_settler_road(world: World, party: PartyId) -> bool:
+    """Connect an isolated owned plot to the road network (up to 3 segments)."""
+    from realm.infrastructure.road_connectivity import is_road_accessible
+    from realm.infrastructure.npc_self_roads import (
+        ensure_road_build_supplies,
+        pick_road_edge,
+    )
+    from realm.infrastructure.roads import build_road
+
+    if int(world.ledger.balance(party_cash_account(party))) < ROAD_BUILD_CASH_THRESHOLD:
+        return False
+
+    unconnected: list[PlotId] = []
+    for pid, plot in world.plots.items():
+        if plot.owner != party:
+            continue
+        if _is_water_plot(plot):
+            continue
+        if is_road_accessible(world, pid):
+            continue
+        unconnected.append(pid)
+    if not unconnected:
+        return False
+
+    target = sorted(unconnected, key=str)[0]
+
+    def _buy_material(w: World, p: PartyId, mat: MaterialId, qty: int) -> dict:
+        return market_buy(w, p, mat, qty, max_price_per_unit_cents=500)
+
+    if not ensure_road_build_supplies(world, party, buy_material=_buy_material):
+        return False
+
+    built = 0
+    while built < _MAX_ROAD_SEGMENTS_PER_WEEK:
+        if is_road_accessible(world, target):
+            break
+        edge = pick_road_edge(world, target)
+        if edge is None:
+            break
+        result = build_road(world, party, edge[0], edge[1])
+        if not result.get("ok"):
+            break
+        built += 1
+        log_event(
+            world,
+            "settler_road_built",
+            f"{party} built road {result.get('segment_id')} ({edge[0]} ↔ {edge[1]})",
+            party=str(party),
+            from_plot=str(edge[0]),
+            to_plot=str(edge[1]),
+            segment_id=str(result.get("segment_id", "")),
+        )
+
+    return built > 0
+
+
+def _is_water_plot(plot: object) -> bool:
+    terr = str(getattr(plot, "terrain", "")).lower()
+    return terr.startswith("water") or terr == "water_shallow"
+
+
+def _maybe_build_power_shed(world: World, party: PartyId) -> bool:
+    """Place a power shed on a road-connected plot when the regional grid needs capacity."""
+    from realm.actions.blueprint_actions import find_free_blueprint_position, place_blueprint
+    from realm.infrastructure.power_grid import POWER_GENERATOR_BLUEPRINTS, compute_grid_regions
+    from realm.infrastructure.road_connectivity import is_road_accessible
+
+    if int(world.ledger.balance(party_cash_account(party))) < _POWER_SHED_CASH_THRESHOLD:
+        return False
+
+    for pb in world.placed_buildings.values():
+        if str(pb.built_by) == str(party) and pb.blueprint_id == "power_shed":
+            return False
+    for row in world.plot_buildings:
+        if str(row.get("party")) == str(party) and str(row.get("building_id")) == "power_shed":
+            return False
+
+    regions = compute_grid_regions(world)
+    plot_to_region = {
+        pid: reg for reg in regions.values() for pid in reg.plot_ids
+    }
+
+    for pid, plot in sorted(world.plots.items(), key=lambda t: str(t[0])):
+        if plot.owner != party:
+            continue
+        if _is_water_plot(plot):
+            continue
+        if not is_road_accessible(world, pid):
+            continue
+        reg = plot_to_region.get(str(pid))
+        if reg is None:
+            continue
+        needs_power = reg.load_factor > 0.6 or reg.capacity_per_day <= 0
+        if not needs_power:
+            continue
+        pos = find_free_blueprint_position(world, pid, "power_shed")
+        if pos is None:
+            continue
+        result = place_blueprint(
+            world,
+            party,
+            pid,
+            "power_shed",
+            pos[0],
+            pos[1],
+            build_mode="turnkey",
+        )
+        if result.get("ok"):
+            log_event(
+                world,
+                "settler_power_shed_built",
+                f"{party} built power shed at {pid}",
+                party=str(party),
+                plot_id=str(pid),
+                instance_id=str(result.get("instance_id", "")),
+            )
+            return True
+    return False
+
+
 def tick_settler_margin_review(world: World) -> None:
     """Once per game-week, evaluate every settler's vertical-integration triggers
     and run buffer-buy logic for materials whose price is rising fast.
@@ -521,6 +666,8 @@ def tick_settler_margin_review(world: World) -> None:
     settlers = sorted(
         (p for p in world.parties if str(p).startswith("settler_")), key=str
     )
+    weekly = int(world.tick) % _TICKS_PER_GAME_WEEK == 0
+    monthly = int(world.tick) % _TICKS_PER_GAME_MONTH == 0
     for party in settlers:
         # One upgrade per settler per week — the first path whose math fires wins.
         for path in _UPGRADE_PATHS:
@@ -532,6 +679,11 @@ def tick_settler_margin_review(world: World) -> None:
         _maybe_update_merchant_store_prices(world, party)
         _maybe_subdivide_and_lease(world, party)
         _maybe_list_excess_electricity(world, party)
+        _maybe_post_job_openings(world, party)
+        if weekly:
+            _maybe_build_settler_road(world, party)
+        if monthly:
+            _maybe_build_power_shed(world, party)
 
 
 def _maybe_list_excess_electricity(world: World, party: PartyId) -> None:
