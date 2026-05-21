@@ -61,11 +61,19 @@ var plots: Dictionary = {} # plot_id str → plot dict
 var world_cell_to_plot: Dictionary = {}
 var plot_buildings: Array = []
 var active_production: Array = [] # engine ``active_production`` list (plot-level runs)
-var recipes: Array = [] # ``recipe_public_list()`` rows
+var recipes: Array = []
+var custom_recipes: Array = []
+var custom_materials: Array = [] # ``recipe_public_list()`` rows
+## Server-backed production routing + warehouse replenish (``workflow_settings``).
+var workflow_settings: Dictionary = {}
 var building_catalog: Array = []
+## ``GET /blueprints`` rows keyed by ``blueprint_id`` (seeded + player-authored).
+var blueprints_by_id: Dictionary = {}
 var player_owned_reports: Array = []
 var party_display_names: Dictionary = {}
 var scenario_id: String = ""
+var world_id: String = ""
+var world_name: String = ""
 ## RNG seed from ``GET /world`` (for HUD / map parity with engine).
 var world_seed: int = 42
 ## Flattened ``market_asks`` / ``market_bids`` / ``market_history`` from ``GET /world``.
@@ -117,6 +125,7 @@ signal map_updated
 signal plot_owner_changed(plot_id: String)
 signal player_updated
 signal static_updated
+signal world_name_changed
 
 
 ## Updates HUD time fields from an authoritative engine tick (e.g. ``POST /tick`` body).
@@ -193,6 +202,15 @@ func apply_summary(data: Dictionary) -> void:
 	active_contracts_count = variant_to_int(data.get("active_contracts", 0), 0)
 	unread_feed_count = variant_to_int(data.get("unread_feed_entries", 0), 0)
 	unread_npc_messages = variant_to_int(data.get("unread_npc_messages", 0), 0)
+	if data.has("world_id"):
+		world_id = str(data.get("world_id", ""))
+	if data.has("world_name"):
+		world_name = str(data.get("world_name", ""))
+		world_name_changed.emit()
+	if data.has("scenario_id"):
+		var sid := str(data.get("scenario_id", ""))
+		if not sid.is_empty():
+			scenario_id = sid
 	_update_time_from_tick()
 	summary_updated.emit()
 
@@ -260,6 +278,11 @@ func apply_world(data: Dictionary) -> void:
 	var pdn: Variant = data.get("party_display_names", {})
 	party_display_names = pdn if pdn is Dictionary else {}
 	scenario_id = str(data.get("scenario_id", scenario_id))
+	if data.has("world_id"):
+		world_id = str(data.get("world_id", ""))
+	if data.has("world_name"):
+		world_name = str(data.get("world_name", ""))
+		world_name_changed.emit()
 	var contracts_raw: Variant = data.get("contracts", [])
 	active_contracts = contracts_raw if contracts_raw is Array else []
 
@@ -301,6 +324,11 @@ func apply_static(data: Dictionary) -> void:
 	market_history_free_window_ticks = variant_to_int(data.get("market_history_free_window_ticks", market_history_free_window_ticks), market_history_free_window_ticks)
 	world_seed = variant_to_int(data.get("seed", world_seed), world_seed)
 	scenario_id = str(data.get("scenario_id", scenario_id))
+	if data.has("world_id"):
+		world_id = str(data.get("world_id", ""))
+	if data.has("world_name"):
+		world_name = str(data.get("world_name", ""))
+		world_name_changed.emit()
 	var pdn: Variant = data.get("party_display_names", {})
 	if pdn is Dictionary:
 		party_display_names = pdn
@@ -313,6 +341,20 @@ func apply_static(data: Dictionary) -> void:
 	_apply_regional_advantages_payload(data)
 	static_loaded = true
 	static_updated.emit()
+
+
+## Fetch ``GET /world/static`` when recipe/building tables are missing (map-only boot).
+func ensure_static_tables(on_ready: Callable = Callable()) -> void:
+	if static_loaded and not recipes.is_empty():
+		if on_ready.is_valid():
+			on_ready.call()
+		return
+	API.get_world_static(func(data: Dictionary) -> void:
+		if not data.is_empty():
+			apply_static(data)
+		if on_ready.is_valid():
+			on_ready.call()
+	)
 
 
 ## Per-party realtime view from ``GET /world/player``. Populates cash,
@@ -375,6 +417,14 @@ func apply_player(data: Dictionary) -> void:
 	plot_buildings = pb_raw if pb_raw is Array else []
 	var ap_raw: Variant = data.get("active_production", [])
 	active_production = ap_raw if ap_raw is Array else []
+	var cr_raw: Variant = data.get("custom_recipes", [])
+	custom_recipes = cr_raw if cr_raw is Array else []
+	var cm_raw: Variant = data.get("custom_materials", [])
+	custom_materials = cm_raw if cm_raw is Array else []
+	var wf: Variant = data.get("workflow_settings", {})
+	workflow_settings = wf if wf is Dictionary else {}
+	if not workflow_settings.is_empty():
+		RealmWorkflowSettings.apply_server_snapshot(workflow_settings)
 	var it: Variant = data.get("in_transit", [])
 	in_transit = it if it is Array else []
 	var fc: Variant = data.get("forward_contracts", [])
@@ -427,7 +477,12 @@ func apply_map(data: Dictionary) -> void:
 	var preserved: Dictionary = {}
 	for pid in plots.keys():
 		var existing: Dictionary = plots[pid]
-		if existing.has("subsurface") or existing.has("recipe_ids") or existing.has("output_stock"):
+		if (
+			existing.has("subsurface")
+			or existing.has("recipe_ids")
+			or existing.has("output_stock")
+			or bool(existing.get("surveyed", false))
+		):
 			preserved[pid] = existing
 	plots.clear()
 	if raw_plots is Array:
@@ -439,7 +494,7 @@ func apply_map(data: Dictionary) -> void:
 				if preserved.has(pid_s):
 					var merged: Dictionary = (p as Dictionary).duplicate(true)
 					var prior: Dictionary = preserved[pid_s]
-					for k in ["subsurface", "recipe_ids", "output_stock"]:
+					for k in ["subsurface", "recipe_ids", "output_stock", "surveyed"]:
 						if prior.has(k):
 							merged[k] = prior[k]
 					plots[pid_s] = merged
@@ -687,7 +742,135 @@ func recipe_by_id(recipe_id: String) -> Dictionary:
 	for r in recipes:
 		if r is Dictionary and str(r.get("id", "")) == recipe_id:
 			return r
+	for row in custom_recipes:
+		if row is Dictionary and str((row as Dictionary).get("recipe_id", "")) == recipe_id:
+			var d: Dictionary = (row as Dictionary).duplicate(true)
+			d["id"] = recipe_id
+			return d
 	return {}
+
+
+func building_catalog_entry(building_id: String) -> Dictionary:
+	for row in building_catalog:
+		if row is Dictionary and str((row as Dictionary).get("id", "")) == building_id:
+			return (row as Dictionary).duplicate(true)
+	return {}
+
+
+func recipes_for_building(building_id: String) -> Array:
+	var out: Array = []
+	for r in recipes:
+		if not (r is Dictionary):
+			continue
+		if str((r as Dictionary).get("requires_building_id", "")) == building_id:
+			out.append(r)
+	return out
+
+
+func merge_blueprints_list(items: Variant) -> void:
+	if not (items is Array):
+		return
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var bid := str((item as Dictionary).get("blueprint_id", ""))
+		if bid.is_empty():
+			continue
+		blueprints_by_id[bid] = (item as Dictionary).duplicate(true)
+
+
+func workshop_id_for_building(building: Dictionary) -> String:
+	var bp := str(building.get("blueprint_id", ""))
+	if not bp.is_empty():
+		return bp
+	return str(building.get("building_id", ""))
+
+
+func blueprint_dict(workshop_id: String) -> Dictionary:
+	if blueprints_by_id.has(workshop_id):
+		return (blueprints_by_id[workshop_id] as Dictionary).duplicate(true)
+	var cat := building_catalog_entry(workshop_id)
+	var enabled: Array = []
+	for row in recipes_for_building(workshop_id):
+		if row is Dictionary:
+			var rid := str((row as Dictionary).get("id", ""))
+			if not rid.is_empty():
+				enabled.append(rid)
+	if cat.is_empty() and enabled.is_empty():
+		return {}
+	return {
+		"blueprint_id": workshop_id,
+		"name": str(cat.get("label", workshop_id)),
+		"description": str(cat.get("description", cat.get("label", ""))),
+		"category": "processing",
+		"enabled_recipe_ids": enabled,
+		"footprint_w": 3,
+		"footprint_h": 3,
+	}
+
+
+func building_display_name(building: Dictionary) -> String:
+	var label := str(building.get("label", ""))
+	if not label.is_empty():
+		return label
+	var wid := workshop_id_for_building(building)
+	var bp := blueprint_dict(wid)
+	var nm := str(bp.get("name", ""))
+	if not nm.is_empty():
+		return nm
+	return wid if not wid.is_empty() else "Building"
+
+
+func recipes_for_workshop_building(building: Dictionary) -> Array:
+	var wid := workshop_id_for_building(building)
+	if wid.is_empty():
+		return []
+	var bp := blueprint_dict(wid)
+	var enabled: Variant = bp.get("enabled_recipe_ids", [])
+	var out: Array = []
+	var seen: Dictionary = {}
+	if enabled is Array:
+		for rid in enabled as Array:
+			var rid_s := str(rid)
+			if rid_s.is_empty() or seen.has(rid_s):
+				continue
+			var row := recipe_by_id(rid_s)
+			if row.is_empty():
+				continue
+			out.append(row)
+			seen[rid_s] = true
+	for r in recipes_for_building(wid):
+		if not (r is Dictionary):
+			continue
+		var id_s := str((r as Dictionary).get("id", ""))
+		if id_s.is_empty() or seen.has(id_s):
+			continue
+		out.append(r)
+		seen[id_s] = true
+	for row in custom_recipes:
+		if not (row is Dictionary):
+			continue
+		if str((row as Dictionary).get("requires_building_id", "")) != wid:
+			continue
+		var crid := str((row as Dictionary).get("recipe_id", ""))
+		if crid.is_empty() or seen.has(crid):
+			continue
+		var dup: Dictionary = (row as Dictionary).duplicate(true)
+		dup["id"] = crid
+		out.append(dup)
+		seen[crid] = true
+	return out
+
+
+func building_supports_production(building: Dictionary) -> bool:
+	var wid := workshop_id_for_building(building)
+	if wid == "road_segment":
+		return false
+	return not recipes_for_workshop_building(building).is_empty()
+
+
+func building_is_warehouse(building: Dictionary) -> bool:
+	return workshop_id_for_building(building) == "warehouse"
 
 
 func player_has_survey_report_for_plot(plot_id: String) -> bool:
@@ -724,6 +907,18 @@ func set_plot_owner(plot_id: String, owner: String) -> void:
 	plot_owner_changed.emit(plot_id)
 
 
+func set_plot_surveyed(plot_id: String, surveyed: bool) -> void:
+	if plot_id.is_empty():
+		return
+	var row: Dictionary
+	if plots.has(plot_id):
+		row = (plots[plot_id] as Dictionary).duplicate(true)
+	else:
+		row = {"id": plot_id}
+	row["surveyed"] = surveyed
+	plots[plot_id] = row
+
+
 func get_plot_ui(plot_id: String) -> Dictionary:
 	var base: Dictionary = plots.get(plot_id, {}).duplicate(true)
 	if not base.has("id") or str(base.get("id", "")).is_empty():
@@ -753,7 +948,24 @@ func get_plot_ui(plot_id: String) -> Dictionary:
 	return base
 
 
-func active_production_run_for_building(plot_id: String, building_id: String) -> Dictionary:
+func active_production_run_for_building(plot_id: String, building: Variant) -> Dictionary:
+	var workshop_id := ""
+	var enabled_ids: Dictionary = {}
+	if building is Dictionary:
+		var b: Dictionary = building as Dictionary
+		workshop_id = workshop_id_for_building(b)
+		for row in recipes_for_workshop_building(b):
+			if row is Dictionary:
+				var rid := str((row as Dictionary).get("id", ""))
+				if not rid.is_empty():
+					enabled_ids[rid] = true
+	elif building is String:
+		workshop_id = str(building)
+		for row in recipes_for_building(workshop_id):
+			if row is Dictionary:
+				var rid := str((row as Dictionary).get("id", ""))
+				if not rid.is_empty():
+					enabled_ids[rid] = true
 	for run in active_production:
 		if not (run is Dictionary):
 			continue
@@ -762,8 +974,10 @@ func active_production_run_for_building(plot_id: String, building_id: String) ->
 		if str(run.get("party", "")) != party_id:
 			continue
 		var rid: String = str(run.get("recipe_id", ""))
+		if enabled_ids.has(rid):
+			return run
 		var req: String = str(recipe_by_id(rid).get("requires_building_id", ""))
-		if req == building_id:
+		if req == workshop_id:
 			return run
 	return {}
 
@@ -774,6 +988,156 @@ func party_label(pid: String) -> String:
 	if pid == "genesis_exchange":
 		return "Exchange"
 	return str(party_display_names.get(pid, pid))
+
+
+func material_display_name(material_id: String) -> String:
+	var parts: PackedStringArray = str(material_id).split("_")
+	for i in parts.size():
+		var p := str(parts[i])
+		if p.length() > 0:
+			parts[i] = p.substr(0, 1).to_upper() + p.substr(1)
+	return " ".join(parts)
+
+
+func owned_plot_ids_sorted() -> PackedStringArray:
+	var ids: Array = []
+	var party := party_id
+	for pid in plots.keys():
+		var row: Dictionary = plots[pid] as Dictionary
+		if str(row.get("owner", "")) == party:
+			ids.append(str(pid))
+	ids.sort()
+	var out := PackedStringArray()
+	for pid in ids:
+		out.append(str(pid))
+	return out
+
+
+func plot_site_tags(plot_id: String) -> PackedStringArray:
+	var tags: PackedStringArray = PackedStringArray()
+	var ui := get_plot_ui(plot_id)
+	for b in ui.get("buildings", []):
+		if not (b is Dictionary):
+			continue
+		var bid := str((b as Dictionary).get("building_id", ""))
+		if bid == "warehouse" and not tags.has("warehouse"):
+			tags.append("warehouse")
+		elif bid == "store" and not tags.has("store"):
+			tags.append("store")
+		elif bid != "road_segment" and recipes_for_building(bid).size() > 0 and not tags.has("factory"):
+			tags.append("factory")
+	return tags
+
+
+func plot_site_label(plot_id: String) -> String:
+	var tags := plot_site_tags(plot_id)
+	if tags.is_empty():
+		return plot_id
+	var tag_list: Array = []
+	for t in tags:
+		tag_list.append(str(t))
+	return "%s · %s" % [plot_id, ", ".join(tag_list)]
+
+
+func plot_output_stock_qty(plot_id: String, material_id: String) -> int:
+	var pd: Dictionary = plots.get(plot_id, {})
+	var stock: Variant = pd.get("output_stock", {})
+	if not (stock is Dictionary):
+		return 0
+	return variant_to_int((stock as Dictionary).get(material_id, 0), 0)
+
+
+func inventory_ledger_rows() -> Array:
+	var rows: Array = []
+	for mat in player_inventory.keys():
+		var mid := str(mat)
+		var qty := player_material_total(mid)
+		if qty <= 0:
+			continue
+		rows.append({
+			"material": mid,
+			"qty": qty,
+			"location": "Carried",
+			"status": "Available",
+			"kind": "carried",
+			"plot_id": "",
+			"can_ship": true,
+			"can_harvest": false,
+		})
+	for pid in owned_plot_ids_sorted():
+		var pd: Dictionary = plots[pid] as Dictionary
+		var stock: Variant = pd.get("output_stock", {})
+		if not (stock is Dictionary):
+			continue
+		for mat in (stock as Dictionary).keys():
+			var mid := str(mat)
+			var qty: int = variant_to_int((stock as Dictionary)[mid], 0)
+			if qty <= 0:
+				continue
+			rows.append({
+				"material": mid,
+				"qty": qty,
+				"location": plot_site_label(pid),
+				"status": "Plot stash",
+				"kind": "stash",
+				"plot_id": pid,
+				"can_ship": false,
+				"can_harvest": true,
+			})
+	for ship in in_transit:
+		if not (ship is Dictionary):
+			continue
+		var s: Dictionary = ship
+		var mid := str(s.get("material", ""))
+		var qty: int = variant_to_int(s.get("qty", 0), 0)
+		if mid.is_empty() or qty <= 0:
+			continue
+		var from_p := str(s.get("from_plot_id", ""))
+		var dest := str(s.get("dest_plot_id", ""))
+		var arrive: int = variant_to_int(s.get("arrive_tick", 0), 0)
+		var eta := maxi(0, arrive - current_tick)
+		rows.append({
+			"material": mid,
+			"qty": qty,
+			"location": "%s → %s" % [from_p if not from_p.is_empty() else "?", dest],
+			"status": "In transit · %s" % format_ticks_as_gametime(eta),
+			"kind": "transit",
+			"plot_id": dest,
+			"can_ship": false,
+			"can_harvest": false,
+		})
+	rows.sort_custom(func(a, b) -> bool:
+		var ka: String = "%s|%s|%s" % [a["kind"], a["location"], a["material"]]
+		var kb: String = "%s|%s|%s" % [b["kind"], b["location"], b["material"]]
+		return ka < kb
+	)
+	return rows
+
+
+func ship_destination_options() -> Array:
+	## Each entry: ``{plot_id, label, group}`` where group is warehouse|store|factory|other.
+	var buckets: Dictionary = {
+		"warehouse": [],
+		"store": [],
+		"factory": [],
+		"other": [],
+	}
+	for pid in owned_plot_ids_sorted():
+		var tags := plot_site_tags(pid)
+		var group := "other"
+		if tags.has("warehouse"):
+			group = "warehouse"
+		elif tags.has("store"):
+			group = "store"
+		elif tags.has("factory"):
+			group = "factory"
+		buckets[group].append({"plot_id": pid, "label": plot_site_label(pid), "group": group})
+	var order := ["warehouse", "store", "factory", "other"]
+	var out: Array = []
+	for g in order:
+		for row in buckets[g]:
+			out.append(row)
+	return out
 
 
 func format_ticks_as_gametime(ticks: int) -> String:

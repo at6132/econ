@@ -20,7 +20,8 @@ const SPEED_OPTIONS: Array = [1.0, 2.0, 4.0]
 var start_paused: bool = false
 var default_speed: float = 1.0
 var default_overlay: String = "none"
-var default_save_slot: String = "current"
+## Empty = use active world's ``world_id``; ``current`` = legacy shared file (avoid).
+var default_save_slot: String = ""
 
 
 func _ready() -> void:
@@ -38,9 +39,7 @@ func load_from_disk() -> void:
 	start_paused = bool(f.get_value(SECTION, "start_paused", false))
 	default_speed = _snap_speed(float(f.get_value(SECTION, "default_speed", 1.0)))
 	default_overlay = str(f.get_value(SECTION, "default_overlay", "none"))
-	default_save_slot = str(f.get_value(SECTION, "default_save_slot", "current")).strip_edges()
-	if default_save_slot.is_empty():
-		default_save_slot = "current"
+	default_save_slot = str(f.get_value(SECTION, "default_save_slot", "")).strip_edges()
 	if overlay_index_from_id(default_overlay) < 0:
 		default_overlay = "none"
 

@@ -29,6 +29,7 @@ WS="*res://autoloads/WS.gd"
 RealmColors="*res://autoloads/RealmColors.gd"
 RealmFonts="*res://autoloads/RealmFonts.gd"
 RealmSettings="*res://autoloads/RealmSettings.gd"
+RealmWorkflowSettings="*res://autoloads/RealmWorkflowSettings.gd"
 MainFeedback="*res://autoloads/MainFeedback.gd"
 
 [display]

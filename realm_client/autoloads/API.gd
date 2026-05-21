@@ -103,6 +103,91 @@ func survey_plot(plot_id: String, cb: Callable, party: String = "player") -> voi
 	post_request("/plots/%s/survey?party=%s" % [plot_id.uri_encode(), party.uri_encode()], {}, cb)
 
 
+func buy_plot(plot_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/plots/%s/buy" % plot_id.uri_encode(),
+		{"party": party},
+		cb,
+	)
+
+
+func assay_mineral(plot_id: String, mineral_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/assay?party=%s&plot_id=%s&mineral_id=%s"
+		% [party.uri_encode(), plot_id.uri_encode(), mineral_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func get_assay_status(cb: Callable, party: String = "player") -> void:
+	get_request("/assay/status?party=%s" % party.uri_encode(), cb)
+
+
+func get_assay_book(cb: Callable, party: String = "player") -> void:
+	get_request("/assay/book?party=%s" % party.uri_encode(), cb)
+
+
+func deep_survey_plot(plot_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/deep_survey?party=%s&plot_id=%s" % [party.uri_encode(), plot_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func get_deep_survey_status(cb: Callable, party: String = "player") -> void:
+	get_request("/deep_survey/status?party=%s" % party.uri_encode(), cb)
+
+
+func get_blueprints(cb: Callable, party: String = "player") -> void:
+	get_request("/blueprints?party=%s" % party.uri_encode(), cb)
+
+
+func get_workflow(cb: Callable, party: String = "player") -> void:
+	get_request("/workflow?party=%s" % party.uri_encode(), cb)
+
+
+func post_workflow_building(
+	instance_id: String,
+	input_routes: Dictionary,
+	output_routes: Dictionary,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/workflow/building",
+		{
+			"party": party,
+			"instance_id": instance_id,
+			"input": input_routes,
+			"output": output_routes,
+		},
+		cb,
+	)
+
+
+func post_workflow_warehouse(
+	plot_id: String,
+	material: String,
+	rule: Dictionary,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/workflow/warehouse",
+		{
+			"party": party,
+			"plot_id": plot_id,
+			"material": material,
+			"enabled": bool(rule.get("enabled", false)),
+			"target_qty": int(rule.get("target_qty", 0)),
+			"max_price_cents": int(rule.get("max_price_cents", 0)),
+		},
+		cb,
+	)
+
+
 ## NPC/script auto-place only — players use ``place_blueprint`` from the build panel.
 func build_on_plot(plot_id: String, building_id: String, mode: String, cb: Callable, party: String = "player") -> void:
 	var q := "/plots/%s/build?party=%s&building_id=%s" % [
@@ -232,6 +317,67 @@ func get_plot_throughput(plot_id: String, recipe_id: String, cb: Callable, party
 		% [plot_id.uri_encode(), party.uri_encode(), recipe_id.uri_encode()],
 		cb,
 	)
+
+
+func create_blueprint(body: Dictionary, cb: Callable) -> void:
+	post_request("/blueprints/create", body, cb)
+
+
+func register_custom_material(
+	display_name: String,
+	category: String,
+	material_id: String,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/materials/register",
+		{
+			"party": party,
+			"display_name": display_name,
+			"category": category,
+			"material_id": material_id,
+		},
+		cb,
+	)
+
+
+func create_custom_recipe(
+	display_name: String,
+	inputs: Dictionary,
+	outputs: Dictionary,
+	duration_ticks: int,
+	labor_cents: int,
+	requires_building_id: String,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/recipes/create",
+		{
+			"party": party,
+			"display_name": display_name,
+			"inputs": inputs,
+			"outputs": outputs,
+			"duration_ticks": int(duration_ticks),
+			"labor_cents": int(labor_cents),
+			"requires_building_id": requires_building_id,
+		},
+		cb,
+	)
+
+
+func validate_plot_schematic(plot_id: String, recipe_ids: Array, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/plots/%s/schematic/validate?party=%s" % [plot_id.uri_encode(), party.uri_encode()],
+		{"recipe_ids": recipe_ids},
+		cb,
+		false,
+	)
+
+
+func accept_construction_quote(body: Dictionary, cb: Callable) -> void:
+	post_request("/construction/accept", body, cb)
 
 
 # ── Market ──────────────────────────────────────────────────────────────────
@@ -376,10 +522,27 @@ func post_job_opening(plot_id: String, skill_min: int, wage: int, cb: Callable, 
 
 # ── Shipping / routes ────────────────────────────────────────────────────────
 
+func get_shipping_estimate(from_plot: String, to_plot: String, qty: int, cb: Callable) -> void:
+	get_request(
+		"/shipping/estimate?from_plot=%s&to_plot=%s&qty=%d"
+		% [from_plot.uri_encode(), to_plot.uri_encode(), int(qty)],
+		cb,
+	)
+
+
 func ship(from_plot: String, to_plot: String, material: String, qty: int, cb: Callable, party: String = "player") -> void:
 	post_request(
 		"/ship?party=%s&material=%s&qty=%d&from_plot=%s&to_plot=%s"
 		% [party.uri_encode(), material.uri_encode(), int(qty), from_plot.uri_encode(), to_plot.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func harvest_plot_output(plot_id: String, material: String, qty: int, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/plot/harvest?party=%s&plot_id=%s&material=%s&qty=%d"
+		% [party.uri_encode(), plot_id.uri_encode(), material.uri_encode(), int(qty)],
 		{},
 		cb,
 	)
@@ -758,12 +921,23 @@ func fulfill_supply_contract(contract_id: String, cb: Callable, supplier: String
 
 # ── Persistence ─────────────────────────────────────────────────────────────
 
-## Saves the live world to ``saves/<slot>.sqlite`` (slot defaults to ``current``).
-func save_game(cb: Callable = Callable(), slot: String = "current") -> void:
-	var q := "/persistence/save"
-	if slot != "":
-		q += "?slot=%s" % slot.uri_encode()
+## Saves the live world to ``saves/<slot>.sqlite``. Empty slot → engine uses this world's id.
+func save_game(cb: Callable = Callable(), slot: String = "") -> void:
+	var s := slot.strip_edges()
+	if s.is_empty():
+		s = _default_save_slot()
+	var q := "/persistence/save?slot=%s" % s.uri_encode()
 	post_request(q, {}, cb)
+
+
+func _default_save_slot() -> String:
+	var wid := WorldState.world_id.strip_edges()
+	if not wid.is_empty():
+		return wid
+	var custom := RealmSettings.default_save_slot.strip_edges()
+	if custom.is_empty() or custom == "current":
+		return "current"
+	return custom
 
 
 func load_game(cb: Callable = Callable(), slot: String = "current") -> void:
@@ -789,8 +963,20 @@ func persistence_clear_all(cb: Callable) -> void:
 	post_request("/persistence/clear-all", {}, cb)
 
 
-func dev_reset(seed: int, scenario: String, cb: Callable, world_name: String = "") -> void:
+func set_world_name(name: String, cb: Callable) -> void:
+	post_request("/dev/world-name?name=%s" % name.uri_encode(), {}, cb)
+
+
+func dev_reset(
+	seed: int,
+	scenario: String,
+	cb: Callable,
+	world_name: String = "",
+	world_id: String = "",
+) -> void:
 	var q := "/dev/reset?seed=%d&scenario=%s" % [int(seed), scenario.uri_encode()]
 	if not world_name.is_empty():
 		q += "&name=%s" % world_name.uri_encode()
+	if not world_id.is_empty():
+		q += "&world_id=%s" % world_id.uri_encode()
 	post_request(q, {}, cb)
