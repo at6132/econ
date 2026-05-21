@@ -1,10 +1,4 @@
-"""Sprint 6 — Phase D.1: ``plot_output_stock`` is now a cumulative *display log*.
-
-Matter always lives in ``world.inventory.stock[party][material]``. The
-``plot_output_stock`` dict records per-plot production + delivery counters so
-the UI can show "what was produced here" — but it is never the source of
-truth for matter.
-"""
+"""Plot-local bulk storage (Option B) — matter lives on plots, not in global carry."""
 
 from __future__ import annotations
 
@@ -12,42 +6,48 @@ from realm.actions import claim_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.infrastructure.movement import dispatch_shipment
 from realm.infrastructure.plot_logistics import plot_output_qty
+from realm.production.storage_caps import is_carried_material
 from realm.world.tick import advance_tick
-from realm.world import bootstrap_genesis
+from realm.world import bootstrap_genesis, bootstrap_frontier
 
 
-def test_genesis_enables_plot_logistics_display_log() -> None:
+def test_genesis_enables_plot_logistics() -> None:
     w = bootstrap_genesis(seed=7, grid_width=10, grid_height=8, settler_count=2)
-    # The flag is still on — it gates the cumulative display log writes.
     assert w.use_plot_output_logistics is True
 
 
-def test_dispatch_pulls_from_party_inventory_and_logs_destination_stock() -> None:
+def test_dispatch_pulls_from_plot_stock_and_delivers_to_dest_plot() -> None:
     w = bootstrap_genesis(seed=13, grid_width=12, grid_height=10, settler_count=2)
-    a = PlotId("p-0-0")
-    b = PlotId("p-1-0")
     party = PartyId("player")
-    assert claim_plot(w, party, a)["ok"] is True
-    assert claim_plot(w, party, b)["ok"] is True
-    # Stage coal in party inventory directly.
-    w.inventory.add(party, MaterialId("coal"), 20)
+    claimed: list[PlotId] = []
+    for pid, plot in w.plots.items():
+        if plot.owner is not None:
+            continue
+        if str(plot.terrain) == "ocean":
+            continue
+        r = claim_plot(w, party, pid)
+        if r.get("ok"):
+            claimed.append(pid)
+        if len(claimed) >= 2:
+            break
+    assert len(claimed) >= 2
+    a, b = claimed[0], claimed[1]
+    w.plot_output_stock[str(a)] = {str(MaterialId("coal")): 20}
     r = dispatch_shipment(w, party, MaterialId("coal"), 12, a, b)
     assert r["ok"] is True, r
-    # Inventory drained by qty shipped.
-    assert w.inventory.qty(party, MaterialId("coal")) == 8
-    for _ in range(60):
-        if w.inventory.qty(party, MaterialId("coal")) >= 20:
-            break
+    assert plot_output_qty(w, a, MaterialId("coal")) == 8
+    assert w.inventory.qty(party, MaterialId("coal")) == 0
+    for _ in range(200):
         advance_tick(w)
-    # After arrival, the 12 units land back in inventory.
-    assert w.inventory.qty(party, MaterialId("coal")) == 20
-    # The destination plot's display log records the delivery.
-    assert plot_output_qty(w, b, MaterialId("coal")) >= 12
+        if plot_output_qty(w, b, MaterialId("coal")) >= 12:
+            break
+    assert plot_output_qty(w, b, MaterialId("coal")) >= 12, (
+        f"coal at dest={plot_output_qty(w, b, MaterialId('coal'))}, "
+        f"in_transit={len(w.in_transit)}"
+    )
 
 
-def test_player_can_list_freshly_produced_goods_from_inventory() -> None:
-    """Phase D.1 fix: production output appears in party inventory directly so
-    the player can immediately list it on the market without harvesting."""
+def test_production_output_lands_on_plot_not_carry() -> None:
     from realm.actions import survey_plot
     from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.production import start_production
@@ -55,8 +55,6 @@ def test_player_can_list_freshly_produced_goods_from_inventory() -> None:
 
     w = bootstrap_genesis(seed=42, grid_width=12, grid_height=10, settler_count=2)
     party = PartyId("player")
-    # Disable the labor staffing penalty so a single un-hired player still gets
-    # full output. (Sprint 3 added a 50% understaffing modifier.)
     w.scenario_state.setdefault("labor", {})["enabled"] = False
     pid = None
     for p_id, plot in w.plots.items():
@@ -76,15 +74,22 @@ def test_player_can_list_freshly_produced_goods_from_inventory() -> None:
     assert claim_plot(w, party, pid)["ok"] is True
     assert survey_plot(w, party, pid).get("ok") is True
     w.inventory.add(party, MaterialId("mining_pick"), 1)
-    starting = w.inventory.qty(party, MaterialId("coal"))
+    w.plot_output_stock.setdefault(str(pid), {})[str(MaterialId("coal"))] = 0
     r = start_production(w, party, pid, "hand_mine_coal", run_count=1)
     assert r["ok"], r
     for _ in range(400):
         advance_tick(w)
-        if w.inventory.qty(party, MaterialId("coal")) > starting:
+        if plot_output_qty(w, pid, MaterialId("coal")) > 0:
             break
-    # Coal appears in party inventory (not just in plot_output_stock).
-    assert w.inventory.qty(party, MaterialId("coal")) > starting, (
-        f"player inventory did not receive coal after production: "
-        f"starting={starting}, now={w.inventory.qty(party, MaterialId('coal'))}"
-    )
+    assert plot_output_qty(w, pid, MaterialId("coal")) > 0
+    assert w.inventory.qty(party, MaterialId("coal")) == 0
+
+
+def test_frontier_starter_bulk_on_spawn_plot() -> None:
+    w = bootstrap_frontier(seed=99, grid_width=20, grid_height=16)
+    party = PartyId("player")
+    spawn = PlotId("p-10-8")
+    assert w.plots[spawn].owner == party
+    assert plot_output_qty(w, spawn, MaterialId("timber")) >= 12
+    assert w.inventory.qty(party, MaterialId("electricity")) >= 8
+    assert not is_carried_material(MaterialId("timber"))

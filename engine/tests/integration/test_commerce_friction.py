@@ -39,8 +39,13 @@ def test_genesis_second_list_same_material_no_second_registration() -> None:
     w = bootstrap_genesis(seed=77, grid_width=8, grid_height=6, settler_count=0)
     p = PartyId("player")
     g = MaterialId("grain")
-    ad = w.inventory.add(p, g, 20)
-    assert not isinstance(ad, MatterErr)
+    from realm.actions import claim_plot
+    from realm.infrastructure.plot_logistics import plot_output_qty
+
+    pid = next(iter(w.plots.keys()))
+    w.plots[pid].owner = p
+    w.plot_output_stock[str(pid)] = {str(g): 20}
+    assert plot_output_qty(w, pid, g) == 20
     pc = party_cash_account(p)
     b0 = w.ledger.balance(pc)
     assert place_sell_order(w, p, g, 4, 120)["ok"] is True
@@ -57,9 +62,7 @@ def test_delivery_deferred_when_insufficient_cash_for_receiving() -> None:
     p = PartyId("player")
     assert claim_plot(w, p, a)["ok"] is True
     assert claim_plot(w, p, b)["ok"] is True
-    # Sprint 6 — Phase D.1: matter lives in party inventory now (plot_output_stock
-    # is a display log). Stage directly into inventory.
-    w.inventory.add(p, MaterialId("coal"), 8)
+    w.plot_output_stock[str(a)] = {str(MaterialId("coal")): 8}
     r = dispatch_shipment(w, p, MaterialId("coal"), 6, a, b)
     assert r["ok"] is True
     recv = receiving_fee_cents(6)

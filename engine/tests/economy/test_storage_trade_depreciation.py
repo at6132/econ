@@ -33,7 +33,7 @@ def _first_land_plot(world, party: PartyId) -> PlotId:
 def test_holding_cost_charged_for_excess_inventory() -> None:
     w = bootstrap_genesis(seed=1, settler_count=3)
     player = PartyId("player")
-    w.inventory.add(player, MaterialId("coal"), 200)
+    w.inventory.add(player, MaterialId("electricity"), 200)
     snap = ConservationSnapshot.of(w.ledger, w.inventory)
     w.tick = 1440
     start_cash = w.ledger.balance(party_cash_account(player))
@@ -44,6 +44,17 @@ def test_holding_cost_charged_for_excess_inventory() -> None:
     assert_money_conserved(w.ledger, snap.ledger_total_cents)
 
 
+def test_bulk_on_plot_exempt_from_holding_cost() -> None:
+    w = bootstrap_genesis(seed=3, settler_count=3)
+    player = PartyId("player")
+    pid = _first_land_plot(w, player)
+    w.plot_output_stock[str(pid)] = {str(MaterialId("coal")): 500}
+    w.tick = 1440
+    start_cash = w.ledger.balance(party_cash_account(player))
+    tick_holding_costs(w)
+    assert w.ledger.balance(party_cash_account(player)) == start_cash
+
+
 def test_warehouse_exempts_from_holding_costs() -> None:
     w = bootstrap_genesis(seed=2, settler_count=3)
     player = PartyId("player")
@@ -52,7 +63,7 @@ def test_warehouse_exempts_from_holding_costs() -> None:
     build_on_plot(w, player, pid, "warehouse", build_mode="turnkey")
     for _ in range(3000):
         advance_tick(w)
-    w.inventory.add(player, MaterialId("coal"), 500)
+    w.plot_output_stock[str(pid)] = {str(MaterialId("coal")): 500}
     w.tick = 1440
     start_cash = w.ledger.balance(party_cash_account(player))
     tick_holding_costs(w)

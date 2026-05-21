@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from realm.core.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.world import World
+from stage_materials import stage_material
 
 
 # How much to give each test party for turnkey builds.
@@ -14,7 +15,12 @@ _TEST_CASH_CENTS: int = 2_000_000_00  # $2,000,000
 
 
 def grant_turnkey_self_materials(
-    world: World, party: PartyId, building_id: str, *, count: int = 1
+    world: World,
+    party: PartyId,
+    building_id: str,
+    *,
+    count: int = 1,
+    plot_id: PlotId | None = None,
 ) -> None:
     """
     Stock ``count`` copies of the construction_materials for a blueprint build,
@@ -34,18 +40,25 @@ def grant_turnkey_self_materials(
         )
 
     # Grant materials — try Blueprint system first, fall back to old BUILDINGS
-    _grant_blueprint_materials(world, party, building_id, count)
+    _grant_blueprint_materials(world, party, building_id, count, plot_id=plot_id)
     _ensure_turnkey_market_liquidity(world, building_id, count)
 
 
 def _grant_blueprint_materials(
-    world: World, party: PartyId, building_id: str, count: int
+    world: World,
+    party: PartyId,
+    building_id: str,
+    count: int,
+    *,
+    plot_id: PlotId | None = None,
 ) -> None:
     """Grant construction_materials from the Blueprint registry if present."""
     bp = world.blueprints.get(building_id)
     if bp is not None:
         for mid_s, qty in bp.construction_materials.items():
-            ad = world.inventory.add(party, MaterialId(str(mid_s)), int(qty) * count)
+            ad = stage_material(
+                world, party, MaterialId(str(mid_s)), int(qty) * count, plot_id=plot_id
+            )
             assert not isinstance(ad, MatterErr), ad
         return
 
@@ -56,7 +69,9 @@ def _grant_blueprint_materials(
         spec = BUILDINGS.get(building_id)
         if spec:
             for mid_s, qty in (spec.get("self_materials") or {}).items():
-                ad = world.inventory.add(party, MaterialId(str(mid_s)), int(qty) * count)
+                ad = stage_material(
+                    world, party, MaterialId(str(mid_s)), int(qty) * count, plot_id=plot_id
+                )
                 assert not isinstance(ad, MatterErr), ad
     except (ImportError, AttributeError):
         pass  # BUILDINGS may no longer exist; blueprint system handles it
