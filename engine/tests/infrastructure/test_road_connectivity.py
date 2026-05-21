@@ -5,11 +5,14 @@ from __future__ import annotations
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import Ledger, MoneyErr, party_cash_account, system_reserve_account
+from realm.actions.blueprint_actions import place_road_path
 from realm.infrastructure.road_connectivity import (
     ROAD_REQUIREMENT_GRACE_TICKS,
     is_road_accessible,
     invalidate_road_cache,
     plot_site_roads_connect_workshops,
+    plot_site_roads_link_world,
+    plot_world_link_edges,
 )
 from realm.world.placed_buildings import PlacedBuilding, register_placed_building
 from realm.infrastructure.roads import build_road
@@ -201,6 +204,37 @@ def test_site_road_adjacent_to_workshop_allows_production() -> None:
     _give_electricity(world, player, 4)
     r = start_production(world, player, pid, "mine_coal", run_count=1)
     assert r["ok"], r.get("reason", "")
+
+
+def test_site_roads_link_world_via_neighbor_endpoint() -> None:
+    world, player = _build_world()
+    road_plot = PlotId("p-4-4")
+    mine_plot = PlotId("p-5-4")
+    _claim(world, player, road_plot)
+    _claim(world, player, mine_plot)
+    world.inventory.add(player, MaterialId("lumber"), 8)
+    world.inventory.add(player, MaterialId("stone"), 8)
+    assert build_road(world, player, road_plot, PlotId("p-4-5"))["ok"]
+    invalidate_road_cache()
+    from realm.production.blueprints import seed_world_blueprints
+
+    seed_world_blueprints(world)
+    assert place_road_path(world, player, mine_plot, [(0, 5), (0, 4)])["ok"]
+    assert plot_site_roads_link_world(world, mine_plot)
+    edges = plot_world_link_edges(world, mine_plot)
+    assert any(str(e.get("neighbor_plot_id")) == str(road_plot) for e in edges)
+
+
+def test_place_road_path_batch_stops_on_failure() -> None:
+    world, player = _build_world()
+    pid = PlotId("p-6-6")
+    _claim(world, player, pid)
+    from realm.production.blueprints import seed_world_blueprints
+
+    seed_world_blueprints(world)
+    r = place_road_path(world, player, pid, [(1, 1), (1, 1)])
+    assert not r["ok"]
+    assert int(r.get("placed_count", 0)) == 1
 
 
 def test_road_cache_invalidates_on_new_road() -> None:

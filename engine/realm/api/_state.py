@@ -90,6 +90,14 @@ def last_save_info() -> dict[str, object]:
     }
 
 
+def clear_save_metadata() -> None:
+    """Drop last-save HUD fields after wiping the saves directory."""
+    global _last_save_at, _last_save_path, _last_save_kind
+    _last_save_at = 0
+    _last_save_path = ""
+    _last_save_kind = ""
+
+
 def safe_save_path(slot_or_path: str | None) -> Path:
     """Resolve a user-supplied save slot/path to ``<repo>/saves/<name>.sqlite``.
 

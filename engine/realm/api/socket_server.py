@@ -130,6 +130,7 @@ def _dispatch(method: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
     long_bootstrap = method_u == "POST" and path_only == "/dev/reset"
     try:
         if long_bootstrap:
+            _log.info("socket_server: %s %s started (world bootstrap — may take 20–120s)", method_u, path_only)
             if json_body:
                 response = client.post(path_only, params=query, json=json_body)
             else:

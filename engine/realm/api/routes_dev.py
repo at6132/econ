@@ -240,3 +240,17 @@ def get_persistence_status() -> dict:
     info["autosave_path"] = _state._AUTOSAVE_PATH.relative_to(_state._REPO_ROOT).as_posix()
     info["ok"] = True
     return info
+
+
+@router.post("/persistence/clear-all")
+def post_persistence_clear_all() -> dict:
+    """Delete every ``*.sqlite`` file under ``saves/`` (Continue menu slots)."""
+    _state._SAVES_DIR.mkdir(parents=True, exist_ok=True)
+    deleted: list[str] = []
+    for p in sorted(_state._SAVES_DIR.glob("*.sqlite")):
+        rel = p.relative_to(_state._REPO_ROOT).as_posix()
+        p.unlink()
+        deleted.append(rel)
+    _state.clear_save_metadata()
+    _log.info("Realm: POST /persistence/clear-all removed %d save(s).", len(deleted))
+    return {"ok": True, "deleted": deleted, "count": len(deleted)}

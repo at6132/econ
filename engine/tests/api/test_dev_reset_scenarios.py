@@ -21,7 +21,8 @@ from realm.world.plot_parcels import world_map_tile_count
         ("cartel", 48 * 36, PLAYER_STARTING_CASH_CENTS, True),
         ("millrace", 42 * 28, 975_000, False),
         ("archive", 48 * 36, 1_080_000, False),
-        ("genesis", 320 * 240, PLAYER_STARTING_CASH_CENTS, False),
+        # Continental genesis: deeds cover land cells, not every grid hectare.
+        ("genesis", -1, PLAYER_STARTING_CASH_CENTS, False),
     ],
 )
 def test_dev_reset_applies_scenario_params(
@@ -42,7 +43,14 @@ def test_dev_reset_applies_scenario_params(
         assert j["player_starting_cash_cents"] == PLAYER_STARTING_CASH_CENTS
 
     world = _state.WORLD
-    assert world_map_tile_count(world) == expected_map_tiles
+    if expected_map_tiles < 0:
+        assert scenario == "genesis"
+        assert world.scenario_state.get("grid_width") == 320
+        assert world.scenario_state.get("grid_height") == 240
+        tiles = world_map_tile_count(world)
+        assert 76_000 <= tiles <= 76_800
+    else:
+        assert world_map_tile_count(world) == expected_map_tiles
     player_cash = world.ledger.balance(party_cash_account(PartyId("player")))
     assert player_cash == expected_player_cents
     grain_orders = world.market_asks_by_material.get(MaterialId("grain"), [])
@@ -71,7 +79,9 @@ def test_dev_reset_defaults_to_genesis() -> None:
     assert r.status_code == 200
     assert r.json()["scenario_id"] == "genesis"
     assert _state.WORLD.scenario_id == "genesis"
-    assert world_map_tile_count(_state.WORLD) == 320 * 240
+    assert _state.WORLD.scenario_state.get("grid_width") == 320
+    assert _state.WORLD.scenario_state.get("grid_height") == 240
+    assert 76_000 <= world_map_tile_count(_state.WORLD) <= 76_800
 
 
 def test_persistence_list_returns_ok_and_slots() -> None:
@@ -122,6 +132,31 @@ def test_persistence_save_rejects_path_outside_saves(tmp_path, monkeypatch) -> N
     c.post("/dev/reset", params={"seed": 1, "scenario": "frontier"})
     r = c.post("/persistence/save", params={"path": "../escape.sqlite"})
     assert r.status_code == 400
+
+
+def test_persistence_clear_all_deletes_sqlite_files(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(_state, "_SAVES_DIR", tmp_path)
+    monkeypatch.setattr(_state, "_DEFAULT_SAVE_PATH", tmp_path / "realm_dev.sqlite")
+    monkeypatch.setattr(_state, "_AUTOSAVE_PATH", tmp_path / "autosave.sqlite")
+    monkeypatch.setattr(_state, "_REPO_ROOT", tmp_path.parent)
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 1, "scenario": "frontier"})
+    c.post("/persistence/save", params={"slot": "to_delete"})
+    assert list(tmp_path.glob("*.sqlite"))
+
+    rc = c.post("/persistence/clear-all")
+    assert rc.status_code == 200
+    body = rc.json()
+    assert body["ok"] is True
+    assert body["count"] >= 1
+    assert not list(tmp_path.glob("*.sqlite"))
+
+    listed = c.get("/persistence/list").json()
+    assert listed["slots"] == []
+
+    status = c.get("/persistence/status").json()
+    assert status["last_save_at"] == 0
 
 
 def test_persistence_status_reports_last_save(tmp_path, monkeypatch) -> None:
