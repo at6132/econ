@@ -47,8 +47,18 @@ from realm.genesis.settler_cost_basis import (
 from realm.world import World
 
 
+PERISHABLE_MATERIALS: frozenset[str] = frozenset({
+    "grain",
+    "fish",
+    "bread",
+    "wild_herb",
+})
+
 __all__ = [
     "tick_settler_margin_review",
+    "tick_settler_perishable_sales",
+    "PERISHABLE_MATERIALS",
+    "_maybe_sell_perishables",
     "VERTICAL_TRIGGER_RATIO_BPS",
     "VERTICAL_CASH_BUFFER_BPS",
     "ROAD_BUILD_CASH_THRESHOLD",
@@ -412,18 +422,20 @@ def _maybe_reprice_stale_orders(world: World, party: PartyId) -> None:
     )
     party_key = str(party)
 
-    ask_mats: dict[str, tuple[int, int]] = {}
+    ask_mats: dict[str, tuple[int, int, PlotId | None]] = {}
     for mat, asks in world.market_asks_by_material.items():
         for ask in asks:
             if ask.party != party:
                 continue
             mid = str(mat)
             if mid not in ask_mats:
-                ask_mats[mid] = (int(ask.price_per_unit_cents), 0)
-            old_price, old_qty = ask_mats[mid]
-            ask_mats[mid] = (old_price, old_qty + int(ask.qty))
+                fp = getattr(ask, "from_plot_id", None) or None
+                orig_plot = PlotId(str(fp)) if fp else None
+                ask_mats[mid] = (int(ask.price_per_unit_cents), 0, orig_plot)
+            old_price, old_qty, orig_plot = ask_mats[mid]
+            ask_mats[mid] = (old_price, old_qty + int(ask.qty), orig_plot)
 
-    for mid, (price, qty) in ask_mats.items():
+    for mid, (price, qty, orig_plot_id) in ask_mats.items():
         tracker_key = f"{party_key}:{mid}"
         tracker = dict(stale_tracker.get(tracker_key, {"days_listed": 0, "price": price}))
         tracker["days_listed"] = int(tracker.get("days_listed", 0)) + 1
@@ -435,7 +447,14 @@ def _maybe_reprice_stale_orders(world: World, party: PartyId) -> None:
                 mat = MaterialId(mid)
                 cancelled = cancel_party_asks_for_material(world, party, mat)
                 if cancelled > 0:
-                    place_sell_order(world, party, mat, qty=qty, price_per_unit_cents=new_price)
+                    place_sell_order(
+                        world,
+                        party,
+                        mat,
+                        qty=qty,
+                        price_per_unit_cents=new_price,
+                        from_plot_id=orig_plot_id,
+                    )
                     tracker = {"days_listed": 0, "price": new_price}
                     log_event(
                         world,
@@ -649,6 +668,63 @@ def _maybe_build_power_shed(world: World, party: PartyId) -> bool:
     return False
 
 
+def _maybe_sell_perishables(world: World, party: PartyId) -> int:
+    """List plot-staged perishables before spoilage; price at best ask − 5%."""
+    from realm.agents.market_oracle import _GENESIS_FAIR_VALUE, get_oracle
+    from realm.economy.market_delivery import DELIVERY_FOB
+    from realm.economy.markets import place_sell_order
+
+    oracle = get_oracle(world)
+    posted = 0
+
+    for plot_id_s, stock in list(world.plot_output_stock.items()):
+        plot = world.plots.get(PlotId(plot_id_s))
+        if plot is None or plot.owner != party:
+            continue
+        for mat_str, qty in list(stock.items()):
+            if mat_str not in PERISHABLE_MATERIALS or int(qty) <= 0:
+                continue
+            already_listed = sum(
+                int(a.qty)
+                for asks in world.market_asks_by_material.values()
+                for a in asks
+                if a.party == party
+                and str(getattr(a, "from_plot_id", "")) == plot_id_s
+                and str(a.material) == mat_str
+            )
+            if already_listed >= int(qty):
+                continue
+            list_qty = int(qty) - already_listed
+            ask_price = int(oracle.best_ask.get(mat_str) or _GENESIS_FAIR_VALUE.get(mat_str, 100))
+            price = max(1, int(ask_price * 0.95))
+            r = place_sell_order(
+                world,
+                party,
+                MaterialId(mat_str),
+                list_qty,
+                price,
+                from_plot_id=PlotId(plot_id_s),
+                delivery_terms=DELIVERY_FOB,
+            )
+            if r.get("ok"):
+                posted += 1
+
+    return posted
+
+
+def tick_settler_perishable_sales(world: World) -> None:
+    """Once per game-day: settlers list plot-staged perishables (cannot wait a week)."""
+    if world.scenario_id != "genesis":
+        return
+    if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
+        return
+    settlers = sorted(
+        (p for p in world.parties if str(p).startswith("settler_")), key=str
+    )
+    for party in settlers:
+        _maybe_sell_perishables(world, party)
+
+
 def tick_settler_margin_review(world: World) -> None:
     """Once per game-week, evaluate every settler's vertical-integration triggers
     and run buffer-buy logic for materials whose price is rising fast.
@@ -687,24 +763,36 @@ def tick_settler_margin_review(world: World) -> None:
 
 
 def _maybe_list_excess_electricity(world: World, party: PartyId) -> None:
-    """Generators with excess electricity list it at the regional clearing price."""
+    """List surplus electricity from generator plots (FOB; stock stays on-site)."""
+    from realm.economy.market_delivery import DELIVERY_FOB
     from realm.economy.markets import place_sell_order
+    from realm.materials import MaterialId
 
-    elec = world.inventory.qty(party, MaterialId("electricity"))
-    if elec < 5:
-        return
-
-    regions = world.scenario_state.get("power_regions", [])
-    ref_price = 40
-    if regions:
-        ref_price = max(int(r.get("clearing_price_cents", 40)) for r in regions)
-
-    sell_qty = elec - 3
-    if sell_qty >= 1:
-        place_sell_order(
-            world,
-            party,
-            MaterialId("electricity"),
-            qty=sell_qty,
-            price_per_unit_cents=ref_price,
+    for plot_id, stock in world.plot_output_stock.items():
+        plot = world.plots.get(PlotId(plot_id))
+        if plot is None or plot.owner != party:
+            continue
+        elec_qty = int(stock.get("electricity", 0))
+        if elec_qty < 5:
+            continue
+        ref_price = max(
+            40,
+            max(
+                (
+                    int(r.get("clearing_price_cents", 40))
+                    for r in world.scenario_state.get("power_regions", [])
+                ),
+                default=40,
+            ),
         )
+        sell_qty = elec_qty - 3
+        if sell_qty >= 1:
+            place_sell_order(
+                world,
+                party,
+                MaterialId("electricity"),
+                sell_qty,
+                ref_price,
+                from_plot_id=PlotId(plot_id),
+                delivery_terms=DELIVERY_FOB,
+            )
