@@ -147,14 +147,16 @@ def test_grid_regions_split_by_road_components() -> None:
     assert len(region_ids) == 2
 
 
-def test_isolated_plot_has_no_grid_capacity() -> None:
+def test_isolated_plot_with_power_shed_has_microgrid_capacity() -> None:
     world, gen, _consumer = _build_world()
     iso = PlotId("p-15-15")
     _claim(world, gen, iso)
     _install_building(world, gen, iso, "power_shed")
     info = get_plot_power_info(world, iso)
-    assert info["powered"] is False
-    assert "isolated" in str(info.get("reason", "")).lower()
+    assert info["powered"] is True
+    assert info["capacity_per_day"] == 24
+    assert info["grid_connected"] is False
+    assert "microgrid" in str(info.get("status_note", "")).lower()
 
 
 def test_generator_earns_revenue_from_consumers() -> None:

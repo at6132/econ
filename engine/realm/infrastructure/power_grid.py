@@ -379,6 +379,92 @@ def plot_has_grid_capacity(world: World, plot_id: PlotId) -> bool:
     return reg is not None and reg.capacity_per_day > 0
 
 
+def _generator_label(world: World, blueprint_id: str) -> str:
+    bp = world.blueprints.get(blueprint_id)
+    if bp is not None:
+        return str(bp.name)
+    from realm.production.buildings import BUILDINGS
+
+    spec = BUILDINGS.get(blueprint_id, {})
+    return str(spec.get("label", blueprint_id))
+
+
+def _region_generators_public(world: World, reg: GridRegion) -> list[dict[str, Any]]:
+    """Active and pending generators in this region (for UI)."""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _append(iid: str, blueprint_id: str, plot_key: str, *, active: bool, eff: int) -> None:
+        if iid in seen:
+            return
+        seen.add(iid)
+        base = int(POWER_GENERATOR_BLUEPRINTS.get(blueprint_id, 0))
+        cap = int(base * eff / 100) if active else 0
+        out.append(
+            {
+                "instance_id": iid,
+                "building_id": blueprint_id,
+                "label": _generator_label(world, blueprint_id),
+                "plot_id": plot_key,
+                "active": active,
+                "efficiency_pct": eff,
+                "capacity_per_day": cap,
+            }
+        )
+
+    for pb in world.placed_buildings.values():
+        if str(pb.plot_id) not in reg.plot_ids:
+            continue
+        if pb.blueprint_id not in POWER_GENERATOR_BLUEPRINTS:
+            continue
+        eff = int(world.building_maintenance.get(pb.instance_id, {}).get("efficiency_pct", 100))
+        active = str(pb.status) == "active" and eff > 0
+        _append(pb.instance_id, pb.blueprint_id, str(pb.plot_id), active=active, eff=eff)
+
+    for row in world.plot_buildings:
+        pid = str(row.get("plot_id", ""))
+        if pid not in reg.plot_ids:
+            continue
+        bid = str(row.get("building_id", ""))
+        if bid not in POWER_GENERATOR_BLUEPRINTS:
+            continue
+        iid = str(row.get("instance_id", ""))
+        if not iid:
+            continue
+        eff = int(world.building_maintenance.get(iid, {}).get("efficiency_pct", 100))
+        active = _legacy_generator_active(world, row) and eff > 0
+        _append(iid, bid, pid, active=active, eff=eff)
+
+    return out
+
+
+def _power_unmet_reason(
+    world: World,
+    plot_id: str,
+    region_id: str,
+    reg: GridRegion,
+    generators: list[dict[str, Any]],
+) -> str:
+    if reg.capacity_per_day > 0:
+        return ""
+    pending = [g for g in generators if not bool(g.get("active"))]
+    if pending and not any(bool(g.get("active")) for g in generators):
+        return (
+            "Generator present but not online yet (finish construction or run maintenance)"
+        )
+    if region_id.startswith("grid_iso_"):
+        return (
+            "No grid power — build a power_shed on this plot and keep it maintained, "
+            "or link to the world road network (Build → Roads → cyan edge port)"
+        )
+    if not generators:
+        return (
+            "Road-linked region has no power_shed — build one on any plot in this "
+            "road component, or run coal_generator at a shed for local electricity stock"
+        )
+    return "Region generators offline (maintenance or construction)"
+
+
 def get_plot_power_info(world: World, plot_id: PlotId) -> dict[str, Any]:
     regions = compute_grid_regions(world)
     serialized = serialize_regions(regions)
@@ -395,24 +481,16 @@ def get_plot_power_info(world: World, plot_id: PlotId) -> dict[str, Any]:
             "ok": True,
             "plot_id": pid,
             "powered": False,
+            "grid_connected": False,
             "reason": "plot not on road network",
             "clearing_price_cents": POWER_PRICE_CEILING_CENTS,
+            "generators": [],
         }
 
     reg = regions[rid]
-    if rid.startswith("grid_iso_"):
-        return {
-            "ok": True,
-            "plot_id": pid,
-            "powered": False,
-            "reason": "isolated plot — no road access",
-            "region_id": rid,
-            "clearing_price_cents": POWER_PRICE_CEILING_CENTS,
-            "load_factor": reg.load_factor,
-            "brownout": False,
-            "capacity_per_day": 0,
-            "load_per_day": reg.load_per_day,
-        }
+    grid_connected = not rid.startswith("grid_iso_")
+    generators = _region_generators_public(world, reg)
+    powered = reg.capacity_per_day > 0
 
     r_data = next((r for r in serialized if r["region_id"] == rid), None)
     if r_data is None:
@@ -425,14 +503,26 @@ def get_plot_power_info(world: World, plot_id: PlotId) -> dict[str, Any]:
         }
 
     lf = float(r_data.get("load_factor", reg.load_factor))
+    reason = _power_unmet_reason(world, pid, rid, reg, generators)
+    status_note = ""
+    if powered and grid_connected:
+        status_note = "Regional grid (road-linked market)"
+    elif powered:
+        status_note = "On-plot microgrid (not linked to world roads)"
+
     return {
         "ok": True,
         "plot_id": pid,
-        "powered": reg.capacity_per_day > 0,
+        "powered": powered,
+        "grid_connected": grid_connected,
+        "status_note": status_note,
+        "reason": reason,
         "region_id": rid,
+        "region_plot_count": len(reg.plot_ids),
         "clearing_price_cents": int(r_data.get("clearing_price_cents", reg.clearing_price_cents)),
         "load_factor": lf,
-        "brownout": lf > BROWNOUT_THRESHOLD,
+        "brownout": lf > BROWNOUT_THRESHOLD if powered else False,
         "capacity_per_day": int(r_data.get("capacity_per_day", reg.capacity_per_day)),
         "load_per_day": int(r_data.get("load_per_day", reg.load_per_day)),
+        "generators": generators,
     }
