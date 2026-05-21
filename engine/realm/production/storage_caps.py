@@ -26,10 +26,17 @@ def party_storage_cap_units(world: World, party: PartyId) -> int:
 
 
 def party_inventory_unit_total(world: World, party: PartyId) -> int:
-    return sum(world.inventory.stock.get(party, {}).values())
+    return sum(world.inventory.stock_for_party(party).values())
 
 
-def try_add_inventory(world: World, party: PartyId, material: MaterialId, qty: int) -> MatterResult:
+def try_add_inventory(
+    world: World,
+    party: PartyId,
+    material: MaterialId,
+    qty: int,
+    *,
+    quality: str = "standard",
+) -> MatterResult:
     """Add units if party total after add would not exceed storage cap."""
     if qty < 0:
         return MatterErr(reason="quantity must be non-negative")
@@ -38,4 +45,4 @@ def try_add_inventory(world: World, party: PartyId, material: MaterialId, qty: i
     cap = party_storage_cap_units(world, party)
     if party_inventory_unit_total(world, party) + qty > cap:
         return MatterErr(reason="storage capacity exceeded")
-    return world.inventory.add(party, material, qty)
+    return world.inventory.add(party, material, qty, quality=quality)
