@@ -2,13 +2,15 @@ extends "res://scenes/panels/TabbedSlidePanel.gd"
 
 
 func _init() -> void:
-	width_pct = 0.70
+	width_pct = 0.74
 	panel_title = "🏢 Business"
 
 
 func _build_tabs() -> void:
-	_add_api_tab("My businesses", func(cb): API.get_businesses_mine(WorldState.party_id, cb))
-	_add_api_tab("Templates", func(cb): API.get_business_templates(cb))
+	var desk := preload("res://scenes/panels/business/BusinessDeskTab.gd").new() as VBoxContainer
+	add_tab(desk, "Desk")
+	add_tab(preload("res://scenes/panels/build/BlueprintCatalogTab.gd").new(), "Blueprints")
+	add_tab(preload("res://scenes/panels/business/CodexStubTab.gd").new(), "Codex")
 	_add_api_tab("Public registry", func(cb): API.get_businesses_public(cb))
 
 

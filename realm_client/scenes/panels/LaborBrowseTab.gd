@@ -85,4 +85,54 @@ func _laborer_row(laborer: Dictionary) -> VBoxContainer:
 	meta.add_theme_font_size_override("font_size", 9)
 	meta.add_theme_color_override("font_color", RealmColors.MUTED)
 	box.add_child(meta)
+
+	if not bool(laborer.get("employed", false)):
+		var hire_row := HBoxContainer.new()
+		hire_row.add_theme_constant_override("separation", 6)
+		var wage := SpinBox.new()
+		wage.prefix = "Wage ¢/d "
+		wage.min_value = 500
+		wage.max_value = 50_000
+		wage.value = 2000
+		var bonus := SpinBox.new()
+		bonus.prefix = "Bonus ¢ "
+		bonus.max_value = 100_000
+		hire_row.add_child(wage)
+		hire_row.add_child(bonus)
+		var hire_btn := Button.new()
+		hire_btn.text = "Hire"
+		PanelUI.style_btn(hire_btn, true)
+		var lid := str(laborer.get("laborer_id", laborer.get("id", "")))
+		hire_btn.pressed.connect(
+			func() -> void:
+				API.hire_laborer(
+					lid,
+					int(bonus.value),
+					int(wage.value),
+					func(r: Dictionary) -> void:
+						if bool(r.get("ok", false)):
+							MainFeedback.toast("Hired %s" % lid)
+							refresh()
+						else:
+							MainFeedback.toast(str(r.get("reason", "Hire failed")), true),
+				)
+		)
+		hire_row.add_child(hire_btn)
+		box.add_child(hire_row)
+	elif str(laborer.get("employer", "")) == WorldState.party_id:
+		var fire_btn := Button.new()
+		fire_btn.text = "Fire"
+		PanelUI.style_btn(fire_btn)
+		var lid := str(laborer.get("laborer_id", laborer.get("id", "")))
+		fire_btn.pressed.connect(
+			func() -> void:
+				API.fire_laborer(
+					lid,
+					func(r: Dictionary) -> void:
+						if bool(r.get("ok", false)):
+							MainFeedback.toast("Fired")
+							refresh()
+				)
+		)
+		box.add_child(fire_btn)
 	return box

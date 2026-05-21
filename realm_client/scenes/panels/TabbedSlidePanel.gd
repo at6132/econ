@@ -20,6 +20,7 @@ func _ready() -> void:
 	_build_tabs()
 	SlidePanelAnim.slide_in(self, panel, width_pct, true)
 	WorldState.world_updated.connect(_on_world_updated)
+	WorldState.player_updated.connect(_on_world_updated)
 	get_viewport().size_changed.connect(_on_resized)
 	call_deferred("_after_open")
 

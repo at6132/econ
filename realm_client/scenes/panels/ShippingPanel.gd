@@ -2,27 +2,18 @@ extends "res://scenes/panels/TabbedSlidePanel.gd"
 
 
 func _init() -> void:
-	width_pct = 0.70
+	width_pct = 0.72
 	panel_title = "🚢 Shipping"
 
 
 func _build_tabs() -> void:
-	_add_api_tab("Routes", func(cb): API.get_routes(cb))
-	_add_api_tab("Uncharted", func(cb): API.get_routes_uncharted(cb))
-	_add_api_tab("Active shipments", func(cb):
-		API.get_world_player(
-			func(p: Dictionary) -> void:
-				if not cb.is_valid():
-					return
-				cb.call({"ok": true, "in_transit": p.get("in_transit", [])}),
-			WorldState.party_id,
-		)
-	)
-	_add_api_tab("Roads", func(cb): API.get_roads(cb))
-
-
-func _add_api_tab(tab_title: String, fetcher: Callable) -> void:
-	var tab := preload("res://scenes/panels/GenericListTab.gd").new() as VBoxContainer
-	tab.title = tab_title
-	tab.fetch_callable = fetcher
-	add_tab(tab, tab_title)
+	var dispatch := preload("res://scenes/panels/shipping/DispatchTab.gd").new() as VBoxContainer
+	add_tab(dispatch, "Dispatch")
+	var routes_wrap := VBoxContainer.new()
+	var routes := preload("res://scenes/panels/shipping/RoutesTab.gd").new() as VBoxContainer
+	routes.fetch_callable = func(cb): API.get_routes(cb)
+	routes_wrap.add_child(routes)
+	routes_wrap.add_child(preload("res://scenes/panels/shipping/RouteRegisterStrip.gd").new())
+	add_tab(routes_wrap, "Routes")
+	var inflight := preload("res://scenes/panels/shipping/InFlightTab.gd").new() as VBoxContainer
+	add_tab(inflight, "In flight")

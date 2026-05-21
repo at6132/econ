@@ -9,8 +9,10 @@ func _init() -> void:
 func _build_tabs() -> void:
 	_add_api_tab("CPI", func(cb): API.get_cpi(cb))
 	_add_api_tab("CPI components", func(cb): API.get_cpi_components(cb))
-	_add_api_tab("FX rates", func(cb): API.get_fx_rates(cb))
-	_add_api_tab("Futures curves", func(cb): API.get_futures_curve("coal", cb))
+	add_tab(preload("res://scenes/panels/finance/FxDeskTab.gd").new(), "FX desk")
+	var fut_curve := VBoxContainer.new()
+	fut_curve.set_script(preload("res://scenes/panels/economics/FuturesCurveTab.gd"))
+	add_tab(fut_curve, "Futures curve")
 	_add_advantage_tab()
 	_add_trade_balance_tab()
 

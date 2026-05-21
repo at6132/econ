@@ -58,6 +58,19 @@ func _tender_row(d: Dictionary) -> VBoxContainer:
 	)
 	v.add_child(spin)
 	v.add_child(bid_btn)
+	var ops := Label.new()
+	ops.text = "Won tenders: set auto-supply targets in Operations → Supply."
+	ops.add_theme_font_size_override("font_size", 10)
+	ops.modulate = Color(0.65, 0.62, 0.55)
+	v.add_child(ops)
+	var open_ops := Button.new()
+	open_ops.text = "Open Operations"
+	open_ops.pressed.connect(func() -> void:
+		var host := get_tree().current_scene
+		if host != null and host.has_method("open_operations_panel"):
+			host.call("open_operations_panel")
+	)
+	v.add_child(open_ops)
 	return v
 
 

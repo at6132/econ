@@ -61,13 +61,8 @@ func _apply_theme() -> void:
 	_style_btn(sort_eff_btn)
 
 
-func _style_btn(btn: Button) -> void:
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.12, 0.12, 0.14)
-	s.set_border_width_all(1)
-	s.border_color = Color(0.85, 0.72, 0.2, 0.55)
-	btn.add_theme_stylebox_override("normal", s)
-	btn.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
+func _style_btn(btn: Button, accent: bool = false) -> void:
+	PanelUI.style_btn(btn, accent)
 
 
 func _width_pct() -> float:
@@ -242,19 +237,44 @@ func _make_plot_row(ui: Dictionary) -> PanelContainer:
 	btn_row.add_theme_constant_override("separation", 8)
 	btn_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var locate_btn := Button.new()
-	locate_btn.text = "Show on map"
-	locate_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	locate_btn.text = "Map"
 	_style_btn(locate_btn)
 	locate_btn.pressed.connect(func() -> void: plot_locate_requested.emit(pid))
 	btn_row.add_child(locate_btn)
+	var build_btn := Button.new()
+	build_btn.text = "Build"
+	_style_btn(build_btn)
+	build_btn.pressed.connect(func() -> void: _host_call("open_build_panel", pid, ui))
+	btn_row.add_child(build_btn)
+	var ops_btn := Button.new()
+	ops_btn.text = "Ops"
+	_style_btn(ops_btn)
+	ops_btn.pressed.connect(func() -> void: _host_call("_on_nav_pressed", "operations"))
+	btn_row.add_child(ops_btn)
+	var inv_btn := Button.new()
+	inv_btn.text = "Inv"
+	_style_btn(inv_btn)
+	inv_btn.pressed.connect(func() -> void: _host_call("_on_nav_pressed", "inventory"))
+	btn_row.add_child(inv_btn)
 	var open_btn := Button.new()
-	open_btn.text = "Open →"
-	open_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_btn(open_btn)
+	open_btn.text = "Detail →"
+	_style_btn(open_btn, true)
 	open_btn.pressed.connect(func() -> void: plot_selected.emit(pid, ui))
 	btn_row.add_child(open_btn)
 	root.add_child(btn_row)
 	return pc
+
+
+func _host_call(method: String, arg1: Variant = null, arg2: Variant = null) -> void:
+	var host := get_tree().current_scene
+	if host == null or not host.has_method(method):
+		return
+	if arg2 != null:
+		host.call(method, arg1, arg2)
+	elif arg1 != null:
+		host.call(method, arg1)
+	else:
+		host.call(method)
 
 
 func _plot_card_stylebox() -> StyleBoxFlat:
