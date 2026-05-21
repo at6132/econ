@@ -27,6 +27,17 @@ def test_oracle_has_positive_margins_at_day_0() -> None:
     assert positive / total > 0.5, f"Only {positive}/{total} recipes look viable"
 
 
+def test_oracle_chemistry_recipes_not_dead_at_day_0() -> None:
+    """Processing-chain outputs must have fair values so margins are not -100%."""
+    w = bootstrap_genesis(seed=42, settler_count=5)
+    oracle = _build_oracle(w, 0)
+    assert oracle.recipe_margins.get("refine_sulfur", -1.0) > -0.5
+    assert oracle.recipe_margins.get("process_phosphate", -1.0) > -0.65
+    assert oracle.recipe_margins.get("make_gunpowder", -1.0) > -0.85
+    dead = sum(1 for m in oracle.recipe_margins.values() if m <= -0.99)
+    assert dead == 0, f"{dead} recipes still at -100%"
+
+
 def test_order_expiry_removes_stale_orders() -> None:
     w = bootstrap_genesis(seed=1, settler_count=2)
     snap = ConservationSnapshot.of(w.ledger, w.inventory)

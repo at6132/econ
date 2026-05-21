@@ -196,6 +196,8 @@ class World:
     p2p_idempotency: dict[str, dict] = field(default_factory=dict)
     scenario_id: str = "frontier"
     """Active scenario name (Frontier, bootstrapper, speculator, cartel)."""
+    world_id: str = ""
+    """Stable identity for this playthrough — groups save slots in Continue."""
     world_name: str = ""
     """Player-chosen display name for this world (shown in Continue menu)."""
     market_intel_expires_tick: int = 0
@@ -371,9 +373,9 @@ class World:
         - If the recipe has ``requires_discovery=False`` → always ``True``.
         - If the recipe has ``requires_discovery=True`` → must be in the party's book.
         """
-        from realm.production.recipes import RECIPES
+        from realm.production.custom_content import get_recipe
 
-        recipe = RECIPES.get(recipe_id)
+        recipe = get_recipe(self, recipe_id)
         if recipe is None:
             return False
         if not bool(getattr(recipe, "requires_discovery", False)):
@@ -762,6 +764,11 @@ def bootstrap_genesis(
     npc_stores = seed_genesis_npc_stores(world)
     if npc_stores:
         world.scenario_state["starting_npc_store_plots"] = [str(p) for p in npc_stores]
+    from realm.genesis.town_roads import seed_genesis_town_roads
+
+    starter_roads = seed_genesis_town_roads(world)
+    if starter_roads > 0:
+        world.scenario_state["genesis_starter_road_segments"] = int(starter_roads)
     # Phase 7A: pop hubs are removed. Population density (Sprint 3 — Phase B.2)
     # no longer derives from hub coordinates; it is set to the frontier
     # baseline everywhere so the per-plot field stays well-defined for

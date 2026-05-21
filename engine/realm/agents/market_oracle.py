@@ -65,6 +65,41 @@ _GENESIS_FAIR_VALUE: dict[str, int] = {
     "smoked_fish": 420,
     "wild_herb": 240,
     "shale_oil": 380,
+    # Chemistry / processing outputs (previously missing — zero fair value killed margins)
+    "raw_silica": 130,
+    "fused_silica": 432,
+    "slag": 270,
+    "sulfur_ore_refined": 391,
+    "sulfuric_acid": 189,
+    "refined_saltpeter": 391,
+    "gunpowder": 108,
+    "phosphate_meal": 165,
+    "platinum_ore": 378,
+    "refined_platinum": 432,
+    "rare_earth_ore": 378,
+    "oil_shale": 141,
+    "crude_oil": 290,
+    "refined_oil": 420,
+    "steel_billet": 520,
+    "cast_iron_ingot": 345,
+    "wrought_iron": 310,
+    "zinc_ingot": 240,
+    "brass_ingot": 360,
+    "soda_ash": 210,
+    "potash": 240,
+    "saltpeter": 280,
+    "sulfur": 320,
+    "phosphorus": 450,
+    "nitrogen": 380,
+    "ammonia": 290,
+    "nitric_acid": 340,
+    "fertilizer": 220,
+    "dye": 480,
+    "pigment": 380,
+    "resin": 290,
+    "tar": 180,
+    "pitch": 240,
+    "coke": 280,
 }
 
 
@@ -106,7 +141,7 @@ def _material_price(
     *,
     for_output: bool,
 ) -> int:
-    """Fair value for margin math: bid→ask→genesis fair value (outputs); ask→bid→fair (inputs)."""
+    """Spot price for margin math: bid→ask→genesis fair value (outputs); ask→bid→fair (inputs)."""
     if for_output:
         return (
             oracle.best_bid.get(mid)
@@ -120,11 +155,24 @@ def _material_price(
     )
 
 
+def _margin_material_price(
+    oracle: MarketOracle,
+    mid: str,
+    *,
+    for_output: bool,
+) -> int:
+    """Recipe-margin unit price — prefer genesis fair value when known."""
+    fair = _GENESIS_FAIR_VALUE.get(mid, 0)
+    if fair > 0:
+        return fair
+    return _material_price(oracle, mid, for_output=for_output)
+
+
 def _input_cost_cents(oracle: MarketOracle, recipe: object) -> int:
     total = int(getattr(recipe, "labor_cents", 0))
     for mat, qty in getattr(recipe, "inputs", {}).items():
         mid = str(mat)
-        total += _material_price(oracle, mid, for_output=False) * int(qty)
+        total += _margin_material_price(oracle, mid, for_output=False) * int(qty)
     return total
 
 
@@ -132,7 +180,7 @@ def _output_value_cents(oracle: MarketOracle, recipe: object) -> int:
     total = 0
     for mat, qty in getattr(recipe, "outputs", {}).items():
         mid = str(mat)
-        total += _material_price(oracle, mid, for_output=True) * int(qty)
+        total += _margin_material_price(oracle, mid, for_output=True) * int(qty)
     return total
 
 
@@ -187,9 +235,11 @@ def _build_oracle(world: World, game_day: int) -> MarketOracle:
     for rid, recipe in RECIPES.items():
         input_cost = _input_cost_cents(oracle, recipe)
         output_value = _output_value_cents(oracle, recipe)
-        if input_cost > 0:
+        if output_value == 0 and input_cost > 0:
+            oracle.recipe_margins[rid] = 0.0
+        elif input_cost > 0:
             oracle.recipe_margins[rid] = (output_value - input_cost) / input_cost
         else:
-            oracle.recipe_margins[rid] = 0.0 if output_value == 0 else 1.0
+            oracle.recipe_margins[rid] = 1.0 if output_value > 0 else 0.0
 
     return oracle

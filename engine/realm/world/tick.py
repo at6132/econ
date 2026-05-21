@@ -32,10 +32,14 @@ from realm.genesis.margaux_sprint5 import (
     tick_margaux_sprint5_beats,
     update_margaux_player_profile,
 )
-from realm.population.employment import tick_job_market, tick_laborer_wages
+from realm.population.employment import (
+    tick_job_market,
+    tick_laborer_wages,
+    tick_settler_job_postings,
+)
 from realm.population.laborers import tick_laborer_births, tick_laborers
 from realm.events.sprint4_feed import tick_sprint4_feed
-from realm.population.stores import tick_laborer_spending
+from realm.population.stores import tick_laborer_spending, tick_store_restock
 from realm.actions.construction_actions import tick_construction_firms, tick_construction_orders
 from realm.economy.business_viability import tick_business_viability
 from realm.population.nascent_settlements import tick_nascent_settlements
@@ -109,8 +113,10 @@ def advance_tick(world: World) -> None:
     if world.scenario_id == "genesis":
         tick_frontier_roads(world)
         tick_laborers(world)
+        tick_settler_job_postings(world)
         tick_job_market(world)
         tick_laborer_wages(world)
+        tick_store_restock(world)
         tick_laborer_spending(world)
         tick_laborer_births(world)
         # Phase 7F — inter-island demand: NPCs on food-deficit islands

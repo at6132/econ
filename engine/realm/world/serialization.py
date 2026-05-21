@@ -78,6 +78,7 @@ def world_public_dict(world: "World") -> dict:
     from realm.economy.markets import market_bids_public, market_book_public
     from realm.infrastructure.power_grid import compute_grid_regions
     from realm.production.buildings import building_catalog_public
+    from realm.production.recipe_sites import plot_is_coastal
     from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
     from realm.core.time_scale import TICKS_PER_GAME_DAY
     from realm.world.world import claim_cost_cents_for_plot
@@ -109,6 +110,7 @@ def world_public_dict(world: "World") -> dict:
             "x": p.x,
             "y": p.y,
             "terrain": p.terrain.value,
+            "is_coastal": plot_is_coastal(world, p),
             "world_tiles_w": wt,
             "world_tiles_h": ht,
             "grid_cells_w": gcw,
@@ -174,6 +176,7 @@ def world_public_dict(world: "World") -> dict:
         "tick": world.tick,
         "ticks_per_game_day": TICKS_PER_GAME_DAY,
         "scenario_id": world.scenario_id,
+        "world_id": world.world_id,
         "world_name": world.world_name,
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "market_intel_active": intel_active,
@@ -531,6 +534,9 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
     return {
         "tick": world.tick,
         "party": str(party),
+        "world_id": world.world_id,
+        "world_name": world.world_name,
+        "scenario_id": world.scenario_id,
         "cash": cash_cents,
         "inventory_value_estimate": inv_value_cents,
         "building_book_value_cents": building_value,
@@ -586,6 +592,7 @@ def world_static_dict(world: "World") -> dict[str, Any]:
     return {
         "seed": world.seed,
         "scenario_id": world.scenario_id,
+        "world_id": world.world_id,
         "world_name": world.world_name,
         "ticks_per_game_day": TICKS_PER_GAME_DAY,
         # Wall-clock pacing canon (Law 2 / doc 09). Solo / public mode shards
@@ -752,6 +759,9 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
 
     recipe_book = sorted(world.party_recipe_books.get(party, set()))
 
+    from realm.infrastructure.building_workflow import workflow_public_dict
+    from realm.production.custom_content import custom_materials_public, custom_recipes_for_party
+
     price_alerts = list(world.scenario_state.get("player_price_alerts") or []) if party_s == "player" else []
 
     return {
@@ -773,6 +783,9 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "bank_rates": _bank_rates_public(world) if party_s == "player" else None,
         "bank_loans": _bank_loans_for_player(world) if party_s == "player" else [],
         "recipe_book": [str(x) for x in recipe_book],
+        "custom_recipes": custom_recipes_for_party(world, party),
+        "custom_materials": custom_materials_public(world),
+        "workflow_settings": workflow_public_dict(world, party),
     }
 
 
@@ -798,6 +811,7 @@ def world_map_dict(world: "World") -> dict[str, Any]:
     Drops ``world_cell_to_plot`` and per-plot ``world_cells`` on uniform
     grids — derivable from ``(x, y)`` as ``p-{x}-{y}``."""
     from realm.infrastructure.power_grid import compute_grid_regions
+    from realm.production.recipe_sites import plot_is_coastal
     from realm.world.plot_scale import (
         plot_grid_side,
         plot_world_cells_tuple,
@@ -822,6 +836,7 @@ def world_map_dict(world: "World") -> dict[str, Any]:
             "x": p.x,
             "y": p.y,
             "terrain": p.terrain.value,
+            "is_coastal": plot_is_coastal(world, p),
             "owner": p.owner,
             "surveyed": p.surveyed,
             "powered": str(p.plot_id) in powered_set,

@@ -147,6 +147,21 @@ def test_plot_is_coastal_when_water_neighbour() -> None:
     assert plot_is_coastal(w, w.plots[PlotId("p-0-0")]) is True
 
 
+def test_plot_is_coastal_when_non_anchor_cell_touches_water() -> None:
+    """Multi-tile deeds: coastal if any world cell borders water, not only (x, y)."""
+    w = bootstrap_frontier(seed=1, grid_width=6, grid_height=6, uniform_plots=True)
+    anchor = w.plots[PlotId("p-2-2")]
+    anchor.terrain = Terrain.PLAINS
+    anchor.world_cells = ((2, 2), (3, 2))
+    w.plots[PlotId("p-3-2")].terrain = Terrain.WATER_SHALLOW
+    for pid in ("p-1-2", "p-2-1", "p-2-3", "p-4-2"):
+        w.plots[PlotId(pid)].terrain = Terrain.PLAINS
+    from realm.world.plot_parcels import refresh_world_cell_index
+
+    refresh_world_cell_index(w)
+    assert plot_is_coastal(w, anchor) is True
+
+
 def test_fishing_blocked_on_inland_plot() -> None:
     w = bootstrap_frontier(seed=1, grid_width=4, grid_height=4)
     # Fully landlocked: surround p-1-1 with non-water terrain.
@@ -156,6 +171,25 @@ def test_fishing_blocked_on_inland_plot() -> None:
     ok, reason = recipe_allowed_on_plot(w, w.plots[PlotId("p-1-1")], "fishing")
     assert ok is False
     assert reason is not None and "coastal" in reason
+
+
+def test_world_map_dict_includes_is_coastal() -> None:
+    from realm.world.plot_parcels import refresh_world_cell_index
+    from realm.world.serialization import world_map_dict
+
+    w = bootstrap_frontier(seed=3, grid_width=6, grid_height=6, uniform_plots=True)
+    w.plots[PlotId("p-2-2")].terrain = Terrain.PLAINS
+    w.plots[PlotId("p-3-2")].terrain = Terrain.WATER_SHALLOW
+    for pid in ("p-1-2", "p-2-1", "p-2-3", "p-4-2", "p-3-1", "p-3-3"):
+        w.plots[PlotId(pid)].terrain = Terrain.PLAINS
+    for pid in ("p-0-1", "p-1-0", "p-2-1", "p-1-2"):
+        w.plots[PlotId(pid)].terrain = Terrain.PLAINS
+    refresh_world_cell_index(w)
+    payload = world_map_dict(w)
+    by_id = {str(row["id"]): row for row in payload["plots"]}
+    assert by_id["p-2-2"]["is_coastal"] is True
+    assert plot_is_coastal(w, w.plots[PlotId("p-1-1")]) is False
+    assert by_id["p-1-1"]["is_coastal"] is False
 
 
 def test_fishing_allowed_on_coastal_plot() -> None:
