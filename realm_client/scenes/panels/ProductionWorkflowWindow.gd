@@ -46,7 +46,8 @@ func _ready() -> void:
 	_show_tab("run")
 	WorldState.world_updated.connect(_on_world_updated)
 	WorldState.player_updated.connect(_on_world_updated)
-	WorldState.static_updated.connect(_on_static_tables_ready)
+	WorldState.recipes_updated.connect(_on_recipes_catalog_ready)
+	WorldState.building_auto_list_changed.connect(_on_building_auto_list_changed)
 	WS.tick_event.connect(_on_tick_event)
 
 
@@ -55,8 +56,10 @@ func _exit_tree() -> void:
 		WorldState.world_updated.disconnect(_on_world_updated)
 	if WorldState.player_updated.is_connected(_on_world_updated):
 		WorldState.player_updated.disconnect(_on_world_updated)
-	if WorldState.static_updated.is_connected(_on_static_tables_ready):
-		WorldState.static_updated.disconnect(_on_static_tables_ready)
+	if WorldState.recipes_updated.is_connected(_on_recipes_catalog_ready):
+		WorldState.recipes_updated.disconnect(_on_recipes_catalog_ready)
+	if WorldState.building_auto_list_changed.is_connected(_on_building_auto_list_changed):
+		WorldState.building_auto_list_changed.disconnect(_on_building_auto_list_changed)
 	if WS.tick_event.is_connected(_on_tick_event):
 		WS.tick_event.disconnect(_on_tick_event)
 
@@ -108,7 +111,7 @@ func _apply_building_profile() -> void:
 		_title.text = "Warehouse — %s" % bname
 		_subtitle.text = (
 			"Plot %s%s\nAuto-buy rules for materials stored on this plot."
-			% [plot_id, footprint]
+			% [_plot_id, footprint]
 		)
 		_tab_run.visible = false
 		_tab_routing.visible = false
@@ -249,7 +252,7 @@ func _stash_qty(plot_id: String, material: String) -> int:
 func _source_options() -> Array:
 	var opts: Array = [
 		{"id": "stash_this", "label": "This plot stash"},
-		{"id": "player_inv", "label": "Player inventory"},
+		{"id": "player_inv", "label": "Personal carry (portable only)"},
 		{"id": "market_buy", "label": "Buy from market if short"},
 	]
 	for row in _owned_plots():
@@ -264,7 +267,7 @@ func _source_options() -> Array:
 func _dest_options() -> Array:
 	var opts: Array = [
 		{"id": "stash_this", "label": "This plot stash"},
-		{"id": "harvest_player", "label": "Harvest to player inventory"},
+		{"id": "harvest_player", "label": "To personal carry (portable only)"},
 		{"id": "auto_list", "label": "Auto-list on market (building flag)"},
 	]
 	for row in _owned_plots():
@@ -502,7 +505,7 @@ func _add_warehouse_rule_row(plot_id: String, material: String) -> void:
 	_warehouse_rules_inner.add_child(row)
 
 
-func _on_static_tables_ready() -> void:
+func _on_recipes_catalog_ready() -> void:
 	if _plot_id.is_empty():
 		return
 	_apply_building_profile()
@@ -523,6 +526,16 @@ func _on_tick_event(event: Dictionary) -> void:
 	if str(event.get("kind", "")) == "production_done" and str(event.get("plot_id", "")) == _plot_id:
 		_apply_output_routing()
 	_sync_building_from_world()
+
+
+func _on_building_auto_list_changed(instance_id: String, enabled: bool) -> void:
+	if _instance_id() != instance_id:
+		return
+	_building["auto_list_output"] = enabled
+	if _production_control != null:
+		var toggle: CheckButton = _production_control.get_node_or_null("%AutoListToggle") as CheckButton
+		if toggle != null:
+			toggle.set_pressed_no_signal(enabled)
 
 
 func _sync_building_from_world() -> void:
@@ -573,7 +586,7 @@ func _execute_output_dest(dest_id: String, material: String, qty: int) -> void:
 	if dest_id == "auto_list":
 		var iid := _instance_id()
 		if not bool(_building.get("auto_list_output", false)):
-			API.post_building_auto_list(iid, true, func(_d: Dictionary) -> void: pass)
+			WorldState.set_building_auto_list_enabled(iid, true)
 		return
 	if dest_id.begins_with("stash_plot:"):
 		var to_pid := dest_id.substr(11)
@@ -629,4 +642,3 @@ func _try_buy_inputs_before_start() -> void:
 		var shortfall: int = need - WorldState.player_material_qty(mid)
 		if shortfall > 0:
 			API.market_buy(mid, shortfall, 0, func(_d: Dictionary) -> void: pass)
-

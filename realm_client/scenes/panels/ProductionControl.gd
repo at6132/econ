@@ -60,7 +60,8 @@ func _ready() -> void:
 	margin_spinbox.tooltip_text = "Listing margin is fixed server-side for now."
 	WorldState.world_updated.connect(_on_world_refreshed)
 	WorldState.player_updated.connect(_on_world_refreshed)
-	WorldState.static_updated.connect(_on_static_tables_ready)
+	WorldState.recipes_updated.connect(_on_recipes_catalog_ready)
+	WorldState.building_auto_list_changed.connect(_on_building_auto_list_changed)
 	WS.tick_event.connect(_on_ws_tick)
 
 
@@ -69,8 +70,10 @@ func _exit_tree() -> void:
 		WorldState.world_updated.disconnect(_on_world_refreshed)
 	if WorldState.player_updated.is_connected(_on_world_refreshed):
 		WorldState.player_updated.disconnect(_on_world_refreshed)
-	if WorldState.static_updated.is_connected(_on_static_tables_ready):
-		WorldState.static_updated.disconnect(_on_static_tables_ready)
+	if WorldState.recipes_updated.is_connected(_on_recipes_catalog_ready):
+		WorldState.recipes_updated.disconnect(_on_recipes_catalog_ready)
+	if WorldState.building_auto_list_changed.is_connected(_on_building_auto_list_changed):
+		WorldState.building_auto_list_changed.disconnect(_on_building_auto_list_changed)
 	if WS.tick_event.is_connected(_on_ws_tick):
 		WS.tick_event.disconnect(_on_ws_tick)
 
@@ -106,12 +109,12 @@ func setup(plot_id: String, building: Dictionary, terrain: String) -> void:
 		recipe_selector.clear()
 		recipe_selector.add_item("Loading recipe catalog…")
 		recipe_selector.disabled = true
-		WorldState.ensure_static_tables(_on_static_tables_ready)
+		WorldState.ensure_recipes_catalog(_on_recipes_catalog_ready)
 	else:
 		_apply_setup_refresh()
 
 
-func _on_static_tables_ready() -> void:
+func _on_recipes_catalog_ready() -> void:
 	if _plot_id.is_empty():
 		return
 	_apply_setup_refresh()
@@ -589,8 +592,13 @@ func _refresh_throughput() -> void:
 	)
 
 
+func _on_building_auto_list_changed(instance_id: String, enabled: bool) -> void:
+	if str(_building.get("instance_id", "")) != instance_id:
+		return
+	_building["auto_list_output"] = enabled
+	auto_list_toggle.set_pressed_no_signal(enabled)
+
+
 func _on_auto_list_toggle(on: bool) -> void:
 	var instance_id: String = str(_building.get("instance_id", ""))
-	if instance_id.is_empty():
-		return
-	API.post_building_auto_list(instance_id, on, func(_d: Dictionary) -> void: pass)
+	WorldState.set_building_auto_list_enabled(instance_id, on)

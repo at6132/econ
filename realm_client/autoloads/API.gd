@@ -37,10 +37,15 @@ func get_world_summary(party: String = "player", cb: Callable = Callable()) -> v
 	get_request("/world/summary?party=%s" % party.uri_encode(), cb)
 
 
-## Read-once tables (recipes, catalogs, scenario constants, grid size).
-## Fetched on boot + after /dev/reset.
+## Read-once tables (building/hire/chemistry catalogs, scenario constants, grid size).
+## Fetched on boot + after /dev/reset. Recipe rows: ``get_recipes``.
 func get_world_static(cb: Callable) -> void:
 	get_request("/world/static", cb)
+
+
+## Seeded recipe catalog (workshop ids, inputs/outputs, terrain/subsurface gates).
+func get_recipes(cb: Callable) -> void:
+	get_request("/recipes", cb)
 
 
 ## Per-party realtime view (cash, inventory, owned plots, in-transit,
@@ -401,13 +406,21 @@ func market_buy(
 	post_request(q, {}, cb)
 
 
-func market_sell(material: String, qty: int, price_per_unit_cents: int, cb: Callable, party: String = "player") -> void:
-	post_request(
+func market_sell(
+	material: String,
+	qty: int,
+	price_per_unit_cents: int,
+	cb: Callable,
+	party: String = "player",
+	from_plot: String = "",
+) -> void:
+	var q := (
 		"/market/sell?party=%s&material=%s&qty=%d&price_per_unit_cents=%d"
-		% [party.uri_encode(), material.uri_encode(), int(qty), int(price_per_unit_cents)],
-		{},
-		cb,
+		% [party.uri_encode(), material.uri_encode(), int(qty), int(price_per_unit_cents)]
 	)
+	if not from_plot.is_empty():
+		q += "&from_plot=%s" % from_plot.uri_encode()
+	post_request(q, {}, cb)
 
 
 func market_cancel(order_id: String, cb: Callable, party: String = "player") -> void:

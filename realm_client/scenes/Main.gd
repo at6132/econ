@@ -156,6 +156,7 @@ func _finish_boot_load() -> void:
 	_apply_boot_map_overlay()
 	API.get_sim_status(_on_boot_sim_status)
 	API.get_world_static(func(s): WorldState.apply_static(s))
+	API.get_recipes(func(d): WorldState.apply_recipes_catalog(d))
 	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 	API.get_world_feed(func(f): WorldState.apply_feed(f), -1)
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
@@ -441,17 +442,18 @@ func open_blueprint_studio(on_created: Callable = Callable()) -> void:
 
 
 func open_production_workflow(plot_id: String, building: Dictionary, plot_data: Dictionary) -> void:
-	var open_fn := func() -> void:
-		if WorldState.blueprints_by_id.is_empty():
-			API.get_blueprints(
-				func(d: Dictionary) -> void:
-					WorldState.merge_blueprints_list(d.get("blueprints", []))
-					_open_production_workflow_window(plot_id, building, plot_data),
-				WorldState.party_id,
-			)
-		else:
+	WorldState.ensure_recipes_catalog(
+		func() -> void:
 			_open_production_workflow_window(plot_id, building, plot_data)
-	WorldState.ensure_static_tables(open_fn)
+	)
+	if WorldState.blueprints_by_id.is_empty():
+		API.get_blueprints(
+			func(d: Dictionary) -> void:
+				WorldState.merge_blueprints_list(d.get("blueprints", []))
+				if is_instance_valid(_production_workflow) and _production_workflow.has_method("open"):
+					_production_workflow.call("open", plot_id, building, plot_data)
+			WorldState.party_id,
+		)
 
 
 func _open_production_workflow_window(

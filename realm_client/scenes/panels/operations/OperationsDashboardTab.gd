@@ -17,6 +17,7 @@ func _ready() -> void:
 	add_child(_scroll)
 	WorldState.player_updated.connect(refresh)
 	WorldState.world_updated.connect(refresh)
+	WorldState.building_auto_list_changed.connect(func(_iid: String, _on: bool) -> void: refresh())
 	refresh()
 
 
@@ -160,7 +161,7 @@ func _automation_section() -> VBoxContainer:
 		auto.button_pressed = bool(row.get("auto_list_output", false))
 		var iid := str(row.get("instance_id", ""))
 		auto.toggled.connect(
-			func(on: bool) -> void: API.post_building_auto_list(iid, on, func(_d): pass)
+			func(on: bool) -> void: WorldState.set_building_auto_list_enabled(iid, on)
 		)
 		line.add_child(auto)
 		var cfg := Button.new()
@@ -250,7 +251,7 @@ func _open_workflow_for_plot(plot_id: String) -> void:
 
 
 func _open_workflow_for_building(plot_id: String, building: Dictionary) -> void:
-	var host := get_tree().current_scene
+	var host := WorldState.find_game_shell()
 	if host != null and host.has_method("open_production_workflow"):
-		var pd: Dictionary = WorldState.plots.get(plot_id, {})
+		var pd: Dictionary = WorldState.get_plot_ui(plot_id)
 		host.call("open_production_workflow", plot_id, building, pd)

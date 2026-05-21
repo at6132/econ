@@ -182,6 +182,9 @@ func _ensure_overlay_data(mode: String) -> void:
 					_rebuild_cell_cache()
 					queue_redraw()
 				)
+				API.get_recipes(func(d: Dictionary) -> void:
+					WorldState.apply_recipes_catalog(d)
+				)
 
 
 func _on_overlay_roads_loaded(data: Dictionary) -> void:

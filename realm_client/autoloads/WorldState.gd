@@ -18,6 +18,8 @@ static func variant_to_int(v: Variant, default_val: int = 0) -> int:
 # ── Player state ─────────────────────────────────────────────────────────────
 ## Must match ``engine/realm/core/player_economy.PLAYER_STARTING_CASH_CENTS``.
 const PLAYER_STARTING_CASH_CENTS: int = 10_000_000
+## Portable goods only — must match ``engine/realm/production/storage_caps.CARRIED_MATERIAL_IDS``.
+const CARRIED_MATERIAL_IDS: Array[String] = ["electricity", "mining_pick"]
 var player_cash_cents: int = 0
 ## Canon starting balance for a fresh human (from ``GET /world/static`` / ``/dev/reset``).
 var player_starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS
@@ -115,11 +117,16 @@ var feed_seen_tick: int = -1
 
 ## True once ``apply_static`` has populated the read-once tables.
 var static_loaded: bool = false
+## True once ``GET /recipes`` has populated ``recipes``.
+var recipes_catalog_loaded: bool = false
 
 signal summary_updated
 signal world_updated
 signal feed_updated
 signal market_updated
+signal recipes_updated
+## ``instance_id``, ``enabled`` — auto-list output toggle synced across panels.
+signal building_auto_list_changed(instance_id: String, enabled: bool)
 signal map_updated
 ## Single-plot owner change (claim, purchase) — cheap map tint refresh only.
 signal plot_owner_changed(plot_id: String)
@@ -305,12 +312,15 @@ func apply_world(data: Dictionary) -> void:
 	feed_updated.emit()
 
 
-## Load the read-once tables from ``GET /world/static``. Safe to call
-## repeatedly (after ``/dev/reset`` for example) — overwrites the cached
-## catalogs and constants in place without touching plot or feed state.
+## Load pacing + building/hire/chemistry catalogs from ``GET /world/static``.
+## Seeded recipes: ``apply_recipes_catalog`` / ``GET /recipes`` only.
 func apply_static(data: Dictionary) -> void:
 	if data.is_empty():
 		return
+	# Legacy servers may still send recipes on static — never use them here.
+	if data.has("recipes"):
+		data = data.duplicate(true)
+		data.erase("recipes")
 	player_starting_cash_cents = variant_to_int(
 		data.get("player_starting_cash_cents", player_starting_cash_cents),
 		player_starting_cash_cents,
@@ -332,9 +342,6 @@ func apply_static(data: Dictionary) -> void:
 	var pdn: Variant = data.get("party_display_names", {})
 	if pdn is Dictionary:
 		party_display_names = pdn
-	var rec_raw: Variant = data.get("recipes", [])
-	if rec_raw is Array:
-		recipes = rec_raw
 	var bc_raw: Variant = data.get("building_catalog", [])
 	if bc_raw is Array:
 		building_catalog = bc_raw
@@ -343,9 +350,34 @@ func apply_static(data: Dictionary) -> void:
 	static_updated.emit()
 
 
-## Fetch ``GET /world/static`` when recipe/building tables are missing (map-only boot).
+## Load seeded recipe rows from ``GET /recipes``.
+func apply_recipes_catalog(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	var rec_raw: Variant = data.get("recipes", [])
+	if rec_raw is Array:
+		recipes = rec_raw
+	recipes_catalog_loaded = true
+	recipes_updated.emit()
+
+
+## Fetch ``GET /recipes`` when the catalog is missing (e.g. map-only boot).
+func ensure_recipes_catalog(on_ready: Callable = Callable()) -> void:
+	if recipes_catalog_loaded and not recipes.is_empty():
+		if on_ready.is_valid():
+			on_ready.call()
+		return
+	API.get_recipes(func(data: Dictionary) -> void:
+		if not data.is_empty():
+			apply_recipes_catalog(data)
+		if on_ready.is_valid():
+			on_ready.call()
+	)
+
+
+## Fetch ``GET /world/static`` when pacing/catalog constants are missing.
 func ensure_static_tables(on_ready: Callable = Callable()) -> void:
-	if static_loaded and not recipes.is_empty():
+	if static_loaded:
 		if on_ready.is_valid():
 			on_ready.call()
 		return
@@ -862,15 +894,94 @@ func recipes_for_workshop_building(building: Dictionary) -> Array:
 	return out
 
 
+## Seeded workshop ids that run recipes (mirrors engine employment / genesis sets).
+const PRODUCTION_WORKSHOP_IDS: Dictionary = {
+	"strip_mine": true,
+	"timber_yard": true,
+	"grain_row": true,
+	"drill_rig": true,
+	"power_shed": true,
+	"tidal_mill": true,
+	"wood_shop": true,
+	"gristmill": true,
+	"kiln_shed": true,
+	"foundry": true,
+	"stone_works": true,
+	"blast_furnace": true,
+	"chemical_works": true,
+	"forge_press": true,
+	"tool_workshop": true,
+	"machine_shop": true,
+	"shipyard": true,
+	"assay_lab": true,
+	"laboratory": true,
+	"apothecary": true,
+	"dock": true,
+	"warehouse": true,
+}
+
+
 func building_supports_production(building: Dictionary) -> bool:
 	var wid := workshop_id_for_building(building)
-	if wid == "road_segment":
+	if wid.is_empty() or wid == "road_segment":
 		return false
+	if building_is_warehouse(building):
+		return true
+	if PRODUCTION_WORKSHOP_IDS.has(wid):
+		return true
+	var bp := blueprint_dict(wid)
+	var cat := str(bp.get("category", "")).to_lower()
+	if cat in ["extraction", "processing", "research"]:
+		return true
+	if cat == "infrastructure" and wid in ["power_shed", "tidal_mill"]:
+		return true
+	if cat == "custom":
+		var er: Variant = bp.get("enabled_recipe_ids", [])
+		if er is Array and not (er as Array).is_empty():
+			return true
 	return not recipes_for_workshop_building(building).is_empty()
 
 
 func building_is_warehouse(building: Dictionary) -> bool:
 	return workshop_id_for_building(building) == "warehouse"
+
+
+func find_game_shell() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	var scene := tree.current_scene
+	if scene != null and scene.has_method("open_production_workflow"):
+		return scene
+	var root := tree.root
+	if root == null:
+		return scene
+	for child in root.get_children():
+		if child.has_method("open_production_workflow"):
+			return child
+	return scene
+
+
+func patch_building_auto_list(instance_id: String, enabled: bool) -> void:
+	if instance_id.is_empty():
+		return
+	for b in plot_buildings:
+		if b is Dictionary and str((b as Dictionary).get("instance_id", "")) == instance_id:
+			(b as Dictionary)["auto_list_output"] = enabled
+			break
+	building_auto_list_changed.emit(instance_id, enabled)
+
+
+func set_building_auto_list_enabled(instance_id: String, enabled: bool) -> void:
+	if instance_id.is_empty():
+		return
+	API.post_building_auto_list(
+		instance_id,
+		enabled,
+		func(res: Dictionary) -> void:
+			if bool(res.get("ok", false)):
+				patch_building_auto_list(instance_id, bool(res.get("enabled", enabled)))
+	)
 
 
 func player_has_survey_report_for_plot(plot_id: String) -> bool:
@@ -1039,6 +1150,32 @@ func plot_site_label(plot_id: String) -> String:
 	return "%s · %s" % [plot_id, ", ".join(tag_list)]
 
 
+func is_carried_material(material_id: String) -> bool:
+	return material_id in CARRIED_MATERIAL_IDS
+
+
+func player_plot_stash_total(material_id: String) -> int:
+	var total := 0
+	for pid in owned_plot_ids_sorted():
+		total += plot_output_stock_qty(pid, material_id)
+	return total
+
+
+func player_material_held_total(material_id: String) -> int:
+	return player_material_total(material_id) + player_plot_stash_total(material_id)
+
+
+func plots_with_material(material_id: String, min_qty: int = 1) -> Array:
+	var out: Array = []
+	for pid in owned_plot_ids_sorted():
+		var q: int = plot_output_stock_qty(pid, material_id)
+		if q >= min_qty:
+			out.append(
+				{"plot_id": pid, "qty": q, "label": plot_site_label(pid)}
+			)
+	return out
+
+
 func plot_output_stock_qty(plot_id: String, material_id: String) -> int:
 	var pd: Dictionary = plots.get(plot_id, {})
 	var stock: Variant = pd.get("output_stock", {})
@@ -1057,11 +1194,11 @@ func inventory_ledger_rows() -> Array:
 		rows.append({
 			"material": mid,
 			"qty": qty,
-			"location": "Carried",
-			"status": "Available",
+			"location": "Personal carry",
+			"status": "Portable",
 			"kind": "carried",
 			"plot_id": "",
-			"can_ship": true,
+			"can_ship": is_carried_material(mid),
 			"can_harvest": false,
 		})
 	for pid in owned_plot_ids_sorted():
@@ -1078,11 +1215,11 @@ func inventory_ledger_rows() -> Array:
 				"material": mid,
 				"qty": qty,
 				"location": plot_site_label(pid),
-				"status": "Plot stash",
+				"status": "On site",
 				"kind": "stash",
 				"plot_id": pid,
-				"can_ship": false,
-				"can_harvest": true,
+				"can_ship": true,
+				"can_harvest": is_carried_material(mid),
 			})
 	for ship in in_transit:
 		if not (ship is Dictionary):

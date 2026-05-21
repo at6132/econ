@@ -900,9 +900,8 @@ func _make_building_row(b: Dictionary) -> PanelContainer:
 			maintain_btn.tooltip_text = "Consumes: %s" % ", ".join(parts)
 		btns.add_child(maintain_btn)
 
-	var supports_prod := WorldState.building_supports_production(b)
-	var is_wh := WorldState.building_is_warehouse(b)
-	if supports_prod or is_wh:
+	if WorldState.building_supports_production(b):
+		var is_wh := WorldState.building_is_warehouse(b)
 		var prod_btn := Button.new()
 		prod_btn.text = "Warehouse" if is_wh else "Production"
 		_style_gold_button(prod_btn)
@@ -959,15 +958,15 @@ func _confirm_demolish(instance_id: String, salvage_cents: int) -> void:
 
 
 func _show_production_for(b: Dictionary) -> void:
-	var host: Node = get_tree().current_scene
+	var host := WorldState.find_game_shell()
 	if host != null and host.has_method("open_production_workflow"):
 		host.call("open_production_workflow", _plot_id, b, _plot_data)
 		return
-	push_warning("PlotDetail: Main.open_production_workflow unavailable")
+	push_warning("PlotDetail: open_production_workflow unavailable on game shell")
 
 
 func _open_operations_chains() -> void:
-	var host: Node = get_tree().current_scene
+	var host := WorldState.find_game_shell()
 	if host != null and host.has_method("_on_nav_pressed"):
 		host.call("_on_nav_pressed", "operations")
 
