@@ -3,8 +3,8 @@ extends VBoxContainer
 
 @onready var title_label: Label = %TitleLabel
 @onready var recipe_selector: OptionButton = %RecipeSelector
-@onready var substitution_note: Label = %SubstitutionNote
-@onready var cluster_label: Label = %ClusterLabel
+var substitution_note: Label
+var cluster_label: Label
 @onready var run_mode_btn: Button = %RunModeBtn
 @onready var status_icon: Label = %StatusIcon
 @onready var status_label: Label = %StatusLabel
@@ -22,6 +22,18 @@ var _run_continuous: bool = false
 
 
 func _ready() -> void:
+	substitution_note = get_node_or_null("%SubstitutionNote") as Label
+	cluster_label = get_node_or_null("%ClusterLabel") as Label
+	if is_instance_valid(substitution_note):
+		substitution_note.hide()
+	if is_instance_valid(cluster_label):
+		cluster_label.hide()
+	if not is_instance_valid(start_btn) or not is_instance_valid(recipe_selector):
+		push_error(
+			"ProductionControl: missing required nodes — open ProductionControl.tscn "
+			+ "and ensure %%StartBtn / %%RecipeSelector have Unique Name enabled."
+		)
+		return
 	_apply_local_theme()
 	start_btn.pressed.connect(_on_start)
 	stop_btn.pressed.connect(_on_stop)
@@ -39,7 +51,6 @@ func _ready() -> void:
 	margin_spinbox.editable = false
 	margin_spinbox.tooltip_text = "Listing margin is fixed server-side for now."
 	WorldState.world_updated.connect(_on_world_refreshed)
-	# Active production countdown comes from /world/player on the tick.
 	WorldState.player_updated.connect(_on_world_refreshed)
 	WS.tick_event.connect(_on_ws_tick)
 
@@ -165,19 +176,22 @@ func _refresh_recipe_hints() -> void:
 	var rid := _selected_recipe_id()
 	var plot_data: Dictionary = WorldState.plots.get(_plot_id, {})
 	var cluster_bonus := float(plot_data.get("cluster_bonus", 0.0))
-	if cluster_bonus > 0.0:
-		cluster_label.text = "🏭 Cluster bonus: +%d%% yield" % int(cluster_bonus * 100.0)
-		cluster_label.modulate = Color(0.4, 1.0, 0.4)
-		cluster_label.show()
-	else:
-		cluster_label.hide()
+	if is_instance_valid(cluster_label):
+		if cluster_bonus > 0.0:
+			cluster_label.text = "🏭 Cluster bonus: +%d%% yield" % int(cluster_bonus * 100.0)
+			cluster_label.modulate = Color(0.4, 1.0, 0.4)
+			cluster_label.show()
+		else:
+			cluster_label.hide()
 	if rid.is_empty():
-		substitution_note.hide()
+		if is_instance_valid(substitution_note):
+			substitution_note.hide()
 		return
 	var row := _recipe_row(rid)
 	var inputs: Variant = row.get("inputs", {})
 	if not (inputs is Dictionary) or (inputs as Dictionary).is_empty():
-		substitution_note.hide()
+		if is_instance_valid(substitution_note):
+			substitution_note.hide()
 		return
 	var show_sub := false
 	for mat in (inputs as Dictionary).keys():
@@ -188,6 +202,8 @@ func _refresh_recipe_hints() -> void:
 		if WorldState.player_has_substitute(rid, mid):
 			show_sub = true
 			break
+	if not is_instance_valid(substitution_note):
+		return
 	if show_sub:
 		substitution_note.text = "⚡ Will use substitute input"
 		substitution_note.modulate = Color(1.0, 0.85, 0.2)
