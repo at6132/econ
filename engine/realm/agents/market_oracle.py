@@ -74,6 +74,7 @@ class MarketOracle:
 
     computed_at_tick: int = 0
     best_ask: dict[str, int] = field(default_factory=dict)
+    best_ask_by_quality: dict[str, dict[str, int]] = field(default_factory=dict)
     best_bid: dict[str, int] = field(default_factory=dict)
     ask_volume: dict[str, int] = field(default_factory=dict)
     ask_depth: dict[str, int] = field(default_factory=dict)
@@ -153,6 +154,13 @@ def _build_oracle(world: World, game_day: int) -> MarketOracle:
             bids = world.market_bids_by_material.get(mat, [])
         if asks:
             oracle.best_ask[mid] = min(int(a.price_per_unit_cents) for a in asks)
+            by_q: dict[str, int] = {}
+            for ask in asks:
+                q = str(getattr(ask, "quality", "standard"))
+                px = int(ask.price_per_unit_cents)
+                if q not in by_q or px < by_q[q]:
+                    by_q[q] = px
+            oracle.best_ask_by_quality[mid] = by_q
             oracle.ask_volume[mid] = sum(int(a.qty) for a in asks)
             oracle.ask_depth[mid] = sum(int(a.qty) for a in asks)
             oracle.ask_seller_count[mid] = len({a.party for a in asks})

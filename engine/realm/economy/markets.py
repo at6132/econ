@@ -96,6 +96,7 @@ class AskOrder:
     iceberg_peak: int = 0  # 0 = not iceberg; else max visible clip size
     iceberg_hidden_qty: int = 0  # units not yet shown at this price
     min_counterparty_honored: int = 0
+    quality: str = "standard"
 
 
 @dataclass
@@ -334,7 +335,8 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     bid.escrow_cents -= reserve
     _apply_fill_to_bid(bid, fill)
     _apply_fill_to_ask(ask, fill)
-    ad = try_add_inventory(world, bid.party, ask.material, fill)
+    ask_quality = str(getattr(ask, "quality", "standard"))
+    ad = try_add_inventory(world, bid.party, ask.material, fill, quality=ask_quality)
     if isinstance(ad, MatterErr):
         bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
         ask.qty, ask.iceberg_hidden_qty = ask_snap
@@ -345,12 +347,13 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     log_event(
         world,
         "market_match",
-        f"{bid.party} bought {fill}×{ask.material} @ {unit_px}¢ (vs ask {ask.order_id})",
+        f"{bid.party} bought {fill}×{ask.material} ({ask_quality}) @ {unit_px}¢ (vs ask {ask.order_id})",
         buyer=str(bid.party),
         seller=str(ask.party),
         material=str(ask.material),
         qty=fill,
         price_per_unit_cents=unit_px,
+        quality=ask_quality,
     )
     _record_genesis_fill(world, ask.material, fill, unit_px, ask.party)
     bump_spot_exchange_honored(world, bid.party, ask.party)
@@ -391,7 +394,8 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     bid.escrow_cents -= reserve
     _apply_fill_to_bid(bid, fill)
     _apply_fill_to_ask(ask, fill)
-    ad = try_add_inventory(world, bid.party, ask.material, fill)
+    ask_quality = str(getattr(ask, "quality", "standard"))
+    ad = try_add_inventory(world, bid.party, ask.material, fill, quality=ask_quality)
     if isinstance(ad, MatterErr):
         bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
         ask.qty, ask.iceberg_hidden_qty = ask_snap
@@ -400,7 +404,7 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     log_event(
         world,
         "market_match",
-        f"{ask.party} sold {fill}×{ask.material} @ {unit_px}¢ (vs bid {bid.order_id})",
+        f"{ask.party} sold {fill}×{ask.material} ({ask_quality}) @ {unit_px}¢ (vs bid {bid.order_id})",
         buyer=str(bid.party),
         seller=str(ask.party),
         material=str(ask.material),
@@ -481,6 +485,7 @@ def place_sell_order(
     *,
     iceberg_display_qty: int | None = None,
     min_counterparty_honored: int = 0,
+    quality: str = "standard",
 ) -> dict:
     """List material for sale at a limit price (inventory removed until filled or cancelled)."""
     if qty <= 0 or price_per_unit_cents <= 0:
@@ -494,9 +499,13 @@ def place_sell_order(
     reg = ensure_market_seller_registration(world, party, material)
     if not reg.get("ok"):
         return dict(reg)
-    if world.inventory.qty(party, material) < qty:
-        return {"ok": False, "reason": "insufficient material"}
-    rm = world.inventory.remove(party, material, qty)
+    have = world.inventory.qty(party, material, quality)
+    if have < qty:
+        return {
+            "ok": False,
+            "reason": f"you have {have} {quality}-quality {material}, need {qty}",
+        }
+    rm = world.inventory.remove(party, material, qty, quality=quality)
     if isinstance(rm, MatterErr):
         return {"ok": False, "reason": rm.reason}
     ice_peak = 0
@@ -518,6 +527,7 @@ def place_sell_order(
         iceberg_peak=ice_peak,
         iceberg_hidden_qty=ice_hid,
         min_counterparty_honored=min_counterparty_honored,
+        quality=quality,
     )
     lst = _asks(world, material)
     lst.append(new_ask)
@@ -550,7 +560,13 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
                     return {"ok": False, "reason": "not your order"}
                 lst.pop(i)
                 total_back = o.qty + o.iceberg_hidden_qty
-                ad = try_add_inventory(world, party, o.material, total_back)
+                ad = try_add_inventory(
+                    world,
+                    party,
+                    o.material,
+                    total_back,
+                    quality=str(getattr(o, "quality", "standard")),
+                )
                 if isinstance(ad, MatterErr):
                     lst.insert(i, o)
                     return {"ok": False, "reason": ad.reason}
@@ -824,7 +840,13 @@ def market_buy(
         if isinstance(tr, MoneyErr):
             break
         _apply_fill_to_ask(o, fill)
-        ad = try_add_inventory(world, buyer, material, fill)
+        ad = try_add_inventory(
+            world,
+            buyer,
+            material,
+            fill,
+            quality=str(getattr(o, "quality", "standard")),
+        )
         if isinstance(ad, MatterErr):
             o.qty, o.iceberg_hidden_qty = ask_snap
             world.ledger.transfer(
@@ -1076,6 +1098,7 @@ def market_book_public(world: World) -> list[dict]:
                     "iceberg_hidden_qty": o.iceberg_hidden_qty,
                     "min_counterparty_honored": o.min_counterparty_honored,
                     "posted_at_tick": int(getattr(o, "posted_at_tick", 0)),
+                    "quality": str(getattr(o, "quality", "standard")),
                 }
             )
     return rows
