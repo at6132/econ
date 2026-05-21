@@ -6,7 +6,7 @@ signal harvest_requested(plot_id: String, material: String, qty: int)
 
 const FILTER_ALL := "All"
 const FILTER_CARRIED := "Carried"
-const FILTER_STASH := "Plot stash"
+const FILTER_STASH := "On site"
 const FILTER_TRANSIT := "In transit"
 
 const COL_MAT_W := 128.0
@@ -45,7 +45,7 @@ func _build_chrome() -> void:
 	var btn_labels: Dictionary = {
 		FILTER_ALL: "All",
 		FILTER_CARRIED: "Carried",
-		FILTER_STASH: "Stash",
+		FILTER_STASH: "On site",
 		FILTER_TRANSIT: "In transit",
 	}
 	for key in [FILTER_ALL, FILTER_CARRIED, FILTER_STASH, FILTER_TRANSIT]:
@@ -123,7 +123,7 @@ func refresh() -> void:
 				transit_qty += q
 
 	_summary.text = (
-		"%d lines · carried %d (%d units) · stash %d (%d) · in transit %d (%d) · est. %s"
+		"%d lines · carry %d (%d u) · on-site %d (%d u) · transit %d (%d u) · matter est. %s"
 		% [
 			shown.size(),
 			carried_n,
@@ -175,17 +175,17 @@ func _make_empty_state(world_is_empty: bool) -> Control:
 	if world_is_empty:
 		title.text = "No inventory yet"
 		body.text = (
-			"Carried stock, plot stashes, and in-transit shipments all read as zero.\n"
-			+ "Buy materials at the Bazaar, claim plots, or start production to populate this ledger."
+			"Personal carry, plot-site bulk, and in-transit shipments all read as zero.\n"
+			+ "Claim plots, run production, or buy at the Bazaar to populate stock."
 		)
 	else:
 		match _filter:
 			FILTER_CARRIED:
-				title.text = "No carried stock"
-				body.text = "Party inventory is empty for this filter. Other locations may still hold materials."
+				title.text = "No personal carry"
+				body.text = "Portable stock (electricity, tools) is empty. Bulk goods live on plot sites."
 			FILTER_STASH:
-				title.text = "No plot stashes"
-				body.text = "Nothing waiting on plot output stock. Harvest or route production outputs here."
+				title.text = "Nothing on site"
+				body.text = "No bulk staged on owned plots. Production and deliveries fill plot stock."
 			FILTER_TRANSIT:
 				title.text = "Nothing in transit"
 				body.text = "No active shipments. Use Dispatch to send materials between sites."
@@ -246,14 +246,15 @@ func _add_row(row: Dictionary) -> void:
 	act_box.alignment = BoxContainer.ALIGNMENT_END
 	if bool(row.get("can_ship", false)):
 		var ship_btn := Button.new()
-		ship_btn.text = "Ship"
+		ship_btn.text = "Dispatch"
 		ship_btn.custom_minimum_size = Vector2(64, 28)
 		PanelUI.style_btn(ship_btn, true)
 		ship_btn.pressed.connect(func() -> void: ship_requested.emit(row.duplicate(true)))
 		act_box.add_child(ship_btn)
 	elif bool(row.get("can_harvest", false)):
 		var harv_btn := Button.new()
-		harv_btn.text = "Take"
+		harv_btn.text = "To carry"
+		harv_btn.tooltip_text = "Move portable units from this plot into personal carry."
 		harv_btn.custom_minimum_size = Vector2(64, 28)
 		PanelUI.style_btn(harv_btn)
 		harv_btn.pressed.connect(

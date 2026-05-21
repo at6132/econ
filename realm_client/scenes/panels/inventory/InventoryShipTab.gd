@@ -1,5 +1,5 @@
 extends VBoxContainer
-## Dispatch carried stock to warehouses, stores, or factory plots.
+## Dispatch bulk from a plot stash to another owned site (Option B logistics).
 
 var _from_sel: OptionButton
 var _dest_sel: OptionButton
@@ -23,8 +23,8 @@ func _build_form() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_color_override("font_color", RealmColors.MUTED)
 	hint.text = (
-		"Shipments debit your carried inventory. Pick an origin plot you own (routing waypoint), "
-		+ "then a destination warehouse, store, or factory plot. Plot-stash stock must be harvested first."
+		"Shipments move bulk goods from one plot stash to another. "
+		+ "Personal carry (electricity, tools) is not shipped here — use production or market for portable stock."
 	)
 	add_child(hint)
 
@@ -33,9 +33,10 @@ func _build_form() -> void:
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 8)
 
-	grid.add_child(_label("Origin plot (you own)"))
+	grid.add_child(_label("Source plot (stock on site)"))
 	_from_sel = OptionButton.new()
 	_from_sel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_from_sel.item_selected.connect(func(_i: int) -> void: _on_origin_changed())
 	grid.add_child(_from_sel)
 
 	grid.add_child(_label("Destination"))
@@ -106,21 +107,20 @@ func refresh() -> void:
 
 
 func prefill_from_row(row: Dictionary) -> void:
+	var kind := str(row.get("kind", ""))
+	if kind != "stash":
+		_err_lbl.text = "Select a plot stash row to prefill dispatch."
+		return
 	var mid := str(row.get("material", ""))
 	var qty: int = int(row.get("qty", 0))
-	var kind := str(row.get("kind", ""))
-	if kind == "stash":
-		_err_lbl.text = "Harvest plot stash to carried stock before shipping."
-		return
-	if kind != "carried" or mid.is_empty():
+	var plot_id := str(row.get("plot_id", ""))
+	if mid.is_empty() or plot_id.is_empty():
 		return
 	_err_lbl.text = ""
+	_select_origin_plot(plot_id)
 	_select_material(mid)
 	if qty > 0:
 		_qty_spin.value = mini(qty, int(_qty_spin.max_value))
-	var plot_id := str(row.get("plot_id", ""))
-	if not plot_id.is_empty():
-		_select_origin_plot(plot_id)
 	_refresh_estimate()
 
 
@@ -139,15 +139,21 @@ func _select_origin_plot(plot_id: String) -> void:
 
 
 func _refresh_plot_selectors() -> void:
+	var prev_origin := _origin_plot_id()
 	_from_sel.clear()
-	var party := WorldState.party_id
-	var first_origin := -1
 	for pid in WorldState.owned_plot_ids_sorted():
-		_from_sel.add_item(WorldState.plot_site_label(pid))
+		var total := 0
+		var pd: Dictionary = WorldState.plots.get(pid, {})
+		var stock: Variant = pd.get("output_stock", {})
+		if stock is Dictionary:
+			for v in (stock as Dictionary).values():
+				total += WorldState.variant_to_int(v, 0)
+		var suffix := "" if total <= 0 else " · %d u" % total
+		_from_sel.add_item("%s%s" % [WorldState.plot_site_label(pid), suffix])
 		_from_sel.set_item_metadata(_from_sel.item_count - 1, pid)
-		if first_origin < 0:
-			first_origin = 0
-	if _from_sel.item_count > 0 and _from_sel.selected < 0:
+	if not prev_origin.is_empty():
+		_select_origin_plot(prev_origin)
+	elif _from_sel.item_count > 0:
 		_from_sel.select(0)
 
 	_dest_sel.clear()
@@ -178,9 +184,14 @@ func _refresh_plot_selectors() -> void:
 func _select_first_real_destination() -> void:
 	for i in _dest_sel.item_count:
 		var meta := str(_dest_sel.get_item_metadata(i))
-		if not meta.is_empty():
+		if not meta.is_empty() and meta != _origin_plot_id():
 			_dest_sel.select(i)
 			return
+
+
+func _on_origin_changed() -> void:
+	_refresh_materials()
+	_refresh_estimate()
 
 
 func _refresh_materials() -> void:
@@ -188,15 +199,23 @@ func _refresh_materials() -> void:
 	if _mat_sel.item_count > 0 and _mat_sel.selected >= 0:
 		prev = str(_mat_sel.get_item_metadata(_mat_sel.selected))
 	_mat_sel.clear()
-	var inv: Dictionary = WorldState.player_inventory
-	var keys: Array = inv.keys()
+	var origin := _origin_plot_id()
+	if origin.is_empty():
+		return
+	var pd: Dictionary = WorldState.plots.get(origin, {})
+	var stock: Variant = pd.get("output_stock", {})
+	if not (stock is Dictionary):
+		return
+	var keys: Array = (stock as Dictionary).keys()
 	keys.sort()
 	for k in keys:
 		var mid := str(k)
-		var qty := WorldState.player_material_total(mid)
+		if WorldState.is_carried_material(mid):
+			continue
+		var qty: int = WorldState.variant_to_int((stock as Dictionary)[k], 0)
 		if qty <= 0:
 			continue
-		_mat_sel.add_item("%s (%d)" % [WorldState.material_display_name(mid), qty])
+		_mat_sel.add_item("%s (%d on site)" % [WorldState.material_display_name(mid), qty])
 		_mat_sel.set_item_metadata(_mat_sel.item_count - 1, mid)
 	if prev != "":
 		_select_material(prev)
@@ -209,7 +228,8 @@ func _refresh_qty_cap() -> void:
 	if _mat_sel.item_count == 0 or _mat_sel.selected < 0:
 		return
 	var mid := str(_mat_sel.get_item_metadata(_mat_sel.selected))
-	var have := WorldState.player_material_total(mid)
+	var origin := _origin_plot_id()
+	var have := WorldState.plot_output_stock_qty(origin, mid) if not origin.is_empty() else 0
 	_qty_spin.max_value = maxi(1, have)
 	if int(_qty_spin.value) > have:
 		_qty_spin.value = maxi(1, have)
@@ -280,10 +300,13 @@ func _on_dispatch_pressed() -> void:
 	var mat_id := _selected_material()
 	var qty := int(_qty_spin.value)
 	if from_pid.is_empty() or to_pid.is_empty() or mat_id.is_empty() or qty <= 0:
-		_err_lbl.text = "Fill origin, destination, material, and quantity."
+		_err_lbl.text = "Fill source plot, destination, material, and quantity."
 		return
 	if from_pid == to_pid:
-		_err_lbl.text = "Origin and destination must differ."
+		_err_lbl.text = "Source and destination must differ."
+		return
+	if WorldState.plot_output_stock_qty(from_pid, mat_id) < qty:
+		_err_lbl.text = "Not enough %s on %s." % [mat_id, from_pid]
 		return
 	_ship_btn.disabled = true
 	API.ship(
@@ -295,6 +318,7 @@ func _on_dispatch_pressed() -> void:
 			_ship_btn.disabled = false
 			if bool(r.get("ok", false)):
 				_err_lbl.text = ""
+				API.get_world(func(w: Dictionary) -> void: WorldState.apply_world(w))
 				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 				_refresh_estimate()
 				var host := get_tree().current_scene

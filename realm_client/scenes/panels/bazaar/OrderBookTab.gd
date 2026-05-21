@@ -24,6 +24,7 @@ extends HSplitContainer
 
 var _selected_material: String = "coal"
 var _quality_filter: String = "all"
+var _sell_from_plot: OptionButton
 
 
 func _ready() -> void:
@@ -49,7 +50,34 @@ func _ready() -> void:
 	sell_btn.pressed.connect(_on_sell)
 	WorldState.world_updated.connect(_on_world_updated)
 	_build_quality_filter_row()
+	_build_sell_from_plot_row()
 	_select_material(_selected_material)
+
+
+func _build_sell_from_plot_row() -> void:
+	var sell_vbox: Node = sell_qty.get_parent()
+	if sell_vbox == null:
+		return
+	if sell_vbox.get_node_or_null("SellFromPlotRow") != null:
+		return
+	var row := HBoxContainer.new()
+	row.name = "SellFromPlotRow"
+	row.add_theme_constant_override("separation", 6)
+	var lbl := Label.new()
+	lbl.text = "List from plot"
+	lbl.add_theme_font_size_override("font_size", 11)
+	row.add_child(lbl)
+	_sell_from_plot = OptionButton.new()
+	_sell_from_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sell_from_plot.item_selected.connect(func(_i: int) -> void: _update_sell_total())
+	row.add_child(_sell_from_plot)
+	sell_vbox.add_child(row)
+	var title: Node = sell_vbox.get_node_or_null("SellTitle")
+	if title != null:
+		sell_vbox.move_child(row, title.get_index() + 1)
+	else:
+		sell_vbox.add_child(row)
+		sell_vbox.move_child(row, 0)
 
 
 func _build_quality_filter_row() -> void:
@@ -220,13 +248,19 @@ func _refresh_order_book() -> void:
 	else:
 		best_bid_label.text = "Best bid: %s" % WorldState.format_money(_bid_price(sorted_bids[0] as Dictionary))
 
-	var held: int = WorldState.player_material_total(_selected_material)
+	_refresh_sell_from_plot_options()
+	var carried: int = WorldState.player_material_total(_selected_material)
+	var on_site: int = WorldState.player_plot_stash_total(_selected_material)
 	var hq := WorldState.player_material_qty(_selected_material, "high")
 	var lq := WorldState.player_material_qty(_selected_material, "low")
-	if hq > 0 or lq > 0:
-		your_holding_label.text = "You hold: %d (★%d ▼%d)" % [held, hq, lq]
+	if on_site > 0 and carried > 0:
+		your_holding_label.text = "Carry %d · on-site %d" % [carried, on_site]
+	elif on_site > 0:
+		your_holding_label.text = "On-site: %d" % on_site
+	elif hq > 0 or lq > 0:
+		your_holding_label.text = "Carry: %d (★%d ▼%d)" % [carried, hq, lq]
 	else:
-		your_holding_label.text = "You hold: %d" % held
+		your_holding_label.text = "Carry: %d" % carried
 
 	if sorted_asks.is_empty():
 		var empty_ask := Label.new()
@@ -442,10 +476,62 @@ func _update_buy_total() -> void:
 	buy_btn.modulate = Color.WHITE if afford else Color(1, 0.4, 0.4)
 
 
+func _refresh_sell_from_plot_options() -> void:
+	if _sell_from_plot == null:
+		return
+	var prev := _sell_source_plot_id()
+	_sell_from_plot.clear()
+	if WorldState.is_carried_material(_selected_material):
+		_sell_from_plot.add_item("Personal carry")
+		_sell_from_plot.set_item_metadata(0, "")
+		return
+	var plots := WorldState.plots_with_material(_selected_material, 1)
+	if plots.is_empty():
+		_sell_from_plot.add_item("(no plot stock — produce or ship first)")
+		_sell_from_plot.set_item_metadata(0, "")
+		_sell_from_plot.set_item_disabled(0, true)
+		return
+	for entry in plots:
+		if not (entry is Dictionary):
+			continue
+		var e: Dictionary = entry
+		var pid := str(e.get("plot_id", ""))
+		var q: int = int(e.get("qty", 0))
+		_sell_from_plot.add_item("%s (%d)" % [str(e.get("label", pid)), q])
+		_sell_from_plot.set_item_metadata(_sell_from_plot.item_count - 1, pid)
+	if not prev.is_empty():
+		for i in _sell_from_plot.item_count:
+			if str(_sell_from_plot.get_item_metadata(i)) == prev:
+				_sell_from_plot.select(i)
+				return
+	if _sell_from_plot.item_count > 0:
+		_sell_from_plot.select(0)
+
+
+func _sell_source_plot_id() -> String:
+	if _sell_from_plot == null or _sell_from_plot.item_count == 0:
+		return ""
+	if _sell_from_plot.selected < 0:
+		return ""
+	return str(_sell_from_plot.get_item_metadata(_sell_from_plot.selected))
+
+
+func _sell_stock_available() -> int:
+	if WorldState.is_carried_material(_selected_material):
+		return WorldState.player_material_total(_selected_material)
+	var pid := _sell_source_plot_id()
+	if pid.is_empty():
+		return 0
+	return WorldState.plot_output_stock_qty(pid, _selected_material)
+
+
 func _update_sell_total() -> void:
 	var revenue := int(sell_qty.value) * int(sell_price.value)
 	sell_total_label.text = "Revenue: %s" % WorldState.format_money(revenue)
-	var have_stock := int(sell_qty.value) <= WorldState.player_material_total(_selected_material)
+	var have := _sell_stock_available()
+	if have > 0:
+		sell_qty.max_value = float(have)
+	var have_stock := int(sell_qty.value) <= have and have > 0
 	sell_btn.modulate = Color.WHITE if have_stock else Color(1, 0.4, 0.4)
 
 
@@ -477,8 +563,19 @@ func _on_sell() -> void:
 	var price := int(sell_price.value)
 	if qty <= 0 or price <= 0:
 		return
+	var from_plot := _sell_source_plot_id()
+	if not WorldState.is_carried_material(_selected_material) and from_plot.is_empty():
+		_show_error("Pick a plot with stock to list from")
+		return
 	sell_btn.disabled = true
-	API.market_sell(_selected_material, qty, price, _on_sell_result)
+	API.market_sell(
+		_selected_material,
+		qty,
+		price,
+		_on_sell_result,
+		WorldState.party_id,
+		from_plot,
+	)
 
 
 func _on_sell_result(data: Dictionary) -> void:

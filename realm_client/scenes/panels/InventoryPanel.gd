@@ -38,6 +38,7 @@ func _on_harvest_requested(plot_id: String, material: String, qty: int) -> void:
 		qty,
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
+				API.get_world(func(w: Dictionary) -> void: WorldState.apply_world(w))
 				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 			elif get_tree().current_scene.has_method("show_feedback"):
 				get_tree().current_scene.call(
