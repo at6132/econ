@@ -120,6 +120,8 @@ __all__ = [
     "store_price_cents",
     "is_store_plot",
     "seed_genesis_npc_stores",
+    "_store_daily_sales",
+    "restock_target_qty",
 ]
 
 
@@ -390,6 +392,7 @@ def _execute_purchase(
         return {"ok": False, "reason": tr.reason, "spent": 0, "units": 0}
     inv[str(material)] = have - units
     lab.cash_cents = world.ledger.balance(lab_acct)
+    _record_store_sale(world, plot_id, material, units)
     # Track per-store daily revenue for UI / analytics.
     rev = world.store_revenue_today.setdefault(str(plot_id), 0)
     world.store_revenue_today[str(plot_id)] = int(rev) + int(total)
@@ -415,6 +418,61 @@ def _execute_purchase(
             store_owner=str(owner),
         )
     return {"ok": True, "spent": int(total), "units": int(units)}
+
+
+def _store_daily_sales(world: World, plot_id: str) -> dict[str, float]:
+    """Seven-day average daily unit sales per material for a store plot."""
+    history = world.scenario_state.get("store_sales_history", {})
+    plot_history: list[dict] = history.get(plot_id, [])
+    if not plot_history:
+        return {}
+    recent = plot_history[-7:]
+    totals: dict[str, float] = {}
+    for day_entry in recent:
+        for mat, qty in day_entry.get("sales", {}).items():
+            totals[mat] = totals.get(mat, 0.0) + float(qty)
+    n = len(recent)
+    return {mat: qty / n for mat, qty in totals.items()}
+
+
+def _record_store_sale(world: World, plot_id: PlotId, material: MaterialId, qty: int) -> None:
+    """Append one retail sale to the rolling 7-day history for restock targeting."""
+    if qty <= 0:
+        return
+    from realm.population.laborers import TICKS_PER_GAME_DAY
+
+    pid = str(plot_id)
+    game_day = int(world.tick) // TICKS_PER_GAME_DAY
+    sales_history = world.scenario_state.setdefault("store_sales_history", {})
+    plot_history: list[dict] = sales_history.setdefault(pid, [])
+    today_entry = next((e for e in plot_history if int(e.get("day", -1)) == game_day), None)
+    if today_entry is None:
+        today_entry = {"day": game_day, "sales": {}}
+        plot_history.append(today_entry)
+    sales = today_entry.setdefault("sales", {})
+    mid = str(material)
+    sales[mid] = int(sales.get(mid, 0)) + int(qty)
+    sales_history[pid] = [e for e in plot_history if int(e.get("day", 0)) >= game_day - 7]
+
+
+def restock_target_qty(
+    world: World,
+    plot_id: str,
+    mat_str: str,
+    *,
+    default_restock: int,
+) -> int:
+    """Consumption- and spoilage-aware restock target for one store material."""
+    from realm.materials import MATERIALS
+
+    mat_def = MATERIALS.get(MaterialId(mat_str))
+    spoilage_days = 30.0
+    if mat_def is not None and int(mat_def.spoilage_interval_ticks) > 0:
+        spoilage_days = int(mat_def.spoilage_interval_ticks) / 1440.0
+    daily_sale = _store_daily_sales(world, plot_id)
+    avg_daily = daily_sale.get(mat_str, default_restock / 5.0)
+    days_to_stock = min(spoilage_days * 0.8, 5.0)
+    return max(10, int(avg_daily * days_to_stock))
 
 
 def _store_party_for_plot(world: World, plot_id: str) -> PartyId:
@@ -451,7 +509,10 @@ def tick_store_restock(world: World) -> None:
         store_party = _store_party_for_plot(world, pid)
         plot_id = PlotId(pid)
         inv = world.store_inventories.setdefault(pid, {})
-        for mat_str, (target_qty, cost_per_unit) in restock_plan.items():
+        for mat_str, (default_restock, cost_per_unit) in restock_plan.items():
+            target_qty = restock_target_qty(
+                world, pid, mat_str, default_restock=default_restock
+            )
             current = int(inv.get(mat_str, 0))
             if current >= target_qty:
                 continue
