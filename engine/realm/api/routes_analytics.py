@@ -171,6 +171,7 @@ def post_market_sell(
     min_counterparty_honored: Annotated[int, Query()] = 0,
     quality: Annotated[str, Query()] = "standard",
     from_plot: Annotated[str | None, Query()] = None,
+    delivery_terms: Annotated[str, Query()] = "ddp",
 ) -> dict:
     from realm.core.ids import PlotId
 
@@ -185,6 +186,7 @@ def post_market_sell(
         min_counterparty_honored=min_counterparty_honored,
         quality=quality,
         from_plot_id=src_plot,
+        delivery_terms=delivery_terms,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
@@ -210,7 +212,11 @@ def post_market_bid(
     max_price_per_unit_cents: Annotated[int, Query()],
     iceberg_display_qty: Annotated[int | None, Query()] = None,
     min_counterparty_honored: Annotated[int, Query()] = 0,
+    delivery_plot: Annotated[str | None, Query()] = None,
 ) -> dict:
+    from realm.core.ids import PlotId
+
+    dest = PlotId(delivery_plot) if delivery_plot else None
     r = place_buy_order(
         _state.WORLD,
         PartyId(party),
@@ -219,6 +225,7 @@ def post_market_bid(
         max_price_per_unit_cents,
         iceberg_display_qty=iceberg_display_qty,
         min_counterparty_honored=min_counterparty_honored,
+        delivery_plot_id=dest,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
@@ -258,10 +265,15 @@ def post_market_buy(
     max_qty: Annotated[int, Query()],
     min_seller_honored: Annotated[int, Query()] = 0,
     max_price_per_unit_cents: Annotated[int | None, Query()] = None,
+    delivery_plot: Annotated[str | None, Query()] = None,
 ) -> dict:
+    from realm.core.ids import PlotId
+
     kwargs: dict = {"min_seller_honored": min_seller_honored}
     if max_price_per_unit_cents is not None:
         kwargs["max_price_per_unit_cents"] = int(max_price_per_unit_cents)
+    if delivery_plot:
+        kwargs["delivery_plot_id"] = PlotId(delivery_plot)
     r = market_buy(
         _state.WORLD,
         PartyId(party),
@@ -271,6 +283,22 @@ def post_market_buy(
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/market/fob_pickup")
+def post_market_fob_pickup(
+    party: Annotated[str, Query()],
+    pickup_id: Annotated[str, Query()],
+    delivery_plot: Annotated[str | None, Query()] = None,
+) -> dict:
+    from realm.core.ids import PlotId
+    from realm.economy.market_delivery import pickup_fob
+
+    dest = PlotId(delivery_plot) if delivery_plot else None
+    r = pickup_fob(_state.WORLD, PartyId(party), pickup_id, to_plot_id=dest)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return dict(r)
 
 

@@ -1189,8 +1189,16 @@ def _maybe_auto_list_outputs(
         price = _auto_list_price_cents(world, mid)
         if price is None:
             continue
+        from realm.economy.market_delivery import DELIVERY_DDP
+
         place_sell_order(
-            world, run.party, mid, q, price, from_plot_id=src_plot
+            world,
+            run.party,
+            mid,
+            q,
+            price,
+            from_plot_id=src_plot,
+            delivery_terms=DELIVERY_DDP,
         )
 
 

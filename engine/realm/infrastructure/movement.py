@@ -273,6 +273,9 @@ def dispatch_shipment(
     qty: int,
     from_plot_id: PlotId,
     to_plot_id: PlotId,
+    *,
+    consignee: PartyId | None = None,
+    escrowed_market: bool = False,
 ) -> dict:
     """
     Ship goods between plots the party owns; fee to system; arrives after distance-based ticks.
@@ -292,17 +295,24 @@ def dispatch_shipment(
     inter_island_preview = _is_inter(world, from_plot_id, to_plot_id)
     if not _plot_owned(world, party, from_plot_id):
         return {"ok": False, "reason": "must own origin plot"}
-    if not inter_island_preview and not _plot_owned(world, party, to_plot_id):
+    if consignee is not None:
+        if not inter_island_preview and not _plot_owned(world, consignee, to_plot_id):
+            return {
+                "ok": False,
+                "reason": "intra-island delivery requires destination owned by the buyer",
+            }
+    elif not inter_island_preview and not _plot_owned(world, party, to_plot_id):
         return {"ok": False, "reason": "intra-island shipping requires owning both plots"}
     if from_plot_id == to_plot_id:
         return {"ok": False, "reason": "same plot"}
     use_plot = party_uses_plot_storage(world, party) and not is_carried_material(material)
-    if use_plot:
-        inv_q = plot_output_qty(world, from_plot_id, material)
-    else:
-        inv_q = world.inventory.qty(party, material)
-    if inv_q < qty:
-        return {"ok": False, "reason": "insufficient material"}
+    if not escrowed_market:
+        if use_plot:
+            inv_q = plot_output_qty(world, from_plot_id, material)
+        else:
+            inv_q = world.inventory.qty(party, material)
+        if inv_q < qty:
+            return {"ok": False, "reason": "insufficient material"}
     dist = manhattan(world, from_plot_id, to_plot_id)
     from_region = region_for_plot(world, from_plot_id)
     to_region = region_for_plot(world, to_plot_id)
@@ -526,14 +536,15 @@ def dispatch_shipment(
         fmid, fqty = fuel_consumed
         world.inventory.add(party, fmid, fqty)
 
-    if use_plot:
-        rm = remove_plot_output(world, party, from_plot_id, material, qty)
-    else:
-        rm = world.inventory.remove(party, material, qty)
-    if isinstance(rm, MatterErr):
-        _refund_fuel()
-        _refund_fee()
-        return {"ok": False, "reason": rm.reason}
+    if not escrowed_market:
+        if use_plot:
+            rm = remove_plot_output(world, party, from_plot_id, material, qty)
+        else:
+            rm = world.inventory.remove(party, material, qty)
+        if isinstance(rm, MatterErr):
+            _refund_fuel()
+            _refund_fee()
+            return {"ok": False, "reason": rm.reason}
     # Sprint 3 — Phase D.3: harbor speed bonus. A dispatch from a coastal plot
     # that has a completed ``dock`` building moves at 1.5 × normal speed.
     transit_ticks = dist * TRANSIT_TICKS_PER_TILE + TRANSIT_BASE_TICKS
@@ -571,6 +582,8 @@ def dispatch_shipment(
             inter_island=bool(inter_island),
             route_key=op_route_key,
             uncharted=bool(uncharted_voyage),
+            consignee=str(consignee) if consignee is not None else None,
+            escrowed_market=bool(escrowed_market),
         )
     )
     fuel_log = (
@@ -650,7 +663,12 @@ def deliver_transit(world: World) -> None:
             keep.append(s)
             continue
         recv_fee = receiving_fee_cents(s.qty)
-        cash = party_cash_account(s.party)
+        recipient = (
+            PartyId(str(s.consignee))
+            if getattr(s, "consignee", None)
+            else s.party
+        )
+        cash = party_cash_account(recipient)
         if recv_fee > 0 and world.ledger.balance(cash) < recv_fee:
             keep.append(s)
             log_event(
@@ -662,13 +680,13 @@ def deliver_transit(world: World) -> None:
                 receiving_fee_cents=recv_fee,
             )
             continue
-        use_plot = party_uses_plot_storage(world, s.party) and not is_carried_material(
+        use_plot = party_uses_plot_storage(world, recipient) and not is_carried_material(
             s.material
         )
         if use_plot:
-            ad = try_add_plot_output(world, s.dest_plot_id, s.party, s.material, s.qty)
+            ad = try_add_plot_output(world, s.dest_plot_id, recipient, s.material, s.qty)
         else:
-            ad = try_add_inventory(world, s.party, s.material, s.qty)
+            ad = try_add_inventory(world, recipient, s.material, s.qty)
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue
@@ -696,7 +714,7 @@ def deliver_transit(world: World) -> None:
                     amount_cents=recv_fee,
                 )
             if isinstance(pay_recv, MoneyErr):
-                rb2 = world.inventory.remove(s.party, s.material, s.qty)
+                rb2 = world.inventory.remove(recipient, s.material, s.qty)
                 assert not isinstance(rb2, MatterErr)
                 keep.append(s)
                 continue

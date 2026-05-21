@@ -45,6 +45,11 @@ from realm.infrastructure.plot_logistics import (
     plot_output_qty,
     remove_party_plot_stock,
 )
+from realm.economy.market_delivery import (
+    DELIVERY_DDP,
+    fulfill_market_matter,
+    normalize_delivery_terms,
+)
 from realm.production.storage_caps import (
     is_carried_material,
     party_uses_plot_storage,
@@ -109,6 +114,7 @@ class AskOrder:
     min_counterparty_honored: int = 0
     quality: str = "standard"
     from_plot_id: str = ""
+    delivery_terms: str = DELIVERY_DDP
 
 
 @dataclass
@@ -123,6 +129,7 @@ class BidOrder:
     iceberg_peak: int = 0
     iceberg_hidden_qty: int = 0
     min_counterparty_honored: int = 0
+    delivery_plot_id: str = ""
 
 
 def _deliver_market_purchase(
@@ -380,7 +387,15 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     _apply_fill_to_bid(bid, fill)
     _apply_fill_to_ask(ask, fill)
     ask_quality = str(getattr(ask, "quality", "standard"))
-    ad = _deliver_market_purchase(world, bid.party, ask.material, fill, quality=ask_quality)
+    ad = fulfill_market_matter(
+        world,
+        buyer=bid.party,
+        seller=ask.party,
+        material=ask.material,
+        qty=fill,
+        ask=ask,
+        bid=bid,
+    )
     if isinstance(ad, MatterErr):
         bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
         ask.qty, ask.iceberg_hidden_qty = ask_snap
@@ -439,7 +454,15 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
     _apply_fill_to_bid(bid, fill)
     _apply_fill_to_ask(ask, fill)
     ask_quality = str(getattr(ask, "quality", "standard"))
-    ad = _deliver_market_purchase(world, bid.party, ask.material, fill, quality=ask_quality)
+    ad = fulfill_market_matter(
+        world,
+        buyer=bid.party,
+        seller=ask.party,
+        material=ask.material,
+        qty=fill,
+        ask=ask,
+        bid=bid,
+    )
     if isinstance(ad, MatterErr):
         bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
         ask.qty, ask.iceberg_hidden_qty = ask_snap
@@ -531,6 +554,7 @@ def place_sell_order(
     min_counterparty_honored: int = 0,
     quality: str = "standard",
     from_plot_id: PlotId | None = None,
+    delivery_terms: str = DELIVERY_DDP,
 ) -> dict:
     """List material for sale at a limit price (stock removed from plot or carry until filled)."""
     if qty <= 0 or price_per_unit_cents <= 0:
@@ -592,6 +616,7 @@ def place_sell_order(
         min_counterparty_honored=min_counterparty_honored,
         quality=quality,
         from_plot_id=str(src_plot) if src_plot is not None else "",
+        delivery_terms=normalize_delivery_terms(delivery_terms),
     )
     lst = _asks(world, material)
     lst.append(new_ask)
@@ -685,6 +710,7 @@ def place_buy_order(
     *,
     iceberg_display_qty: int | None = None,
     min_counterparty_honored: int = 0,
+    delivery_plot_id: PlotId | None = None,
 ) -> dict:
     """Limit bid: lock qty × max price in market escrow; may immediately lift asks."""
     if qty <= 0 or max_price_per_unit_cents <= 0:
@@ -724,6 +750,7 @@ def place_buy_order(
         iceberg_peak=ice_peak,
         iceberg_hidden_qty=ice_hid,
         min_counterparty_honored=min_counterparty_honored,
+        delivery_plot_id=str(delivery_plot_id) if delivery_plot_id is not None else "",
     )
     bl = _bids(world, material)
     bl.append(bid)
@@ -834,9 +861,10 @@ def market_buy(
     min_seller_honored: int = 0,
     max_price_per_unit_cents: int | None = None,
     prefer_origin: tuple[int, int] | None = None,
+    delivery_plot_id: PlotId | None = None,
 ) -> dict:
     """
-    Aggressive buy: walk asks in ascending price order; pay sellers from buyer cash; deliver goods.
+    Aggressive buy: walk asks in ascending price order; pay sellers from buyer cash; physical delivery.
 
     Skips asks whose ``min_counterparty_honored`` the buyer cannot satisfy, then continues to
     higher-priced fillable clips (so rep-gated cheap listings do not block the whole book).
@@ -918,12 +946,23 @@ def market_buy(
         if isinstance(tr, MoneyErr):
             break
         _apply_fill_to_ask(o, fill)
-        ad = try_add_inventory(
+        pseudo_bid = BidOrder(
+            order_id="market_buy",
+            party=buyer,
+            material=material,
+            qty=0,
+            max_price_per_unit_cents=int(o.price_per_unit_cents),
+            escrow_cents=0,
+            delivery_plot_id=str(delivery_plot_id) if delivery_plot_id is not None else "",
+        )
+        ad = fulfill_market_matter(
             world,
-            buyer,
-            material,
-            fill,
-            quality=str(getattr(o, "quality", "standard")),
+            buyer=buyer,
+            seller=o.party,
+            material=material,
+            qty=fill,
+            ask=o,
+            bid=pseudo_bid,
         )
         if isinstance(ad, MatterErr):
             o.qty, o.iceberg_hidden_qty = ask_snap
@@ -971,6 +1010,8 @@ def sell_into_bids(
     max_qty: int,
     *,
     min_buyer_honored: int = 0,
+    from_plot_id: PlotId | None = None,
+    delivery_terms: str = DELIVERY_DDP,
 ) -> dict:
     """
     Aggressive sell: walk bids in descending price order; receive payment from bid escrow.
@@ -1027,15 +1068,36 @@ def sell_into_bids(
             break
         bid.escrow_cents -= reserve
         _apply_fill_to_bid(bid, fill)
+        src_plot: PlotId | None = from_plot_id
         if party_uses_plot_storage(world, seller) and not is_carried_material(material):
-            rm = remove_party_plot_stock(world, seller, material, fill)
+            if src_plot is None:
+                src_plot = pick_plot_with_stock(world, seller, material, fill)
+            rm = remove_party_plot_stock(
+                world, seller, material, fill, preferred_plot=src_plot
+            )
         else:
             rm = world.inventory.remove(seller, material, fill)
         if isinstance(rm, MatterErr):
             bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
             world.ledger.transfer(debit=seller_cash, credit=escrow, amount_cents=payment)
             break
-        ad = _deliver_market_purchase(world, bid.party, material, fill)
+        ad = fulfill_market_matter(
+            world,
+            buyer=bid.party,
+            seller=seller,
+            material=material,
+            qty=fill,
+            ask=AskOrder(
+                order_id="sell_fill",
+                party=seller,
+                material=material,
+                qty=0,
+                price_per_unit_cents=int(unit_px),
+                from_plot_id=str(src_plot) if src_plot is not None else "",
+                delivery_terms=normalize_delivery_terms(delivery_terms),
+            ),
+            bid=bid,
+        )
         if isinstance(ad, MatterErr):
             if party_uses_plot_storage(world, seller) and not is_carried_material(material):
                 add_party_plot_stock(world, seller, material, fill)
@@ -1198,6 +1260,8 @@ def market_book_public(world: World) -> list[dict]:
                     "min_counterparty_honored": o.min_counterparty_honored,
                     "posted_at_tick": int(getattr(o, "posted_at_tick", 0)),
                     "quality": str(getattr(o, "quality", "standard")),
+                    "from_plot_id": str(getattr(o, "from_plot_id", "")),
+                    "delivery_terms": str(getattr(o, "delivery_terms", DELIVERY_DDP)),
                 }
             )
     return rows
@@ -1222,6 +1286,7 @@ def market_bids_public(world: World) -> list[dict]:
                     "iceberg_hidden_qty": b.iceberg_hidden_qty,
                     "min_counterparty_honored": b.min_counterparty_honored,
                     "posted_at_tick": int(getattr(b, "posted_at_tick", 0)),
+                    "delivery_plot_id": str(getattr(b, "delivery_plot_id", "")),
                 }
             )
     return rows
@@ -1234,8 +1299,11 @@ def transit_public(world: World) -> list[dict]:
             "party": str(s.party),
             "material": str(s.material),
             "qty": s.qty,
+            "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
             "dest_plot_id": str(s.dest_plot_id),
             "arrive_tick": s.arrive_tick,
+            "consignee": str(getattr(s, "consignee", "") or "") or None,
+            "escrowed_market": bool(getattr(s, "escrowed_market", False)),
         }
         for s in world.in_transit
     ]

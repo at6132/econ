@@ -73,6 +73,9 @@ class InTransit:
     # register an operator.
     route_key: str | None = None
     uncharted: bool = False
+    # Market DDP/FOB: ``party`` pays freight; ``consignee`` receives on arrival.
+    consignee: str | None = None
+    escrowed_market: bool = False
 
 
 @dataclass
@@ -181,6 +184,8 @@ class World:
     market_asks_by_material: dict[str, list[Any]] = field(default_factory=dict)
     market_bids_by_material: dict[str, list[Any]] = field(default_factory=dict)
     next_order_seq: int = 0
+    next_market_pickup_seq: int = 0
+    market_fob_pickups: list[object] = field(default_factory=list)
     reputation: dict[str, dict[str, int]] = field(default_factory=dict)
     contracts: list[dict] = field(default_factory=list)
     next_contract_seq: int = 0

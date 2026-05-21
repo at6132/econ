@@ -750,10 +750,16 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
             "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
             "dest_plot_id": str(s.dest_plot_id),
             "arrive_tick": int(s.arrive_tick),
+            "consignee": str(getattr(s, "consignee", "") or "") or None,
+            "escrowed_market": bool(getattr(s, "escrowed_market", False)),
         }
         for s in world.in_transit
-        if s.party == party
+        if s.party == party or str(getattr(s, "consignee", "") or "") == party_s
     ]
+
+    from realm.economy.market_delivery import fob_pickups_for_party
+
+    market_fob_pickups = fob_pickups_for_party(world, party)
 
     recipe_book = sorted(world.party_recipe_books.get(party, set()))
 
@@ -775,6 +781,7 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "plot_buildings": plot_buildings,
         "active_production": active_production,
         "in_transit": in_transit,
+        "market_fob_pickups": market_fob_pickups,
         "forward_contracts": _forward_contracts_public(world, party),
         "owned_reports": _player_owned_reports_public(world, party),
         "price_alerts": price_alerts,

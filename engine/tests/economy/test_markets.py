@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from realm.core.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import market_escrow_account, party_cash_account
 from realm.economy.markets import (
     cancel_buy_order,
@@ -19,7 +19,7 @@ from realm.world import bootstrap_frontier
 def test_cancel_sell_order_restores_inventory() -> None:
     w = bootstrap_frontier(seed=20, grid_width=2, grid_height=2)
     p = PartyId("player")
-    m = MaterialId("timber")
+    m = MaterialId("electricity")
     before = w.inventory.qty(p, m)
     pr = place_sell_order(w, p, m, 3, 100)
     assert pr["ok"] is True
@@ -34,8 +34,9 @@ def test_cancel_sell_order_restores_inventory() -> None:
 def test_cancel_sell_order_wrong_party() -> None:
     w = bootstrap_frontier(seed=21, grid_width=2, grid_height=2)
     p = PartyId("player")
-    m = MaterialId("timber")
+    m = MaterialId("electricity")
     pr = place_sell_order(w, p, m, 1, 50)
+    assert pr["ok"] is True
     oid = pr["order_id"]
     cr = cancel_sell_order(w, PartyId("npc_grain_vendor"), oid)
     assert cr["ok"] is False
@@ -139,7 +140,7 @@ def test_p2p_idempotency_mismatch() -> None:
         w,
         PartyId("player"),
         PartyId("t1_consumer"),
-        MaterialId("grain"),
+        MaterialId("electricity"),
         1,
         50,
         idempotency_key="idem-b",
@@ -148,7 +149,7 @@ def test_p2p_idempotency_mismatch() -> None:
         w,
         PartyId("player"),
         PartyId("t1_consumer"),
-        MaterialId("grain"),
+        MaterialId("electricity"),
         2,
         50,
         idempotency_key="idem-b",
