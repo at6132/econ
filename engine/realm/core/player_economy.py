@@ -14,6 +14,11 @@ PLAYER_STARTING_CASH_CENTS: Final[int] = 10_000_000
 # Genesis algorithmic settlers still spawn lean; only the human starts at 100K.
 GENESIS_SETTLER_STARTING_CASH_CENTS: Final[int] = 1_000_000
 
+# Inventory demurrage — excess stock above free tier costs cash per game-day.
+FREE_STORAGE_UNITS_PER_PARTY: Final[int] = 100
+HOLDING_COST_CENTS_PER_UNIT_DAY: Final[int] = 1
+HOLDING_COST_INTERVAL_TICKS: Final[int] = 1440
+
 # Scenarios where the human should hold PLAYER_STARTING_CASH_CENTS at tick 0.
 _PLAYER_STARTING_SCENARIOS: Final[frozenset[str]] = frozenset({"genesis", "frontier", "cartel"})
 

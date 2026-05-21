@@ -563,6 +563,11 @@ def dispatch_shipment(
         if fuel_consumed is not None
         else None
     )
+    from realm.economy.trade_balance import record_shipment_flow
+
+    record_shipment_flow(
+        world, from_plot_id, to_plot_id, material, qty, goods_value_cents
+    )
     log_event(
         world,
         "ship_dispatch",

@@ -40,6 +40,7 @@ _SEEDED_FOOTPRINTS: Final[dict[str, tuple[int, int]]] = {
     "road_segment": (1, 1),
     "tool_cache": (2, 2),
     "watch_hut": (2, 2),
+    "warehouse": (4, 4),
 }
 
 
@@ -68,7 +69,14 @@ def _category_for(building_id: str) -> str:
         "shipyard",
     ):
         return "processing"
-    if building_id in ("power_shed", "tidal_mill", "dock", "waystation", "road_segment"):
+    if building_id in (
+        "power_shed",
+        "tidal_mill",
+        "dock",
+        "waystation",
+        "road_segment",
+        "warehouse",
+    ):
         return "infrastructure"
     if building_id in ("store", "bank_building", "apothecary"):
         return "commerce"
@@ -87,13 +95,14 @@ def _blueprint_from_building_spec(bid: str, spec: dict) -> Blueprint:
             str(k): int(v) for k, v in (spec.get("material_inputs") or {}).items()
         }
         labor = int(spec.get("cost_cents", 0))
-        ticks = BUILD_SIMPLE_TICKS
+        ticks = int(spec.get("construction_ticks", BUILD_SIMPLE_TICKS))
     else:
         mats = {str(k): int(v) for k, v in (spec.get("self_materials") or {}).items()}
         labor = int(spec.get("self_shell_cents", 0)) + int(
             spec.get("self_contractor_fee_cents", 0)
         )
-        ticks = BUILD_CONTRACTED_TICKS
+        ticks = int(spec.get("construction_ticks", BUILD_CONTRACTED_TICKS))
+    desc = str(spec.get("description") or spec.get("label", bid))
     sched = spec.get("maintenance_schedule") or {}
     maint_mats = {
         str(k): int(v) for k, v in (sched.get("materials") or {}).items()
@@ -111,7 +120,7 @@ def _blueprint_from_building_spec(bid: str, spec: dict) -> Blueprint:
     return Blueprint(
         blueprint_id=bid,
         name=str(spec.get("label", bid)),
-        description=str(spec.get("label", bid)),
+        description=desc,
         footprint_w=fw,
         footprint_h=fh,
         construction_materials=mats,

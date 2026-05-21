@@ -14,7 +14,11 @@ from realm.production.blueprints import Blueprint, blueprint_public_dict
 from realm.production.buildings import BUILDINGS
 from realm.production.recipes import RECIPES
 from realm.world import World
-from realm.world.placed_buildings import PlacedBuilding, register_placed_building
+from realm.world.placed_buildings import (
+    PlacedBuilding,
+    register_placed_building,
+    sync_plot_buildings_from_placed,
+)
 from realm.world.plot_scale import (
     cells_free,
     cells_occupied,
@@ -361,6 +365,12 @@ def place_blueprint(
         if bp.maintenance_interval_ticks > 0
         else 0
     )
+    if mode == "turnkey":
+        build_cost_cents = compute_turnkey_cost_cents(world, bp)
+    else:
+        build_cost_cents = int(bp.construction_labor_cents)
+        for mat_id, qty in bp.construction_materials.items():
+            build_cost_cents += _turnkey_unit_price_cents(world, str(mat_id)) * int(qty)
     iid = _next_instance_id(world)
     pb = PlacedBuilding(
         instance_id=iid,
@@ -375,6 +385,8 @@ def place_blueprint(
         missed_maintenance_cycles=0,
         due_at_tick=int(due),
         sub_plot_id=sub_plot_id,
+        original_cost_cents=int(build_cost_cents),
+        book_value_cents=int(build_cost_cents),
     )
     register_placed_building(world, pb)
     world.building_maintenance[iid] = {
@@ -416,6 +428,39 @@ def place_blueprint(
             "h": bp.footprint_h,
         },
     }
+
+
+def place_road_path(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    cells: list[tuple[int, int]],
+    build_mode: str = "turnkey",
+) -> ActionResult:
+    """Place ``road_segment`` on each cell in order; stops on first failure."""
+    if not cells:
+        return {"ok": False, "reason": "no cells"}
+    placed: list[str] = []
+    for gx, gy in cells:
+        result = place_blueprint(
+            world,
+            party,
+            plot_id,
+            "road_segment",
+            int(gx),
+            int(gy),
+            build_mode,
+        )
+        if not result.get("ok"):
+            partial: ActionResult = {
+                "ok": False,
+                "reason": str(result.get("reason", "placement failed")),
+                "placed_count": len(placed),
+                "instance_ids": placed,
+            }
+            return partial
+        placed.append(str(result.get("instance_id", "")))
+    return {"ok": True, "placed_count": len(placed), "instance_ids": placed}
 
 
 def build_on_plot(
@@ -518,6 +563,13 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
 
         _, _, world_w, world_h = plot_world_span(plot)
         area_sq_m = plot_area_sq_metres(plot)
+    from realm.infrastructure.road_connectivity import (
+        is_road_accessible,
+        plot_site_roads_connect_workshops,
+        plot_site_roads_link_world,
+        plot_world_link_edges,
+    )
+
     return {
         "grid_cells_w": grid_w,
         "grid_cells_h": grid_h,
@@ -529,7 +581,48 @@ def plot_grid_state(world: World, plot_id: PlotId) -> dict:
         "occupied_cells": occupied,
         "free_cells_count": max(0, free_cells),
         "placed_buildings": placed,
+        "road_accessible": is_road_accessible(world, plot_id),
+        "site_roads_connect_workshops": plot_site_roads_connect_workshops(world, plot_id),
+        "site_roads_link_world": plot_site_roads_link_world(world, plot_id),
+        "world_link_edges": plot_world_link_edges(world, plot_id),
     }
+
+
+def demolish_building(world: World, party: PartyId, instance_id: str) -> ActionResult:
+    """Remove a building; pay 50% of current book value as salvage from system reserve."""
+    pb = world.placed_buildings.get(instance_id)
+    if pb is None:
+        return {"ok": False, "reason": "building not found"}
+    if str(pb.built_by) != str(party):
+        return {"ok": False, "reason": "not your building"}
+    salvage = int(int(pb.book_value_cents) * 0.5)
+    if salvage > 0:
+        tr = world.ledger.transfer(
+            debit=system_reserve_account(),
+            credit=party_cash_account(party),
+            amount_cents=salvage,
+        )
+        if isinstance(tr, MoneyErr):
+            return {"ok": False, "reason": tr.reason}
+    plot_key = str(pb.plot_id)
+    del world.placed_buildings[instance_id]
+    iids = world.plot_placed_buildings.get(plot_key, [])
+    if instance_id in iids:
+        iids.remove(instance_id)
+    world.building_maintenance.pop(instance_id, None)
+    sync_plot_buildings_from_placed(world)
+    log_event(
+        world,
+        "building_demolished",
+        (
+            f"{party} demolished {pb.blueprint_id} at {pb.plot_id} "
+            f"(salvage: {salvage}¢)"
+        ),
+        party=str(party),
+        salvage_cents=salvage,
+        instance_id=instance_id,
+    )
+    return {"ok": True, "salvage_cents": salvage}
 
 
 def available_positions(

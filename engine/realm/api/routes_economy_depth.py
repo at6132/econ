@@ -26,6 +26,13 @@ def _party(pid: str) -> PartyId:
     return PartyId(str(pid))
 
 
+@router.get("/economy/trade-balance")
+def get_trade_balance() -> dict[str, Any]:
+    from realm.economy.trade_balance import get_trade_balance_summary
+
+    return {"trade_balance": get_trade_balance_summary(_state.WORLD)}
+
+
 @router.get("/economy/power")
 def get_power_grid() -> dict[str, Any]:
     """Regional grid overview: capacity, load, clearing price per road component."""

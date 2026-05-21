@@ -251,6 +251,36 @@ def post_place_blueprint(plot_id: str, body: dict) -> dict:
     return dict(r)
 
 
+@router.post("/plots/{plot_id}/place-roads")
+def post_place_road_path(plot_id: str, body: dict) -> dict:
+    from realm.actions.blueprint_actions import place_road_path
+
+    party = PartyId(str(body.get("party", "player")))
+    cells_raw = body.get("cells", [])
+    cells: list[tuple[int, int]] = []
+    if isinstance(cells_raw, list):
+        for item in cells_raw:
+            if isinstance(item, dict):
+                cells.append(
+                    (
+                        int(item.get("grid_x", item.get("x", 0))),
+                        int(item.get("grid_y", item.get("y", 0))),
+                    )
+                )
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                cells.append((int(item[0]), int(item[1])))
+    r = place_road_path(
+        _state.WORLD,
+        party,
+        PlotId(plot_id),
+        cells,
+        str(body.get("build_mode", "turnkey")),
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=r.get("reason", "error"))
+    return dict(r)
+
+
 @router.get("/plots/{plot_id}/grid")
 def get_plot_grid(plot_id: str) -> dict:
     from realm.actions.blueprint_actions import plot_grid_state
@@ -522,6 +552,19 @@ def post_hire_fire(
     r = fire_laborer(_state.WORLD, PartyId(employer), laborer_id)
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/buildings/{instance_id}/demolish")
+def post_demolish_building(
+    instance_id: str,
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    from realm.actions.blueprint_actions import demolish_building
+
+    r = demolish_building(_state.WORLD, PartyId(party), instance_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
     return dict(r)
 
 

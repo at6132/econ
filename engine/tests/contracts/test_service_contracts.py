@@ -144,3 +144,4 @@ def test_power_supply_breach_when_plot_unpowered() -> None:
 def test_valid_service_ids_frozenset_nonempty() -> None:
     assert "analytics_data" in VALID_SERVICE_IDS
     assert "route_access" in VALID_SERVICE_IDS
+    assert "storage" in VALID_SERVICE_IDS

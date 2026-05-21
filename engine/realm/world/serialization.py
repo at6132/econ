@@ -448,7 +448,12 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
     for mat, qty in world.inventory.stock_for_party(party).items():
         unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
         inv_value_cents += unit * int(qty)
-    net_worth_estimate = cash_cents + inv_value_cents
+    building_value = sum(
+        int(pb.book_value_cents)
+        for pb in world.placed_buildings.values()
+        if str(pb.built_by) == str(party)
+    )
+    net_worth_estimate = cash_cents + inv_value_cents + building_value
 
     active = [
         {
@@ -528,6 +533,7 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "party": str(party),
         "cash": cash_cents,
         "inventory_value_estimate": inv_value_cents,
+        "building_book_value_cents": building_value,
         "net_worth_estimate": net_worth_estimate,
         "active_production": active,
         "maintenance_warnings": maintenance_warning[:8],
@@ -630,6 +636,20 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
     cash_acct = str(party_cash_account(party))
     balances = world.ledger.snapshot()
     cash_cents = int(balances.get(cash_acct, 0))
+    try:
+        from realm.economy.pricing import _FAIR_VALUE_CENTS
+    except Exception:
+        _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
+    inv_value_cents = 0
+    for mat, qty in world.inventory.stock_for_party(party).items():
+        unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
+        inv_value_cents += unit * int(qty)
+    party_s = str(party)
+    building_book_value_cents = sum(
+        int(pb.book_value_cents)
+        for pb in world.placed_buildings.values()
+        if str(pb.built_by) == party_s
+    )
 
     inventory: dict[str, Any] = {}
     for mat, raw in world.inventory.stock.get(party, {}).items():
@@ -649,7 +669,6 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
         }
 
     owned_plots: list[dict[str, Any]] = []
-    party_s = str(party)
     for p in world.plots.values():
         if p.owner is None or str(p.owner) != party_s:
             continue
@@ -739,6 +758,9 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "tick": world.tick,
         "party": party_s,
         "cash_cents": cash_cents,
+        "inventory_value_estimate": inv_value_cents,
+        "building_book_value_cents": building_book_value_cents,
+        "net_worth_estimate": cash_cents + inv_value_cents + building_book_value_cents,
         "player_accounts": _player_accounts_public(world) if party_s == "player" else [],
         "inventory": inventory,
         "owned_plots": owned_plots,

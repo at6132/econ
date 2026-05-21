@@ -40,6 +40,7 @@ VALID_SERVICE_IDS: frozenset[str] = frozenset(
         "construction_priority",
         "labor_supply",
         "power_supply",
+        "storage",
     }
 )
 
@@ -351,6 +352,11 @@ def propose_service_sub(
         return {"ok": False, "reason": "unknown party"}
     if provider == subscriber:
         return {"ok": False, "reason": "provider and subscriber must differ"}
+    if service_id == "storage":
+        from realm.economy.holding_costs import _parties_with_warehouse
+
+        if str(provider) not in _parties_with_warehouse(world):
+            return {"ok": False, "reason": "storage service requires an active warehouse"}
     cid = _next_contract_id(world)
     world.contracts.append(
         {

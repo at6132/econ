@@ -345,4 +345,9 @@ def validate_service_delivery(world: World, c: dict[str, Any]) -> str | None:
         actual = sum(1 for lab in world.laborers.values() if str(lab.employer) == str(provider))
         if actual < min_count:
             return f"provider has {actual} laborers, promised {min_count}"
+    elif service_id == "storage":
+        from realm.economy.holding_costs import _parties_with_warehouse
+
+        if str(provider) not in _parties_with_warehouse(world):
+            return "provider no longer operates a warehouse"
     return None

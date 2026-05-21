@@ -46,6 +46,13 @@ from realm.world.real_estate import tick_npc_plot_demand
 def advance_tick(world: World) -> None:
     """One simulation step: transit → production → agents → clock."""
     deliver_transit(world)
+    from realm.economy.asset_depreciation import (
+        tick_asset_depreciation,
+        tick_placed_building_activation,
+    )
+
+    tick_placed_building_activation(world)
+    tick_asset_depreciation(world)
     tick_building_decay(world)
     tick_building_maintenance(world)
     tick_road_decay(world)
@@ -65,12 +72,16 @@ def advance_tick(world: World) -> None:
     world.tick += 1
     if int(world.tick) % 1440 == 0:
         from realm.agents.market_oracle import get_oracle
+        from realm.economy.holding_costs import tick_holding_costs
         from realm.economy.markets import tick_order_expiry
+        from realm.economy.trade_balance import tick_trade_balance
         from realm.infrastructure.power_grid import tick_power_grid
 
         get_oracle(world)
         tick_order_expiry(world)
         tick_power_grid(world)
+        tick_holding_costs(world)
+        tick_trade_balance(world)
         for route_data in (world.scenario_state.get("route_daily_volume") or {}).values():
             if isinstance(route_data, dict):
                 route_data["units_shipped_today"] = 0

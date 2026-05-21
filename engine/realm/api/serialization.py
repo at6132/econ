@@ -212,6 +212,9 @@ def dump_world(world: World) -> dict[str, Any]:
                 "missed_maintenance_cycles": pb.missed_maintenance_cycles,
                 "due_at_tick": pb.due_at_tick,
                 "sub_plot_id": pb.sub_plot_id,
+                "original_cost_cents": int(pb.original_cost_cents),
+                "book_value_cents": int(pb.book_value_cents),
+                "depreciation_rate_per_year": float(pb.depreciation_rate_per_year),
             }
             for iid, pb in world.placed_buildings.items()
         },
@@ -750,6 +753,11 @@ def load_world(d: dict[str, Any]) -> World:
             missed_maintenance_cycles=int(raw.get("missed_maintenance_cycles", 0)),
             due_at_tick=int(raw.get("due_at_tick", 0)),
             sub_plot_id=raw.get("sub_plot_id"),
+            original_cost_cents=int(raw.get("original_cost_cents", 0)),
+            book_value_cents=int(raw.get("book_value_cents", 0)),
+            depreciation_rate_per_year=float(
+                raw.get("depreciation_rate_per_year", 0.05)
+            ),
         )
     world.plot_placed_buildings = copy.deepcopy(
         dict(d.get("plot_placed_buildings") or {})

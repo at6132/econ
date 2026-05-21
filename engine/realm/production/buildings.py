@@ -321,6 +321,24 @@ BUILDINGS: dict[str, dict[str, Any]] = {
     },
     # Sprint 3 — Phase D.4: coastal renewable power. Half the throughput of a
     # coal power_shed but zero ongoing fuel cost.
+    "warehouse": {
+        "kind": "contracted",
+        "label": "Warehouse",
+        "description": (
+            "Bulk storage facility. Owner can hold unlimited inventory "
+            "without demurrage charges. Also enables storage service contracts."
+        ),
+        "self_shell_cents": 120_000,
+        "self_contractor_fee_cents": 60_000,
+        "self_materials": {"lumber": 12, "timber": 8, "brick": 8, "rope": 4},
+        "turnkey_total_cents": 250_000,
+        "construction_ticks": 2880,
+        "maintenance_schedule": {
+            "interval_ticks": 14_400,
+            "materials": {"lumber": 2, "rope": 1},
+            "grace_ticks": 2880,
+        },
+    },
     "tidal_mill": {
         "kind": "contracted",
         "label": "Tidal mill (coastal renewable electricity — no coal needed)",

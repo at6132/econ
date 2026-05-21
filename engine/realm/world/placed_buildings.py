@@ -24,6 +24,9 @@ class PlacedBuilding:
     missed_maintenance_cycles: int
     due_at_tick: int
     sub_plot_id: str | None = None
+    original_cost_cents: int = 0
+    book_value_cents: int = 0
+    depreciation_rate_per_year: float = 0.05
 
 
 def legacy_plot_building_row(world: World, pb: PlacedBuilding) -> dict[str, Any]:
@@ -41,6 +44,8 @@ def legacy_plot_building_row(world: World, pb: PlacedBuilding) -> dict[str, Any]
         "cost_cents": 0,
         "build_mode": "blueprint",
         "completes_at_tick": int(pb.built_at_tick),
+        "original_cost_cents": int(pb.original_cost_cents),
+        "book_value_cents": int(pb.book_value_cents),
         "grid_x": int(pb.grid_x),
         "grid_y": int(pb.grid_y),
         "status": pb.status,
