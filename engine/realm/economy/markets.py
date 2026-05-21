@@ -531,6 +531,13 @@ def place_sell_order(
     delivery_terms: str = DELIVERY_DDP,
 ) -> dict:
     """List material for sale; bulk on plots stays on-site (reserved), carry is escrowed in inventory."""
+    from realm.infrastructure.energy_service import is_legacy_electricity_material
+
+    if is_legacy_electricity_material(material):
+        return {
+            "ok": False,
+            "reason": "electricity is grid service (kWh), not a tradeable commodity",
+        }
     if qty <= 0 or price_per_unit_cents <= 0:
         return {"ok": False, "reason": "invalid qty or price"}
     if min_counterparty_honored < 0:
@@ -542,14 +549,18 @@ def place_sell_order(
     reg = ensure_market_seller_registration(world, party, material)
     if not reg.get("ok"):
         return dict(reg)
-    src_plot: PlotId | None = None
-    if from_plot_id is not None:
-        src_plot = from_plot_id
+    src_plot: PlotId | None = from_plot_id
     if uses_plot_market_reserve(world, party, material):
         if src_plot is None:
             src_plot = pick_plot_with_stock(world, party, material, qty)
         if src_plot is None:
-            return {"ok": False, "reason": "insufficient unlisted material on plots"}
+            return {
+                "ok": False,
+                "reason": (
+                    f"no plot with {qty}× {material} ({quality}) available for listing; "
+                    f"produce or ship material to one of your plots first"
+                ),
+            }
     else:
         have = world.inventory.qty(party, material, quality)
         if have < qty:
