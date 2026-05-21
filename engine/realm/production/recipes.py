@@ -892,3 +892,4 @@ def recipe_public_list() -> list[dict]:
                 for k, pairs in r.input_substitutes.items()
             }
         out.append(row)
+    return out
