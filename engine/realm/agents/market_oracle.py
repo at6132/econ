@@ -242,4 +242,19 @@ def _build_oracle(world: World, game_day: int) -> MarketOracle:
         else:
             oracle.recipe_margins[rid] = 1.0 if output_value > 0 else 0.0
 
+    # Perishable outputs spoil before sale — discount recipe margins accordingly.
+    perishable_discount: dict[str, float] = {
+        "grain": 0.25,
+        "fish": 0.35,
+        "bread": 0.20,
+        "wild_herb": 0.10,
+    }
+    for rid, recipe in RECIPES.items():
+        margin = oracle.recipe_margins.get(rid, 0.0)
+        for out_mat in getattr(recipe, "outputs", {}).keys():
+            discount = perishable_discount.get(str(out_mat), 0.0)
+            if discount > 0:
+                oracle.recipe_margins[rid] = margin * (1.0 - discount)
+                break
+
     return oracle
