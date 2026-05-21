@@ -23,45 +23,20 @@ MINERAL_VALUE_WEIGHTS: dict[str, int] = {
 
 
 def compute_plot_value(world: World, plot_id: PlotId) -> int:
-    plot = world.plots.get(plot_id)
-    if plot is None:
-        return 0
-    terr = plot.terrain.value
-    if terr.startswith("water"):
-        return 0
+    from realm.world.plot_geom_cache import cached_compute_plot_value
 
-    from realm.world.plot_scale import plot_world_tile_count
-
-    value = BASE_PLOT_VALUE_CENTS * max(1, plot_world_tile_count(plot))
-    min_town_dist = _min_town_distance(world, plot)
-    if min_town_dist < 5:
-        value = int(value * 3.5)
-    elif min_town_dist < 10:
-        value = int(value * 2.0)
-    elif min_town_dist < 20:
-        value = int(value * 1.4)
-
-    from realm.production.recipe_sites import plot_is_coastal
-
-    if plot_is_coastal(world, plot):
-        value = int(value * 1.5)
-
-    sub = plot.subsurface
-    for grade_attr, weight in MINERAL_VALUE_WEIGHTS.items():
-        grade = float(getattr(sub, grade_attr, 0.0))
-        value += int(grade * weight)
-
-    demand = float(
-        (world.scenario_state.get("plot_demand_scores") or {}).get(str(plot_id), 0.0)
-    )
-    value = int(value * (1.0 + demand * 0.5))
-    return value
+    return cached_compute_plot_value(world, plot_id)
 
 
 def _min_town_distance(world: World, plot: object) -> float:
-    min_d = 9999.0
+    from realm.world import Plot
+    from realm.world.plot_geom_cache import cached_min_town_distance
+
+    if isinstance(plot, Plot):
+        return cached_min_town_distance(world, plot)
     px = int(getattr(plot, "x", 0))
     py = int(getattr(plot, "y", 0))
+    min_d = 9999.0
     for town in world.towns.values():
         cx = int(getattr(town, "center_x", 0))
         cy = int(getattr(town, "center_y", 0))
@@ -96,6 +71,9 @@ def tick_npc_plot_demand(world: World) -> None:
 
     world.scenario_state["plot_demand_scores"] = demand_scores
     world.scenario_state["plot_npc_bids"] = npc_bids
+    from realm.world.plot_geom_cache import invalidate_plot_geom_caches
+
+    invalidate_plot_geom_caches()
 
 
 def _npc_plot_preference(world: World, party: PartyId) -> dict[str, object] | None:

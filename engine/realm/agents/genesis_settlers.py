@@ -102,11 +102,14 @@ SETTLER_TICK_STRIDE: int = 8
 
 def invalidate_settler_plot_caches() -> None:
     """Call when plot ownership or the plots map changes (e.g. claim_plot)."""
+    from realm.world.plot_geom_cache import invalidate_plot_geom_caches
+
     _plot_scan_cache.clear()
     _owned_plots_cache.clear()
     pid_keys = list(_plot_cache_gen.keys())
     for pid in pid_keys:
         _plot_cache_gen[pid] = int(_plot_cache_gen.get(pid, 0)) + 1
+    invalidate_plot_geom_caches()
 
 
 def _owned_plots_by_party(world: World) -> dict[PartyId, tuple[PlotId, ...]]:

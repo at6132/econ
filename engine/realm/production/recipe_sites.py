@@ -204,6 +204,13 @@ def plot_is_coastal(world, plot: Plot) -> bool:
 
 
 def waterfront_build_cells(world, plot: Plot) -> frozenset[tuple[int, int]]:
+    """Cached waterfront cells; see ``waterfront_build_cells_uncached``."""
+    from realm.world.plot_geom_cache import cached_waterfront_build_cells
+
+    return cached_waterfront_build_cells(world, plot)
+
+
+def waterfront_build_cells_uncached(world, plot: Plot) -> frozenset[tuple[int, int]]:
     """10m build-grid cells on this deed with a world-tile neighbour that is water.
 
     Used to gate dock / shipyard placement: the footprint must overlap at least one
