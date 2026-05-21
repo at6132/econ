@@ -11,7 +11,7 @@ signal closed
 @onready var mode_buildings_btn: Button = %ModeBuildingsBtn
 @onready var mode_roads_btn: Button = %ModeRoadsBtn
 @onready var columns: HBoxContainer = %Columns
-@onready var root_panel: MarginContainer = %Root
+@onready var root_panel: PanelContainer = %Root
 
 var _plot_id: String = ""
 var _plot_data: Dictionary = {}
@@ -22,6 +22,9 @@ var _build_mode: String = "turnkey"
 func _ready() -> void:
 	layer = 40
 	set_process_unhandled_input(true)
+	if back_btn == null or grid_view == null:
+		push_error("BuildPanel: scene nodes missing — check BuildPanel.tscn")
+		return
 	back_btn.pressed.connect(_close)
 	if sidebar.has_signal("blueprint_selected"):
 		sidebar.blueprint_selected.connect(_on_blueprint_selected)

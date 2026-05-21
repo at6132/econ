@@ -9,6 +9,7 @@ signal plot_layout_changed()
 @onready var subdivide_btn: Button = %SubdivideBtn
 
 const BlueprintIconsScript := preload("res://scenes/panels/build/BlueprintIcons.gd")
+const BlueprintIconDrawScene := preload("res://scenes/panels/build/BlueprintIconDraw.gd")
 
 var _all_blueprints: Array = []
 var _terrain: String = "plains"
@@ -106,18 +107,9 @@ func _make_blueprint_card(bp: Dictionary) -> PanelContainer:
 	if bid == _selected_id:
 		pc.add_theme_stylebox_override("panel", _make_selected_stylebox())
 	var header := HBoxContainer.new()
-	var icon_box := PanelContainer.new()
-	var icon_sb := StyleBoxFlat.new()
-	icon_sb.bg_color = BlueprintIconsScript.color_for(bp).darkened(0.55)
-	icon_sb.set_corner_radius_all(4)
-	icon_sb.set_content_margin_all(4)
-	icon_box.add_theme_stylebox_override("panel", icon_sb)
-	var icon_lbl := Label.new()
-	icon_lbl.text = BlueprintIconsScript.icon_for(bp)
-	icon_lbl.add_theme_font_size_override("font_size", 18)
-	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon_box.add_child(icon_lbl)
-	header.add_child(icon_box)
+	var icon_draw: Control = BlueprintIconDrawScene.new()
+	icon_draw.setup(bp)
+	header.add_child(icon_draw)
 	var name_lbl := Label.new()
 	name_lbl.text = str(bp.get("name", bid))
 	name_lbl.add_theme_font_size_override("font_size", 13)

@@ -94,6 +94,11 @@ func _style_pill_btn(b: Button) -> void:
 		b.add_theme_font_size_override("font_size", 16)
 
 
+func _active_save_slot() -> String:
+	var slot := RealmSettings.default_save_slot.strip_edges()
+	return SAVE_SLOT if slot.is_empty() else slot
+
+
 func _on_pause_pressed() -> void:
 	API.sim_control({"paused": not WorldState.sim_paused}, Callable())
 
@@ -315,7 +320,7 @@ func _run_save() -> void:
 		else:
 			save_status.add_theme_color_override("font_color", RealmColors.DANGER)
 			save_status.text = _save_failure_message(data)
-	API.save_game(on_saved, SAVE_SLOT)
+	API.save_game(on_saved, _active_save_slot())
 
 
 func _save_failure_message(data: Dictionary) -> String:

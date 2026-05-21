@@ -4,10 +4,10 @@ extends CanvasLayer
 const PANEL_WIDTH_PCT := 0.70
 const HUD_TOP := 96.0
 
-const WorldFeedTabScript := preload("res://scenes/panels/chronicle/WorldFeedTab.gd")
-const NpcMessagesTabScript := preload("res://scenes/panels/chronicle/NpcMessagesTab.gd")
-const MyEventsTabScript := preload("res://scenes/panels/chronicle/MyEventsTab.gd")
-const AlertsTabScript := preload("res://scenes/panels/chronicle/AlertsTab.gd")
+const WorldFeedTabScript: GDScript = preload("res://scenes/panels/chronicle/WorldFeedTab.gd")
+const NpcMessagesTabScript: GDScript = preload("res://scenes/panels/chronicle/NpcMessagesTab.gd")
+const MyEventsTabScript: GDScript = preload("res://scenes/panels/chronicle/MyEventsTab.gd")
+const AlertsTabScript: GDScript = preload("res://scenes/panels/chronicle/AlertsTab.gd")
 
 @onready var panel: Panel = %Panel
 @onready var close_btn: Button = %CloseBtn

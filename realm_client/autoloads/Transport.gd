@@ -63,6 +63,14 @@ func restart_solo_engine() -> void:
 	await _spawn_python_async()
 
 
+func repo_saves_dir() -> String:
+	return ProjectSettings.globalize_path("res://../saves")
+
+
+func solo_log_path() -> String:
+	return ProjectSettings.globalize_path("res://../engine/logs/realm_solo.log")
+
+
 func use_server_mode(base_url: String) -> void:
 	_kill_python()
 	_stream = null
@@ -208,6 +216,13 @@ func _notification(what: int) -> void:
 func _safe_call(callback: Callable, data: Dictionary) -> void:
 	if not callback.is_valid():
 		return
+	var obj := callback.get_object()
+	if obj == null:
+		return
+	if obj is Node:
+		var n := obj as Node
+		if not is_instance_valid(n) or not n.is_inside_tree():
+			return
 	callback.call(data)
 
 

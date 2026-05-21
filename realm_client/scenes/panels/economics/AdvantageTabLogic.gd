@@ -10,6 +10,10 @@ func refresh() -> void:
 	var list: VBoxContainer = get_meta("list") as VBoxContainer
 	PanelUI.clear_children(list)
 	var adv: Dictionary = WorldState.regional_advantage
+	if adv.is_empty() and not WorldState.regional_advantages.is_empty():
+		var keys := WorldState.regional_advantages.keys()
+		var row: Variant = WorldState.regional_advantages[keys[0]]
+		adv = row if row is Dictionary else {}
 	if adv.is_empty():
 		var lbl := Label.new()
 		lbl.text = "Regional advantage data loads from GET /world."

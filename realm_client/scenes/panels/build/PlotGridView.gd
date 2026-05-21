@@ -4,6 +4,7 @@ extends Control
 signal cell_hovered(gx: int, gy: int)
 signal cell_clicked(gx: int, gy: int)
 signal road_path_painted(cells: Array)
+signal world_link_clicked(neighbor_plot_id: String)
 
 const TERRAIN_COLORS := {
 	"plains": Color(0.62, 0.58, 0.38),
@@ -29,6 +30,8 @@ const ROAD_ASPHALT := Color(0.22, 0.24, 0.28, 0.92)
 const ROAD_EDGE := Color(0.55, 0.58, 0.62, 0.95)
 const ROAD_PREVIEW := Color(0.40, 0.85, 0.95, 0.55)
 const ROAD_LINK := Color(0.85, 0.72, 0.20, 0.65)
+const WORLD_LINK_COLOR := Color(0.35, 0.85, 0.95, 0.95)
+const WORLD_LINK_DONE := Color(0.55, 0.72, 0.42, 0.9)
 const OCCUPIED_COLOR := Color(0.25, 0.25, 0.30, 0.85)
 const PREVIEW_OK := Color(0.30, 0.90, 0.40, 0.55)
 const PREVIEW_BLOCK := Color(0.90, 0.25, 0.25, 0.55)
@@ -64,6 +67,7 @@ var _interaction_mode: String = "building"
 var _road_drag_active: bool = false
 var _road_last_cell: Vector2i = Vector2i(-1, -1)
 var _road_paint_stroke: Dictionary = {}
+var _world_link_edges: Array = []
 
 
 func _ready() -> void:
@@ -87,6 +91,9 @@ func load_plot(plot_id: String, data: Dictionary) -> void:
 	_lots = [_deed_lot_from_world_cells(data)]
 	_deed_cells = _deed_cell_lookup(_lots)
 	_street_rows = []
+	var grid: Dictionary = data.get("grid", {}) if data.get("grid") is Dictionary else {}
+	var edges: Variant = grid.get("world_link_edges", data.get("world_link_edges", []))
+	_world_link_edges = edges if edges is Array else []
 	queue_redraw()
 
 
@@ -335,6 +342,7 @@ func _draw() -> void:
 		)
 
 	_draw_road_links(road_cells, cs)
+	_draw_world_link_ports(cs)
 
 	for key in _road_paint_stroke.keys():
 		var parts: PackedStringArray = str(key).split(",")
@@ -604,6 +612,66 @@ func _road_cell_set() -> Dictionary:
 	return out
 
 
+func _world_link_marker_pos(gx: int, gy: int, direction: String) -> Vector2:
+	var r := _cell_rect(gx, gy)
+	var c := r.get_center()
+	var pad := mini(10.0, r.size.x * 0.35)
+	match direction:
+		"north":
+			return Vector2(c.x, r.position.y + pad)
+		"south":
+			return Vector2(c.x, r.end.y - pad)
+		"west":
+			return Vector2(r.position.x + pad, c.y)
+		"east":
+			return Vector2(r.end.x - pad, c.y)
+	return c
+
+
+func _draw_world_link_ports(cs: float) -> void:
+	if _interaction_mode != "roads" or _world_link_edges.is_empty():
+		return
+	for edge in _world_link_edges:
+		if not (edge is Dictionary):
+			continue
+		var ed: Dictionary = edge as Dictionary
+		var gx := int(ed.get("grid_x", -1))
+		var gy := int(ed.get("grid_y", -1))
+		if gx < 0:
+			continue
+		var direction := str(ed.get("direction", ""))
+		var pos := _world_link_marker_pos(gx, gy, direction)
+		var has_seg := bool(ed.get("segment_exists", false))
+		var col := WORLD_LINK_DONE if has_seg else WORLD_LINK_COLOR
+		var radius := clampf(cs * 0.22, 5.0, 11.0)
+		draw_circle(pos, radius, col)
+		draw_arc(pos, radius, 0.0, TAU, 24, Color(0.05, 0.05, 0.08, 0.85), 1.5, true)
+		if cs >= 14.0:
+			var nbr := str(ed.get("neighbor_plot_id", "")).split("-")[-1]
+			_draw_text(pos + Vector2(-8, -radius - 4), nbr, 8, col)
+
+
+func _hit_test_world_link(screen_pos: Vector2) -> String:
+	if _interaction_mode != "roads":
+		return ""
+	var cs := _cell_size()
+	var hit_r := clampf(cs * 0.35, 8.0, 16.0)
+	for edge in _world_link_edges:
+		if not (edge is Dictionary):
+			continue
+		var ed: Dictionary = edge as Dictionary
+		if bool(ed.get("segment_exists", false)):
+			continue
+		var gx := int(ed.get("grid_x", -1))
+		var gy := int(ed.get("grid_y", -1))
+		if gx < 0:
+			continue
+		var pos := _world_link_marker_pos(gx, gy, str(ed.get("direction", "")))
+		if pos.distance_to(screen_pos) <= hit_r:
+			return str(ed.get("neighbor_plot_id", ""))
+	return ""
+
+
 func _draw_road_links(road_cells: Dictionary, cs: float) -> void:
 	if road_cells.is_empty():
 		return
@@ -615,10 +683,10 @@ func _draw_road_links(road_cells: Dictionary, cs: float) -> void:
 		var gx := int(parts[0])
 		var gy := int(parts[1])
 		var center := _cell_rect(gx, gy).get_center()
-		for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-			var nk := "%d,%d" % [gx + dx, gy + dy]
+		for off in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+			var nk := "%d,%d" % [gx + off.x, gy + off.y]
 			if road_cells.has(nk):
-				draw_line(center, _cell_rect(gx + dx, gy + dy).get_center(), ROAD_EDGE, 2.0, true)
+				draw_line(center, _cell_rect(gx + off.x, gy + off.y).get_center(), ROAD_EDGE, 2.0, true)
 		for b in _placed_buildings:
 			if not (b is Dictionary):
 				continue
@@ -691,6 +759,12 @@ func _gui_input(event: InputEvent) -> void:
 			queue_redraw()
 	elif event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			if _is_road_paint_mode():
+				var neighbor := _hit_test_world_link(event.position)
+				if neighbor != "":
+					world_link_clicked.emit(neighbor)
+					accept_event()
+					return
 			var gpos := _screen_to_grid(event.position)
 			if gpos.x >= 0:
 				if _is_road_paint_mode():

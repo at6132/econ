@@ -22,6 +22,7 @@ var _panel_root: VBoxContainer
 var _panel_solo: VBoxContainer
 var _panel_new: VBoxContainer
 var _panel_continue: VBoxContainer
+var _panel_settings: VBoxContainer
 
 var _scenario_opt: OptionButton
 var _seed_spin: SpinBox
@@ -31,12 +32,43 @@ var _saves_scroll: ScrollContainer
 var _saves_vbox: VBoxContainer
 
 var _dialog: AcceptDialog
+var _confirm_clear_saves: ConfirmationDialog
+var _confirm_restart_engine: ConfirmationDialog
+
+var _settings_about: Label
+var _settings_status: Label
+var _chk_start_paused: CheckButton
+var _opt_default_speed: OptionButton
+var _opt_default_overlay: OptionButton
+var _edit_save_slot: LineEdit
+var _settings_pause_btn: Button
+var _settings_speed_btns: Array[Button] = []
 
 
 func _ready() -> void:
 	_dialog = AcceptDialog.new()
 	_dialog.title = "Realm"
 	add_child(_dialog)
+	_confirm_clear_saves = ConfirmationDialog.new()
+	_confirm_clear_saves.title = "Clear all saves?"
+	_confirm_clear_saves.dialog_text = (
+		"Delete every *.sqlite file in the saves/ folder.\n\n"
+		+ "This cannot be undone. Your current in-memory world is not affected."
+	)
+	_confirm_clear_saves.ok_button_text = "Clear all saves"
+	_confirm_clear_saves.cancel_button_text = "Cancel"
+	_confirm_clear_saves.confirmed.connect(_on_clear_all_saves_confirmed)
+	add_child(_confirm_clear_saves)
+	_confirm_restart_engine = ConfirmationDialog.new()
+	_confirm_restart_engine.title = "Restart solo engine?"
+	_confirm_restart_engine.dialog_text = (
+		"Stops and respawns the Python process on port 9000.\n\n"
+		+ "Use this after engine code changes or if Continue/New world acts stale."
+	)
+	_confirm_restart_engine.ok_button_text = "Restart"
+	_confirm_restart_engine.confirmed.connect(_on_restart_engine_confirmed)
+	add_child(_confirm_restart_engine)
+	WorldState.sim_clock_updated.connect(_on_world_sim_clock_updated)
 	_build_panels()
 	_show_panel("root")
 	if RealmFonts:
@@ -94,7 +126,8 @@ func _build_panels() -> void:
 	_panel_solo = _make_solo_menu()
 	_panel_new = _make_new_world()
 	_panel_continue = _make_continue()
-	for p in [_panel_root, _panel_solo, _panel_new, _panel_continue]:
+	_panel_settings = _make_settings()
+	for p in [_panel_root, _panel_solo, _panel_new, _panel_continue, _panel_settings]:
 		p.visible = false
 		inner.add_child(p)
 
@@ -104,8 +137,8 @@ func _make_root_menu() -> VBoxContainer:
 	v.add_theme_constant_override("separation", 12)
 	v.add_child(_menu_heading("Main menu"))
 
-	var b_settings := _menu_button("Settings", true)
-	b_settings.pressed.connect(_on_coming_soon_pressed.bind("Settings"))
+	var b_settings := _menu_button("Settings", false)
+	b_settings.pressed.connect(func(): _show_panel("settings"))
 
 	var b_solo := _menu_button("Solo", false)
 	b_solo.pressed.connect(_on_solo_pressed)
@@ -233,6 +266,131 @@ func _make_new_world() -> VBoxContainer:
 	return v
 
 
+func _make_settings() -> VBoxContainer:
+	var outer := VBoxContainer.new()
+	outer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_theme_constant_override("separation", 10)
+	outer.add_child(_menu_heading("Settings"))
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 420)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var v := VBoxContainer.new()
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_theme_constant_override("separation", 14)
+	scroll.add_child(v)
+	outer.add_child(scroll)
+
+	# ── About ──
+	v.add_child(_menu_heading("About"))
+	_settings_about = _settings_info_label("Loading engine info…")
+	v.add_child(_settings_about)
+	_settings_status = _settings_info_label("")
+	v.add_child(_settings_status)
+
+	var b_log := _menu_button("Open engine log", false)
+	b_log.pressed.connect(_on_open_log_pressed)
+	v.add_child(b_log)
+
+	# ── Session defaults (user://) ──
+	v.add_child(_menu_heading("Session defaults"))
+	v.add_child(
+		_settings_hint_label("Applied when you enter the world from New world or Continue.")
+	)
+
+	_chk_start_paused = CheckButton.new()
+	_chk_start_paused.text = "Start paused"
+	_style_check_button(_chk_start_paused)
+	_chk_start_paused.toggled.connect(_on_start_paused_toggled)
+	v.add_child(_chk_start_paused)
+
+	var row_speed := HBoxContainer.new()
+	row_speed.add_theme_constant_override("separation", 12)
+	row_speed.add_child(_settings_field_label("Default speed"))
+	_opt_default_speed = OptionButton.new()
+	_opt_default_speed.custom_minimum_size.x = 200
+	for mult in RealmSettings.SPEED_OPTIONS:
+		_opt_default_speed.add_item("%dx" % int(mult))
+	_style_primary_button(_opt_default_speed)
+	_opt_default_speed.item_selected.connect(_on_default_speed_selected)
+	row_speed.add_child(_opt_default_speed)
+	v.add_child(row_speed)
+
+	var row_ov := HBoxContainer.new()
+	row_ov.add_theme_constant_override("separation", 12)
+	row_ov.add_child(_settings_field_label("Map overlay"))
+	_opt_default_overlay = OptionButton.new()
+	_opt_default_overlay.custom_minimum_size.x = 280
+	for row in RealmSettings.OVERLAY_MODES:
+		_opt_default_overlay.add_item(str((row as Array)[1]))
+	_style_primary_button(_opt_default_overlay)
+	_opt_default_overlay.item_selected.connect(_on_default_overlay_selected)
+	row_ov.add_child(_opt_default_overlay)
+	v.add_child(row_ov)
+
+	var row_slot := HBoxContainer.new()
+	row_slot.add_theme_constant_override("separation", 12)
+	row_slot.add_child(_settings_field_label("Save slot"))
+	_edit_save_slot = LineEdit.new()
+	_edit_save_slot.placeholder_text = "current"
+	_edit_save_slot.custom_minimum_size.x = 200
+	_edit_save_slot.max_length = 48
+	_edit_save_slot.add_theme_stylebox_override("normal", RealmColors.style_btn_normal())
+	_edit_save_slot.add_theme_color_override("font_color", RealmColors.TEXT)
+	if RealmFonts.font_body:
+		_edit_save_slot.add_theme_font_override("font", RealmFonts.font_body)
+		_edit_save_slot.add_theme_font_size_override("font_size", 20)
+	_edit_save_slot.text_submitted.connect(func(_t: String) -> void: _on_save_slot_committed())
+	_edit_save_slot.focus_exited.connect(func() -> void: _on_save_slot_committed())
+	row_slot.add_child(_edit_save_slot)
+	v.add_child(row_slot)
+
+	# ── Live sim (engine must be up) ──
+	v.add_child(_menu_heading("Simulation"))
+	v.add_child(_settings_hint_label("Controls the running solo engine (same as in-game top strip)."))
+	var sim_row := HBoxContainer.new()
+	sim_row.add_theme_constant_override("separation", 8)
+	_settings_pause_btn = _menu_button("Pause", false)
+	_settings_pause_btn.custom_minimum_size = Vector2(100, 40)
+	_settings_pause_btn.pressed.connect(_on_settings_pause_pressed)
+	sim_row.add_child(_settings_pause_btn)
+	_settings_speed_btns.clear()
+	for mult in [1.0, 2.0, 4.0]:
+		var sb := _menu_button("%dx" % int(mult), false)
+		sb.custom_minimum_size = Vector2(64, 40)
+		sb.pressed.connect(_on_settings_speed_pressed.bind(mult))
+		sim_row.add_child(sb)
+		_settings_speed_btns.append(sb)
+	v.add_child(sim_row)
+
+	# ── Saves & engine ──
+	v.add_child(_menu_heading("Saves & engine"))
+	var b_folder := _menu_button("Open saves folder", false)
+	b_folder.pressed.connect(_on_open_saves_folder_pressed)
+	v.add_child(b_folder)
+
+	v.add_child(
+		_settings_hint_label("Removes every *.sqlite in saves/. In-memory play is not affected.")
+	)
+	var b_clear := _menu_button("Clear all save files", false)
+	b_clear.add_theme_color_override("font_color", RealmColors.DANGER)
+	b_clear.add_theme_color_override("font_hover_color", RealmColors.WARN)
+	b_clear.pressed.connect(_on_clear_saves_pressed)
+	v.add_child(b_clear)
+
+	var b_restart := _menu_button("Restart solo engine", false)
+	b_restart.pressed.connect(_on_restart_engine_pressed)
+	v.add_child(b_restart)
+
+	var b_back := _menu_button("Back", false)
+	b_back.pressed.connect(func(): _show_panel("root"))
+	v.add_child(b_back)
+
+	_sync_settings_prefs_ui()
+	return outer
+
+
 func _make_continue() -> VBoxContainer:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
@@ -307,6 +465,10 @@ func _show_panel(which: String) -> void:
 	_panel_solo.visible = which == "solo"
 	_panel_new.visible = which == "new"
 	_panel_continue.visible = which == "continue"
+	_panel_settings.visible = which == "settings"
+	if which == "settings":
+		_sync_settings_prefs_ui()
+		_refresh_settings_diagnostics()
 	if which == "new":
 		if is_instance_valid(_seed_spin):
 			_seed_spin.value = _roll_new_world_seed_spin()
@@ -324,6 +486,208 @@ func _roll_new_world_seed_spin() -> int:
 func _on_coming_soon_pressed(feature: String) -> void:
 	_dialog.dialog_text = "%s — coming soon." % feature
 	_dialog.popup_centered()
+
+
+func _settings_info_label(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", RealmColors.DIM)
+	if RealmFonts.font_body:
+		l.add_theme_font_override("font", RealmFonts.font_body)
+		l.add_theme_font_size_override("font_size", 16)
+	return l
+
+
+func _settings_hint_label(text: String) -> Label:
+	var l := _settings_info_label(text)
+	l.add_theme_color_override("font_color", RealmColors.MUTED)
+	l.add_theme_font_size_override("font_size", 15)
+	return l
+
+
+func _settings_field_label(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.custom_minimum_size.x = 120
+	l.add_theme_color_override("font_color", RealmColors.DIM)
+	if RealmFonts.font_body:
+		l.add_theme_font_override("font", RealmFonts.font_body)
+		l.add_theme_font_size_override("font_size", 18)
+	return l
+
+
+func _style_check_button(cb: CheckButton) -> void:
+	cb.add_theme_color_override("font_color", RealmColors.TEXT)
+	cb.add_theme_color_override("font_hover_color", RealmColors.ACCENT)
+	if RealmFonts.font_body:
+		cb.add_theme_font_override("font", RealmFonts.font_body)
+		cb.add_theme_font_size_override("font_size", 20)
+
+
+func _sync_settings_prefs_ui() -> void:
+	if not is_instance_valid(_chk_start_paused):
+		return
+	_chk_start_paused.set_block_signals(true)
+	_chk_start_paused.button_pressed = RealmSettings.start_paused
+	_chk_start_paused.set_block_signals(false)
+	if is_instance_valid(_opt_default_speed):
+		_opt_default_speed.select(RealmSettings.speed_index_from_value(RealmSettings.default_speed))
+	if is_instance_valid(_opt_default_overlay):
+		var oi := RealmSettings.overlay_index_from_id(RealmSettings.default_overlay)
+		_opt_default_overlay.select(maxi(0, oi))
+	if is_instance_valid(_edit_save_slot):
+		_edit_save_slot.text = RealmSettings.default_save_slot
+	if is_instance_valid(_settings_pause_btn):
+		_settings_pause_btn.text = "Resume" if WorldState.sim_paused else "Pause"
+
+
+func _refresh_settings_diagnostics() -> void:
+	if not is_instance_valid(_settings_about):
+		return
+	var port := Transport.SOLO_PORT
+	var log_p := Transport.solo_log_path()
+	var saves_p := Transport.repo_saves_dir()
+	_settings_about.text = (
+		"Solo engine: %s:%d\nLog: %s\nSaves: %s"
+		% [Transport.SOLO_HOST, port, log_p, saves_p]
+	)
+	_settings_status.text = "Fetching version…"
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		Transport.engine_ready.connect(_refresh_settings_diagnostics, CONNECT_ONE_SHOT)
+		return
+	API.get_version(
+		func(ver: Dictionary) -> void:
+			if not is_instance_valid(_settings_about):
+				return
+			var build := str(ver.get("build_id", "?"))
+			var cash := WorldState.variant_to_int(ver.get("player_starting_cash_cents", 0), 0)
+			var line := "Build: %s" % build
+			if cash > 0:
+				line += "  ·  starting cash %s" % WorldState.format_money(cash)
+			if not bool(ver.get("ok", false)):
+				line = "Engine on :%d is outdated (no /version)." % port
+			_settings_about.text = (
+				"%s\nSolo: %s:%d\nLog: %s\nSaves: %s" % [line, Transport.SOLO_HOST, port, log_p, saves_p]
+			)
+	)
+	API.persistence_status(
+		func(st: Dictionary) -> void:
+			if not is_instance_valid(_settings_status):
+				return
+			if not bool(st.get("ok", false)):
+				_settings_status.text = ""
+				return
+			var at := int(st.get("last_save_at", 0))
+			var path := str(st.get("last_save_path", ""))
+			var kind := str(st.get("last_save_kind", ""))
+			if at <= 0:
+				_settings_status.text = "Last save: none yet"
+			else:
+				var ago := maxi(0, int(Time.get_unix_time_from_system()) - at)
+				var name := path.get_file() if not path.is_empty() else "?"
+				_settings_status.text = "Last save: %s (%s, %d s ago)" % [name, kind, ago]
+	)
+
+
+func _on_start_paused_toggled(on: bool) -> void:
+	RealmSettings.start_paused = on
+	RealmSettings.persist()
+
+
+func _on_default_speed_selected(idx: int) -> void:
+	if idx >= 0 and idx < RealmSettings.SPEED_OPTIONS.size():
+		RealmSettings.default_speed = float(RealmSettings.SPEED_OPTIONS[idx])
+		RealmSettings.persist()
+
+
+func _on_default_overlay_selected(idx: int) -> void:
+	RealmSettings.default_overlay = RealmSettings.overlay_id_from_index(idx)
+	RealmSettings.persist()
+
+
+func _on_save_slot_committed() -> void:
+	if not is_instance_valid(_edit_save_slot):
+		return
+	var slot := _edit_save_slot.text.strip_edges()
+	RealmSettings.default_save_slot = "current" if slot.is_empty() else slot
+	RealmSettings.persist()
+
+
+func _on_settings_pause_pressed() -> void:
+	await _ensure_engine_ready()
+	API.sim_control({"paused": not WorldState.sim_paused}, _on_settings_sim_control_done)
+
+
+func _on_settings_speed_pressed(mult: float) -> void:
+	await _ensure_engine_ready()
+	API.sim_control({"speed": float(mult), "paused": false}, _on_settings_sim_control_done)
+
+
+func _on_settings_sim_control_done(data: Dictionary) -> void:
+	if not data.is_empty():
+		WorldState.apply_sim_status(data)
+	_sync_settings_prefs_ui()
+
+
+func _on_world_sim_clock_updated() -> void:
+	if _panel_settings.visible:
+		_sync_settings_prefs_ui()
+
+
+func _on_open_saves_folder_pressed() -> void:
+	var dir := Transport.repo_saves_dir()
+	if not DirAccess.dir_exists_absolute(dir):
+		DirAccess.make_dir_recursive_absolute(dir)
+	var err := OS.shell_open(dir)
+	if err != OK:
+		_dialog.dialog_text = "Could not open folder:\n%s" % dir
+		_dialog.popup_centered()
+
+
+func _on_open_log_pressed() -> void:
+	var path := Transport.solo_log_path()
+	if FileAccess.file_exists(path):
+		var err := OS.shell_open(path)
+		if err != OK:
+			_dialog.dialog_text = "Could not open log:\n%s" % path
+			_dialog.popup_centered()
+	else:
+		_dialog.dialog_text = "Log not found yet:\n%s\n\nStart Solo once to create it." % path
+		_dialog.popup_centered()
+
+
+func _on_restart_engine_pressed() -> void:
+	_confirm_restart_engine.popup_centered()
+
+
+func _on_restart_engine_confirmed() -> void:
+	_footer.text = "Restarting engine…"
+	await Transport.restart_solo_engine()
+	_footer.text = "Solo engine restarted."
+	_refresh_settings_diagnostics()
+
+
+func _on_clear_saves_pressed() -> void:
+	_confirm_clear_saves.popup_centered()
+
+
+func _on_clear_all_saves_confirmed() -> void:
+	await _ensure_engine_ready()
+	_footer.text = "Clearing saves…"
+	API.persistence_clear_all(
+		func(data: Dictionary) -> void:
+			if bool(data.get("ok", false)):
+				var n := int(data.get("count", 0))
+				_footer.text = "Removed %d save file(s)." % n
+				if _panel_continue.visible:
+					_refresh_save_list()
+			else:
+				_footer.text = ""
+				var reason := str(data.get("reason", data))
+				_dialog.dialog_text = "Could not clear saves: %s" % reason
+				_dialog.popup_centered()
+	)
 
 
 func _on_solo_pressed() -> void:
