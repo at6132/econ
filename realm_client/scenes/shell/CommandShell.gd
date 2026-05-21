@@ -36,9 +36,11 @@ func _ready() -> void:
 	_build_sim_controls()
 	WorldState.summary_updated.connect(_refresh_stats)
 	WorldState.world_updated.connect(_on_world_changed)
+	WorldState.world_name_changed.connect(_refresh_brand)
 	WorldState.sim_clock_updated.connect(_refresh_sim_controls)
 	_refresh_stats()
 	_refresh_seed()
+	_refresh_brand()
 	_refresh_sim_controls()
 	save_button.pressed.connect(_on_save_pressed)
 	_status_timer = Timer.new()
@@ -95,8 +97,14 @@ func _style_pill_btn(b: Button) -> void:
 
 
 func _active_save_slot() -> String:
-	var slot := RealmSettings.default_save_slot.strip_edges()
-	return SAVE_SLOT if slot.is_empty() else slot
+	var wid := WorldState.world_id.strip_edges()
+	var custom := RealmSettings.default_save_slot.strip_edges()
+	# Legacy shared file — only when this world has no id yet.
+	if custom.is_empty() or custom == SAVE_SLOT:
+		if not wid.is_empty():
+			return wid
+		return SAVE_SLOT
+	return custom
 
 
 func _on_pause_pressed() -> void:
@@ -178,9 +186,11 @@ func _style_pill(lbl: Label) -> void:
 func _build_nav() -> void:
 	_add_nav_group("FIELD OPS", [
 		["territory", "Territory & works"],
+		["operations", "Operations"],
 	])
 	_add_nav_group("COMMERCE", [
 		["market", "Bazaar & tape"],
+		["inventory", "Inventory"],
 		["caravans", "Shipping"],
 		["economics", "Economics"],
 		["tenders", "Tenders"],
@@ -282,6 +292,17 @@ func _refresh_nav_badges() -> void:
 func _on_world_changed() -> void:
 	_refresh_stats()
 	_refresh_seed()
+	_refresh_brand()
+
+
+func _refresh_brand() -> void:
+	var wn := WorldState.world_name.strip_edges()
+	if not wn.is_empty():
+		brand_sub.text = wn
+	elif not WorldState.scenario_id.is_empty():
+		brand_sub.text = WorldState.scenario_id.replace("_", " ").capitalize()
+	else:
+		brand_sub.text = "Realm"
 
 
 func _refresh_seed() -> void:

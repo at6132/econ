@@ -4,17 +4,23 @@ extends Node2D
 const PlotDetailScene := preload("res://scenes/panels/PlotDetail.tscn")
 const BazaarPanelScene := preload("res://scenes/panels/BazaarPanel.tscn")
 const BuildPanelScene := preload("res://scenes/panels/BuildPanel.tscn")
+const ProductionWorkflowScene := preload("res://scenes/panels/ProductionWorkflowWindow.tscn")
+const BlueprintStudioScene := preload("res://scenes/panels/build/BlueprintStudioWindow.tscn")
 const ChroniclePanelScene := preload("res://scenes/panels/ChroniclePanel.tscn")
 const PactsPanelScene := preload("res://scenes/panels/PactsPanel.tscn")
 const FinancePanelScene := preload("res://scenes/panels/FinancePanel.tscn")
 const LaborPanelScene := preload("res://scenes/panels/LaborPanel.tscn")
 const BusinessPanelScene := preload("res://scenes/panels/BusinessPanel.tscn")
 const ShippingPanelScene := preload("res://scenes/panels/ShippingPanel.tscn")
+const InventoryPanelScene := preload("res://scenes/panels/InventoryPanel.tscn")
+const OperationsPanelScene := preload("res://scenes/panels/OperationsPanel.tscn")
+const CommandPaletteScene := preload("res://scenes/shell/CommandPalette.tscn")
 const SciencePanelScene := preload("res://scenes/panels/SciencePanel.tscn")
 const EconomicsPanelScene := preload("res://scenes/panels/EconomicsPanel.tscn")
 const TendersPanelScene := preload("res://scenes/panels/TendersPanel.tscn")
 const ProfilePanelScene := preload("res://scenes/panels/ProfilePanel.tscn")
 const TerritoryPanelScene := preload("res://scenes/panels/TerritoryPanel.tscn")
+const PauseMenuScene := preload("res://scenes/PauseMenu.tscn")
 
 const OVERLAY_LAYER := 32
 
@@ -26,6 +32,8 @@ const OVERLAY_LAYER := 32
 var _overlay_bar: HBoxContainer
 
 var _active_overlay: Node = null
+var _production_workflow: CanvasLayer = null
+var _blueprint_studio: CanvasLayer = null
 var _resume_plot_id: String = ""
 var _build_return_plot_id: String = ""
 
@@ -37,6 +45,8 @@ const _REFRESH_MIN_INTERVAL_S: float = 2.0
 var _last_refresh_msec: int = -1
 ## Avoid overlapping refreshes when an earlier round-trip is still in flight.
 var _refresh_in_flight: bool = false
+var _pause_menu: CanvasLayer = null
+var _command_palette: CanvasLayer = null
 
 
 func _ready() -> void:
@@ -53,6 +63,39 @@ func _ready() -> void:
 	# heavier ``summary + player + feed`` GETs run throttled in
 	# ``_on_engine_push`` (at most once per ``_REFRESH_MIN_INTERVAL_S``).
 	Transport.engine_push.connect(_on_engine_push)
+	_pause_menu = PauseMenuScene.instantiate() as CanvasLayer
+	add_child(_pause_menu)
+	_command_palette = CommandPaletteScene.instantiate() as CanvasLayer
+	add_child(_command_palette)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	var key := event as InputEventKey
+	if key.keycode == KEY_K and (key.ctrl_pressed or key.meta_pressed):
+		_toggle_command_palette()
+		get_viewport().set_input_as_handled()
+		return
+	if key.keycode != KEY_ESCAPE:
+		return
+	if _overlay_blocks_pause_menu():
+		return
+	if _pause_menu != null and _pause_menu.visible:
+		if _pause_menu.has_method("handle_escape") and _pause_menu.call("handle_escape"):
+			get_viewport().set_input_as_handled()
+		return
+	if _pause_menu != null and _pause_menu.has_method("open_menu"):
+		_pause_menu.call("open_menu")
+		get_viewport().set_input_as_handled()
+
+
+func _overlay_blocks_pause_menu() -> bool:
+	if not is_instance_valid(_active_overlay):
+		return false
+	if _active_overlay.has_method("blocks_pause_menu"):
+		return bool(_active_overlay.call("blocks_pause_menu"))
+	return false
 
 
 func _boot_shell() -> void:
@@ -284,6 +327,9 @@ func _on_nav_pressed(panel_name: String) -> void:
 	if panel_name == "territory":
 		_toggle_overlay(TerritoryPanelScene)
 		return
+	if panel_name == "operations":
+		_toggle_overlay(OperationsPanelScene)
+		return
 	if panel_name == "chronicle":
 		_toggle_overlay(ChroniclePanelScene)
 		return
@@ -301,6 +347,9 @@ func _on_nav_pressed(panel_name: String) -> void:
 		return
 	if panel_name == "caravans" or panel_name == "shipping":
 		_toggle_overlay(ShippingPanelScene)
+		return
+	if panel_name == "inventory":
+		_toggle_overlay(InventoryPanelScene)
 		return
 	if panel_name == "lab" or panel_name == "science":
 		_toggle_overlay(SciencePanelScene)
@@ -355,6 +404,10 @@ func _open_bazaar() -> void:
 	_mount_overlay(BazaarPanelScene.instantiate())
 
 
+func open_operations_panel() -> void:
+	_toggle_overlay(OperationsPanelScene)
+
+
 func open_build_panel(plot_id: String, plot_data: Dictionary) -> void:
 	_build_return_plot_id = plot_id
 	_close_active_overlay()
@@ -364,6 +417,62 @@ func open_build_panel(plot_id: String, plot_data: Dictionary) -> void:
 		panel.call("open", plot_id, plot_data)
 	if panel.has_signal("closed"):
 		panel.closed.connect(_on_build_panel_closed, CONNECT_ONE_SHOT)
+
+
+func _toggle_command_palette() -> void:
+	if _command_palette == null:
+		return
+	if _command_palette.visible and _command_palette.has_method("close_palette"):
+		_command_palette.call("close_palette")
+	elif _command_palette.has_method("open_palette"):
+		_command_palette.call("open_palette")
+
+
+func open_blueprint_studio(on_created: Callable = Callable()) -> void:
+	if is_instance_valid(_blueprint_studio):
+		_blueprint_studio.queue_free()
+		_blueprint_studio = null
+	_blueprint_studio = BlueprintStudioScene.instantiate() as CanvasLayer
+	add_child(_blueprint_studio)
+	if on_created.is_valid() and _blueprint_studio.has_signal("blueprint_created"):
+		_blueprint_studio.blueprint_created.connect(on_created)
+	if _blueprint_studio.has_signal("closed"):
+		_blueprint_studio.closed.connect(func() -> void: _blueprint_studio = null)
+
+
+func open_production_workflow(plot_id: String, building: Dictionary, plot_data: Dictionary) -> void:
+	var open_fn := func() -> void:
+		if WorldState.blueprints_by_id.is_empty():
+			API.get_blueprints(
+				func(d: Dictionary) -> void:
+					WorldState.merge_blueprints_list(d.get("blueprints", []))
+					_open_production_workflow_window(plot_id, building, plot_data),
+				WorldState.party_id,
+			)
+		else:
+			_open_production_workflow_window(plot_id, building, plot_data)
+	WorldState.ensure_static_tables(open_fn)
+
+
+func _open_production_workflow_window(
+	plot_id: String, building: Dictionary, plot_data: Dictionary
+) -> void:
+	if is_instance_valid(_production_workflow):
+		_production_workflow.queue_free()
+		_production_workflow = null
+	var win: CanvasLayer = ProductionWorkflowScene.instantiate() as CanvasLayer
+	_production_workflow = win
+	add_child(win)
+	win.layer = 45
+	if win.has_method("open"):
+		win.call("open", plot_id, building, plot_data)
+	if win.has_signal("closed"):
+		win.closed.connect(_on_production_workflow_closed, CONNECT_ONE_SHOT)
+
+
+func _on_production_workflow_closed() -> void:
+	_production_workflow = null
+	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 
 
 func open_building_picker(plot_id: String, terrain: String) -> void:
