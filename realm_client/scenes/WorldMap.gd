@@ -157,8 +157,42 @@ func set_overlay_mode(mode: String, mineral: String = "coal") -> void:
 	_overlay_mode = mode
 	if mineral != "":
 		_overlay_mineral = mineral
+	_ensure_overlay_data(mode)
 	_rebuild_cell_cache()
 	queue_redraw()
+
+
+func _ensure_overlay_data(mode: String) -> void:
+	match mode:
+		"roads":
+			if WorldState.road_segments.is_empty():
+				API.get_roads(_on_overlay_roads_loaded)
+		"routes":
+			if WorldState.in_transit.is_empty():
+				API.get_world_player(
+					func(p: Dictionary) -> void:
+						if not p.is_empty():
+							WorldState.apply_player(p),
+					WorldState.party_id,
+				)
+		"advantage":
+			if WorldState.regional_advantages.is_empty():
+				API.get_world_static(func(s: Dictionary) -> void:
+					WorldState.apply_static(s)
+					_rebuild_cell_cache()
+					queue_redraw()
+				)
+
+
+func _on_overlay_roads_loaded(data: Dictionary) -> void:
+	if data.is_empty() or not bool(data.get("ok", true)):
+		return
+	var segs: Variant = data.get("segments", [])
+	if segs is Array:
+		WorldState.road_segments = segs as Array
+	if _overlay_mode == "roads":
+		_rebuild_cell_cache()
+		queue_redraw()
 
 
 func _ready() -> void:
@@ -263,6 +297,21 @@ func _on_player_updated() -> void:
 	# itself changes (claim / survey / build → apply_map).
 	_rebuild_building_cache_only()
 	_invalidate_draw_buffer()
+	if _overlay_mode == "routes":
+		queue_redraw()
+
+
+func _cell_index_safe(gx: int, gy: int) -> int:
+	var bx := _last_mesh_bounds.x
+	var by := _last_mesh_bounds.y
+	if bx <= 0 or by <= 0 or _cell_flags.is_empty():
+		return -1
+	if gx < 0 or gy < 0 or gx >= bx or gy >= by:
+		return -1
+	var idx := gy * bx + gx
+	if idx < 0 or idx >= _cell_flags.size():
+		return -1
+	return idx
 
 
 func _on_world_updated() -> void:
@@ -381,7 +430,7 @@ func _rebuild_cell_cache_fill_rows(y0: int, y1: int) -> void:
 			if p.get("powered", true) == false:
 				fill = fill.darkened(0.22)
 			var ov := MapOverlays.overlay_tint_for_plot(
-				_overlay_mode, p, my_party, _overlay_mineral
+				_overlay_mode, p, my_party, _overlay_mineral, _overlay_advantage_cat
 			)
 			if ov.a > 0.01:
 				fill = fill.lerp(ov, clampf(ov.a, 0.0, 1.0))
@@ -510,7 +559,9 @@ func _rebuild_parcel_draw_cache() -> void:
 			fill = fill.lightened(0.06)
 		if p.get("powered", true) == false:
 			fill = fill.darkened(0.22)
-		var ov := MapOverlays.overlay_tint_for_plot(_overlay_mode, p, my_party, _overlay_mineral)
+		var ov := MapOverlays.overlay_tint_for_plot(
+			_overlay_mode, p, my_party, _overlay_mineral, _overlay_advantage_cat
+		)
 		if ov.a > 0.01:
 			fill = fill.lerp(ov, clampf(ov.a, 0.0, 1.0))
 		var flags := 0x1
@@ -728,6 +779,7 @@ func _draw() -> void:
 		_draw_overview_terrain()
 		_draw_selection_highlight(sel_gx, sel_gy)
 		_draw_town_dots()
+		_draw_vector_overlays()
 		return
 
 	# Frontier: one polygon per plot. Genesis: flat fills, no grid strokes (cache builds in chunks).
@@ -758,6 +810,77 @@ func _draw() -> void:
 
 	if lod >= 3:
 		_draw_plot_detail_labels()
+	_draw_vector_overlays()
+
+
+func _draw_vector_overlays() -> void:
+	if _mesh == null:
+		return
+	if _overlay_mode == "roads":
+		_draw_world_road_segments()
+	if _overlay_mode != "routes":
+		return
+	var stroke := Color(0.95, 0.82, 0.35, 0.75)
+	var width := _world_line_width(1.4)
+	for row in WorldState.in_transit:
+		if not (row is Dictionary):
+			continue
+		var sd: Dictionary = row as Dictionary
+		var from_id := str(sd.get("from_plot_id", sd.get("origin_plot_id", "")))
+		var dest_id := str(sd.get("dest_plot_id", sd.get("destination_plot_id", "")))
+		if from_id == "" or dest_id == "":
+			continue
+		var from_pt := _plot_centroid_for_id(from_id)
+		var dest_pt := _plot_centroid_for_id(dest_id)
+		if from_pt == Vector2.ZERO or dest_pt == Vector2.ZERO:
+			continue
+		_draw_shipment_arc(from_pt, dest_pt, stroke, width)
+
+
+func _draw_world_road_segments() -> void:
+	if WorldState.road_segments.is_empty():
+		return
+	var stroke := Color(0.62, 0.52, 0.32, 0.88)
+	var width := _world_line_width(2.2)
+	for seg in WorldState.road_segments:
+		if not (seg is Dictionary):
+			continue
+		var sd: Dictionary = seg as Dictionary
+		var from_id := str(sd.get("from_plot", ""))
+		var to_id := str(sd.get("to_plot", ""))
+		if from_id == "" or to_id == "":
+			continue
+		var from_pt := _plot_centroid_for_id(from_id)
+		var to_pt := _plot_centroid_for_id(to_id)
+		if from_pt == Vector2.ZERO or to_pt == Vector2.ZERO:
+			continue
+		draw_line(from_pt, to_pt, stroke, width, true)
+
+
+func _plot_centroid_for_id(plot_id: String) -> Vector2:
+	if _mesh == null or plot_id.is_empty():
+		return Vector2.ZERO
+	var p: Dictionary = WorldState.plots.get(plot_id, {})
+	if p.is_empty():
+		return Vector2.ZERO
+	var cell_set := _plot_cell_set(p, plot_id)
+	if cell_set.is_empty():
+		return Vector2.ZERO
+	return _parcel_centroid(cell_set)
+
+
+func _draw_shipment_arc(from_pt: Vector2, to_pt: Vector2, color: Color, width: float) -> void:
+	var mx := (from_pt.x + to_pt.x) * 0.5
+	var my := (from_pt.y + to_pt.y) * 0.5
+	my -= absf(to_pt.x - from_pt.x) * 0.08 + absf(to_pt.y - from_pt.y) * 0.05
+	var ctrl := Vector2(mx, my)
+	var prev := from_pt
+	for step in range(1, 17):
+		var t := float(step) / 16.0
+		var u := 1.0 - t
+		var pt := u * u * from_pt + 2.0 * u * t * ctrl + t * t * to_pt
+		draw_line(prev, pt, color, width, true)
+		prev = pt
 
 
 func _draw_overview_terrain() -> void:
@@ -787,9 +910,9 @@ func _neighbor_same_parcel(gx: int, gy: int, dx: int, dy: int) -> bool:
 	var ny := gy + dy
 	if nx < 0 or ny < 0 or nx >= bx or ny >= by:
 		return false
-	var idx := gy * bx + gx
-	var nidx := ny * bx + nx
-	if (_cell_flags[idx] & 0x1) == 0 or (_cell_flags[nidx] & 0x1) == 0:
+	var idx := _cell_index_safe(gx, gy)
+	var nidx := _cell_index_safe(nx, ny)
+	if idx < 0 or nidx < 0 or (_cell_flags[idx] & 0x1) == 0 or (_cell_flags[nidx] & 0x1) == 0:
 		return false
 	return _cell_pids[idx] == _cell_pids[nidx]
 
@@ -844,12 +967,10 @@ func _draw_parcel_edges(lod: int) -> void:
 
 
 func _draw_aligned_cell_terrain() -> void:
-	var bx := _last_mesh_bounds.x
 	for gy in range(_vis_min_y, _vis_max_y):
-		var row_off := gy * bx
 		for gx in range(_vis_min_x, _vis_max_x):
-			var idx := row_off + gx
-			if (_cell_flags[idx] & 0x1) == 0:
+			var idx := _cell_index_safe(gx, gy)
+			if idx < 0 or (_cell_flags[idx] & 0x1) == 0:
 				continue
 			draw_rect(_cell_rect(gx, gy), _cell_colors[idx])
 
@@ -867,10 +988,9 @@ func _draw_parcel_boundaries_large_map(lod: int) -> void:
 	var multicell_cache: Dictionary = {}
 
 	for gy in range(_vis_min_y, _vis_max_y):
-		var row_off := gy * bx
 		for gx in range(_vis_min_x, _vis_max_x):
-			var idx := row_off + gx
-			if (_cell_flags[idx] & 0x1) == 0:
+			var idx := _cell_index_safe(gx, gy)
+			if idx < 0 or (_cell_flags[idx] & 0x1) == 0:
 				continue
 			var r := _cell_rect(gx, gy)
 			var flags := _cell_flags[idx]
@@ -971,9 +1091,8 @@ func _draw_aligned_cell_terrain_stroked(sel_gx: int, sel_gy: int, lod: int) -> v
 func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
 	if sel_gx < _vis_min_x or sel_gx >= _vis_max_x or sel_gy < _vis_min_y or sel_gy >= _vis_max_y:
 		return
-	var bx := _last_mesh_bounds.x
-	var sel_idx := sel_gy * bx + sel_gx
-	if (_cell_flags[sel_idx] & 0x1) == 0:
+	var sel_idx := _cell_index_safe(sel_gx, sel_gy)
+	if sel_idx < 0 or (_cell_flags[sel_idx] & 0x1) == 0:
 		return
 	var sw := _world_line_width(3.5)
 	var accent := RealmColors.ACCENT
@@ -981,7 +1100,9 @@ func _draw_selection_highlight(sel_gx: int, sel_gy: int) -> void:
 	if pid.is_empty():
 		draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
 		return
-	# Highlight the whole plot footprint (L-shapes, multi-hectare, not one cell).
+	if _is_large_map():
+		draw_rect(_cell_rect(sel_gx, sel_gy), Color(accent, 0.0), false, sw)
+		return
 	var p_sel: Dictionary = WorldState.plots.get(pid, {})
 	var cell_set := _plot_cell_set(p_sel, pid)
 	if cell_set.size() > 1 or _uses_parcel_polygon_draw():
@@ -1584,10 +1705,8 @@ func _handle_plot_click(screen_pos: Vector2) -> void:
 		for dx in range(-1, 2):
 			var gx := approx_gx + dx
 			var gy := approx_gy + dy
-			if gx < 0 or gy < 0 or gx >= bounds.x or gy >= bounds.y:
-				continue
-			var idx := gy * bounds.x + gx
-			if (_cell_flags[idx] & 0x1) == 0:
+			var idx := _cell_index_safe(gx, gy)
+			if idx < 0 or (_cell_flags[idx] & 0x1) == 0:
 				continue
 			var c := _mesh.plot_centroid(gx, gy)
 			var d := world_pos.distance_squared_to(c)

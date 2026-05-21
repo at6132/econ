@@ -17,7 +17,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="Realm"
 config/description="Realm solo client — display shell for FastAPI engine (Phase 1)."
 run/main_scene="res://scenes/GameHome.tscn"
-config/features=PackedStringArray("4.6", "Forward Plus")
+config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -28,6 +28,7 @@ WorldState="*res://autoloads/WorldState.gd"
 WS="*res://autoloads/WS.gd"
 RealmColors="*res://autoloads/RealmColors.gd"
 RealmFonts="*res://autoloads/RealmFonts.gd"
+RealmSettings="*res://autoloads/RealmSettings.gd"
 MainFeedback="*res://autoloads/MainFeedback.gd"
 
 [display]
@@ -42,4 +43,6 @@ theme/custom="res://theme/realm_theme.tres"
 
 [rendering]
 
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/canvas_textures/default_texture_filter=0

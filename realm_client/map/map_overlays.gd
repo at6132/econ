@@ -16,7 +16,13 @@ const MINERAL_COLORS: Dictionary = {
 }
 
 
-static func overlay_tint_for_plot(mode: String, plot: Dictionary, party: String, mineral: String) -> Color:
+static func overlay_tint_for_plot(
+	mode: String,
+	plot: Dictionary,
+	party: String,
+	mineral: String,
+	advantage_cat: String = "mining",
+) -> Color:
 	if mode == "none" or plot.is_empty():
 		return Color(0, 0, 0, 0)
 	match mode:
@@ -42,9 +48,44 @@ static func overlay_tint_for_plot(mode: String, plot: Dictionary, party: String,
 			if dens < 0.05:
 				return Color(0, 0, 0, 0)
 			return Color(0.9, 0.4, 0.8, clampf(dens, 0.1, 0.45))
+		"roads":
+			return _roads_tint(plot)
 		"advantage":
+			return _advantage_tint(plot, advantage_cat)
+		"routes":
 			return Color(0, 0, 0, 0)
 	return Color(0, 0, 0, 0)
+
+
+static func _roads_tint(plot: Dictionary) -> Color:
+	var pid := str(plot.get("id", ""))
+	if pid == "" or WorldState.road_segments.is_empty():
+		return Color(0, 0, 0, 0)
+	for seg in WorldState.road_segments:
+		if not (seg is Dictionary):
+			continue
+		var sd: Dictionary = seg as Dictionary
+		if str(sd.get("from_plot", "")) == pid or str(sd.get("to_plot", "")) == pid:
+			return Color(0.62, 0.52, 0.28, 0.42)
+	return Color(0, 0, 0, 0)
+
+
+static func _advantage_tint(plot: Dictionary, advantage_cat: String) -> Color:
+	if not plot.has("landmass_id"):
+		return Color(0, 0, 0, 0)
+	var lm_key := str(plot.get("landmass_id", ""))
+	var table: Variant = WorldState.regional_advantages.get(lm_key, WorldState.regional_advantages.get(int(lm_key), null))
+	if not (table is Dictionary):
+		return Color(0, 0, 0, 0)
+	var cat := advantage_cat if advantage_cat != "" else "mining"
+	var mult: float = float((table as Dictionary).get(cat, (table as Dictionary).get(cat.to_lower(), 1.0)))
+	if mult >= 1.2:
+		return Color(0.35, 0.85, 0.45, 0.38)
+	if mult >= 1.05:
+		return Color(0.45, 0.75, 0.55, 0.32)
+	if mult < 0.95:
+		return Color(0.75, 0.35, 0.35, 0.34)
+	return Color(0.55, 0.55, 0.6, 0.22)
 
 
 static func _mineral_tint(plot: Dictionary, party: String, mineral: String) -> Color:

@@ -110,21 +110,47 @@ func _on_boot_world_fallback(data: Dictionary) -> void:
 
 
 func _finish_boot_load() -> void:
+	_apply_boot_map_overlay()
 	API.get_sim_status(_on_boot_sim_status)
 	API.get_world_static(func(s): WorldState.apply_static(s))
 	API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 	API.get_world_feed(func(f): WorldState.apply_feed(f), -1)
 	API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
+	API.get_roads(func(d: Dictionary) -> void:
+		if not d.is_empty() and bool(d.get("ok", true)):
+			var segs: Variant = d.get("segments", [])
+			if segs is Array:
+				WorldState.road_segments = segs as Array
+	)
 
 
 func _on_boot_sim_status(data: Dictionary) -> void:
 	if data.is_empty():
 		return
 	WorldState.apply_sim_status(data)
+	_apply_boot_sim_prefs()
 	if shell.has_method("_refresh_sim_controls"):
 		shell.call("_refresh_sim_controls")
 	if shell.has_method("_refresh_stats"):
 		shell.call("_refresh_stats")
+
+
+func _apply_boot_map_overlay() -> void:
+	if not is_instance_valid(_overlay_bar):
+		return
+	if _overlay_bar.has_method("apply_mode"):
+		_overlay_bar.call("apply_mode", RealmSettings.default_overlay)
+
+
+func _apply_boot_sim_prefs() -> void:
+	var body: Dictionary = {}
+	if RealmSettings.default_speed > 0.0:
+		body["speed"] = RealmSettings.default_speed
+	if RealmSettings.start_paused:
+		body["paused"] = true
+	if body.is_empty():
+		return
+	API.sim_control(body, Callable())
 
 
 func _setup_map_overlay_bar() -> void:
@@ -132,12 +158,13 @@ func _setup_map_overlay_bar() -> void:
 		return
 	_overlay_bar = preload("res://scenes/MapOverlayBar.tscn").instantiate() as HBoxContainer
 	ui_root.add_child(_overlay_bar)
-	_overlay_bar.overlay_changed.connect(
-		func(mode: String) -> void:
-			if world_map.has_method("set_overlay_mode"):
-				world_map.call("set_overlay_mode", mode)
-	)
+	_overlay_bar.overlay_changed.connect(_on_map_overlay_mode_changed)
 	_position_overlay_bar()
+
+
+func _on_map_overlay_mode_changed(mode: String) -> void:
+	if world_map.has_method("set_overlay_mode"):
+		world_map.call("set_overlay_mode", mode)
 
 
 func _position_overlay_bar() -> void:
@@ -170,12 +197,11 @@ func _layout_shell() -> void:
 	map_viewport.offset_top = top_h
 	var gw := maxi(64, int(vp.x))
 	var gh := maxi(64, int(vp.y - top_h))
-	var map_size := Vector2i(gw, gh)
 	sub_viewport.transparent_bg = false
 	sub_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
-	sub_viewport.size = map_size
+	# Do not assign sub_viewport.size while MapViewport.stretch is true (Godot 4.6 SIGSEGV).
 	if world_map.has_method("set_view_size"):
-		world_map.call("set_view_size", Vector2(map_size))
+		world_map.call("set_view_size", Vector2(gw, gh))
 	_position_overlay_bar()
 
 

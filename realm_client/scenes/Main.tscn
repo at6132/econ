@@ -45,6 +45,3 @@ position_smoothing_enabled = false
 [node name="MarkersLayer" type="Node2D" parent="UILayer/UIRoot/MapViewport/SubViewport/WorldMap"]
 
 [node name="CommandShell" parent="." instance=ExtResource("3_shell")]
-
-[node name="PanelRoot" type="CanvasLayer" parent="."]
-layer = 20
