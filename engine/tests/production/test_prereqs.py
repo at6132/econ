@@ -13,6 +13,9 @@ from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_genesis, bootstrap_frontier
 
+from realm.infrastructure.plot_logistics import plot_output_qty
+
+from stage_materials import stage_material
 from turnkey_fixtures import grant_turnkey_self_materials
 from plot_helpers import claimable_land_plot_id, first_land_plot_id
 
@@ -24,21 +27,21 @@ def test_prereq_build_deducts_materials() -> None:
     total0 = w.ledger.total_cents()
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
-    grant_turnkey_self_materials(w, player, "strip_mine")
-    t0 = w.inventory.qty(player, MaterialId("timber"))
-    b0 = w.inventory.qty(player, MaterialId("brick"))
-    c0 = w.inventory.qty(player, MaterialId("coal"))
+    grant_turnkey_self_materials(w, player, "strip_mine", plot_id=pid)
+    t0 = plot_output_qty(w, pid, MaterialId("timber"))
+    b0 = plot_output_qty(w, pid, MaterialId("brick"))
+    c0 = plot_output_qty(w, pid, MaterialId("coal"))
     cash0 = w.ledger.balance(party_cash_account(player))
     r = build_on_plot(w, player, pid, "strip_mine", build_mode="self")
     assert r["ok"] is True, r
     bp = w.blueprints["strip_mine"]
-    assert w.inventory.qty(player, MaterialId("timber")) == t0 - int(
+    assert plot_output_qty(w, pid, MaterialId("timber")) == t0 - int(
         bp.construction_materials["timber"]
     )
-    assert w.inventory.qty(player, MaterialId("brick")) == b0 - int(
+    assert plot_output_qty(w, pid, MaterialId("brick")) == b0 - int(
         bp.construction_materials["brick"]
     )
-    assert w.inventory.qty(player, MaterialId("coal")) == c0 - int(
+    assert plot_output_qty(w, pid, MaterialId("coal")) == c0 - int(
         bp.construction_materials["coal"]
     )
     assert w.ledger.balance(party_cash_account(player)) == cash0
@@ -46,7 +49,7 @@ def test_prereq_build_deducts_materials() -> None:
 
 
 def test_prereq_build_fails_without_materials() -> None:
-    w = bootstrap_genesis(seed=302, grid_width=10, grid_height=8, settler_count=2)
+    w = bootstrap_frontier(seed=302, grid_width=4, grid_height=3)
     player = PartyId("player")
     pid = claimable_land_plot_id(w, PartyId("player"))
     assert claim_plot(w, player, pid)["ok"] is True
@@ -67,12 +70,12 @@ def test_tier0_hand_chop_produces_timber() -> None:
     ad = w.inventory.add(player, MaterialId("pick_axe"), 1)
     assert not isinstance(ad, MatterErr)
     total0 = w.ledger.total_cents()
-    t0 = w.inventory.qty(player, MaterialId("timber"))
+    t0 = plot_output_qty(w, pid, MaterialId("timber"))
     assert start_production(w, player, pid, "hand_chop")["ok"] is True
     n = RECIPES["hand_chop"].duration_ticks
     for _ in range(n):
         advance_tick(w)
-    assert w.inventory.qty(player, MaterialId("timber")) == t0 + 1
+    assert plot_output_qty(w, pid, MaterialId("timber")) == t0 + 1
     assert w.inventory.qty(player, MaterialId("pick_axe")) >= 1
     assert w.ledger.total_cents() == total0
 

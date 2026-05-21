@@ -12,7 +12,8 @@ from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
-from turnkey_fixtures import grant_turnkey_self_materials
+from stage_materials import stage_material
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 from plot_helpers import claimable_land_plot_id, first_land_plot_id, first_terrain_plot_id, first_water_plot_id
 
 
@@ -57,9 +58,11 @@ def test_sawmill_ok_after_turnkey_wood_shop() -> None:
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
-    grant_turnkey_self_materials(w, player, "wood_shop")
+    grant_turnkey_self_materials(w, player, "wood_shop", plot_id=pid)
     assert build_on_plot(w, player, pid, "wood_shop", build_mode="self")["ok"] is True
     _advance_until_building_ready(w, player, pid, "wood_shop")
+    ensure_plot_grid_power(w, pid)
+    stage_material(w, player, MaterialId("timber"), 20, plot_id=pid)
     assert start_production(w, player, pid, "sawmill")["ok"] is True
 
 

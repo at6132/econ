@@ -11,8 +11,11 @@ from realm.production.recipes import RECIPES
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
+from realm.infrastructure.plot_logistics import plot_output_qty
+
 from plot_helpers import claimable_land_plot_id
-from turnkey_fixtures import grant_turnkey_self_materials
+from stage_materials import stage_material
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
@@ -41,9 +44,13 @@ def _complete_recipe(w, recipe_id: str) -> None:
 
 
 def _workshop_turnkey(w, party: PartyId, pid: PlotId, building_id: str) -> None:
-    grant_turnkey_self_materials(w, party, building_id)
+    grant_turnkey_self_materials(w, party, building_id, plot_id=pid)
     r = build_on_plot(w, party, pid, building_id, build_mode="self")
     assert r["ok"] is True, r
+    _advance_until_building_ready(w, party, pid, building_id)
+    if building_id == "wood_shop":
+        ensure_plot_grid_power(w, pid)
+        stage_material(w, party, MaterialId("timber"), 20, plot_id=pid)
 
 
 def test_sawmill_completes_after_duration_ticks() -> None:
@@ -52,17 +59,16 @@ def test_sawmill_completes_after_duration_ticks() -> None:
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     _workshop_turnkey(w, PartyId("player"), pid, "wood_shop")
-    _advance_until_building_ready(w, PartyId("player"), pid, "wood_shop")
     cash0 = w.ledger.balance(party_cash_account(PartyId("player")))
     assert start_production(w, PartyId("player"), pid, "sawmill")["ok"] is True
-    assert w.inventory.qty(PartyId("player"), MaterialId("timber")) == 8 - 2
-    assert w.inventory.qty(PartyId("player"), MaterialId("electricity")) == 8 - 1
+    assert plot_output_qty(w, pid, MaterialId("timber")) == 20 - 2
+    assert w.inventory.qty(PartyId("player"), MaterialId("electricity")) == 0
     cash1 = w.ledger.balance(party_cash_account(PartyId("player")))
     assert cash1 == cash0 - 500  # labor_cents on sawmill recipe
     assert len(w.active_production) == 1
     _complete_recipe(w, "sawmill")
     assert len(w.active_production) == 0
-    assert w.inventory.qty(PartyId("player"), MaterialId("lumber")) == 1
+    assert plot_output_qty(w, pid, MaterialId("lumber")) == 1
 
 
 def test_money_conserved_across_sawmill_run() -> None:
@@ -71,7 +77,6 @@ def test_money_conserved_across_sawmill_run() -> None:
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     _workshop_turnkey(w, PartyId("player"), pid, "wood_shop")
-    _advance_until_building_ready(w, PartyId("player"), pid, "wood_shop")
     total0 = w.ledger.total_cents()
     assert start_production(w, PartyId("player"), pid, "sawmill")["ok"] is True
     _complete_recipe(w, "sawmill")
@@ -84,7 +89,7 @@ def test_rejects_second_production_same_plot() -> None:
     assert claim_plot(w, PartyId("player"), pid)["ok"] is True
     assert survey_plot(w, PartyId("player"), pid)["ok"] is True
     _workshop_turnkey(w, PartyId("player"), pid, "power_shed")
-    _advance_until_building_ready(w, PartyId("player"), pid, "power_shed")
+    stage_material(w, PartyId("player"), MaterialId("coal"), 10, plot_id=pid)
     assert start_production(w, PartyId("player"), pid, "coal_generator")["ok"] is True
     r = start_production(w, PartyId("player"), pid, "coal_generator")
     assert r["ok"] is True
@@ -99,10 +104,10 @@ def test_tool_cache_reduces_recipe_labor_cash() -> None:
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
-    assert build_on_plot(w, player, pid, "tool_cache")["ok"] is True
+    grant_turnkey_self_materials(w, player, "tool_cache", plot_id=pid)
+    assert build_on_plot(w, player, pid, "tool_cache", build_mode="self")["ok"] is True
     _advance_until_building_ready(w, player, pid, "tool_cache")
     _workshop_turnkey(w, player, pid, "wood_shop")
-    _advance_until_building_ready(w, player, pid, "wood_shop")
     cash0 = w.ledger.balance(party_cash_account(player))
     assert start_production(w, player, pid, "sawmill")["ok"] is True
     cash1 = w.ledger.balance(party_cash_account(player))
@@ -119,7 +124,6 @@ def test_stub_hire_routes_part_of_labor_to_employee() -> None:
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _workshop_turnkey(w, player, pid, "wood_shop")
-    _advance_until_building_ready(w, player, pid, "wood_shop")
     assert hire_worker_stub(w, player, emp, 500)["ok"] is True
     pc = party_cash_account(player)
     ec = party_cash_account(emp)
@@ -139,16 +143,13 @@ def test_twist_rope_completes_and_conserves_ledger() -> None:
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _workshop_turnkey(w, player, pid, "wood_shop")
-    _advance_until_building_ready(w, player, pid, "wood_shop")
     total0 = w.ledger.total_cents()
-    t0 = w.inventory.qty(player, MaterialId("timber"))
-    e0 = w.inventory.qty(player, MaterialId("electricity"))
+    t0 = plot_output_qty(w, pid, MaterialId("timber"))
     assert start_production(w, player, pid, "twist_rope")["ok"] is True
-    assert w.inventory.qty(player, MaterialId("timber")) == t0 - 1
-    assert w.inventory.qty(player, MaterialId("electricity")) == e0 - 1
+    assert plot_output_qty(w, pid, MaterialId("timber")) == t0 - 1
     _complete_recipe(w, "twist_rope")
     assert w.ledger.total_cents() == total0
-    assert w.inventory.qty(player, MaterialId("rope")) == 3
+    assert plot_output_qty(w, pid, MaterialId("rope")) == 3
 
 
 def test_build_ladder_completes_and_conserves_ledger() -> None:
@@ -158,14 +159,12 @@ def test_build_ladder_completes_and_conserves_ledger() -> None:
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _workshop_turnkey(w, player, pid, "wood_shop")
-    _advance_until_building_ready(w, player, pid, "wood_shop")
-    w.inventory.add(player, MaterialId("lumber"), 4)
-    w.inventory.add(player, MaterialId("rope"), 4)
-    w.inventory.add(player, MaterialId("electricity"), 4)
+    stage_material(w, player, MaterialId("lumber"), 4, plot_id=pid)
+    stage_material(w, player, MaterialId("rope"), 4, plot_id=pid)
     total0 = w.ledger.total_cents()
     assert start_production(w, player, pid, "build_ladder")["ok"] is True
     _complete_recipe(w, "build_ladder")
     assert w.ledger.total_cents() == total0
-    assert w.inventory.qty(player, MaterialId("ladder")) == 1
-    assert w.inventory.qty(player, MaterialId("lumber")) == 2
-    assert w.inventory.qty(player, MaterialId("rope")) == 2
+    assert plot_output_qty(w, pid, MaterialId("ladder")) == 1
+    assert plot_output_qty(w, pid, MaterialId("lumber")) == 2
+    assert plot_output_qty(w, pid, MaterialId("rope")) == 2

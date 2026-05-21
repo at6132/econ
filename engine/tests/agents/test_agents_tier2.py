@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from realm.core.ids import MaterialId, PartyId
+from realm.actions import claim_plot
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.economy.markets import place_buy_order, place_sell_order
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
+from realm.world.terrain import Terrain
 
 
 def test_tier2_parties_exist_in_bootstrap() -> None:
@@ -104,8 +106,15 @@ def test_t2_lumber_bid_improves_wide_spread_within_25_ticks() -> None:
     for _ in range(24):
         advance_tick(w)
     assert w.tick == 24
-    w.inventory.add(player, mat, 2)
-    assert place_sell_order(w, player, mat, 1, 95)["ok"] is True
+    land_pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None and p.terrain not in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW)
+    )
+    assert claim_plot(w, player, land_pid)["ok"]
+    w.plot_output_stock.setdefault(str(land_pid), {})["lumber"] = 10
+    sell = place_sell_order(w, player, mat, 1, 95, from_plot_id=land_pid)
+    assert sell["ok"] is True, sell.get("reason")
     assert place_buy_order(w, consumer, mat, 1, 70)["ok"] is True
     assert _best_ask_cents(w, "lumber") == 95
     assert _best_bid_cents(w, "lumber") == 70

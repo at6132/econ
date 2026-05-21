@@ -34,7 +34,8 @@ from realm.production.buildings import build_on_plot
 from realm.world import bootstrap_frontier
 from realm.world.tick import advance_tick
 
-from turnkey_fixtures import grant_turnkey_self_materials
+from stage_materials import stage_material
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 from plot_helpers import claimable_land_plot_id, first_land_plot_id
 
 
@@ -45,7 +46,7 @@ def _setup_sawmill_ready(seed: int = 1) -> tuple:
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"]
     assert survey_plot(w, player, pid)["ok"]
-    grant_turnkey_self_materials(w, player, "wood_shop")
+    grant_turnkey_self_materials(w, player, "wood_shop", plot_id=pid)
     r = build_on_plot(w, player, pid, "wood_shop", build_mode="turnkey")
     assert r["ok"], r
     # Step time until the wood_shop completes.
@@ -65,6 +66,8 @@ def _setup_sawmill_ready(seed: int = 1) -> tuple:
         if ct is None or w.tick >= int(ct):
             break
         advance_tick(w)
+    ensure_plot_grid_power(w, pid)
+    stage_material(w, player, MaterialId("timber"), 40, plot_id=pid)
     return w, player, pid
 
 
@@ -174,7 +177,7 @@ def test_rotation_spreads_wages_across_multiple_local_laborers():
 
 
 def test_laborer_cash_mirror_kept_in_sync():
-    w, player, pid = _setup_sawmill_ready(seed=26)
+    w, player, pid = _setup_sawmill_ready(seed=1)
     w.scenario_state["plot_islands"] = {str(pid): 0}
     lab = _seed_laborer(w, "lab-mirror", island_id=0)
     assert start_production(w, player, pid, "sawmill")["ok"]

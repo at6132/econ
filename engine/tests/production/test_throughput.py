@@ -24,8 +24,10 @@ def _give_cash(w, party: PartyId, cents: int) -> None:
     )
 
 
-def _stock(w, party: PartyId, mat: str, qty: int) -> None:
-    w.inventory.add(party, MaterialId(mat), qty)
+def _stock(w, party: PartyId, mat: str, qty: int, *, plot_id: PlotId | None = None) -> None:
+    from stage_materials import stage_material
+
+    stage_material(w, party, MaterialId(mat), qty, plot_id=plot_id)
 
 
 def _find_hand_mine_coal_plot(w, party: PartyId) -> PlotId:
@@ -125,7 +127,7 @@ def test_production_stalls_without_input():
     from realm.world import bootstrap_frontier
     from realm.world.terrain import Terrain
     from plot_helpers import claimable_land_plot_id
-    from turnkey_fixtures import grant_turnkey_self_materials
+    from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 
     w = bootstrap_frontier(seed=42, grid_width=8, grid_height=4)
     party = PartyId("player")
@@ -133,7 +135,7 @@ def test_production_stalls_without_input():
     w.plots[pid].terrain = Terrain.PLAINS
     assert claim_plot(w, party, pid)["ok"]
     assert survey_plot(w, party, pid).get("ok")
-    grant_turnkey_self_materials(w, party, "wood_shop")
+    grant_turnkey_self_materials(w, party, "wood_shop", plot_id=pid)
     r = build_on_plot(w, party, pid, "wood_shop", build_mode="turnkey")
     assert r["ok"], r
     while any(
@@ -143,16 +145,20 @@ def test_production_stalls_without_input():
         for b in w.plot_buildings
     ):
         advance_tick(w)
-    # Sawmill recipe: 2 timber + 1 electricity → 1 lumber. Stock electricity
-    # generously so timber is the limiting reagent.
+    ensure_plot_grid_power(w, pid)
+    from realm.infrastructure.plot_logistics import plot_output_qty, remove_plot_output
+
     rec = RECIPES["sawmill"]
     timber_per_run = int(rec.inputs[MaterialId("timber")])
-    while w.inventory.qty(party, MaterialId("timber")) > 0:
-        w.inventory.remove(
-            party, MaterialId("timber"), w.inventory.qty(party, MaterialId("timber"))
+    while plot_output_qty(w, pid, MaterialId("timber")) > 0:
+        remove_plot_output(
+            w,
+            party,
+            pid,
+            MaterialId("timber"),
+            plot_output_qty(w, pid, MaterialId("timber")),
         )
-    _stock(w, party, "timber", timber_per_run)
-    _stock(w, party, "electricity", 50)
+    _stock(w, party, "timber", timber_per_run, plot_id=pid)
     r = start_production(w, party, pid, "sawmill", run_count=CONTINUOUS_RUN_COUNT)
     assert r["ok"], r
     # Tick past completion of the first run plus enough for the stall to fire.
@@ -170,7 +176,7 @@ def test_production_stalls_without_input():
         a.party == party and a.recipe_id == "sawmill" for a in w.active_production
     )
     # Restock and tick past the retry window — run should pick up again.
-    _stock(w, party, "timber", timber_per_run * 2)
+    _stock(w, party, "timber", timber_per_run * 2, plot_id=pid)
     from realm.production import AUTO_RESTART_INPUT_STALL_RETRY_TICKS
 
     for _ in range(AUTO_RESTART_INPUT_STALL_RETRY_TICKS + 5):
@@ -190,18 +196,16 @@ def test_throughput_multiplier_combines_factors():
     from realm.production.buildings import build_on_plot
     from realm.world.terrain import Terrain
 
-    pid = None
-    for plot_id, plot in w.plots.items():
-        if plot.owner is None and plot.terrain == Terrain.PLAINS:
-            pid = plot_id
-            break
-    assert pid is not None
+    from plot_helpers import claimable_land_plot_id
+
+    pid = claimable_land_plot_id(w, party)
+    w.plots[pid].terrain = Terrain.PLAINS
     _give_cash(w, party, 5_000_000)
     assert claim_plot(w, party, pid)["ok"]
     assert survey_plot(w, party, pid).get("ok")
-    _stock(w, party, "timber", 6)
-    _stock(w, party, "lumber", 2)
-    _stock(w, party, "coal", 2)
+    _stock(w, party, "timber", 6, plot_id=pid)
+    _stock(w, party, "lumber", 2, plot_id=pid)
+    _stock(w, party, "coal", 2, plot_id=pid)
     r = build_on_plot(w, party, pid, "wood_shop", build_mode="turnkey")
     assert r["ok"], r
     while any(
@@ -211,6 +215,9 @@ def test_throughput_multiplier_combines_factors():
         for b in w.plot_buildings
     ):
         advance_tick(w)
+    from turnkey_fixtures import ensure_plot_grid_power
+
+    ensure_plot_grid_power(w, pid)
     # Set efficiency to 80% on the wood_shop.
     iid = next(
         str(b["instance_id"])
