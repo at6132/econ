@@ -47,6 +47,9 @@ func _apply_theme() -> void:
 
 
 func show_blueprint(bp: Dictionary) -> void:
+	if str(bp.get("blueprint_id", "")) == "road_segment":
+		show_roads_context({})
+		return
 	current_blueprint = bp.duplicate(true)
 	var bid := str(bp.get("blueprint_id", ""))
 	name_label.text = str(bp.get("name", bid))

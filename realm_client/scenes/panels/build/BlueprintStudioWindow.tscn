@@ -1,0 +1,113 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_blueprint_studio"]
+
+[ext_resource type="Script" path="res://scenes/panels/build/BlueprintStudioWindow.gd" id="1_script"]
+
+[node name="BlueprintStudioWindow" type="CanvasLayer"]
+layer = 46
+script = ExtResource("1_script")
+
+[node name="DimBackground" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.04, 0.06, 0.9)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterPanel" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(720, 580)
+
+[node name="Margin" type="MarginContainer" parent="Center/CenterPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="Center/CenterPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Center/CenterPanel/Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Blueprint studio"
+
+[node name="CloseBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "✕"
+
+[node name="Subtitle" type="Label" parent="Center/CenterPanel/Margin/VBox"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Design a full facility: footprint zones, build cost, custom materials & processes, then publish."
+
+[node name="TabBar" type="HBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TabDesignBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "Design"
+
+[node name="TabBomBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Build cost"
+
+[node name="TabProcessBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Processes"
+
+[node name="TabPublishBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Publish"
+
+[node name="Pages" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="DesignPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/Pages"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BomPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/Pages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ProcessPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/Pages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PublishPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/Pages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3

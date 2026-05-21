@@ -13,10 +13,11 @@ const BlueprintIconDrawScene := preload("res://scenes/panels/build/BlueprintIcon
 
 var _all_blueprints: Array = []
 var _terrain: String = "plains"
+var _is_coastal: bool = false
 var _selected_id: String = ""
 var _plot_id: String = ""
 
-const CreateBlueprintDialogScene := preload("res://scenes/panels/build/CreateBlueprintDialog.tscn")
+const BlueprintStudioScene := preload("res://scenes/panels/build/BlueprintStudioWindow.tscn")
 const SubdivideDialogScene := preload("res://scenes/panels/build/SubdivideDialog.tscn")
 
 
@@ -30,12 +31,14 @@ func set_plot_id(plot_id: String) -> void:
 	_plot_id = plot_id
 
 
-func load_blueprints(terrain: String) -> void:
+func load_blueprints(terrain: String, is_coastal: bool = false) -> void:
 	_terrain = terrain
+	_is_coastal = is_coastal
 	API.get_request("/blueprints?party=%s" % WorldState.party_id.uri_encode(), func(data: Dictionary) -> void:
 		_all_blueprints = data.get("blueprints", [])
 		if _all_blueprints is not Array:
 			_all_blueprints = []
+		WorldState.merge_blueprints_list(_all_blueprints)
 		_filter(search_box.text)
 	)
 
@@ -47,6 +50,18 @@ func select_blueprint_id(blueprint_id: String) -> void:
 			blueprint_selected.emit(blueprint_id, bp as Dictionary)
 			_filter(search_box.text)
 			return
+	# Roads mode can activate before GET /blueprints returns — still wire the grid.
+	if blueprint_id == "road_segment":
+		_selected_id = blueprint_id
+		blueprint_selected.emit(
+			blueprint_id,
+			{
+				"blueprint_id": "road_segment",
+				"footprint_w": 1,
+				"footprint_h": 1,
+				"name": "Road segment",
+			},
+		)
 
 
 func _filter(text: String) -> void:
@@ -124,7 +139,10 @@ func _make_blueprint_card(bp: Dictionary) -> PanelContainer:
 	vbox.add_child(header)
 	if not _terrain_ok(bp):
 		var block_lbl := Label.new()
-		block_lbl.text = "Wrong terrain"
+		if bool(bp.get("requires_coastal", false)):
+			block_lbl.text = "Needs waterfront plot"
+		else:
+			block_lbl.text = "Wrong terrain"
 		block_lbl.add_theme_font_size_override("font_size", 9)
 		block_lbl.modulate = Color(1.0, 0.4, 0.4)
 		vbox.add_child(block_lbl)
@@ -172,7 +190,7 @@ func _terrain_ok(bp: Dictionary) -> bool:
 	if _terrain.begins_with("water"):
 		return false
 	if bool(bp.get("requires_coastal", false)):
-		return _terrain == "coastal"
+		return _is_coastal
 	var req: Variant = bp.get("terrain_requirements", [])
 	if req is Array and not req.is_empty():
 		return _terrain in req
@@ -188,15 +206,25 @@ func _make_selected_stylebox() -> StyleBoxFlat:
 
 
 func _on_create_blueprint() -> void:
-	var dialog: Node = CreateBlueprintDialogScene.instantiate()
-	get_tree().root.add_child(dialog)
-	if dialog.has_signal("blueprint_created"):
-		dialog.blueprint_created.connect(
-			func(bid: String, bp_data: Dictionary) -> void:
-				_all_blueprints.append(bp_data)
-				_filter(search_box.text)
-				blueprint_selected.emit(bid, bp_data)
-		)
+	var host := get_tree().current_scene
+	if host != null and host.has_method("open_blueprint_studio"):
+		host.call("open_blueprint_studio", _on_studio_blueprint_created)
+		return
+	_open_blueprint_studio_local()
+
+
+func _open_blueprint_studio_local() -> void:
+	var studio: CanvasLayer = BlueprintStudioScene.instantiate() as CanvasLayer
+	get_tree().root.add_child(studio)
+	if studio.has_signal("blueprint_created"):
+		studio.blueprint_created.connect(_on_studio_blueprint_created)
+
+
+func _on_studio_blueprint_created(bid: String, bp_data: Dictionary) -> void:
+	_all_blueprints.append(bp_data)
+	WorldState.merge_blueprints_list([bp_data])
+	_filter(search_box.text)
+	blueprint_selected.emit(bid, bp_data)
 
 
 func _on_subdivide() -> void:

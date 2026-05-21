@@ -18,6 +18,14 @@ var _plot_data: Dictionary = {}
 var _selected_blueprint_id: String = ""
 var _build_mode: String = "turnkey"
 
+const ROAD_BLUEPRINT_ID := "road_segment"
+const ROAD_BLUEPRINT_FALLBACK: Dictionary = {
+	"blueprint_id": "road_segment",
+	"footprint_w": 1,
+	"footprint_h": 1,
+	"name": "Road segment",
+}
+
 
 func _ready() -> void:
 	layer = 40
@@ -75,6 +83,10 @@ func _apply_theme() -> void:
 		btn.add_theme_stylebox_override("hover", pressed)
 
 
+func blocks_pause_menu() -> bool:
+	return grid_view.has_method("is_confirming") and bool(grid_view.call("is_confirming"))
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	# Keys while a sidebar button still has focus — grid ``_gui_input`` never sees them.
 	if not grid_view.has_method("is_confirming") or not grid_view.call("is_confirming"):
@@ -94,7 +106,10 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	_plot_id = plot_id
 	_plot_data = plot_data.duplicate(true)
 	var terrain: String = str(plot_data.get("terrain", "plains"))
+	var is_coastal: bool = bool(plot_data.get("is_coastal", false))
 	var tlabel: String = terrain.replace("_", " ").capitalize()
+	if is_coastal:
+		tlabel += " · Coastal"
 	var area_m := int(plot_data.get("area_sq_metres", 10_000))
 	var ha := float(area_m) / 10000.0
 	var tile_n := int(plot_data.get("world_tile_count", 0))
@@ -109,7 +124,7 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	if sidebar.has_method("set_plot_id"):
 		sidebar.call("set_plot_id", plot_id)
 	if sidebar.has_method("load_blueprints"):
-		sidebar.call("load_blueprints", terrain)
+		sidebar.call("load_blueprints", terrain, is_coastal)
 	_set_build_mode("building")
 	_refresh_plot_data()
 
@@ -125,10 +140,9 @@ func _set_build_mode(mode: String) -> void:
 	if sidebar:
 		sidebar.visible = not roads_on
 	if roads_on:
-		if sidebar.has_method("select_blueprint_id"):
-			sidebar.call("select_blueprint_id", "road_segment")
-		if detail_panel.has_method("show_roads_context"):
-			detail_panel.call("show_roads_context", _plot_data.get("grid", {}))
+		_enable_road_paint()
+		if grid_view is Control:
+			(grid_view as Control).grab_focus()
 	elif not roads_on:
 		_selected_blueprint_id = ""
 		if grid_view.has_method("set_placing_blueprint"):
@@ -145,6 +159,11 @@ func _refresh_plot_data() -> void:
 
 
 func _on_grid_loaded(data: Dictionary) -> void:
+	if data.has("is_coastal"):
+		_plot_data["is_coastal"] = bool(data.get("is_coastal", false))
+		var terrain_s := str(_plot_data.get("terrain", "plains"))
+		if sidebar.has_method("load_blueprints"):
+			sidebar.call("load_blueprints", terrain_s, _plot_data["is_coastal"])
 	_plot_data["placed_buildings"] = data.get("placed_buildings", [])
 	_plot_data["grid"] = data
 	_plot_data["grid_cells_w"] = int(data.get("grid_cells_w", 10))
@@ -152,10 +171,13 @@ func _on_grid_loaded(data: Dictionary) -> void:
 	_plot_data["world_tiles_w"] = int(data.get("world_tiles_w", 1))
 	_plot_data["world_tiles_h"] = int(data.get("world_tiles_h", 1))
 	_plot_data["area_sq_metres"] = int(data.get("area_sq_metres", 10_000))
+	_ensure_plot_geometry_on_grid_data(data)
 	if grid_view.has_method("load_plot"):
 		grid_view.call("load_plot", _plot_id, _plot_data)
-	if _interaction_mode_roads() and detail_panel.has_method("show_roads_context"):
-		detail_panel.call("show_roads_context", data)
+	if _interaction_mode_roads():
+		_enable_road_paint()
+		if detail_panel.has_method("show_roads_context"):
+			detail_panel.call("show_roads_context", data)
 	var free_cells := int(data.get("free_cells_count", 100))
 	if detail_panel.has_method("set_market_context"):
 		detail_panel.call("set_market_context", int(_plot_data.get("fair_value_cents", 0)), free_cells)
@@ -181,6 +203,12 @@ func _on_subplots_loaded(data: Dictionary) -> void:
 
 
 func _on_blueprint_selected(blueprint_id: String, bp_data: Dictionary) -> void:
+	if _interaction_mode_roads():
+		# Roads tab drives paint mode; sidebar is hidden — ignore selection echoes.
+		return
+	if blueprint_id == ROAD_BLUEPRINT_ID:
+		_activate_road_paint(bp_data)
+		return
 	_selected_blueprint_id = blueprint_id
 	if grid_view.has_method("set_placing_blueprint"):
 		grid_view.call("set_placing_blueprint", blueprint_id, bp_data)
@@ -188,8 +216,27 @@ func _on_blueprint_selected(blueprint_id: String, bp_data: Dictionary) -> void:
 		detail_panel.call("show_blueprint", bp_data)
 
 
+func _activate_road_paint(bp_data: Dictionary) -> void:
+	_selected_blueprint_id = ROAD_BLUEPRINT_ID
+	var rd: Dictionary = bp_data if not bp_data.is_empty() else ROAD_BLUEPRINT_FALLBACK
+	if grid_view.has_method("set_placing_blueprint"):
+		grid_view.call("set_placing_blueprint", ROAD_BLUEPRINT_ID, rd)
+	# Do not call sidebar.select_blueprint_id here — it re-emits blueprint_selected
+	# and causes infinite recursion when the Roads tab enables paint mode.
+	var grid: Dictionary = _plot_data.get("grid", {})
+	if detail_panel.has_method("show_roads_context"):
+		detail_panel.call("show_roads_context", grid)
+	if grid_view is Control:
+		(grid_view as Control).grab_focus()
+
+
 func _on_cell_clicked(gx: int, gy: int) -> void:
 	if _selected_blueprint_id.is_empty():
+		return
+	if grid_view.has_method("can_place_at") and not grid_view.call("can_place_at", gx, gy):
+		if grid_view.has_method("show_error"):
+			var msg := "Must be placed on the waterfront (blue cells touching water)"
+			grid_view.call("show_error", msg)
 		return
 	_confirm_placement(gx, gy)
 
@@ -198,8 +245,23 @@ func _on_road_path_painted(cells: Array) -> void:
 	_place_road_cells(cells)
 
 
+func _ensure_plot_geometry_on_grid_data(grid: Dictionary) -> void:
+	for key in ["world_cells", "x", "y", "parcel_shape"]:
+		if not _plot_data.has(key) or _plot_data.get(key) == null:
+			var ui := WorldState.get_plot_ui(_plot_id)
+			if ui.has(key):
+				_plot_data[key] = ui[key]
+	for key in ["world_tiles_w", "world_tiles_h", "grid_cells_w", "grid_cells_h", "area_sq_metres"]:
+		if grid.has(key):
+			_plot_data[key] = grid[key]
+
+
 func _interaction_mode_roads() -> bool:
 	return mode_roads_btn != null and mode_roads_btn.button_pressed
+
+
+func _enable_road_paint() -> void:
+	_activate_road_paint(ROAD_BLUEPRINT_FALLBACK)
 
 
 func _place_road_cells(cells: Array) -> void:
@@ -214,6 +276,7 @@ func _place_road_cells(cells: Array) -> void:
 				var n := int(data.get("placed_count", cells.size()))
 				_refresh_plot_data()
 				MainFeedback.toast("Road placed (%d cells)" % n, false)
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 				API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
 			else:
 				var placed := int(data.get("placed_count", 0))
@@ -234,6 +297,7 @@ func _on_world_link_clicked(neighbor_plot_id: String) -> void:
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
 				_refresh_plot_data()
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 				API.get_world_map(func(m): WorldState.apply_map(m))
 				API.get_roads(func(r):
 					var segs: Variant = r.get("segments", [])

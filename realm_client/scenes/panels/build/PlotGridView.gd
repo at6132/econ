@@ -35,6 +35,7 @@ const WORLD_LINK_DONE := Color(0.55, 0.72, 0.42, 0.9)
 const OCCUPIED_COLOR := Color(0.25, 0.25, 0.30, 0.85)
 const PREVIEW_OK := Color(0.30, 0.90, 0.40, 0.55)
 const PREVIEW_BLOCK := Color(0.90, 0.25, 0.25, 0.55)
+const WATERFRONT_FILL := Color(0.28, 0.52, 0.82, 0.38)
 const METRE_LABEL := Color(0.75, 0.75, 0.75, 0.60)
 
 var _plot_id: String = ""
@@ -46,11 +47,13 @@ var _placed_buildings: Array = []
 var _sub_plots: Array = []
 var _lots: Array = []
 var _deed_cells: Dictionary = {}  # "gx,gy" → true
+var _waterfront_cells: Dictionary = {}  # "gx,gy" → true (build cells touching water)
 var _street_rows: Array[int] = []
 
 var _placing_blueprint_id: String = ""
 var _placing_w: int = 0
 var _placing_h: int = 0
+var _placing_requires_coastal: bool = false
 var _hover_gx: int = -1
 var _hover_gy: int = -1
 var _hover_lot_idx: int = -1
@@ -94,6 +97,7 @@ func load_plot(plot_id: String, data: Dictionary) -> void:
 	# Deed footprint = engine ``world_cells`` (one source of truth with the world map).
 	_lots = [_deed_lot_from_world_cells(data)]
 	_deed_cells = _deed_cell_lookup(_lots)
+	_waterfront_cells = _waterfront_cell_lookup(data)
 	_street_rows = []
 	var grid: Dictionary = data.get("grid", {}) if data.get("grid") is Dictionary else {}
 	var edges: Variant = grid.get("world_link_edges", data.get("world_link_edges", []))
@@ -109,6 +113,16 @@ func _deed_cell_lookup(lots: Array) -> Dictionary:
 		for c in (lot as Dictionary).get("cells", []) as Array:
 			if c is Vector2i:
 				out["%d,%d" % [c.x, c.y]] = true
+	return out
+
+
+func _waterfront_cell_lookup(data: Dictionary) -> Dictionary:
+	var out := {}
+	var grid: Dictionary = data.get("grid", {}) if data.get("grid") is Dictionary else {}
+	var raw: Variant = grid.get("waterfront_cells", data.get("waterfront_cells", []))
+	if raw is Array:
+		for key in raw as Array:
+			out[str(key)] = true
 	return out
 
 
@@ -170,15 +184,19 @@ func set_interaction_mode(mode: String) -> void:
 
 
 func set_placing_blueprint(blueprint_id: String, bp_data: Dictionary) -> void:
+	if blueprint_id != "road_segment" and _road_drag_active:
+		_cancel_road_drag()
 	_placing_blueprint_id = blueprint_id
 	_placing_w = int(bp_data.get("footprint_w", 1))
 	_placing_h = int(bp_data.get("footprint_h", 1))
+	_placing_requires_coastal = bool(bp_data.get("requires_coastal", false))
 	_confirming = false
 	queue_redraw()
 
 
 func _is_road_paint_mode() -> bool:
-	return _interaction_mode == "roads"
+	# Roads tab or road_segment picked from the blueprint sidebar (Buildings tab).
+	return _interaction_mode == "roads" or _placing_blueprint_id == "road_segment"
 
 
 func is_confirming() -> bool:
@@ -455,6 +473,7 @@ func _load_terrain_textures() -> void:
 
 func _draw_cell_fills(terrain_color: Color) -> void:
 	var tex: Texture2D = _terrain_textures.get(_terrain_texture_key()) as Texture2D
+	var show_waterfront := _placing_requires_coastal and not _waterfront_cells.is_empty()
 	for gy in range(_grid_h):
 		for gx in range(_grid_w):
 			var r := _cell_rect(gx, gy)
@@ -463,6 +482,8 @@ func _draw_cell_fills(terrain_color: Color) -> void:
 					draw_texture_rect(tex, r, false)
 				else:
 					draw_rect(r, terrain_color)
+				if show_waterfront and _waterfront_cells.has("%d,%d" % [gx, gy]):
+					draw_rect(r, WATERFRONT_FILL)
 			else:
 				draw_rect(r, VOID_FILL)
 
@@ -603,10 +624,15 @@ func _draw_text(pos: Vector2, text: String, font_size: int, color: Color) -> voi
 	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 
+func can_place_at(gx: int, gy: int) -> bool:
+	return _can_place_at(gx, gy)
+
+
 func _can_place_at(gx: int, gy: int) -> bool:
 	if gx < 0 or gy < 0 or gx + _placing_w > _grid_w or gy + _placing_h > _grid_h:
 		return false
 	var occ := _occupied_set()
+	var touches_waterfront := false
 	for dy in range(_placing_h):
 		for dx in range(_placing_w):
 			var cx := gx + dx
@@ -615,6 +641,10 @@ func _can_place_at(gx: int, gy: int) -> bool:
 				return false
 			if occ.has("%d,%d" % [cx, cy]):
 				return false
+			if _waterfront_cells.has("%d,%d" % [cx, cy]):
+				touches_waterfront = true
+	if _placing_requires_coastal and not _waterfront_cells.is_empty():
+		return touches_waterfront
 	return true
 
 
@@ -808,17 +838,17 @@ func _end_road_drag() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Continue road strokes when the pointer leaves the grid control mid-drag.
 	if not _road_drag_active or not _is_road_paint_mode():
 		return
 	if event is InputEventMouseMotion:
 		var gpos := _screen_to_grid_paint(get_local_mouse_position())
 		if gpos.x >= 0:
 			_stroke_line_to(gpos.x, gpos.y)
-		var hover := _screen_to_grid(get_local_mouse_position())
-		if hover.x >= 0:
-			_hover_gx = hover.x
-			_hover_gy = hover.y
+			_hover_gx = gpos.x
+			_hover_gy = gpos.y
 		queue_redraw()
+		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
@@ -855,7 +885,7 @@ func _gui_input(event: InputEvent) -> void:
 					world_link_clicked.emit(neighbor)
 					accept_event()
 					return
-			var gpos := _screen_to_grid(event.position)
+			var gpos := _screen_to_grid_paint(event.position)
 			if gpos.x >= 0:
 				if _is_road_paint_mode():
 					_begin_road_drag(gpos.x, gpos.y)
@@ -866,7 +896,7 @@ func _gui_input(event: InputEvent) -> void:
 				else:
 					cell_clicked.emit(gpos.x, gpos.y)
 		elif not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			if _road_drag_active:
+			if _road_drag_active and _is_road_paint_mode():
 				_end_road_drag()
 				accept_event()
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
