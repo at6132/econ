@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from realm.core.ids import PlotId
 from realm.world import World
+from realm.world.plot_scale import cells_occupied
 
 ROAD_EXEMPT_RECIPES: frozenset[str] = frozenset({
     "hand_mine_coal",
@@ -50,6 +51,51 @@ def _get_road_endpoints(world: World) -> set[str]:
 
 def invalidate_road_cache() -> None:
     _endpoint_cache.clear()
+
+
+def _footprint_cells_on_plot(
+    world: World, plot_id: str, blueprint_id: str, grid_x: int, grid_y: int
+) -> set[tuple[int, int]]:
+    bp = world.blueprints.get(blueprint_id)
+    fw = int(bp.footprint_w) if bp is not None else 1
+    fh = int(bp.footprint_h) if bp is not None else 1
+    return set(cells_occupied(int(grid_x), int(grid_y), fw, fh))
+
+
+def plot_site_roads_connect_workshops(world: World, plot_id: PlotId) -> bool:
+    """True when each non-exempt workshop has at least one cell beside a site road cell."""
+    pid = str(plot_id)
+    road_cells: set[tuple[int, int]] = set()
+    workshops: list[set[tuple[int, int]]] = []
+    for pb in world.placed_buildings.values():
+        if str(pb.plot_id) != pid:
+            continue
+        if str(pb.status) not in ("active", "construction"):
+            continue
+        bid = str(pb.blueprint_id)
+        cells = _footprint_cells_on_plot(world, pid, bid, int(pb.grid_x), int(pb.grid_y))
+        if bid == "road_segment":
+            road_cells |= cells
+        elif bid in ROAD_EXEMPT_BLUEPRINTS:
+            continue
+        else:
+            workshops.append(cells)
+    if not workshops:
+        return False
+    if not road_cells:
+        return False
+    for footprint in workshops:
+        connected = False
+        for cx, cy in footprint:
+            for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                if (cx + dx, cy + dy) in road_cells or (cx, cy) in road_cells:
+                    connected = True
+                    break
+            if connected:
+                break
+        if not connected:
+            return False
+    return True
 
 
 def is_road_accessible(world: World, plot_id: PlotId) -> bool:
@@ -97,12 +143,14 @@ def require_road_access(
 
     if is_road_accessible(world, plot_id):
         return None
+    if plot_site_roads_connect_workshops(world, plot_id):
+        return None
 
     return {
         "ok": False,
         "reason": (
-            "this plot has no road access — production buildings require a "
-            "connected road to operate. Build a road to this plot, or use "
-            "hand-labour recipes (hand_mine_coal, etc.) which don't need infrastructure."
+            "this plot has no road access — connect workshops to site roads "
+            "(road_segment on the build grid) or to the world road network on "
+            "an adjacent plot edge, or use hand-labour recipes."
         ),
     }

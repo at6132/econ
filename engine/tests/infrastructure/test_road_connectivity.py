@@ -9,7 +9,9 @@ from realm.infrastructure.road_connectivity import (
     ROAD_REQUIREMENT_GRACE_TICKS,
     is_road_accessible,
     invalidate_road_cache,
+    plot_site_roads_connect_workshops,
 )
+from realm.world.placed_buildings import PlacedBuilding, register_placed_building
 from realm.infrastructure.roads import build_road
 from realm.production import start_production
 from realm.world.terrain import Terrain
@@ -150,6 +152,55 @@ def test_generator_exempt_from_road_requirement() -> None:
     r = start_production(world, player, pid, "coal_generator", run_count=1)
     if not r["ok"]:
         assert "road" not in r["reason"].lower()
+
+
+def test_site_road_adjacent_to_workshop_allows_production() -> None:
+    world, player = _build_world()
+    pid = PlotId("p-5-5")
+    _claim(world, player, pid)
+    world.tick = ROAD_REQUIREMENT_GRACE_TICKS + 1
+    from realm.production.blueprints import seed_world_blueprints
+
+    seed_world_blueprints(world)
+    world.next_building_instance_seq += 1
+    register_placed_building(
+        world,
+        PlacedBuilding(
+            instance_id="b000010",
+            blueprint_id="strip_mine",
+            plot_id=str(pid),
+            grid_x=2,
+            grid_y=2,
+            built_at_tick=0,
+            built_by=str(player),
+            status="active",
+            efficiency_pct=100,
+            missed_maintenance_cycles=0,
+            due_at_tick=0,
+        ),
+    )
+    # Road east of 6×4 strip_mine footprint (not overlapping).
+    register_placed_building(
+        world,
+        PlacedBuilding(
+            instance_id="b000011",
+            blueprint_id="road_segment",
+            plot_id=str(pid),
+            grid_x=8,
+            grid_y=2,
+            built_at_tick=0,
+            built_by=str(player),
+            status="active",
+            efficiency_pct=100,
+            missed_maintenance_cycles=0,
+            due_at_tick=0,
+        ),
+    )
+    assert plot_site_roads_connect_workshops(world, pid)
+    assert not is_road_accessible(world, pid)
+    _give_electricity(world, player, 4)
+    r = start_production(world, player, pid, "mine_coal", run_count=1)
+    assert r["ok"], r.get("reason", "")
 
 
 def test_road_cache_invalidates_on_new_road() -> None:
