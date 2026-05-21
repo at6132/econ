@@ -46,7 +46,8 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "✕"
 
-[node name="HSeparator1" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepAfterHeader" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="InfoGrid" type="GridContainer" parent="Panel/Scroll/VBoxMain"]
@@ -114,7 +115,8 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 
-[node name="HSeparator2" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepAfterInfo" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="ClaimSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
@@ -159,7 +161,8 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Claim plot"
 
-[node name="HSeparator3" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepAfterClaim" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="SurveySection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
@@ -171,7 +174,8 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Survey this plot"
 
-[node name="HSeparator4" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepAfterSurvey" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="SubsurfaceSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
@@ -187,7 +191,8 @@ unique_name_in_owner = true
 layout_mode = 2
 columns = 2
 
-[node name="HSeparator5" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepAfterSubsurface" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="RealEstateSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
@@ -214,10 +219,12 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "List for sale"
 
-[node name="HSeparator5b" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepBeforeBuildings" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="BuildingsSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
@@ -240,7 +247,36 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="HSeparator6" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+[node name="SepBeforeRoads" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RoadsSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RoadsTitle" type="Label" parent="Panel/Scroll/VBoxMain/RoadsSection"]
+layout_mode = 2
+text = "Roads"
+
+[node name="RoadsHint" type="Label" parent="Panel/Scroll/VBoxMain/RoadsSection"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Site road segments — monitor condition and maintenance only."
+
+[node name="RoadsSummary" type="Label" parent="Panel/Scroll/VBoxMain/RoadsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+
+[node name="RoadsList" type="VBoxContainer" parent="Panel/Scroll/VBoxMain/RoadsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SepBeforeProduction" type="HSeparator" parent="Panel/Scroll/VBoxMain"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="ProductionSection" type="VBoxContainer" parent="Panel/Scroll/VBoxMain"]

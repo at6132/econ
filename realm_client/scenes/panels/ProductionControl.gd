@@ -19,6 +19,7 @@ var _plot_id: String = ""
 var _building: Dictionary = {}
 var _terrain: String = "plains"
 var _run_continuous: bool = false
+var _throughput_label: Label
 
 
 func _ready() -> void:
@@ -41,9 +42,16 @@ func _ready() -> void:
 	run_mode_btn.pressed.connect(_toggle_run_mode)
 	auto_list_toggle.toggled.connect(_on_auto_list_toggle)
 	run_mode_btn.text = "One-shot"
+	_throughput_label = Label.new()
+	_throughput_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_throughput_label.add_theme_font_size_override("font_size", 11)
+	_throughput_label.add_theme_color_override("font_color", RealmColors.MUTED)
+	_throughput_label.visible = false
+	add_child(_throughput_label)
 	recipe_selector.item_selected.connect(func(_i: int) -> void:
 		_refresh_status()
 		_refresh_recipe_hints()
+		_refresh_throughput()
 	)
 	margin_spinbox.min_value = 10
 	margin_spinbox.max_value = 100
@@ -52,6 +60,7 @@ func _ready() -> void:
 	margin_spinbox.tooltip_text = "Listing margin is fixed server-side for now."
 	WorldState.world_updated.connect(_on_world_refreshed)
 	WorldState.player_updated.connect(_on_world_refreshed)
+	WorldState.static_updated.connect(_on_static_tables_ready)
 	WS.tick_event.connect(_on_ws_tick)
 
 
@@ -60,6 +69,8 @@ func _exit_tree() -> void:
 		WorldState.world_updated.disconnect(_on_world_refreshed)
 	if WorldState.player_updated.is_connected(_on_world_refreshed):
 		WorldState.player_updated.disconnect(_on_world_refreshed)
+	if WorldState.static_updated.is_connected(_on_static_tables_ready):
+		WorldState.static_updated.disconnect(_on_static_tables_ready)
 	if WS.tick_event.is_connected(_on_ws_tick):
 		WS.tick_event.disconnect(_on_ws_tick)
 
@@ -88,44 +99,175 @@ func setup(plot_id: String, building: Dictionary, terrain: String) -> void:
 	_plot_id = plot_id
 	_building = building.duplicate(true)
 	_terrain = terrain
+	var bname := WorldState.building_display_name(_building)
+	title_label.text = bname
 	auto_list_toggle.set_pressed_no_signal(bool(_building.get("auto_list_output", false)))
+	if WorldState.recipes.is_empty():
+		recipe_selector.clear()
+		recipe_selector.add_item("Loading recipe catalog…")
+		recipe_selector.disabled = true
+		WorldState.ensure_static_tables(_on_static_tables_ready)
+	else:
+		_apply_setup_refresh()
+
+
+func _on_static_tables_ready() -> void:
+	if _plot_id.is_empty():
+		return
+	_apply_setup_refresh()
+
+
+func _apply_setup_refresh() -> void:
 	_populate_recipes()
 	_on_world_refreshed()
 	_refresh_recipe_hints()
+	_refresh_throughput()
+	_refresh_status()
 
 
 func _building_id() -> String:
-	return str(_building.get("building_id", ""))
+	return WorldState.workshop_id_for_building(_building)
 
 
 func _populate_recipes() -> void:
 	recipe_selector.clear()
 	var bid := _building_id()
-	var plot_recipes: Array = []
-	var pd: Dictionary = WorldState.plots.get(_plot_id, {})
-	var pr: Variant = pd.get("recipe_ids", [])
-	if pr is Array:
-		plot_recipes = pr
+	if bid.is_empty():
+		recipe_selector.add_item("No recipes available")
+		recipe_selector.set_item_metadata(0, "")
+		recipe_selector.disabled = true
+		return
 	var idx := 0
-	for r in WorldState.recipes:
+	for r in _recipes_for_this_building():
 		if not (r is Dictionary):
 			continue
 		var row: Dictionary = r
-		if str(row.get("requires_building_id", "")) != bid:
-			continue
 		var rid := str(row.get("id", ""))
-		if not plot_recipes.is_empty() and not (rid in plot_recipes):
+		if rid.is_empty():
 			continue
 		var label := str(row.get("display_name", rid))
+		var gate := _recipe_plot_gate_reason(rid)
+		if not gate.is_empty():
+			label += " — %s" % gate
 		recipe_selector.add_item(label)
 		recipe_selector.set_item_metadata(idx, rid)
 		idx += 1
 	if idx == 0:
-		recipe_selector.add_item("No recipes available")
+		if WorldState.recipes.is_empty():
+			recipe_selector.add_item("Recipe catalog not loaded — reopen in a moment")
+		else:
+			recipe_selector.add_item("No recipes for this building type")
 		recipe_selector.set_item_metadata(0, "")
 		recipe_selector.disabled = true
 	else:
 		recipe_selector.disabled = false
+
+
+func _recipes_for_this_building() -> Array:
+	return WorldState.recipes_for_workshop_building(_building)
+
+
+func _recipe_row_in_array(rows: Array, recipe_id: String) -> bool:
+	for r in rows:
+		if r is Dictionary and str((r as Dictionary).get("id", "")) == recipe_id:
+			return true
+	return false
+
+
+func _plot_recipe_ids() -> Array:
+	var pd: Dictionary = WorldState.plots.get(_plot_id, {})
+	var pr: Variant = pd.get("recipe_ids", [])
+	return pr if pr is Array else []
+
+
+func _recipe_plot_gate_reason(recipe_id: String) -> String:
+	var pd: Dictionary = WorldState.get_plot_ui(_plot_id)
+	if str(pd.get("owner", "")) != WorldState.party_id:
+		return ""
+	if not bool(pd.get("surveyed", false)):
+		return "survey plot first"
+	var plot_recipes := _plot_recipe_ids()
+	if plot_recipes.is_empty():
+		return ""
+	if recipe_id in plot_recipes:
+		return ""
+	var done_at: int = int(_building.get("completes_at_tick", 0))
+	if done_at > WorldState.current_tick:
+		return "building under construction"
+	var eff := int(_building.get("_efficiency_pct", 100))
+	if eff <= 0:
+		return "maintain building first"
+	var sub_block := _subsurface_gate_reason(recipe_id)
+	if not sub_block.is_empty():
+		return sub_block
+	var terr_block := _terrain_gate_reason(recipe_id)
+	if not terr_block.is_empty():
+		return terr_block
+	return "not allowed on this plot (terrain or discovery)"
+
+
+func _subsurface_gate_reason(recipe_id: String) -> String:
+	var row := _recipe_row(recipe_id)
+	var subs: Variant = row.get("requires_subsurface", [])
+	if not (subs is Array) or (subs as Array).is_empty():
+		return ""
+	var grades: Dictionary = WorldState.subsurface_for_plot_ui(_plot_id, WorldState.get_plot_ui(_plot_id))
+	for entry in subs as Array:
+		if not (entry is Dictionary):
+			continue
+		var field := str((entry as Dictionary).get("field", ""))
+		var need := float((entry as Dictionary).get("min", 0.3))
+		var have := float(grades.get(field, 0.0))
+		if have < need:
+			var nice := field.replace("_grade", "").replace("_", " ")
+			return "needs %s grade ≥ %d%% (have %d%%)" % [nice, int(need * 100.0), int(have * 100.0)]
+	return ""
+
+
+func _terrain_gate_reason(recipe_id: String) -> String:
+	var allowed: Array = _terrain_allowed_for_recipe(recipe_id)
+	if allowed.is_empty():
+		return ""
+	if _terrain in allowed:
+		return ""
+	var nice_allowed: PackedStringArray = PackedStringArray()
+	for t in allowed:
+		nice_allowed.append(str(t))
+	return "needs %s terrain (this plot is %s)" % [", ".join(nice_allowed), _terrain]
+
+
+func _terrain_allowed_for_recipe(recipe_id: String) -> Array:
+	# Mirror engine ``RECIPE_ALLOWED_TERRAINS`` for strip-mine / foundry lines (client UX only).
+	const TABLE: Dictionary = {
+		"mine_iron_ore": ["mountain"],
+		"mine_copper_ore": ["mountain"],
+		"mine_coal": ["mountain", "desert", "plains", "forest", "tundra"],
+		"dig_clay": ["plains", "forest", "swamp", "tundra"],
+		"mine_phosphate": ["plains", "forest"],
+		"mine_tin_ore": ["mountain", "plains"],
+		"mine_lead_ore": ["mountain"],
+		"mine_sulfur_ore": ["swamp", "tundra", "mountain", "plains"],
+		"mine_saltpeter": ["desert", "plains"],
+		"mine_raw_silica": ["desert", "plains", "mountain"],
+		"smelt_iron": ["mountain"],
+		"smelt_copper": ["mountain"],
+		"steel_alloy": ["mountain"],
+		"wire_draw": ["mountain", "plains"],
+	}
+	if TABLE.has(recipe_id):
+		return TABLE[recipe_id] as Array
+	return []
+
+
+func _recipe_needs_mountain(recipe_id: String) -> bool:
+	var mountain_only := [
+		"smelt_iron", "smelt_copper", "steel_alloy", "mine_iron_ore", "mine_copper_ore",
+	]
+	return recipe_id in mountain_only
+
+
+func selected_recipe_id() -> String:
+	return _selected_recipe_id()
 
 
 func _selected_recipe_id() -> String:
@@ -147,6 +289,7 @@ func _on_world_refreshed() -> void:
 			_building = (b as Dictionary).duplicate(true)
 			auto_list_toggle.set_pressed_no_signal(bool(_building.get("auto_list_output", false)))
 			break
+	_populate_recipes()
 	_refresh_status()
 
 
@@ -160,16 +303,136 @@ func _refresh_status() -> void:
 	if rid.is_empty() and recipe_selector.item_count > 0 and not recipe_selector.disabled:
 		recipe_selector.select(0)
 		rid = _selected_recipe_id()
-	var run: Dictionary = WorldState.active_production_run_for_building(_plot_id, _building_id())
+	var run: Dictionary = WorldState.active_production_run_for_building(_plot_id, _building)
 	if run.is_empty():
-		_set_idle()
+		var blocker := _production_blocker(rid)
+		if blocker.is_empty():
+			_set_idle_ready(rid)
+		else:
+			_set_blocked(blocker)
 		return
 	var ticks_left: int = int(run.get("ticks_remaining", 0))
 	var active_rid := str(run.get("recipe_id", ""))
 	if ticks_left <= 0:
-		_set_idle()
+		_set_idle_ready(rid)
 		return
 	_set_running(active_rid, ticks_left)
+
+
+func _plot_ui() -> Dictionary:
+	return WorldState.get_plot_ui(_plot_id)
+
+
+func _production_blocker(recipe_id: String) -> String:
+	var pd := _plot_ui()
+	if str(pd.get("owner", "")) != WorldState.party_id:
+		return "You do not own this plot"
+	if not bool(pd.get("surveyed", false)):
+		return "Survey the plot first (Plot detail → Survey this plot)"
+	var done_at: int = int(_building.get("completes_at_tick", 0))
+	if done_at > WorldState.current_tick:
+		var eta := done_at - WorldState.current_tick
+		return "Building still under construction — ready in %s" % WorldState.format_ticks_as_gametime(eta)
+	var eff := int(_building.get("_efficiency_pct", 100))
+	if eff <= 0:
+		return "Building stopped — use Maintain on this building first"
+	if WorldState.recipes.is_empty():
+		return "Recipe catalog still loading from server"
+	if recipe_selector.disabled or recipe_id.is_empty():
+		return _empty_recipe_hint()
+	var gate := _recipe_plot_gate_reason(recipe_id)
+	if not gate.is_empty():
+		return gate.capitalize()
+	if recipe_id.is_empty():
+		return "Select a recipe"
+	return _missing_inputs_reason(recipe_id)
+
+
+func _missing_inputs_reason(recipe_id: String) -> String:
+	var row := _recipe_row(recipe_id)
+	var inputs: Variant = row.get("inputs", {})
+	if not (inputs is Dictionary) or (inputs as Dictionary).is_empty():
+		return ""
+	var missing: PackedStringArray = []
+	for mat in (inputs as Dictionary).keys():
+		var mid := str(mat)
+		if mid == "electricity":
+			var need := int((inputs as Dictionary)[mat])
+			var have := WorldState.player_material_total(mid)
+			if have < need:
+				missing.append("%s need %d (have %d)" % [WorldState.material_display_name(mid), need, have])
+			continue
+		var need := int((inputs as Dictionary)[mat])
+		if not WorldState.player_has_material(mid, need):
+			if WorldState.player_has_substitute(recipe_id, mid):
+				continue
+			var have := WorldState.player_material_total(mid)
+			missing.append(
+				"%s need %d (have %d)" % [WorldState.material_display_name(mid), need, have]
+			)
+	if missing.is_empty():
+		return ""
+	var labor := int(row.get("labor_cents", 0))
+	if labor > 0 and WorldState.player_cash_cents < labor:
+		return "Need %s cash for labor (have %s)" % [
+			WorldState.format_money(labor),
+			WorldState.format_money(WorldState.player_cash_cents),
+		]
+	return "Missing: " + ", ".join(missing) + " — Bazaar or Buy inputs"
+
+
+func _empty_recipe_hint() -> String:
+	var wid := _building_id()
+	var bname := WorldState.building_display_name(_building)
+	if WorldState.recipes.is_empty():
+		return "Recipe catalog not loaded yet — close and reopen Production"
+	if wid.is_empty():
+		return "Unknown building — no recipes"
+	if wid == "strip_mine":
+		return (
+			"Strip mine recipes depend on survey grades and terrain. "
+			+ "Iron/copper ore need mountain; coal, clay, and phosphate work on many land tiles."
+		)
+	var bp := WorldState.blueprint_dict(wid)
+	var desc := str(bp.get("description", ""))
+	if not desc.is_empty():
+		return "%s — %s" % [bname, desc]
+	if wid == "foundry" and _terrain != "mountain":
+		return (
+			"%s: smelting needs a mountain plot (this tile is %s). "
+			+ "Wire draw may still work if the plot is surveyed."
+		) % [bname, _terrain]
+	return "No recipes enabled for %s — check blueprint recipes, survey, and terrain" % bname
+
+
+func _set_idle_ready(recipe_id: String) -> void:
+	status_icon.text = "⏸"
+	if recipe_id.is_empty():
+		status_label.text = "Idle — pick a recipe and press Start"
+	else:
+		status_label.text = "Ready — press Start to run %s" % str(
+			_recipe_row(recipe_id).get("display_name", recipe_id)
+		)
+	status_label.modulate = Color(0.55, 0.85, 0.55)
+	progress_bar.value = 0.0
+	start_btn.show()
+	start_btn.disabled = recipe_selector.disabled
+	stop_btn.hide()
+	buy_inputs_btn.hide()
+
+
+func _set_blocked(reason: String) -> void:
+	status_icon.text = "⚠"
+	status_label.text = reason
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.modulate = Color(1.0, 0.55, 0.25)
+	progress_bar.value = 0.0
+	start_btn.show()
+	start_btn.disabled = false
+	stop_btn.hide()
+	var rid := _selected_recipe_id()
+	var needs_inputs := not _missing_inputs_reason(rid).is_empty()
+	buy_inputs_btn.visible = needs_inputs
 
 
 func _refresh_recipe_hints() -> void:
@@ -213,14 +476,7 @@ func _refresh_recipe_hints() -> void:
 
 
 func _set_idle() -> void:
-	status_icon.text = "⏸"
-	status_label.text = "Idle"
-	status_label.modulate = Color(0.7, 0.7, 0.7)
-	progress_bar.value = 0.0
-	start_btn.show()
-	start_btn.disabled = recipe_selector.disabled
-	stop_btn.hide()
-	buy_inputs_btn.hide()
+	_set_idle_ready(_selected_recipe_id())
 
 
 func _set_running(recipe_id: String, ticks_remaining: int) -> void:
@@ -300,9 +556,41 @@ func _on_buy_inputs() -> void:
 	status_label.text = "Buying inputs…"
 
 
+func _refresh_throughput() -> void:
+	if not is_instance_valid(_throughput_label):
+		return
+	var rid := _selected_recipe_id()
+	if rid.is_empty() or _plot_id.is_empty():
+		_throughput_label.hide()
+		return
+	API.get_plot_throughput(
+		_plot_id,
+		rid,
+		func(data: Dictionary) -> void:
+			if not is_instance_valid(_throughput_label):
+				return
+			if not bool(data.get("ok", false)):
+				_throughput_label.hide()
+				return
+			var combined: int = int(data.get("combined_bps", 10_000))
+			var pct := float(combined) / 100.0
+			var row := _recipe_row(rid)
+			var dur: int = int(row.get("duration_ticks", 0))
+			_throughput_label.text = (
+				"Throughput %+.0f%% · ~%s per run · building eff %d%% · labor %d bps"
+				% [
+					pct - 100.0,
+					WorldState.format_ticks_as_gametime(dur),
+					int(data.get("efficiency_pct", 100)),
+					int(data.get("labour_bps", data.get("labor_bps", 10_000))),
+				]
+			)
+			_throughput_label.show(),
+	)
+
+
 func _on_auto_list_toggle(on: bool) -> void:
 	var instance_id: String = str(_building.get("instance_id", ""))
 	if instance_id.is_empty():
 		return
 	API.post_building_auto_list(instance_id, on, func(_d: Dictionary) -> void: pass)
-

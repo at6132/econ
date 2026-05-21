@@ -1,0 +1,130 @@
+[gd_scene load_steps=2 format=3 uid="uid://realm_production_workflow"]
+
+[ext_resource type="Script" path="res://scenes/panels/ProductionWorkflowWindow.gd" id="1_script"]
+
+[node name="ProductionWorkflowWindow" type="CanvasLayer"]
+layer = 45
+script = ExtResource("1_script")
+
+[node name="DimBackground" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.04, 0.04, 0.06, 0.88)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterPanel" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(920, 640)
+
+[node name="Margin" type="MarginContainer" parent="Center/CenterPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="Center/CenterPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Center/CenterPanel/Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Production workflow"
+
+[node name="CloseBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "✕"
+
+[node name="SubtitleLabel" type="Label" parent="Center/CenterPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = "Route inputs and outputs; warehouse replenish rules save locally until server workflow API."
+
+[node name="TabBar" type="HBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TabRunBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "Run"
+
+[node name="TabRoutingBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "I/O routing"
+
+[node name="TabWarehouseBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Warehouses"
+
+[node name="TabPages" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RunPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RoutingPage" type="ScrollContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="RoutingInner" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages/RoutingPage"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="WarehousePage" type="HBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="WarehouseList" type="ItemList" parent="Center/CenterPanel/Margin/VBox/TabPages/WarehousePage"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="WarehouseRulesScroll" type="ScrollContainer" parent="Center/CenterPanel/Margin/VBox/TabPages/WarehousePage"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="WarehouseRulesInner" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages/WarehousePage/WarehouseRulesScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
