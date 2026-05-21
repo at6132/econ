@@ -69,7 +69,7 @@ RECEIVING_FEE_CHUNK_UNITS = 20  # +1¢ per this many units after the first
 # per unit of energy material consumed from the shipper's stockpile at the
 # origin plot. Coal preferred; electricity falls back.
 MOVEMENT_FUEL_TILES_PER_UNIT: int = 20
-INTER_ISLAND_FUEL_MATERIALS: tuple[str, ...] = ("coal", "electricity")
+INTER_ISLAND_FUEL_MATERIALS: tuple[str, ...] = ("coal",)
 
 # Phase 10B — uncharted voyages (no registered operator on the lane).
 UNCHARTED_TIME_MULTIPLIER: Final[float] = 2.0
@@ -255,8 +255,7 @@ def _inter_island_fuel_plan(
     """Pick a fuel material the party has enough of for an inter-island voyage.
 
     Returns ``(material_id, units_required)`` or ``None`` when neither coal
-    nor electricity is on hand in sufficient quantity. Coal is preferred
-    (cheaper, denser); electricity is the fallback (modern dockside power).
+    Coal is required for open-ocean voyages (Law 4 — energy for movement).
     """
     needed = max(1, distance_tiles // MOVEMENT_FUEL_TILES_PER_UNIT)
     for fuel in INTER_ISLAND_FUEL_MATERIALS:
@@ -351,7 +350,7 @@ def dispatch_shipment(
         if inter_island_fuel is None:
             return {
                 "ok": False,
-                "reason": "inter-island voyage requires coal or electricity for fuel",
+                "reason": "inter-island voyage requires coal for fuel",
             }
     # Phase 8D: refuse dispatch on a route that's currently blockaded by a storm.
     if inter_island:

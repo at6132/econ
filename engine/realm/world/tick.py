@@ -84,6 +84,9 @@ def advance_tick(world: World) -> None:
         get_oracle(world)
         tick_order_expiry(world)
         tick_power_grid(world)
+        from realm.infrastructure.utility_billing import tick_monthly_utility_bills
+
+        tick_monthly_utility_bills(world)
         tick_holding_costs(world)
         tick_trade_balance(world)
         for route_data in (world.scenario_state.get("route_daily_volume") or {}).values():

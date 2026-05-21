@@ -31,7 +31,7 @@ from realm.world import (
 from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 17
+SNAPSHOT_VERSION = 18
 
 
 def _blueprint_public_dict(bp: object) -> dict[str, Any]:
@@ -548,7 +548,7 @@ def _plot_from_snapshot(pid_str: str, saved: dict[str, Any]) -> Plot:
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     saved_plots: dict[str, Any] = d["plots"]
@@ -1202,6 +1202,19 @@ def load_world(d: dict[str, Any]) -> World:
                 ad = try_add_plot_output(world, depot, party, mat, total)
                 if isinstance(ad, MatterErr):
                     world.inventory.add(party, mat, total)
+    if int(ver) <= 17:
+        from realm.infrastructure.energy_service import LEGACY_ELECTRICITY_MATERIAL
+
+        elec = LEGACY_ELECTRICITY_MATERIAL
+        for party in list(world.parties):
+            for mat in list(world.inventory.stock_for_party(party).keys()):
+                if str(mat) != str(elec):
+                    continue
+                qty = world.inventory.qty(party, mat)
+                if qty > 0:
+                    world.inventory.remove(party, mat, qty)
+            for _pid_str, bucket in list(world.plot_output_stock.items()):
+                bucket.pop(str(elec), None)
     if not str(world.world_id or "").strip():
         from realm.core.ids import new_world_id
 

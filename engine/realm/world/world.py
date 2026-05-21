@@ -533,7 +533,6 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
         (MaterialId("grain"), 80_000, 120),
         (MaterialId("timber"), 500_000, 200),
         (MaterialId("coal"), 500_000, 140),
-        (MaterialId("electricity"), 100_000, 100),
         (MaterialId("lumber"), 400_000, 200),
         (MaterialId("brick"), 400_000, 200),
         (MaterialId("stone"), 400_000, 200),
@@ -891,6 +890,9 @@ def bootstrap_genesis(
     from realm.production.blueprints import seed_world_blueprints
 
     seed_world_blueprints(world)
+    from realm.infrastructure.utility_billing import seed_utility_operator
+
+    seed_utility_operator(world)
     return world
 
 
@@ -1078,6 +1080,9 @@ def bootstrap_frontier(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.use_plot_output_logistics = True
+    from realm.infrastructure.utility_billing import seed_utility_operator
+
+    seed_utility_operator(world)
     from realm.infrastructure.plot_logistics import try_add_plot_output
     from realm.production.storage_caps import is_carried_material
 
@@ -1089,7 +1094,6 @@ def bootstrap_frontier(
     _starter = (
         (MaterialId("timber"), 12),
         (MaterialId("coal"), 12),
-        (MaterialId("electricity"), 8),
         (MaterialId("iron_ore"), 6),
         (MaterialId("copper_ore"), 6),
         (MaterialId("clay"), 10),
@@ -1153,8 +1157,7 @@ def bootstrap_frontier(
         raise ValueError(str(pr2.get("reason")))
     coal_v = PartyId("t1_coal_vendor")
     clay_v = PartyId("t1_clay_vendor")
-    elec_b = PartyId("t1_electricity_buyer")
-    for px in (coal_v, clay_v, elec_b):
+    for px in (coal_v, clay_v):
         world.parties.add(px)
         world.reputation[str(px)] = {"honored": 0, "breached": 0}
     ad_coal = inv.add(coal_v, MaterialId("coal"), 3)
@@ -1163,15 +1166,6 @@ def bootstrap_frontier(
     ad_clay = inv.add(clay_v, MaterialId("clay"), 3)
     if isinstance(ad_clay, MatterErr):
         raise ValueError(ad_clay.reason)
-    eb_cash = party_cash_account(elec_b)
-    world.ledger.ensure_account(eb_cash)
-    tr_eb = world.ledger.transfer(
-        debit=system_reserve_account(),
-        credit=eb_cash,
-        amount_cents=30_000,
-    )
-    if isinstance(tr_eb, MoneyErr):
-        raise ValueError(tr_eb.reason)
     pr_coal = place_sell_order(world, coal_v, MaterialId("coal"), 2, 38)
     if not pr_coal.get("ok"):
         raise ValueError(str(pr_coal.get("reason")))
