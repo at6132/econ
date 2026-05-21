@@ -66,6 +66,7 @@ def test_ddp_fill_spawns_transit_not_buyer_stash() -> None:
         delivery_terms=DELIVERY_DDP,
     )
     assert r["ok"], r
+    assert plot_output_qty(w, pid, MaterialId("timber")) == 10
     _clear_exchange_asks(w, MaterialId("timber"))
     br = place_buy_order(
         w,
@@ -107,6 +108,7 @@ def test_fob_fill_creates_pickup_not_instant_stash() -> None:
         delivery_terms=DELIVERY_FOB,
     )
     assert r["ok"], r
+    assert plot_output_qty(w, pid, MaterialId("timber")) == 6
     _clear_exchange_asks(w, MaterialId("timber"))
     br = place_buy_order(
         w,
