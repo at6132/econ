@@ -357,12 +357,35 @@ def place_blueprint(
         if mat_err is not None:
             return mat_err
     elif mode == "self":
+        from realm.infrastructure.plot_logistics import (
+            party_material_on_plot,
+            remove_party_plot_stock,
+            uses_plot_logistics,
+        )
+        from realm.production.storage_caps import is_carried_material
+
         for mat_id, qty in bp.construction_materials.items():
-            have = world.inventory.qty(party, MaterialId(mat_id))
-            if have < int(qty):
+            mid = MaterialId(mat_id)
+            need = int(qty)
+            if is_carried_material(mid):
+                have = world.inventory.qty(party, mid)
+            elif uses_plot_logistics(world, party):
+                have = party_material_on_plot(world, party, plot_id, mid)
+            else:
+                have = world.inventory.qty(party, mid)
+            if have < need:
                 return {"ok": False, "reason": f"missing {mat_id}: need {qty}, have {have}"}
         for mat_id, qty in bp.construction_materials.items():
-            rm = world.inventory.remove(party, MaterialId(mat_id), int(qty))
+            mid = MaterialId(mat_id)
+            need = int(qty)
+            if is_carried_material(mid):
+                rm = world.inventory.remove(party, mid, need)
+            elif uses_plot_logistics(world, party):
+                rm = remove_party_plot_stock(
+                    world, party, mid, need, preferred_plot=plot_id
+                )
+            else:
+                rm = world.inventory.remove(party, mid, need)
             if isinstance(rm, MatterErr):
                 return {"ok": False, "reason": rm.reason}
     elif mode not in ("construction_order",):
