@@ -3,6 +3,8 @@ extends VBoxContainer
 
 @onready var title_label: Label = %TitleLabel
 @onready var recipe_selector: OptionButton = %RecipeSelector
+@onready var substitution_note: Label = %SubstitutionNote
+@onready var cluster_label: Label = %ClusterLabel
 @onready var run_mode_btn: Button = %RunModeBtn
 @onready var status_icon: Label = %StatusIcon
 @onready var status_label: Label = %StatusLabel
@@ -27,7 +29,10 @@ func _ready() -> void:
 	run_mode_btn.pressed.connect(_toggle_run_mode)
 	auto_list_toggle.toggled.connect(_on_auto_list_toggle)
 	run_mode_btn.text = "One-shot"
-	recipe_selector.item_selected.connect(func(_i: int) -> void: _refresh_status())
+	recipe_selector.item_selected.connect(func(_i: int) -> void:
+		_refresh_status()
+		_refresh_recipe_hints()
+	)
 	margin_spinbox.min_value = 10
 	margin_spinbox.max_value = 100
 	margin_spinbox.value = 30
@@ -75,6 +80,7 @@ func setup(plot_id: String, building: Dictionary, terrain: String) -> void:
 	auto_list_toggle.set_pressed_no_signal(bool(_building.get("auto_list_output", false)))
 	_populate_recipes()
 	_on_world_refreshed()
+	_refresh_recipe_hints()
 
 
 func _building_id() -> String:
@@ -153,6 +159,41 @@ func _refresh_status() -> void:
 		_set_idle()
 		return
 	_set_running(active_rid, ticks_left)
+
+
+func _refresh_recipe_hints() -> void:
+	var rid := _selected_recipe_id()
+	var plot_data: Dictionary = WorldState.plots.get(_plot_id, {})
+	var cluster_bonus := float(plot_data.get("cluster_bonus", 0.0))
+	if cluster_bonus > 0.0:
+		cluster_label.text = "🏭 Cluster bonus: +%d%% yield" % int(cluster_bonus * 100.0)
+		cluster_label.modulate = Color(0.4, 1.0, 0.4)
+		cluster_label.show()
+	else:
+		cluster_label.hide()
+	if rid.is_empty():
+		substitution_note.hide()
+		return
+	var row := _recipe_row(rid)
+	var inputs: Variant = row.get("inputs", {})
+	if not (inputs is Dictionary) or (inputs as Dictionary).is_empty():
+		substitution_note.hide()
+		return
+	var show_sub := false
+	for mat in (inputs as Dictionary).keys():
+		var mid := str(mat)
+		var need := int((inputs as Dictionary)[mat])
+		if WorldState.player_has_material(mid, need):
+			continue
+		if WorldState.player_has_substitute(rid, mid):
+			show_sub = true
+			break
+	if show_sub:
+		substitution_note.text = "⚡ Will use substitute input"
+		substitution_note.modulate = Color(1.0, 0.85, 0.2)
+		substitution_note.show()
+	else:
+		substitution_note.hide()
 
 
 func _set_idle() -> void:

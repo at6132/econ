@@ -15,6 +15,19 @@ text = "Production"
 unique_name_in_owner = true
 layout_mode = 2
 
+[node name="SubstitutionNote" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+autowrap_mode = 3
+text = "⚡ Will use substitute input"
+
+[node name="ClusterLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "🏭 Cluster bonus"
+
 [node name="RunModeRow" type="HBoxContainer" parent="."]
 layout_mode = 2
 theme_override_constants/separation = 10

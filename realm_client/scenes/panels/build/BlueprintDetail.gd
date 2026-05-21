@@ -133,8 +133,49 @@ func _reset_hint() -> void:
 		)
 
 
+func show_roads_context(grid: Dictionary) -> void:
+	current_blueprint = {}
+	mode_row.visible = true
+	name_label.text = "Roads"
+	meta_label.text = "Site grid (10m cells) · world edges (plot-to-plot)"
+	var linked := bool(grid.get("site_roads_link_world", false))
+	var workshops := bool(grid.get("site_roads_connect_workshops", false))
+	var world_ok := bool(grid.get("road_accessible", false))
+	var status_parts: PackedStringArray = []
+	if world_ok:
+		status_parts.append("World network: connected")
+	elif linked:
+		status_parts.append("World network: site road reaches neighbor highway")
+	else:
+		status_parts.append("World network: not linked")
+	if workshops:
+		status_parts.append("Workshops: site roads OK")
+	else:
+		status_parts.append("Workshops: need road beside each building")
+	desc_label.text = "\n".join(status_parts)
+	cost_label.text = "Site road: turnkey per cell (road_segment)"
+	materials_label.text = "World road: lumber×2 + stone×2 + $120 on adjacent plot edge"
+	recipes_label.hide()
+	license_label.hide()
+	hint_label.text = (
+		"Drag on the grid to paint site roads. Click cyan edge ports to build a "
+		+ "world road to the neighboring plot ($120 + materials)."
+	)
+	hint_label.remove_theme_color_override("font_color")
+
+
 func set_market_context(fair_value_cents: int, free_cells: int) -> void:
 	market_label.text = "Plot value: %s  ·  %d free cells" % [
 		WorldState.format_money(fair_value_cents),
 		free_cells,
 	]
+
+
+func set_cluster_context(plot_data: Dictionary) -> void:
+	var cluster_bonus := float(plot_data.get("cluster_bonus", 0.0))
+	var nearby := int(plot_data.get("nearby_buildings_same_owner", 0))
+	if cluster_bonus > 0.0:
+		market_label.text += "\n🏭 %d buildings nearby — +10%% cluster bonus active!" % nearby
+	elif nearby > 0:
+		var need := maxi(0, 4 - nearby)
+		market_label.text += "\nBuild %d more buildings within 5 tiles for cluster bonus" % need

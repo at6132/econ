@@ -85,6 +85,9 @@ var forward_contracts: Array = []
 var player_price_alerts: Array = []
 var road_segments: Array = []
 var population_density_map: Dictionary = {}
+## Per-landmass category multipliers from ``regional_advantages`` on ``GET /world/static``.
+var regional_advantages: Dictionary = {}
+## Legacy flat view (first landmass) for economics panels.
 var regional_advantage: Dictionary = {}
 
 ## Matches ``realm.actions.plot_actions.SURVEY_COST_CENTS`` (engine source of truth).
@@ -230,8 +233,7 @@ func apply_world(data: Dictionary) -> void:
 	player_price_alerts = pa if pa is Array else []
 	var rs: Variant = data.get("road_segments", [])
 	road_segments = rs if rs is Array else []
-	var adv: Variant = data.get("regional_advantage", data.get("landmass_advantage", {}))
-	regional_advantage = adv if adv is Dictionary else {}
+	_apply_regional_advantages_payload(data)
 	population_density_map.clear()
 	for pid in plots.keys():
 		var pd: Dictionary = plots[pid]
@@ -300,6 +302,7 @@ func apply_static(data: Dictionary) -> void:
 	var bc_raw: Variant = data.get("building_catalog", [])
 	if bc_raw is Array:
 		building_catalog = bc_raw
+	_apply_regional_advantages_payload(data)
 	static_loaded = true
 	static_updated.emit()
 
@@ -311,6 +314,18 @@ func apply_static(data: Dictionary) -> void:
 func _merge_server_tick(server_tick: Variant) -> void:
 	# Poll responses can finish after a newer tick push — never rewind the HUD.
 	current_tick = maxi(current_tick, variant_to_int(server_tick, current_tick))
+
+
+func _apply_regional_advantages_payload(data: Dictionary) -> void:
+	var ra: Variant = data.get("regional_advantages", data.get("regional_advantage", data.get("landmass_advantage", null)))
+	if ra is Dictionary and not (ra as Dictionary).is_empty():
+		regional_advantages = (ra as Dictionary).duplicate(true)
+		var keys := regional_advantages.keys()
+		if keys.size() > 0:
+			var row: Variant = regional_advantages[keys[0]]
+			regional_advantage = row if row is Dictionary else {}
+		else:
+			regional_advantage = {}
 
 
 func apply_player(data: Dictionary) -> void:
@@ -597,6 +612,55 @@ func format_money(cents: int) -> String:
 	var c := ac % 100
 	var sign := "-" if cents < 0 else ""
 	return "%s$%s.%02d" % [sign, _format_int_commas(dollars), c]
+
+
+func player_material_total(material_id: String) -> int:
+	var row: Variant = player_inventory.get(material_id, 0)
+	if row is Dictionary:
+		return variant_to_int((row as Dictionary).get("total", 0), 0)
+	return variant_to_int(row, 0)
+
+
+func player_material_qty(material_id: String, quality: String = "standard") -> int:
+	var row: Variant = player_inventory.get(material_id, 0)
+	if row is Dictionary:
+		var d: Dictionary = row as Dictionary
+		if quality == "any":
+			return player_material_total(material_id)
+		var by_q: Variant = d.get("by_quality", {})
+		if by_q is Dictionary:
+			return variant_to_int((by_q as Dictionary).get(quality, 0), 0)
+		return variant_to_int(d.get("total", 0), 0)
+	if quality == "any" or quality == "standard":
+		return variant_to_int(row, 0)
+	return 0
+
+
+func player_has_material(material_id: String, qty_needed: int) -> bool:
+	return player_material_total(material_id) >= qty_needed
+
+
+func player_has_substitute(recipe_id: String, primary_material_id: String) -> bool:
+	var recipe := recipe_by_id(recipe_id)
+	var subs: Variant = recipe.get("input_substitutes", {})
+	if not (subs is Dictionary):
+		return false
+	var entries: Variant = (subs as Dictionary).get(primary_material_id, [])
+	if not (entries is Array):
+		return false
+	var primary_qty := 1
+	var inputs: Variant = recipe.get("inputs", {})
+	if inputs is Dictionary and (inputs as Dictionary).has(primary_material_id):
+		primary_qty = variant_to_int((inputs as Dictionary)[primary_material_id], 1)
+	for entry in entries as Array:
+		if not (entry is Array) or (entry as Array).size() < 2:
+			continue
+		var sub_id := str((entry as Array)[0])
+		var ratio := float((entry as Array)[1])
+		var sub_need := int(ceil(float(primary_qty) * ratio))
+		if player_material_total(sub_id) >= sub_need:
+			return true
+	return false
 
 
 func recipe_by_id(recipe_id: String) -> Dictionary:

@@ -23,6 +23,7 @@ extends HSplitContainer
 @onready var sell_btn: Button = %SellBtn
 
 var _selected_material: String = "coal"
+var _quality_filter: String = "all"
 
 
 func _ready() -> void:
@@ -47,7 +48,47 @@ func _ready() -> void:
 	buy_btn.pressed.connect(_on_buy)
 	sell_btn.pressed.connect(_on_sell)
 	WorldState.world_updated.connect(_on_world_updated)
+	_build_quality_filter_row()
 	_select_material(_selected_material)
+
+
+func _build_quality_filter_row() -> void:
+	var parent_col := material_list.get_parent()
+	if parent_col == null:
+		return
+	if parent_col.get_node_or_null("QualityFilterRow") != null:
+		return
+	var row := HBoxContainer.new()
+	row.name = "QualityFilterRow"
+	row.add_theme_constant_override("separation", 6)
+	parent_col.add_child(row)
+	parent_col.move_child(row, material_list.get_index())
+	for label_text in ["All Quality", "★ High", "Standard", "▼ Low"]:
+		var chip := Button.new()
+		chip.text = label_text
+		chip.toggle_mode = true
+		chip.add_theme_font_size_override("font_size", 10)
+		_style_btn(chip)
+		chip.pressed.connect(_on_quality_filter_chip.bind(label_text, chip, row))
+		row.add_child(chip)
+	if row.get_child_count() > 0:
+		(row.get_child(0) as Button).button_pressed = true
+
+
+func _on_quality_filter_chip(label_text: String, chip: Button, row: HBoxContainer) -> void:
+	for c in row.get_children():
+		if c is Button:
+			(c as Button).button_pressed = c == chip
+	match label_text:
+		"★ High":
+			_quality_filter = "high"
+		"Standard":
+			_quality_filter = "standard"
+		"▼ Low":
+			_quality_filter = "low"
+		_:
+			_quality_filter = "all"
+	_refresh_order_book()
 
 
 func _exit_tree() -> void:
@@ -147,6 +188,12 @@ func _refresh_order_book() -> void:
 	if _selected_material.is_empty():
 		return
 	var sorted_asks: Array = _asks_for_material(_selected_material)
+	if _quality_filter != "all":
+		var filtered: Array = []
+		for row in sorted_asks:
+			if row is Dictionary and str((row as Dictionary).get("quality", "standard")) == _quality_filter:
+				filtered.append(row)
+		sorted_asks = filtered
 	sorted_asks.sort_custom(
 		func(a: Variant, b: Variant) -> bool:
 			return int((a as Dictionary).get("price_per_unit_cents", 0)) < int((b as Dictionary).get("price_per_unit_cents", 0))
@@ -173,8 +220,13 @@ func _refresh_order_book() -> void:
 	else:
 		best_bid_label.text = "Best bid: %s" % WorldState.format_money(_bid_price(sorted_bids[0] as Dictionary))
 
-	var held: int = int(WorldState.player_inventory.get(_selected_material, 0))
-	your_holding_label.text = "You hold: %d" % held
+	var held: int = WorldState.player_material_total(_selected_material)
+	var hq := WorldState.player_material_qty(_selected_material, "high")
+	var lq := WorldState.player_material_qty(_selected_material, "low")
+	if hq > 0 or lq > 0:
+		your_holding_label.text = "You hold: %d (★%d ▼%d)" % [held, hq, lq]
+	else:
+		your_holding_label.text = "You hold: %d" % held
 
 	if sorted_asks.is_empty():
 		var empty_ask := Label.new()
@@ -294,6 +346,23 @@ func _make_ask_row(ask: Dictionary) -> HBoxContainer:
 		seller_lbl.modulate = Color(0.92, 0.9, 0.84)
 	row.add_child(seller_lbl)
 
+	var quality := str(ask.get("quality", "standard"))
+	var quality_color := Color(0.4, 1.0, 0.4) if quality == "high" else (
+		Color(1.0, 0.4, 0.4) if quality == "low" else Color(0.7, 0.7, 0.7)
+	)
+	var quality_lbl := Label.new()
+	match quality:
+		"high":
+			quality_lbl.text = "★ HQ"
+		"low":
+			quality_lbl.text = "▼ LQ"
+		_:
+			quality_lbl.text = ""
+	if not quality_lbl.text.is_empty():
+		quality_lbl.modulate = quality_color
+		quality_lbl.add_theme_font_size_override("font_size", 9)
+		row.add_child(quality_lbl)
+
 	if not is_mine and qty > 0:
 		var qb := Button.new()
 		qb.text = "Buy"
@@ -376,7 +445,7 @@ func _update_buy_total() -> void:
 func _update_sell_total() -> void:
 	var revenue := int(sell_qty.value) * int(sell_price.value)
 	sell_total_label.text = "Revenue: %s" % WorldState.format_money(revenue)
-	var have_stock := int(sell_qty.value) <= int(WorldState.player_inventory.get(_selected_material, 0))
+	var have_stock := int(sell_qty.value) <= WorldState.player_material_total(_selected_material)
 	sell_btn.modulate = Color.WHITE if have_stock else Color(1, 0.4, 0.4)
 
 

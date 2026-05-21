@@ -10,6 +10,8 @@ signal closed
 @onready var detail_panel: PanelContainer = %BlueprintDetail
 @onready var mode_buildings_btn: Button = %ModeBuildingsBtn
 @onready var mode_roads_btn: Button = %ModeRoadsBtn
+@onready var columns: HBoxContainer = %Columns
+@onready var root_panel: MarginContainer = %Root
 
 var _plot_id: String = ""
 var _plot_data: Dictionary = {}
@@ -29,6 +31,8 @@ func _ready() -> void:
 		grid_view.cell_clicked.connect(_on_cell_clicked)
 	if grid_view.has_signal("road_path_painted"):
 		grid_view.road_path_painted.connect(_on_road_path_painted)
+	if grid_view.has_signal("world_link_clicked"):
+		grid_view.world_link_clicked.connect(_on_world_link_clicked)
 	if mode_buildings_btn and mode_roads_btn:
 		var mode_group := ButtonGroup.new()
 		mode_group.allow_unpress = false
@@ -45,6 +49,27 @@ func _apply_theme() -> void:
 	var bg := get_node_or_null("DimBackground")
 	if bg is ColorRect:
 		(bg as ColorRect).color = Color(0.04, 0.04, 0.06, 0.92)
+	if root_panel:
+		var panel_sb := StyleBoxFlat.new()
+		panel_sb.bg_color = Color(0.07, 0.07, 0.09, 0.96)
+		panel_sb.set_border_width_all(1)
+		panel_sb.border_color = Color(0.85, 0.72, 0.2, 0.35)
+		panel_sb.set_corner_radius_all(6)
+		panel_sb.set_content_margin_all(12)
+		root_panel.add_theme_stylebox_override("panel", panel_sb)
+	for btn in [mode_buildings_btn, mode_roads_btn]:
+		if btn == null:
+			continue
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.12, 0.12, 0.14)
+		sb.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal", sb)
+		var pressed := sb.duplicate() as StyleBoxFlat
+		pressed.bg_color = Color(0.22, 0.20, 0.12)
+		pressed.border_color = Color(0.85, 0.72, 0.2, 0.8)
+		pressed.set_border_width_all(1)
+		btn.add_theme_stylebox_override("pressed", pressed)
+		btn.add_theme_stylebox_override("hover", pressed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -93,9 +118,14 @@ func _set_build_mode(mode: String) -> void:
 	if mode_buildings_btn:
 		mode_buildings_btn.button_pressed = not roads_on
 	if mode_roads_btn:
-		mode_roads_btn.pressed = roads_on
-	if roads_on and sidebar.has_method("select_blueprint_id"):
-		sidebar.call("select_blueprint_id", "road_segment")
+		mode_roads_btn.button_pressed = roads_on
+	if sidebar:
+		sidebar.visible = not roads_on
+	if roads_on:
+		if sidebar.has_method("select_blueprint_id"):
+			sidebar.call("select_blueprint_id", "road_segment")
+		if detail_panel.has_method("show_roads_context"):
+			detail_panel.call("show_roads_context", _plot_data.get("grid", {}))
 	elif not roads_on:
 		_selected_blueprint_id = ""
 		if grid_view.has_method("set_placing_blueprint"):
@@ -121,9 +151,13 @@ func _on_grid_loaded(data: Dictionary) -> void:
 	_plot_data["area_sq_metres"] = int(data.get("area_sq_metres", 10_000))
 	if grid_view.has_method("load_plot"):
 		grid_view.call("load_plot", _plot_id, _plot_data)
+	if _interaction_mode_roads() and detail_panel.has_method("show_roads_context"):
+		detail_panel.call("show_roads_context", data)
 	var free_cells := int(data.get("free_cells_count", 100))
 	if detail_panel.has_method("set_market_context"):
 		detail_panel.call("set_market_context", int(_plot_data.get("fair_value_cents", 0)), free_cells)
+	if detail_panel.has_method("set_cluster_context"):
+		detail_panel.call("set_cluster_context", _plot_data)
 
 
 func _on_value_loaded(data: Dictionary) -> void:
@@ -158,31 +192,54 @@ func _on_cell_clicked(gx: int, gy: int) -> void:
 
 
 func _on_road_path_painted(cells: Array) -> void:
+	_place_road_cells(cells)
+
+
+func _interaction_mode_roads() -> bool:
+	return mode_roads_btn != null and mode_roads_btn.button_pressed
+
+
+func _place_road_cells(cells: Array) -> void:
 	if cells.is_empty():
 		return
-	_place_road_cells(cells, 0)
-
-
-func _place_road_cells(cells: Array, index: int) -> void:
-	if index >= cells.size():
-		_refresh_plot_data()
-		MainFeedback.toast("Road segment placed (%d cells)" % cells.size(), false)
-		return
-	var c: Variant = cells[index]
-	if not (c is Vector2i):
-		_place_road_cells(cells, index + 1)
-		return
-	var cell := c as Vector2i
-	API.place_blueprint(
+	API.place_road_path(
 		_plot_id,
-		"road_segment",
-		cell.x,
-		cell.y,
+		cells,
 		_build_mode,
 		func(data: Dictionary) -> void:
-			if not bool(data.get("ok", false)):
-				_show_placement_failed(str(data.get("reason", "Road placement failed")))
-			_place_road_cells(cells, index + 1),
+			if bool(data.get("ok", false)):
+				var n := int(data.get("placed_count", cells.size()))
+				_refresh_plot_data()
+				MainFeedback.toast("Road placed (%d cells)" % n, false)
+				API.get_world_summary(WorldState.party_id, func(s): WorldState.apply_summary(s))
+			else:
+				var placed := int(data.get("placed_count", 0))
+				var msg := str(data.get("reason", "Road placement failed"))
+				if placed > 0:
+					msg += " (%d placed before stop)" % placed
+					_refresh_plot_data()
+				_show_placement_failed(msg),
+	)
+
+
+func _on_world_link_clicked(neighbor_plot_id: String) -> void:
+	if neighbor_plot_id.is_empty():
+		return
+	API.build_road(
+		_plot_id,
+		neighbor_plot_id,
+		func(data: Dictionary) -> void:
+			if bool(data.get("ok", false)):
+				_refresh_plot_data()
+				API.get_world_map(func(m): WorldState.apply_map(m))
+				API.get_roads(func(r):
+					var segs: Variant = r.get("segments", [])
+					if segs is Array:
+						WorldState.road_segments = segs as Array
+				)
+				MainFeedback.toast("World road built to %s" % neighbor_plot_id, false)
+			else:
+				_show_placement_failed(str(data.get("reason", "World road build failed"))),
 	)
 
 
