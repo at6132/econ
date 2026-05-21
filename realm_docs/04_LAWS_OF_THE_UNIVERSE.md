@@ -56,11 +56,11 @@ Where speed depends on transport asset. A coastal vessel is fast over water but 
 
 ## Law 4 — Energy is required
 
-Production consumes energy. Energy is a tradeable good (electricity, fuel, etc. depending on what materials are used to generate it).
+Production consumes energy. **Delivered electricity** is a **regional grid service** billed in **kWh** (watt-hours), not a warehouse commodity. **Fuel** (coal, charcoal, etc.) remains tradeable matter used to **generate** exports into the grid. **Stored electrical energy** exists only in **battery** buildings on a plot.
 
-**Engine implication:** Every production recipe specifies energy input. If energy isn't available, production stalls. This makes energy supply a foundational vertical (power plants, fuel refineries, etc.) and creates demand even when other markets are flat.
+**Engine implication:** Recipes specify an `energy_wh` draw from the connected grid or on-site batteries. If the grid is at capacity (brownout) and batteries are empty, production stalls. Generators and fuel supply are foundational verticals.
 
-**Important sub-law: regional energy networks.** Energy doesn't transmit globally for free. There are local grids (or fuel logistics). This means a region without an energy provider is economically dead until someone builds one — creating opportunity for new entrants.
+**Important sub-law: regional energy networks.** Power does not transmit globally for free. Road-connected **grid regions** clear price daily; a **utility operator** issues periodic statements. A region without generation is economically constrained until someone builds capacity.
 
 ---
 
