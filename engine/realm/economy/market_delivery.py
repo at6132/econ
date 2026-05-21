@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr, MatterOk, MatterResult
 from realm.events.event_log import log_event
+from realm.core.ledger import MoneyErr, party_cash_account
+from realm.economy.market_reserves import consume_reserve_for_order
 from realm.infrastructure.plot_logistics import add_party_plot_stock, owned_plot_ids_sorted
 from realm.production.storage_caps import (
     is_carried_material,
@@ -20,6 +22,10 @@ DELIVERY_DDP: str = "ddp"
 DELIVERY_FOB: str = "fob"
 VALID_DELIVERY_TERMS: frozenset[str] = frozenset({DELIVERY_DDP, DELIVERY_FOB})
 
+# Seller breach when DDP dispatch fails after a match — paid to buyer (trade rolls back).
+DDP_BREACH_PENALTY_BPS: int = 2_000  # 20% of line value
+DDP_BREACH_MIN_CENTS: int = 500
+
 
 @dataclass(frozen=True, slots=True)
 class MarketFobPickup:
@@ -32,6 +38,45 @@ class MarketFobPickup:
     quality: str
     match_tick: int
     order_id: str = ""
+
+
+def apply_ddp_breach_penalty(
+    world: World,
+    seller: PartyId,
+    buyer: PartyId,
+    trade_value_cents: int,
+) -> int:
+    """Charge seller for failing DDP after match; compensates buyer. Returns cents paid."""
+    trade_value_cents = max(0, int(trade_value_cents))
+    penalty = max(
+        DDP_BREACH_MIN_CENTS,
+        trade_value_cents * DDP_BREACH_PENALTY_BPS // 10_000,
+    )
+    seller_c = party_cash_account(seller)
+    buyer_c = party_cash_account(buyer)
+    if world.ledger.balance(seller_c) < penalty:
+        penalty = max(0, world.ledger.balance(seller_c))
+    if penalty <= 0:
+        log_event(
+            world,
+            "market_ddp_breach_unpaid",
+            f"{seller} breached DDP but has no cash for {penalty}¢ penalty",
+            seller=str(seller),
+            buyer=str(buyer),
+        )
+        return 0
+    tr = world.ledger.transfer(debit=seller_c, credit=buyer_c, amount_cents=penalty)
+    if isinstance(tr, MoneyErr):
+        return 0
+    log_event(
+        world,
+        "market_ddp_breach",
+        f"{seller} paid {penalty}¢ breach penalty to {buyer} (DDP delivery failed)",
+        seller=str(seller),
+        buyer=str(buyer),
+        penalty_cents=penalty,
+    )
+    return penalty
 
 
 def normalize_delivery_terms(raw: str | None) -> str:
@@ -141,9 +186,10 @@ def fulfill_market_matter(
         return MatterErr(reason="sell order missing listing plot for physical delivery")
 
     terms = normalize_delivery_terms(getattr(ask, "delivery_terms", DELIVERY_DDP))
+    order_id = str(getattr(ask, "order_id", "") or "")
 
     if terms == DELIVERY_FOB:
-        return _append_fob_pickup(
+        fob = _append_fob_pickup(
             world,
             buyer=buyer,
             seller=seller,
@@ -151,8 +197,11 @@ def fulfill_market_matter(
             material=material,
             qty=qty,
             quality=quality,
-            order_id=str(getattr(ask, "order_id", "")),
+            order_id=order_id,
         )
+        if not isinstance(fob, MatterErr) and order_id:
+            consume_reserve_for_order(world, order_id, int(qty))
+        return fob
 
     dest_raw = str(getattr(bid, "delivery_plot_id", "") or "") if bid is not None else ""
     dest_explicit = PlotId(dest_raw) if dest_raw else None
@@ -170,7 +219,6 @@ def fulfill_market_matter(
         from_plot,
         dest,
         consignee=buyer,
-        escrowed_market=True,
     )
     if ship.get("ok"):
         log_event(
@@ -185,29 +233,21 @@ def fulfill_market_matter(
             dest_plot_id=str(dest),
             shipment_id=str(ship.get("shipment_id", "")),
         )
+        if order_id:
+            consume_reserve_for_order(world, order_id, int(qty))
         return MatterOk()
 
-    # Cannot run DDP (no dock, fuel, cash, etc.) — fall back to FOB so trade still clears.
     log_event(
         world,
         "market_ddp_failed",
-        f"DDP failed ({ship.get('reason', '?')}) — goods await FOB pickup at {from_plot}",
+        f"DDP failed ({ship.get('reason', '?')}) — match void, breach penalty due",
         seller=str(seller),
         buyer=str(buyer),
         material=str(material),
         qty=int(qty),
         reason=str(ship.get("reason", "")),
     )
-    return _append_fob_pickup(
-        world,
-        buyer=buyer,
-        seller=seller,
-        from_plot_id=from_plot,
-        material=material,
-        qty=qty,
-        quality=quality,
-        order_id=str(getattr(ask, "order_id", "")),
-    )
+    return MatterErr(reason=f"DDP delivery failed: {ship.get('reason', 'unknown')}")
 
 
 def pickup_fob(
@@ -239,7 +279,7 @@ def pickup_fob(
         int(row.qty),
         row.from_plot_id,
         dest,
-        escrowed_market=True,
+        consignee=buyer,
     )
     if not ship.get("ok"):
         return dict(ship)
@@ -254,6 +294,59 @@ def pickup_fob(
         shipment_id=str(ship.get("shipment_id", "")),
     )
     return {"ok": True, "shipment_id": ship.get("shipment_id"), "dest_plot_id": str(dest)}
+
+
+def fulfill_p2p_delivery(
+    world: World,
+    *,
+    seller: PartyId,
+    buyer: PartyId,
+    material: MaterialId,
+    qty: int,
+    from_plot_id: PlotId | None = None,
+    to_plot_id: PlotId | None = None,
+) -> MatterResult:
+    """P2P bulk: ship from seller plot to buyer plot (no instant stash teleport)."""
+    if qty <= 0:
+        return MatterOk()
+    if not party_uses_plot_storage(world, buyer) or is_carried_material(material):
+        return try_add_inventory(world, buyer, material, qty)
+    if not party_uses_plot_storage(world, seller):
+        return MatterErr(reason="seller uses plot storage required for bulk P2P")
+    from realm.infrastructure.plot_logistics import pick_plot_with_stock
+
+    src = from_plot_id
+    if src is None:
+        src = pick_plot_with_stock(world, seller, material, qty)
+    if src is None:
+        return MatterErr(reason="seller has no uncommitted bulk on plots")
+    dest = resolve_buyer_delivery_plot(world, buyer, explicit=to_plot_id)
+    if dest is None:
+        return MatterErr(reason="buyer has no plot to receive delivery")
+    from realm.infrastructure.movement import dispatch_shipment
+
+    ship = dispatch_shipment(
+        world,
+        seller,
+        material,
+        int(qty),
+        src,
+        dest,
+        consignee=buyer,
+    )
+    if not ship.get("ok"):
+        return MatterErr(reason=str(ship.get("reason", "dispatch failed")))
+    log_event(
+        world,
+        "p2p_ship",
+        f"{seller} shipping {qty}×{material} to {buyer} at {dest} (P2P)",
+        seller=str(seller),
+        buyer=str(buyer),
+        material=str(material),
+        qty=int(qty),
+        shipment_id=str(ship.get("shipment_id", "")),
+    )
+    return MatterOk()
 
 
 def fob_pickups_for_party(world: World, party: PartyId) -> list[dict]:
