@@ -1,4 +1,4 @@
-"""Plot-local output stock: when enabled (Genesis), outputs and inbound shipments stage on plots until harvested."""
+"""Plot-local bulk storage — source of truth for matter at a site (Option B)."""
 
 from __future__ import annotations
 
@@ -7,29 +7,32 @@ from collections.abc import Sequence
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr, MatterOk, MatterResult
-from realm.production.storage_caps import try_add_inventory
+from realm.production.storage_caps import (
+    is_carried_material,
+    party_uses_plot_storage,
+    plot_storage_cap_units,
+    try_add_inventory,
+)
 from realm.world import World
-
-# Per-plot cap on total units staged (all materials); separate from party inventory cap.
-PLOT_OUTPUT_STORAGE_CAP_UNITS = 50_000
 
 
 def plot_logistics_enabled(world: World) -> bool:
-    """All parties use the same staging rules when the scenario enables plot logistics."""
     return bool(world.use_plot_output_logistics)
 
 
 def uses_plot_logistics(world: World, party: PartyId) -> bool:
-    """Same as ``plot_logistics_enabled``; ``party`` is kept for call-site readability."""
-    return plot_logistics_enabled(world)
+    return plot_logistics_enabled(world) and party_uses_plot_storage(world, party)
 
 
-def party_material_on_plot(world: World, party: PartyId, plot_id: PlotId, material: MaterialId) -> int:
-    """Inventory plus staged output on one plot (recipe inputs draw from both)."""
-    q = world.inventory.qty(party, material)
-    if not plot_logistics_enabled(world):
-        return q
-    return q + plot_output_qty(world, plot_id, material)
+def party_material_on_plot(
+    world: World, party: PartyId, plot_id: PlotId, material: MaterialId
+) -> int:
+    """Units available to run production on ``plot_id``."""
+    if is_carried_material(material):
+        return world.inventory.qty(party, material, "any")
+    if not uses_plot_logistics(world, party):
+        return world.inventory.qty(party, material, "any")
+    return plot_output_qty(world, plot_id, material)
 
 
 def party_material_held(
@@ -39,20 +42,14 @@ def party_material_held(
     *,
     owned_plot_ids: Sequence[PlotId] | None = None,
 ) -> int:
-    """Inventory plus staged goods on owned plots.
-
-    When ``owned_plot_ids`` is provided (sorted plot ids for that party), only those
-    plots are consulted — used by Genesis settler ticks to avoid scanning the full map
-    thousands of times per day.
-
-    When omitted, staged output is summed by iterating ``plot_output_stock`` keys
-    (plots that actually hold staged matter), not every plot in the world.
-    """
-    t = world.inventory.qty(party, material)
-    if not plot_logistics_enabled(world):
-        return t
+    """Carried portable stock plus bulk staged on owned plots."""
+    if not uses_plot_logistics(world, party):
+        return world.inventory.qty(party, material, "any")
+    t = world.inventory.qty(party, material, "any") if is_carried_material(material) else 0
     ms = str(material)
-    if owned_plot_ids is not None:
+    if is_carried_material(material):
+        pass
+    elif owned_plot_ids is not None:
         for pid in owned_plot_ids:
             t += plot_output_qty(world, pid, material)
         return t
@@ -72,6 +69,13 @@ def _plot_owned_by(world: World, party: PartyId, plot_id: PlotId) -> bool:
     return p is not None and p.owner == party
 
 
+def owned_plot_ids_sorted(world: World, party: PartyId) -> list[PlotId]:
+    return sorted(
+        (p.plot_id for p in world.plots.values() if p.owner == party),
+        key=str,
+    )
+
+
 def plot_output_total(world: World, plot_id: PlotId) -> int:
     d = world.plot_output_stock.get(str(plot_id))
     if not d:
@@ -87,16 +91,22 @@ def plot_output_qty(world: World, plot_id: PlotId, material: MaterialId) -> int:
 
 
 def try_add_plot_output(
-    world: World, plot_id: PlotId, party: PartyId, material: MaterialId, qty: int
+    world: World,
+    plot_id: PlotId,
+    party: PartyId,
+    material: MaterialId,
+    qty: int,
 ) -> MatterResult:
     if qty < 0:
         return MatterErr(reason="quantity must be non-negative")
     if qty == 0:
         return MatterOk()
+    if is_carried_material(material):
+        return try_add_inventory(world, party, material, qty)
     if not _plot_owned_by(world, party, plot_id):
         return MatterErr(reason="plot not owned")
-    if plot_output_total(world, plot_id) + qty > PLOT_OUTPUT_STORAGE_CAP_UNITS:
-        return MatterErr(reason="plot output storage full")
+    if plot_output_total(world, plot_id) + qty > plot_storage_cap_units(world, plot_id):
+        return MatterErr(reason="plot storage full")
     bucket = world.plot_output_stock.setdefault(str(plot_id), {})
     bucket[str(material)] = int(bucket.get(str(material), 0)) + qty
     return MatterOk()
@@ -127,14 +137,66 @@ def remove_plot_output(
     return MatterOk()
 
 
+def pick_plot_with_stock(
+    world: World,
+    party: PartyId,
+    material: MaterialId,
+    qty: int,
+    *,
+    preferred: PlotId | None = None,
+) -> PlotId | None:
+    if preferred is not None and plot_output_qty(world, preferred, material) >= qty:
+        return preferred
+    for pid in owned_plot_ids_sorted(world, party):
+        if plot_output_qty(world, pid, material) >= qty:
+            return pid
+    return None
+
+
+def remove_party_plot_stock(
+    world: World,
+    party: PartyId,
+    material: MaterialId,
+    qty: int,
+    *,
+    preferred_plot: PlotId | None = None,
+) -> MatterResult:
+    pid = pick_plot_with_stock(world, party, material, qty, preferred=preferred_plot)
+    if pid is None:
+        return MatterErr(reason="insufficient material on plots")
+    return remove_plot_output(world, party, pid, material, qty)
+
+
+def add_party_plot_stock(
+    world: World,
+    party: PartyId,
+    material: MaterialId,
+    qty: int,
+    *,
+    preferred_plot: PlotId | None = None,
+) -> MatterResult:
+    if is_carried_material(material):
+        return try_add_inventory(world, party, material, qty)
+    plots = owned_plot_ids_sorted(world, party)
+    if not plots:
+        return MatterErr(reason="no owned plot for bulk storage")
+    pid = preferred_plot if preferred_plot in plots else plots[0]
+    return try_add_plot_output(world, pid, party, material, qty)
+
+
 def harvest_plot_output_to_party(
     world: World, party: PartyId, plot_id: PlotId, material: MaterialId, qty: int
 ) -> dict:
-    """Move staged units from plot stock into party inventory (subject to party storage cap)."""
+    """Move portable units from plot stock into personal carry."""
     if qty <= 0:
         return {"ok": False, "reason": "quantity must be positive"}
-    if not plot_logistics_enabled(world):
+    if not uses_plot_logistics(world, party):
         return {"ok": False, "reason": "plot logistics not enabled"}
+    if not is_carried_material(material):
+        return {
+            "ok": False,
+            "reason": "bulk goods stay on the plot — ship them or sell from site",
+        }
     if not _plot_owned_by(world, party, plot_id):
         return {"ok": False, "reason": "plot not owned"}
     rm = remove_plot_output(world, party, plot_id, material, qty)
@@ -148,7 +210,7 @@ def harvest_plot_output_to_party(
     log_event(
         world,
         "plot_harvest",
-        f"{party} harvested {qty}×{material} from {plot_id} to inventory",
+        f"{party} harvested {qty}×{material} from {plot_id} to carry",
         party=str(party),
         plot_id=str(plot_id),
         material=str(material),
@@ -160,14 +222,14 @@ def harvest_plot_output_to_party(
 def ensure_inventory_from_stash(
     world: World, party: PartyId, material: MaterialId, target_inv_qty: int
 ) -> None:
-    """Harvest from owned plots (deterministic plot order) until inventory >= target or blocked."""
-    if not plot_logistics_enabled(world):
+    """Legacy helper — only moves portable goods from plot to carry."""
+    if not uses_plot_logistics(world, party) or not is_carried_material(material):
         return
     target_inv_qty = max(0, target_inv_qty)
     while world.inventory.qty(party, material) < target_inv_qty:
         need = target_inv_qty - world.inventory.qty(party, material)
         moved = False
-        for pid in sorted((p.plot_id for p in world.plots.values() if p.owner == party), key=str):
+        for pid in owned_plot_ids_sorted(world, party):
             st = plot_output_qty(world, pid, material)
             if st <= 0:
                 continue
