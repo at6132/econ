@@ -98,12 +98,45 @@ def clear_save_metadata() -> None:
     _last_save_kind = ""
 
 
+def primary_slot_for_world(world: "World | None") -> str:
+    """Primary manual-save filename stem for this playthrough (``saves/<stem>.sqlite``)."""
+    if world is None:
+        return "current"
+    wid = str(getattr(world, "world_id", "") or "").strip()
+    return wid if wid else "current"
+
+
+def autosave_path_for_world(world: "World | None") -> Path:
+    """Per-world autosave file — does not overwrite other worlds' autosaves."""
+    wid = str(getattr(world, "world_id", "") or "").strip() if world is not None else ""
+    if wid:
+        return _SAVES_DIR / f"{wid}_autosave.sqlite"
+    return _AUTOSAVE_PATH
+
+
+def resolve_save_slot(slot_or_path: str | None, world: "World | None" = None) -> str | None:
+    """Map legacy shared ``current`` to this world's ``world_id`` when set."""
+    if slot_or_path is None:
+        primary = primary_slot_for_world(world)
+        return primary if primary != "current" else None
+    raw = str(slot_or_path).strip()
+    if not raw:
+        primary = primary_slot_for_world(world)
+        return primary if primary != "current" else None
+    if raw.lower() == "current":
+        primary = primary_slot_for_world(world)
+        if primary != "current":
+            return primary
+    return raw
+
+
 def safe_save_path(slot_or_path: str | None) -> Path:
     """Resolve a user-supplied save slot/path to ``<repo>/saves/<name>.sqlite``.
 
     Refuses anything that resolves outside the saves directory. Accepts:
       * ``None`` / empty → default ``realm_dev.sqlite``
-      * a bare slot name (``"current"`` → ``saves/current.sqlite``)
+      * a bare slot name (``"current"`` → ``saves/current.sqlite``, or the active
+        world's ``world_id`` when resolved via ``resolve_save_slot``)
       * a relative path under ``saves/`` (``"saves/foo.sqlite"``)
 
     Raises ``ValueError`` if the path escapes the saves directory.

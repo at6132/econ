@@ -267,16 +267,15 @@ def _solo_autosave_loop(interval: int) -> None:
     from realm.api.persistence import save_snapshot
 
     _log.info(
-        "Realm: solo autosave loop started (every %ds → %s).",
+        "Realm: solo autosave loop started (every %ds, per-world files).",
         interval,
-        _state._AUTOSAVE_PATH.name,
     )
     while not _solo_autosave_stop.is_set():
         if _solo_autosave_stop.wait(interval):
             break
         if not _state.is_world_initialized():
             continue
-        path = _state._AUTOSAVE_PATH
+        path = _state.autosave_path_for_world(_state.WORLD)
         try:
             t0 = time.perf_counter()
             with _state.WORLD_LOCK:

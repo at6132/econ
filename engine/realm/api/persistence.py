@@ -42,6 +42,7 @@ def save_snapshot(path: str, world: World) -> None:
             ("scenario_id", str(world.scenario_id)),
             ("seed", str(int(world.seed))),
             ("saved_at", str(saved_at)),
+            ("world_id", str(getattr(world, "world_id", "") or "")),
             ("world_name", str(getattr(world, "world_name", "") or "")),
         ]
         for k, v in meta_rows:
@@ -63,12 +64,19 @@ def load_snapshot(path: str) -> World:
 
 
 def read_meta(path: str) -> dict[str, Any]:
-    """Return ``{tick, scenario_id, seed, saved_at}`` from a save's meta table.
+    """Return ``{tick, scenario_id, seed, saved_at, world_id, world_name}`` from meta.
 
     Tolerant of older saves that pre-date the meta table — returns empty
     strings/zeros for fields that aren't present.
     """
-    out: dict[str, Any] = {"tick": 0, "scenario_id": "", "seed": 0, "saved_at": 0, "world_name": ""}
+    out: dict[str, Any] = {
+        "tick": 0,
+        "scenario_id": "",
+        "seed": 0,
+        "saved_at": 0,
+        "world_id": "",
+        "world_name": "",
+    }
     try:
         con = sqlite3.connect(path)
     except sqlite3.Error:
@@ -83,6 +91,7 @@ def read_meta(path: str) -> dict[str, Any]:
         out["scenario_id"] = m.get("scenario_id", "")
         out["seed"] = int(m.get("seed", "0") or 0)
         out["saved_at"] = int(m.get("saved_at", "0") or 0)
+        out["world_id"] = m.get("world_id", "")
         out["world_name"] = m.get("world_name", "")
     finally:
         con.close()

@@ -82,6 +82,7 @@ def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
 
 def dump_world(world: World) -> dict[str, Any]:
     plots_out: dict[str, Any] = {}
+    from realm.production.recipe_sites import plot_is_coastal
     from realm.world.plot_scale import plot_world_cells_tuple
 
     for pid, p in world.plots.items():
@@ -90,6 +91,7 @@ def dump_world(world: World) -> dict[str, Any]:
             "y": p.y,
             "world_cells": [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)],
             "terrain": p.terrain.value,
+            "is_coastal": plot_is_coastal(world, p),
             "owner": str(p.owner) if p.owner else None,
             "surveyed": p.surveyed,
             "deep_surveyed": getattr(p, "deep_surveyed", False),
@@ -243,6 +245,7 @@ def dump_world(world: World) -> dict[str, Any]:
         "market_history": [copy.deepcopy(h) for h in world.market_history],
         "p2p_idempotency": {str(k): copy.deepcopy(dict(v)) for k, v in world.p2p_idempotency.items()},
         "scenario_id": world.scenario_id,
+        "world_id": world.world_id,
         "world_name": world.world_name,
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "next_building_instance_seq": world.next_building_instance_seq,
@@ -679,6 +682,7 @@ def load_world(d: dict[str, Any]) -> World:
         market_history=[copy.deepcopy(h) for h in d.get("market_history", [])],
         p2p_idempotency={str(k): copy.deepcopy(v) for k, v in d.get("p2p_idempotency", {}).items()},
         scenario_id=str(d.get("scenario_id", "frontier")),
+        world_id=str(d.get("world_id", "")),
         world_name=str(d.get("world_name", "")),
         market_intel_expires_tick=int(d.get("market_intel_expires_tick", 0)),
         next_building_instance_seq=next_bseq,
@@ -1109,6 +1113,10 @@ def load_world(d: dict[str, Any]) -> World:
         if migrated:
             # Display log starts fresh — old saves' counters are subsumed into inventory.
             world.plot_output_stock = {}
+    if not str(world.world_id or "").strip():
+        from realm.core.ids import new_world_id
+
+        world.world_id = str(new_world_id())
     return world
 
 

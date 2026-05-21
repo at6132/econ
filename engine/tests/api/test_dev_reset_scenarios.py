@@ -93,6 +93,33 @@ def test_persistence_list_returns_ok_and_slots() -> None:
     assert isinstance(j.get("slots"), list)
 
 
+def test_dev_reset_assigns_world_id() -> None:
+    c = TestClient(app)
+    r = c.post("/dev/reset", params={"seed": 7, "scenario": "frontier", "name": "Id Test"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    wid = str(body.get("world_id", ""))
+    assert wid.startswith("w_")
+    assert _state.WORLD.world_id == wid
+
+
+def test_persistence_save_slot_current_uses_world_id(tmp_path, monkeypatch) -> None:
+    """``slot=current`` must not stomp a single shared file when the world has an id."""
+    monkeypatch.setattr(_state, "_SAVES_DIR", tmp_path)
+    monkeypatch.setattr(_state, "_REPO_ROOT", tmp_path.parent)
+
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 1, "scenario": "frontier"})
+    wid = str(_state.WORLD.world_id)
+    assert wid.startswith("w_")
+
+    rs = c.post("/persistence/save", params={"slot": "current"})
+    assert rs.status_code == 200
+    assert (tmp_path / f"{wid}.sqlite").is_file()
+    assert not (tmp_path / "current.sqlite").is_file()
+
+
 def test_persistence_save_load_roundtrip_with_meta(tmp_path, monkeypatch) -> None:
     """Save → list → load preserves tick and exposes meta (scenario/seed/saved_at)."""
     monkeypatch.setattr(_state, "_SAVES_DIR", tmp_path)
@@ -117,6 +144,7 @@ def test_persistence_save_load_roundtrip_with_meta(tmp_path, monkeypatch) -> Non
     assert meta["seed"] == 9
     assert meta["tick"] == saved_tick
     assert meta["saved_at"] > 0
+    assert str(meta.get("world_id", "")).startswith("w_")
 
     rld = c.post("/persistence/load", params={"slot": "unit_test_slot"})
     assert rld.status_code == 200
@@ -157,6 +185,19 @@ def test_persistence_clear_all_deletes_sqlite_files(tmp_path, monkeypatch) -> No
 
     status = c.get("/persistence/status").json()
     assert status["last_save_at"] == 0
+
+
+def test_dev_set_world_name() -> None:
+    c = TestClient(app)
+    c.post("/dev/reset", params={"seed": 3, "scenario": "frontier", "name": "Old Name"})
+    r = c.post("/dev/world-name", params={"name": "Avi's Frontier"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["world_name"] == "Avi's Frontier"
+    assert _state.WORLD.world_name == "Avi's Frontier"
+    summary = c.get("/world/summary", params={"party": "player"}).json()
+    assert summary.get("world_name") == "Avi's Frontier"
 
 
 def test_persistence_status_reports_last_save(tmp_path, monkeypatch) -> None:

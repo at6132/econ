@@ -69,7 +69,7 @@ async def _autosave_loop(interval: int) -> None:
     from realm.api import _state
     from realm.api.persistence import save_snapshot
 
-    _log.info("Realm: autosave loop started (every %ds → %s).", interval, _state._AUTOSAVE_PATH.name)
+    _log.info("Realm: autosave loop started (every %ds, per-world files).", interval)
     while True:
         try:
             await asyncio.sleep(interval)
@@ -77,7 +77,7 @@ async def _autosave_loop(interval: int) -> None:
             raise
         if not _state.is_world_initialized():
             continue
-        path = _state._AUTOSAVE_PATH
+        path = _state.autosave_path_for_world(_state.WORLD)
         try:
             t0 = time.perf_counter()
             await asyncio.to_thread(save_snapshot, str(path), _state.WORLD)

@@ -200,6 +200,48 @@ def get_blueprint(blueprint_id: str) -> dict:
     return blueprint_public_dict(bp)
 
 
+@router.post("/materials/register")
+def post_register_material(body: dict) -> dict:
+    from realm.actions.custom_recipe_actions import register_material_action
+
+    party = PartyId(str(body.get("party", "player")))
+    r = register_material_action(
+        _state.WORLD,
+        party,
+        str(body.get("display_name", "")),
+        str(body.get("category", "processed")),
+        str(body.get("material_id", "")),
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/recipes/create")
+def post_create_custom_recipe(body: dict) -> dict:
+    from realm.actions.custom_recipe_actions import create_custom_recipe_action
+
+    party = PartyId(str(body.get("party", "player")))
+    inputs_raw = body.get("inputs") or {}
+    outputs_raw = body.get("outputs") or {}
+    inputs = {str(k): int(v) for k, v in inputs_raw.items()} if isinstance(inputs_raw, dict) else {}
+    outputs = {str(k): int(v) for k, v in outputs_raw.items()} if isinstance(outputs_raw, dict) else {}
+    r = create_custom_recipe_action(
+        _state.WORLD,
+        party,
+        str(body.get("display_name", "")),
+        inputs,
+        outputs,
+        int(body.get("duration_ticks", 60)),
+        int(body.get("labor_cents", 0)),
+        str(body.get("requires_building_id", "")),
+        is_public=bool(body.get("is_public", False)),
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
 @router.post("/blueprints/create")
 def post_create_blueprint(body: dict) -> dict:
     from realm.actions.blueprint_actions import create_blueprint
@@ -431,6 +473,69 @@ def get_deep_survey_status(party: Annotated[str, Query()] = "player") -> dict:
     from realm.actions.deep_survey_actions import party_active_deep_survey_jobs
 
     return {"jobs": party_active_deep_survey_jobs(_state.WORLD, PartyId(party))}
+
+
+@router.get("/workflow")
+def get_workflow(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.infrastructure.building_workflow import workflow_public_dict
+
+    return {"ok": True, **workflow_public_dict(_state.WORLD, PartyId(party))}
+
+
+@router.get("/workflow/building")
+def get_workflow_building(
+    instance_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    from realm.infrastructure.building_workflow import get_building_routing
+
+    r = get_building_routing(_state.WORLD, PartyId(party), instance_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.post("/workflow/building")
+def post_workflow_building(body: dict) -> dict:
+    from realm.infrastructure.building_workflow import set_building_routing
+
+    party = PartyId(str(body.get("party", "player")))
+    instance_id = str(body.get("instance_id", ""))
+    inp = body.get("input") or {}
+    out = body.get("output") or {}
+    if not isinstance(inp, dict) or not isinstance(out, dict):
+        raise HTTPException(status_code=400, detail="input and output must be objects")
+    r = set_building_routing(
+        _state.WORLD,
+        party,
+        instance_id,
+        {str(k): str(v) for k, v in inp.items()},
+        {str(k): str(v) for k, v in out.items()},
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
+@router.post("/workflow/warehouse")
+def post_workflow_warehouse(body: dict) -> dict:
+    from realm.infrastructure.building_workflow import set_warehouse_rule
+
+    party = PartyId(str(body.get("party", "player")))
+    plot_id = PlotId(str(body.get("plot_id", "")))
+    material = str(body.get("material", ""))
+    r = set_warehouse_rule(
+        _state.WORLD,
+        party,
+        plot_id,
+        material,
+        enabled=bool(body.get("enabled", False)),
+        target_qty=int(body.get("target_qty", 0)),
+        max_price_cents=int(body.get("max_price_cents", 0)),
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
 
 
 @router.post("/hire")

@@ -86,6 +86,7 @@ def dev_reset(
     seed: Annotated[int, Query()] = 42,
     scenario: Annotated[str, Query()] = "genesis",
     name: Annotated[str, Query()] = "",
+    world_id: Annotated[str, Query()] = "",
 ) -> dict:
     """Recreate world (dev). ``scenario`` ∈ frontier, cartel, bootstrapper, speculator, millrace, archive, genesis."""
     _log.info("Realm: POST /dev/reset received (scenario=%r seed=%s) — building world…", scenario, seed)
@@ -100,6 +101,10 @@ def dev_reset(
             w = bootstrap_by_scenario(seed=seed, scenario=scenario)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        from realm.core.ids import new_world_id, normalize_world_id
+
+        wid = normalize_world_id(world_id) or new_world_id()
+        w.world_id = str(wid)
         with _state.WORLD_LOCK:
             _state.assign_world(w)
             if name:
@@ -107,13 +112,6 @@ def dev_reset(
         from realm.core.player_economy import ensure_player_starting_cash
 
         player_cash_after_ensure = ensure_player_starting_cash(_state.WORLD)
-        # Drop stale autosave so Continue cannot resurrect a pre-reset $10k world.
-        try:
-            if _state._AUTOSAVE_PATH.is_file():
-                _state._AUTOSAVE_PATH.unlink()
-                _log.info("Realm: removed stale autosave %s after /dev/reset.", _state._AUTOSAVE_PATH.name)
-        except OSError as e:
-            _log.warning("Realm: could not remove autosave after reset: %s", e)
         from realm.api import sim_loop
 
         clk.set_speed(1.0)
@@ -133,6 +131,7 @@ def dev_reset(
         return {
             "ok": True,
             "seed": seed,
+            "world_id": str(wid),
             "scenario_id": w.scenario_id,
             "map_layout": w.scenario_state.get("map_layout"),
             "grid_width": w.scenario_state.get("grid_width"),
@@ -143,6 +142,15 @@ def dev_reset(
     finally:
         if not was_paused:
             clk.set_paused(False)
+
+
+@router.post("/dev/world-name")
+def dev_set_world_name(name: Annotated[str, Query()] = "") -> dict:
+    """Rename the in-memory world (solo dev HUD label + save metadata)."""
+    trimmed = name.strip()
+    with _state.WORLD_LOCK:
+        _state.WORLD.world_name = trimmed
+    return {"ok": True, "world_name": trimmed}
 
 
 @router.post("/persistence/save")
@@ -157,7 +165,8 @@ def post_persistence_save(
     default dev save (``saves/realm_dev.sqlite``).
     """
     try:
-        p = _state.safe_save_path(slot or path)
+        resolved = _state.resolve_save_slot(slot or path, _state.WORLD)
+        p = _state.safe_save_path(resolved)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     t0 = time.perf_counter()
@@ -169,7 +178,13 @@ def post_persistence_save(
         time.perf_counter() - t0,
         _state.WORLD.tick,
     )
-    return {"ok": True, "path": p.relative_to(_state._REPO_ROOT).as_posix(), "tick": _state.WORLD.tick}
+    return {
+        "ok": True,
+        "path": p.relative_to(_state._REPO_ROOT).as_posix(),
+        "tick": _state.WORLD.tick,
+        "world_id": str(getattr(_state.WORLD, "world_id", "") or ""),
+        "slot": p.stem,
+    }
 
 
 @router.post("/persistence/load")
@@ -178,7 +193,7 @@ def post_persistence_load(
     slot: Annotated[str | None, Query()] = None,
 ) -> dict:
     try:
-        p = _state.safe_save_path(slot or path)
+        p = _state.safe_save_path(_state.resolve_save_slot(slot or path, None))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     try:
@@ -202,6 +217,7 @@ def post_persistence_load(
         "ok": True,
         "path": p.relative_to(_state._REPO_ROOT).as_posix(),
         "tick": _state.WORLD.tick,
+        "world_id": str(getattr(_state.WORLD, "world_id", "") or ""),
         "player_cash_cents": player_cash,
         "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
     }
@@ -225,6 +241,7 @@ def get_persistence_list() -> dict:
                 "seed": int(meta.get("seed", 0) or 0),
                 "saved_at": int(meta.get("saved_at", 0) or 0),
                 "size_bytes": int(p.stat().st_size),
+                "world_id": str(meta.get("world_id", "") or ""),
                 "world_name": str(meta.get("world_name", "") or ""),
             }
         )
@@ -237,7 +254,11 @@ def get_persistence_status() -> dict:
     info = _state.last_save_info()
     info["world_initialized"] = _state.is_world_initialized()
     info["autosave_seconds"] = int(getattr(_state, "AUTOSAVE_SECONDS", 0) or 0)
-    info["autosave_path"] = _state._AUTOSAVE_PATH.relative_to(_state._REPO_ROOT).as_posix()
+    w = _state.WORLD if _state.is_world_initialized() else None
+    info["world_id"] = str(getattr(w, "world_id", "") or "") if w is not None else ""
+    info["primary_slot"] = _state.primary_slot_for_world(w)
+    ap = _state.autosave_path_for_world(w)
+    info["autosave_path"] = ap.relative_to(_state._REPO_ROOT).as_posix()
     info["ok"] = True
     return info
 
