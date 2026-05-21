@@ -58,6 +58,9 @@ LABORER_STARTING_CASH_CENTS: Final[int] = 20_000
 """$200 subsistence stake. The only money injection on the laborer side."""
 
 # Per game-day decay rates (units = need fraction lost per day).
+SKILL_GROWTH_RATE_PER_DAY: Final[float] = 0.01
+"""Skill gain per game-day while employed (+0.01 on a 0–100 scale)."""
+
 FOOD_DECAY_PER_DAY: Final[float] = 0.05
 FUEL_DECAY_PER_DAY: Final[float] = 0.03
 SHELTER_DECAY_PER_DAY: Final[float] = 0.01
@@ -134,7 +137,7 @@ class LaborerNPC:
     home_plot_id: PlotId
     home_town: str | None = None
     employer: PartyId | None = None
-    skill_level: int = 0
+    skill_level: float = 0.0
     age_ticks: int = 0
     health: float = 1.0
     cash_cents: int = 0
@@ -452,6 +455,12 @@ def tick_laborers(world: World) -> dict[str, int]:
         _apply_health_pressure(lab, days_elapsed, epidemic_mult=epidemic_mult)
         lab.age_ticks += elapsed_ticks
         lab.last_needs_tick = now
+        if lab.employer is not None and elapsed_ticks >= TICKS_PER_GAME_DAY:
+            lab.skill_level = min(
+                100.0,
+                float(lab.skill_level)
+                + SKILL_GROWTH_RATE_PER_DAY * (elapsed_ticks / TICKS_PER_GAME_DAY),
+            )
         stats["ticked"] += 1
         if lab.health <= DEATH_THRESHOLD:
             dead_ids.append(lab.laborer_id)

@@ -14,6 +14,7 @@ from realm.population.laborers import (
     laborer_cash_account,
 )
 from realm.core.ledger import party_cash_account, system_reserve_account
+from realm.core.conservation import ConservationSnapshot, assert_money_conserved
 from realm.population.stores import (
     FOOD_PER_UNIT,
     FUEL_PER_UNIT,
@@ -34,10 +35,56 @@ from realm.population.stores import (
 from realm.world.terrain import Terrain
 from realm.population.towns import town_for_plot
 from realm.world import bootstrap_genesis
+from realm.world.tick import advance_tick
 from turnkey_fixtures import grant_turnkey_self_materials
 
 
 # ───────────────────────── seeded NPC stores ─────────────────────────
+
+
+def test_genesis_store_inventory_counts_as_store_plot():
+    """Bootstrap stores must be discoverable even without a plot_buildings row."""
+    w = bootstrap_genesis(seed=7, settler_count=4)
+    pid = next(iter(w.store_inventories.keys()))
+    assert int(w.store_inventories[pid].get("grain", 0)) > 0
+    assert is_store_plot(w, PlotId(pid))
+
+
+def test_laborers_buy_food_from_genesis_stores_over_two_days():
+    w = bootstrap_genesis(seed=7, settler_count=10)
+    for tid, town in w.towns.items():
+        stores = stores_for_town(w, tid)
+        assert len(stores) > 0, f"Town {tid} ({town.name}) has no discoverable stores"
+    snap = ConservationSnapshot.of(w.ledger, w.inventory)
+    for _ in range(2 * 1440):
+        advance_tick(w)
+    purchases = sum(
+        1
+        for e in w.event_log
+        if e.get("kind") in ("store_purchase", "laborer_purchase")
+    )
+    assert purchases > 0, "No store purchases after 2 days"
+    assert_money_conserved(w.ledger, snap.ledger_total_cents)
+
+
+def test_store_restocks_after_depletion():
+    w = bootstrap_genesis(seed=1, settler_count=10)
+    pid = list(w.store_inventories.keys())[0]
+    w.store_inventories[pid]["grain"] = 0
+    snap = ConservationSnapshot.of(w.ledger, w.inventory)
+    for _ in range(1440):
+        advance_tick(w)
+    assert int(w.store_inventories[pid].get("grain", 0)) > 0
+    assert_money_conserved(w.ledger, snap.ledger_total_cents)
+
+
+def test_tick_store_restock_fires_on_day_boundary():
+    w = bootstrap_genesis(seed=3, settler_count=4)
+    pid = next(iter(w.towns.values())).store_plots[0]
+    w.store_inventories[str(pid)]["grain"] = 0
+    w.tick = 1439
+    advance_tick(w)
+    assert int(w.store_inventories[str(pid)].get("grain", 0)) > 0
 
 
 def test_genesis_seeds_one_npc_store_per_town():

@@ -55,6 +55,20 @@ NPC_DAY1_TARGET_EMPLOYMENT_RATIO: Final[float] = 0.30
 population on day 1 via NPC-posted openings. The remainder stays
 unemployed and creates demand pressure for player-side hiring."""
 
+MIN_WAGE_PER_GAME_DAY_CENTS: Final[int] = 100
+"""Minimum legal daily wage ($1.00/day)."""
+
+MAX_JOB_MATCHES_PER_DAY: Final[int] = 40
+"""Cap hires per game-day so employment ramps gradually, not in one tick."""
+
+JOB_OPENING_TTL_TICKS: Final[int] = 43_200
+"""Drop unfilled openings older than 30 game-days."""
+
+JOB_POSTING_CASH_THRESHOLD: Final[int] = 100_000
+"""Settlers need $1,000 cash before posting wage jobs."""
+
+JOB_WAGE_CENTS_PER_DAY: Final[int] = DEFAULT_WAGE_PER_GAME_DAY_CENTS
+
 
 __all__ = [
     "JobOpening",
@@ -66,7 +80,9 @@ __all__ = [
     "tick_laborer_wages",
     "seed_genesis_npc_job_market",
     "job_openings_for_employer",
+    "get_openings_for_party",
     "active_employment_count",
+    "tick_settler_job_postings",
 ]
 
 
@@ -107,11 +123,16 @@ def post_job_opening(
         return {"ok": False, "reason": "unknown employer"}
     if skill_min < 0 or wage_per_day_cents < 0:
         return {"ok": False, "reason": "skill_min and wage must be non-negative"}
+    if wage_per_day_cents < MIN_WAGE_PER_GAME_DAY_CENTS:
+        return {"ok": False, "reason": "minimum wage is $1.00/day"}
     plot = world.plots.get(plot_id)
     if plot is None:
         return {"ok": False, "reason": "unknown plot"}
     if plot.owner != employer:
         return {"ok": False, "reason": "not your plot"}
+    for op in world.job_openings:
+        if op.employer == employer and op.plot_id == plot_id and op.filled_by is None:
+            return {"ok": True, "opening_id": op.opening_id, "already_exists": True}
     next_seq = int(world.scenario_state.setdefault("next_job_opening_seq", 1))
     opening_id = f"job_{next_seq:06d}"
     world.scenario_state["next_job_opening_seq"] = next_seq + 1
@@ -163,6 +184,20 @@ def cancel_job_opening(world: World, employer: PartyId, opening_id: str) -> dict
 # ───────────────────────────── tick: matching ─────────────────────────────
 
 
+def _plot_island_id(world: World, plot_id: PlotId) -> int:
+    raw = world.landmass_id.get(str(plot_id))
+    if raw is not None:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    plot_islands = world.scenario_state.get("plot_islands") or {}
+    try:
+        return int(plot_islands.get(str(plot_id), -1))
+    except (TypeError, ValueError):
+        return -1
+
+
 def _laborer_can_take(world: World, lab_id: str, opening: JobOpening) -> bool:
     """Skill + location gate for a laborer applying to an opening."""
     lab = world.laborers.get(lab_id)
@@ -173,6 +208,9 @@ def _laborer_can_take(world: World, lab_id: str, opening: JobOpening) -> bool:
     plot = world.plots.get(opening.plot_id)
     if plot is None:
         return False
+    job_island = _plot_island_id(world, opening.plot_id)
+    if job_island >= 0 and int(lab.island_id) == job_island:
+        return True
     home = world.plots.get(lab.home_plot_id)
     if home is None:
         return False
@@ -194,9 +232,12 @@ def _open_unfilled_openings(world: World) -> list[JobOpening]:
     return [op for op in world.job_openings if op.filled_by is None]
 
 
-def _match_unfilled_openings(world: World) -> int:
-    """Deterministic gate-free matcher used by both the daily tick and the
-    bootstrap seeding pass. Returns the number of laborers newly hired."""
+def _match_unfilled_openings(world: World, *, max_hires: int | None = None) -> int:
+    """Deterministic matcher used by the daily tick and bootstrap seeding.
+
+    Returns the number of laborers newly hired. When ``max_hires`` is set,
+    stops after that many matches (daily tick); bootstrap passes ``None``.
+    """
     openings = sorted(
         _open_unfilled_openings(world),
         key=lambda o: (-int(o.wage_per_day_cents), o.opening_id),
@@ -215,6 +256,8 @@ def _match_unfilled_openings(world: World) -> int:
     hired = 0
     used: set[str] = set()
     for opening in openings:
+        if max_hires is not None and hired >= max_hires:
+            break
         match: str | None = None
         for lid in unemployed:
             if lid in used:
@@ -228,14 +271,15 @@ def _match_unfilled_openings(world: World) -> int:
         lab = world.laborers[match]
         lab.employer = opening.employer
         lab.employment_contract = opening.opening_id
+        lab.wage_per_day_cents = int(opening.wage_per_day_cents)
         opening.filled_by = match
         used.add(match)
         hired += 1
         log_event(
             world,
-            "job_filled",
+            "laborer_hired",
             f"{lab.display_name} hired by {opening.employer} at {opening.plot_id} "
-            f"(${opening.wage_per_day_cents/100:.2f}/day)",
+            f"(skill {lab.skill_level}, ${opening.wage_per_day_cents/100:.2f}/day)",
             opening_id=opening.opening_id,
             employer=str(opening.employer),
             laborer_id=match,
@@ -243,6 +287,18 @@ def _match_unfilled_openings(world: World) -> int:
             wage_per_day_cents=int(opening.wage_per_day_cents),
         )
     return hired
+
+
+def _prune_stale_job_openings(world: World) -> None:
+    cutoff = int(world.tick) - JOB_OPENING_TTL_TICKS
+    kept: list[JobOpening] = []
+    for op in world.job_openings:
+        if op.filled_by is not None:
+            kept.append(op)
+            continue
+        if int(op.posted_at_tick) >= cutoff:
+            kept.append(op)
+    world.job_openings = kept
 
 
 def tick_job_market(world: World) -> dict[str, int]:
@@ -265,7 +321,8 @@ def tick_job_market(world: World) -> dict[str, int]:
         # Job market clears once per game-day at the boundary.
         out["openings_remaining"] = len(_open_unfilled_openings(world))
         return out
-    out["hired"] = _match_unfilled_openings(world)
+    out["hired"] = _match_unfilled_openings(world, max_hires=MAX_JOB_MATCHES_PER_DAY)
+    _prune_stale_job_openings(world)
     out["openings_remaining"] = sum(
         1 for o in world.job_openings if o.filled_by is None
     )
@@ -344,6 +401,13 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
         lab.cash_cents = world.ledger.balance(lab_acct)
         stats["paid"] += 1
         stats["cents_moved"] += int(wage)
+    if stats["quit_for_nonpayment"] > 0:
+        log_event(
+            world,
+            "world_feed",
+            f"💼 {stats['quit_for_nonpayment']} laborers let go today — employers ran short on cash.",
+            fired_count=int(stats["quit_for_nonpayment"]),
+        )
     return stats
 
 
@@ -352,6 +416,135 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
 
 def job_openings_for_employer(world: World, employer: PartyId) -> list[JobOpening]:
     return [op for op in world.job_openings if op.employer == employer]
+
+
+def get_openings_for_party(world: World, party: PartyId) -> list[JobOpening]:
+    """Unfilled openings posted by ``party`` (alias for API/tests)."""
+    return [
+        op
+        for op in world.job_openings
+        if op.employer == party and op.filled_by is None
+    ]
+
+
+_SKIP_JOB_BLUEPRINT_CATEGORIES: Final[frozenset[str]] = frozenset(
+    {"population", "infrastructure"}
+)
+
+_PRODUCTION_BUILDING_IDS: Final[frozenset[str]] = frozenset(
+    {
+        "strip_mine",
+        "timber_yard",
+        "grain_row",
+        "power_shed",
+        "wood_shop",
+        "gristmill",
+        "kiln_shed",
+        "foundry",
+        "stone_works",
+        "assay_lab",
+        "blast_furnace",
+        "chemical_works",
+        "forge_press",
+        "machine_shop",
+        "tool_workshop",
+        "dock",
+        "shipyard",
+        "apothecary",
+        "laboratory",
+        "store",
+    }
+)
+
+
+def _opening_exists_for_plot(
+    world: World, employer: PartyId, plot_id: PlotId
+) -> bool:
+    for op in world.job_openings:
+        if op.employer == employer and op.plot_id == plot_id and op.filled_by is None:
+            return True
+    return False
+
+
+def _laborer_working_plot(world: World, employer: PartyId, plot_id: PlotId) -> bool:
+    pid_s = str(plot_id)
+    for lab in world.laborers.values():
+        if lab.employer != employer:
+            continue
+        if lab.employment_contract:
+            op = _opening_for_employment(world, lab.employment_contract)
+            if op is not None and str(op.plot_id) == pid_s:
+                return True
+    return False
+
+
+def maybe_post_job_openings_for_party(world: World, party: PartyId) -> int:
+    """Post openings for each active production building without a filled slot."""
+    if world.ledger.balance(party_cash_account(party)) < JOB_POSTING_CASH_THRESHOLD:
+        return 0
+
+    posted = 0
+    now = int(world.tick)
+    seen_plots: set[str] = set()
+
+    def _try_post(plot_key: str, blueprint_id: str) -> None:
+        nonlocal posted
+        if plot_key in seen_plots:
+            return
+        seen_plots.add(plot_key)
+        if _opening_exists_for_plot(world, party, PlotId(plot_key)):
+            return
+        if _laborer_working_plot(world, party, PlotId(plot_key)):
+            return
+        bp = world.blueprints.get(blueprint_id)
+        if bp is not None and bp.category in _SKIP_JOB_BLUEPRINT_CATEGORIES:
+            return
+        if blueprint_id == "road_segment":
+            return
+        if bp is None and blueprint_id not in _PRODUCTION_BUILDING_IDS:
+            return
+        res = post_job_opening(
+            world,
+            party,
+            PlotId(plot_key),
+            skill_min=0,
+            wage_per_day_cents=JOB_WAGE_CENTS_PER_DAY,
+        )
+        if res.get("ok") and not res.get("already_exists"):
+            posted += 1
+
+    for pb in world.placed_buildings.values():
+        if str(pb.built_by) != str(party):
+            continue
+        if str(pb.status) != "active":
+            continue
+        _try_post(str(pb.plot_id), str(pb.blueprint_id))
+
+    for row in world.plot_buildings:
+        if str(row.get("party")) != str(party):
+            continue
+        if int(row.get("completes_at_tick", 0)) > now:
+            continue
+        bid = str(row.get("building_id", ""))
+        if not bid or bid == "residence":
+            continue
+        _try_post(str(row.get("plot_id", "")), bid)
+
+    return posted
+
+
+def tick_settler_job_postings(world: World) -> int:
+    """Once per game-day: settlers post jobs for active workshops."""
+    if world.scenario_id != "genesis":
+        return 0
+    if int(world.tick) <= 0 or int(world.tick) % TICKS_PER_GAME_DAY != 0:
+        return 0
+    total = 0
+    for party in sorted(
+        (p for p in world.parties if str(p).startswith("settler_")), key=str
+    ):
+        total += maybe_post_job_openings_for_party(world, party)
+    return total
 
 
 def active_employment_count(world: World) -> int:

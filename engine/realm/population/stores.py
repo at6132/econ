@@ -93,6 +93,13 @@ NPC_STOREKEEPER_STARTING_CASH_CENTS: Final[int] = 20_000 * 100
 """Phase 7F: starting cash for the settlement storekeeper NPC so they can
 restock their stores via real B2B buy orders (including across islands)."""
 
+STORE_RESTOCK_INTERVAL_TICKS: Final[int] = 1440
+STORE_GRAIN_RESTOCK_QTY: Final[int] = 100
+STORE_COAL_RESTOCK_QTY: Final[int] = 80
+STORE_RESTOCK_COST_GRAIN: Final[int] = 55
+STORE_RESTOCK_COST_COAL: Final[int] = 75
+STORE_RESTOCK_SUBSIDY_CAP_UNITS: Final[int] = 50
+
 
 __all__ = [
     "STORE_BUILDING_ID",
@@ -107,6 +114,7 @@ __all__ = [
     "set_store_price",
     "withdraw_store_stock",
     "tick_laborer_spending",
+    "tick_store_restock",
     "stores_for_town",
     "store_inventory_qty",
     "store_price_cents",
@@ -119,15 +127,26 @@ __all__ = [
 
 
 def is_store_plot(world: World, plot_id: PlotId) -> bool:
-    """True when this plot has at least one completed ``store`` building."""
+    """True when this plot has a completed store building or genesis store inventory."""
     now = int(world.tick)
+    pid = str(plot_id)
     for b in world.plot_buildings:
-        if str(b.get("plot_id")) != str(plot_id):
+        if str(b.get("plot_id")) != pid:
             continue
         if str(b.get("building_id")) != STORE_BUILDING_ID:
             continue
         if int(b.get("completes_at_tick", 0)) > now:
             continue
+        return True
+    for pb in world.placed_buildings.values():
+        if str(pb.plot_id) != pid:
+            continue
+        if pb.blueprint_id != STORE_BUILDING_ID:
+            continue
+        if int(pb.built_at_tick) > now:
+            continue
+        return True
+    if pid in world.store_inventories:
         return True
     return False
 
@@ -398,6 +417,78 @@ def _execute_purchase(
     return {"ok": True, "spent": int(total), "units": int(units)}
 
 
+def _store_party_for_plot(world: World, plot_id: str) -> PartyId:
+    """Party that owns the store on ``plot_id`` (plot owner or building row)."""
+    for b in world.plot_buildings:
+        if str(b.get("plot_id")) == plot_id:
+            return PartyId(str(b.get("party", "genesis_storekeeper")))
+    plot = world.plots.get(PlotId(plot_id))
+    if plot is not None and plot.owner is not None:
+        return plot.owner
+    return PartyId("genesis_storekeeper")
+
+
+def tick_store_restock(world: World) -> None:
+    """Genesis NPC stores auto-restock once per game-day (training wheels)."""
+    if int(world.tick) % STORE_RESTOCK_INTERVAL_TICKS != 0:
+        return
+    if not world.towns:
+        return
+
+    from realm.economy.markets import market_buy
+
+    genesis_store_plots: set[str] = set()
+    for town in world.towns.values():
+        for pid in town.store_plots:
+            genesis_store_plots.add(str(pid))
+
+    restock_plan: dict[str, tuple[int, int]] = {
+        "grain": (STORE_GRAIN_RESTOCK_QTY, STORE_RESTOCK_COST_GRAIN),
+        "coal": (STORE_COAL_RESTOCK_QTY, STORE_RESTOCK_COST_COAL),
+    }
+
+    for pid in sorted(genesis_store_plots):
+        store_party = _store_party_for_plot(world, pid)
+        plot_id = PlotId(pid)
+        inv = world.store_inventories.setdefault(pid, {})
+        for mat_str, (target_qty, cost_per_unit) in restock_plan.items():
+            current = int(inv.get(mat_str, 0))
+            if current >= target_qty:
+                continue
+            need = target_qty - current
+            mat = MaterialId(mat_str)
+            res = market_buy(world, store_party, mat, max_qty=need)
+            bought = int(res.get("filled", 0)) if res.get("ok") else 0
+            if bought > 0:
+                stock_res = stock_store(world, store_party, plot_id, mat, bought)
+                if not stock_res.get("ok"):
+                    rm = world.inventory.remove(store_party, mat, bought)
+                    if not isinstance(rm, MatterErr):
+                        inv[mat_str] = current + bought
+            still_need = need - bought
+            if still_need <= 0:
+                continue
+            subsidy_units = min(still_need, STORE_RESTOCK_SUBSIDY_CAP_UNITS)
+            subsidy_cost = subsidy_units * cost_per_unit
+            tr = world.ledger.transfer(
+                debit=system_reserve_account(),
+                credit=party_cash_account(store_party),
+                amount_cents=subsidy_cost,
+            )
+            if isinstance(tr, MoneyErr):
+                continue
+            inv[mat_str] = int(inv.get(mat_str, 0)) + subsidy_units
+            log_event(
+                world,
+                "store_restock_subsidy",
+                f"Genesis store {pid} subsidized {subsidy_units}×{mat_str}",
+                plot_id=pid,
+                material=mat_str,
+                qty=int(subsidy_units),
+                cost_cents=int(subsidy_cost),
+            )
+
+
 def tick_laborer_spending(world: World) -> dict[str, int]:
     """Drive one game-day of laborer→store consumption.
 
@@ -415,10 +506,12 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
     stats = {"purchases": 0, "laborers_serviced": 0}
     if not world.laborers:
         return stats
-    # Reset per-day store revenue at the day boundary.
-    last_day = int(world.scenario_state.get("store_last_spend_tick", -1))
     now = int(world.tick)
-    if last_day >= 0 and now - last_day < TICKS_PER_GAME_DAY:
+    if now % TICKS_PER_GAME_DAY != 0:
+        return stats
+    # Reset per-day store revenue at the day boundary (idempotent same tick).
+    last_day = int(world.scenario_state.get("store_last_spend_tick", -1))
+    if last_day == now:
         return stats
     world.scenario_state["store_last_spend_tick"] = now
     world.store_revenue_today.clear()
