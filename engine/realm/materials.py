@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Final, Mapping
 
 from realm.core.ids import MaterialId
-from realm.core.time_scale import legacy_scaled
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +46,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         780.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=legacy_scaled(10),
+        spoilage_interval_ticks=10_080,  # 7 game-days — dry plot yard storage
     ),
     MaterialId("spoiled_grain"): MaterialDef(
         MaterialId("spoiled_grain"), "Spoiled grain", 780.0, "organic"
@@ -61,7 +60,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         0.0,
         "energy",
         spoils_to=MaterialId("dissipated_energy"),
-        spoilage_interval_ticks=480,
+        spoilage_interval_ticks=432,  # 0.3 game-days — cannot store power off-grid
     ),
     MaterialId("dissipated_energy"): MaterialDef(
         MaterialId("dissipated_energy"), "Dissipated energy", 0.0, "energy"
@@ -74,7 +73,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         500.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=720,
+        spoilage_interval_ticks=2_880,  # 2 game-days — fresh fish
     ),
     MaterialId("smoked_fish"): MaterialDef(
         MaterialId("smoked_fish"),
@@ -82,7 +81,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         420.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=14_400,
+        spoilage_interval_ticks=43_200,  # 30 game-days — preserved
     ),
     MaterialId("brick"): MaterialDef(
         MaterialId("brick"), "Fired brick", 1900.0, "construction"
@@ -104,7 +103,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         500.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=legacy_scaled(14),
+        spoilage_interval_ticks=4_320,  # 3 game-days — baked goods
     ),
     MaterialId("steel_ingot"): MaterialDef(
         MaterialId("steel_ingot"), "Steel ingot", 7850.0, "processed"
@@ -243,7 +242,7 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
         80.0,
         "organic",
         spoils_to=MaterialId("spoiled_grain"),
-        spoilage_interval_ticks=14_400,  # 10 game-days
+        spoilage_interval_ticks=20_160,  # 14 game-days — dried herbs
     ),
     MaterialId("medicine"): MaterialDef(
         MaterialId("medicine"), "Medicine", 90.0, "processed"
