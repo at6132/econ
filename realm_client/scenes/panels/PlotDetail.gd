@@ -37,6 +37,7 @@ const MINERAL_ROWS := [
 ]
 
 @onready var panel: Panel = %Panel
+@onready var scroll: ScrollContainer = %Scroll
 @onready var title_label: Label = %TitleLabel
 @onready var close_btn: Button = %CloseBtn
 @onready var terrain_value: Label = %TerrainValue
@@ -92,7 +93,10 @@ func _ready() -> void:
 	build_btn.pressed.connect(_on_build_btn)
 	list_for_sale_btn.pressed.connect(_on_list_for_sale)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	scroll.resized.connect(_sync_scroll_content_width)
 	WorldState.player_updated.connect(_on_world_state_player_updated)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	call_deferred("_sync_scroll_content_width")
 
 
 func _on_viewport_resized() -> void:
@@ -100,6 +104,20 @@ func _on_viewport_resized() -> void:
 	panel.size = Vector2(PANEL_WIDTH, vp.y - HUD_BAR_TOP)
 	if panel.position.x < vp.x - PANEL_WIDTH + 1.0:
 		panel.position.x = vp.x - PANEL_WIDTH
+	_sync_scroll_content_width()
+
+
+func _sync_scroll_content_width() -> void:
+	if not is_instance_valid(scroll):
+		return
+	var vbox := %VBoxMain
+	var w := scroll.size.x
+	if w <= 8.0:
+		return
+	vbox.custom_minimum_size.x = w
+	for child in vbox.get_children():
+		if child is Control:
+			(child as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 func _apply_theme() -> void:
@@ -116,7 +134,11 @@ func _apply_theme() -> void:
 	_style_gold_button(build_btn)
 	_style_gold_button(list_for_sale_btn)
 	for n in panel.find_children("*", "Label", true, false):
-		(n as Label).add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
+		var lbl := n as Label
+		lbl.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.clip_text = true
+	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 
 func _style_gold_button(btn: Button) -> void:
@@ -135,6 +157,7 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	_plot_id = plot_id
 	_plot_data = plot_data.duplicate(true)
 	_populate(_plot_data)
+	call_deferred("_sync_scroll_content_width")
 	_slide_in()
 	API.get_plot_energy(plot_id, _on_energy_response)
 	API.get_plot_value(plot_id, _on_plot_value_response)
@@ -303,6 +326,7 @@ func _refresh_buildings() -> void:
 	for b in buildings:
 		if b is Dictionary:
 			buildings_list.add_child(_make_building_row(b as Dictionary))
+	call_deferred("_sync_scroll_content_width")
 
 
 func _building_operational(b: Dictionary) -> bool:
@@ -314,6 +338,7 @@ func _building_operational(b: Dictionary) -> bool:
 
 func _make_building_row(b: Dictionary) -> PanelContainer:
 	var pc := PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.1, 0.1, 0.12)
 	sb.set_content_margin_all(6)
@@ -321,12 +346,17 @@ func _make_building_row(b: Dictionary) -> PanelContainer:
 	sb.border_color = Color(0.85, 0.72, 0.2, 0.25)
 	pc.add_theme_stylebox_override("panel", sb)
 	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pc.add_child(vbox)
 
 	var header := HBoxContainer.new()
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var name_lbl := Label.new()
 	name_lbl.text = str(b.get("label", b.get("building_id", "?")))
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.size_flags_stretch_ratio = 1.0
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.clip_text = true
 	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
 	header.add_child(name_lbl)
 
@@ -334,11 +364,15 @@ func _make_building_row(b: Dictionary) -> PanelContainer:
 	var missed_b: int = int(b.get("_missed_cycles", 0))
 	var eff_lbl := Label.new()
 	eff_lbl.text = "%d%%" % eff
+	eff_lbl.size_flags_horizontal = Control.SIZE_SHRINK_END
 	eff_lbl.modulate = _efficiency_color(eff)
 	header.add_child(eff_lbl)
 	vbox.add_child(header)
 
 	var maint_lbl := Label.new()
+	maint_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	maint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	maint_lbl.clip_text = true
 	maint_lbl.add_theme_font_size_override("font_size", 11)
 	maint_lbl.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
 	if not _building_operational(b):
@@ -360,7 +394,20 @@ func _make_building_row(b: Dictionary) -> PanelContainer:
 			maint_lbl.modulate = Color(0.4, 1, 0.4)
 	vbox.add_child(maint_lbl)
 
+	var book_val := int(b.get("book_value_cents", 0))
+	var orig_val := int(b.get("original_cost_cents", 0))
+	if orig_val > 0:
+		var dep_pct := int((1.0 - float(book_val) / float(orig_val)) * 100.0)
+		var val_lbl := Label.new()
+		val_lbl.text = "📊 Book value: %s (%d%% depreciated)" % [
+			WorldState.format_money(book_val), dep_pct
+		]
+		val_lbl.add_theme_font_size_override("font_size", 10)
+		val_lbl.modulate = Color(0.6, 0.6, 0.6)
+		vbox.add_child(val_lbl)
+
 	var btns := HBoxContainer.new()
+	btns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if _building_operational(b) and (missed_b > 0 or eff < 100):
 		var maintain_btn := Button.new()
 		var needs: Dictionary = b.get("_maintenance_materials", {}) as Dictionary
@@ -382,9 +429,39 @@ func _make_building_row(b: Dictionary) -> PanelContainer:
 		prod_btn.tooltip_text = "Available when construction finishes"
 	prod_btn.pressed.connect(func() -> void: _show_production_for(b))
 	btns.add_child(prod_btn)
+	if _building_operational(b) and str(b.get("instance_id", "")) != "":
+		var demolish_btn := Button.new()
+		demolish_btn.text = "🔨 Demolish (salvage %s)" % WorldState.format_money(book_val / 2)
+		demolish_btn.modulate = Color(1.0, 0.4, 0.4)
+		demolish_btn.pressed.connect(
+			func() -> void: _confirm_demolish(str(b.get("instance_id", "")), book_val / 2)
+		)
+		btns.add_child(demolish_btn)
 	vbox.add_child(btns)
 
 	return pc
+
+
+func _confirm_demolish(instance_id: String, salvage_cents: int) -> void:
+	if instance_id == "":
+		return
+	API.demolish_building(
+		instance_id,
+		func(res: Dictionary) -> void:
+			if bool(res.get("ok", false)):
+				_refresh_buildings()
+				API.get_world_player(
+					func(p: Dictionary) -> void: WorldState.apply_player(p),
+					WorldState.party_id,
+				)
+				API.get_world_summary(
+					WorldState.party_id,
+					func(s: Dictionary) -> void: WorldState.apply_summary(s),
+				)
+			else:
+				push_warning("Demolish failed: %s" % str(res.get("reason", "?"))),
+		WorldState.party_id,
+	)
 
 
 func _show_production_for(b: Dictionary) -> void:

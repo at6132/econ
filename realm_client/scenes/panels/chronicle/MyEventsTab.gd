@@ -100,7 +100,17 @@ func _make_row(d: Dictionary, kind: String, alt: bool) -> PanelContainer:
 	icon.text = str(style.get("icon", "•"))
 	row.add_child(icon)
 	var msg := Label.new()
-	msg.text = str(d.get("message", ""))
+	if kind == "holding_cost_charged":
+		var cents := int(d.get("holding_cost_cents", 0))
+		var money_str := WorldState.format_money(cents)
+		msg.text = (
+			"Storage demurrage: "
+			+ money_str
+			+ " charged for holding excess inventory.\n"
+			+ "Build a Warehouse to eliminate storage costs."
+		)
+	else:
+		msg.text = str(d.get("message", ""))
 	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	msg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	msg.add_theme_color_override("font_color", RealmColors.TEXT)

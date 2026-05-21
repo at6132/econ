@@ -7,7 +7,10 @@ func _init() -> void:
 
 
 func _build_tabs() -> void:
-	_add_api_tab("Accounts", func(cb): API.get_accounts(cb))
+	var accounts_tab := preload("res://scenes/panels/finance/FinanceAccountsTab.gd").new() as VBoxContainer
+	accounts_tab.title = "Accounts"
+	accounts_tab.fetch_callable = func(cb: Callable) -> void: API.get_accounts(cb)
+	add_tab(accounts_tab, "Accounts")
 	var bank_tab := preload("res://scenes/panels/BankRatesTab.gd").new() as VBoxContainer
 	bank_tab.title = "Bank"
 	bank_tab.fetch_callable = func(cb: Callable) -> void: API.get_bank_rates(cb)

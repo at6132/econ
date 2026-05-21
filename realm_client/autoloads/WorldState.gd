@@ -22,6 +22,8 @@ var player_cash_cents: int = 0
 ## Canon starting balance for a fresh human (from ``GET /world/static`` / ``/dev/reset``).
 var player_starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS
 var player_net_worth_cents: int = 0
+var player_inventory_value_cents: int = 0
+var player_building_book_value_cents: int = 0
 var party_id: String = "player"
 var display_name: String = "Player"
 
@@ -174,6 +176,12 @@ func apply_summary(data: Dictionary) -> void:
 	if data.is_empty():
 		return
 	player_cash_cents = variant_to_int(data.get("cash", 0), 0)
+	player_inventory_value_cents = variant_to_int(
+		data.get("inventory_value_estimate", 0), 0
+	)
+	player_building_book_value_cents = variant_to_int(
+		data.get("building_book_value_cents", 0), 0
+	)
 	player_net_worth_cents = variant_to_int(data.get("net_worth_estimate", 0), 0)
 	# Summary polls must not rewind the clock below the last push frame.
 	var summary_tick := variant_to_int(data.get("tick", current_tick), current_tick)
@@ -333,6 +341,18 @@ func apply_player(data: Dictionary) -> void:
 		return
 	_merge_server_tick(data.get("tick", current_tick))
 	player_cash_cents = variant_to_int(data.get("cash_cents", player_cash_cents), player_cash_cents)
+	player_inventory_value_cents = variant_to_int(
+		data.get("inventory_value_estimate", player_inventory_value_cents),
+		player_inventory_value_cents,
+	)
+	player_building_book_value_cents = variant_to_int(
+		data.get("building_book_value_cents", player_building_book_value_cents),
+		player_building_book_value_cents,
+	)
+	player_net_worth_cents = variant_to_int(
+		data.get("net_worth_estimate", player_net_worth_cents),
+		player_net_worth_cents,
+	)
 	var inv: Variant = data.get("inventory", {})
 	player_inventory = inv if inv is Dictionary else {}
 	var own_raw: Variant = data.get("owned_plots", [])

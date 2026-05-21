@@ -138,6 +138,14 @@ func post_building_auto_list(instance_id: String, enabled: bool, cb: Callable, p
 	)
 
 
+func demolish_building(instance_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/buildings/%s/demolish?party=%s" % [instance_id.uri_encode(), party.uri_encode()],
+		{},
+		cb,
+	)
+
+
 func get_plot_energy(plot_id: String, cb: Callable) -> void:
 	get_request("/plots/%s/energy" % plot_id.uri_encode(), cb)
 
@@ -174,6 +182,41 @@ func place_blueprint(
 	if sub_plot_id != "":
 		body["sub_plot_id"] = sub_plot_id
 	post_request("/plots/%s/place" % plot_id.uri_encode(), body, cb)
+
+
+func place_road_path(
+	plot_id: String,
+	cells: Array,
+	build_mode: String,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	var cell_rows: Array = []
+	for c in cells:
+		if c is Vector2i:
+			var v := c as Vector2i
+			cell_rows.append({"grid_x": v.x, "grid_y": v.y})
+		elif c is Dictionary:
+			cell_rows.append(c)
+	var body := {
+		"party": party,
+		"build_mode": build_mode,
+		"cells": cell_rows,
+	}
+	post_request("/plots/%s/place-roads" % plot_id.uri_encode(), body, cb)
+
+
+func build_road(
+	from_plot_id: String,
+	to_plot_id: String,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/roads/build",
+		{"party": party, "from_plot": from_plot_id, "to_plot": to_plot_id},
+		cb,
+	)
 
 
 func list_plot_for_sale(plot_id: String, ask_price_cents: int, cb: Callable, party: String = "player") -> void:
@@ -375,6 +418,10 @@ func apply_for_loan(principal_cents: int, cycles: int, cb: Callable, party: Stri
 	if collateral_plot_id != "":
 		body["collateral_plot_id"] = collateral_plot_id
 	post_request("/bank/loan/apply", body, cb)
+
+
+func get_trade_balance(cb: Callable) -> void:
+	get_request("/economy/trade-balance", cb)
 
 
 func get_cpi(cb: Callable) -> void:
@@ -736,6 +783,10 @@ func persistence_status(cb: Callable) -> void:
 
 func persistence_load_path(relative_path: String, cb: Callable) -> void:
 	post_request("/persistence/load?path=%s" % relative_path.uri_encode(), {}, cb)
+
+
+func persistence_clear_all(cb: Callable) -> void:
+	post_request("/persistence/clear-all", {}, cb)
 
 
 func dev_reset(seed: int, scenario: String, cb: Callable, world_name: String = "") -> void:
