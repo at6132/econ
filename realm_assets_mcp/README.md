@@ -30,6 +30,18 @@ Cursor (Settings → MCP → refresh).
 For a user-global config, use the same `mcpServers` block with an absolute `cwd`
 path to `realm_assets_mcp/`.
 
+## Generate everything (CLI)
+
+From `realm_assets_mcp/` after `FAL_KEY` is set and [fal.ai billing](https://fal.ai/dashboard/billing) has credit:
+
+```bash
+python generate_all.py              # skip existing PNGs
+python generate_all.py --only boats # vessel, small_vessel, boat aliases only
+python generate_all.py --force      # regenerate all
+```
+
+Counts: 33 buildings, 68 materials (incl. boats), 13 terrain, 21 events, 26 UI (~161 images, ~$0.50 on Flux Schnell).
+
 ## Usage in Cursor
 
 ```
