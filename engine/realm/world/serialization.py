@@ -10,8 +10,9 @@ Endpoints + payload responsibilities (see ``routes_world.py``):
                             Genesis). Kept for back-compat; new code should
                             prefer the split payloads below.
 * ``world_summary_dict`` — top-bar HUD (tick, cash, counters). Tiny.
-* ``world_static_dict``  — read-once tables (recipes, building catalog,
-                            chemistry, scenario constants, party names).
+* ``world_static_dict``  — read-once tables (building catalog, chemistry,
+                            scenario constants, party names). Recipe catalog:
+                            ``GET /recipes``.
 * ``world_player_dict``  — everything tied to a single party: inventory,
                             owned plots + subsurface + recipe_ids, accounts,
                             bank rates/loans, in_transit, forward contracts,
@@ -447,10 +448,9 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
         from realm.economy.pricing import _FAIR_VALUE_CENTS
     except Exception:
         _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
-    inv_value_cents = 0
-    for mat, qty in world.inventory.stock_for_party(party).items():
-        unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
-        inv_value_cents += unit * int(qty)
+    from realm.production.storage_caps import party_matter_value_cents
+
+    inv_value_cents = party_matter_value_cents(world, party)
     building_value = sum(
         int(pb.book_value_cents)
         for pb in world.placed_buildings.values()
@@ -556,10 +556,10 @@ def world_static_dict(world: "World") -> dict[str, Any]:
     """Read-once tables that never change during a tick loop.
 
     Fetched once at boot, again only after ``/dev/reset`` or a save load.
-    Includes: recipes, building/hire/chemistry catalogs, scenario id,
-    seed, ticks_per_game_day, FREE_MARKET_HISTORY_TICKS, the grid size
-    + map_layout for the map renderer, the public party-display names
-    map, and the bank plot id."""
+    Includes: building/hire/chemistry catalogs, scenario id, seed,
+    ticks_per_game_day, FREE_MARKET_HISTORY_TICKS, the grid size +
+    map_layout for the map renderer, the public party-display names map,
+    and the bank plot id. Recipe rows: ``GET /recipes``."""
     from realm.actions import hire_catalog_public
     from realm.core.time_scale import (
         REAL_SECONDS_PER_GAME_DAY,
@@ -606,7 +606,6 @@ def world_static_dict(world: "World") -> dict[str, Any]:
         "grid_width": int(grid_w) if grid_w is not None else None,
         "grid_height": int(grid_h) if grid_h is not None else None,
         "uniform_plots": _grid_is_uniform(world),
-        "recipes": recipe_public_list(),
         "building_catalog": building_catalog_public(),
         "hire_catalog": hire_catalog_public(),
         "chemistry_catalog": _chemistry_catalog_public(),
@@ -647,10 +646,9 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
         from realm.economy.pricing import _FAIR_VALUE_CENTS
     except Exception:
         _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
-    inv_value_cents = 0
-    for mat, qty in world.inventory.stock_for_party(party).items():
-        unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
-        inv_value_cents += unit * int(qty)
+    from realm.production.storage_caps import party_matter_value_cents
+
+    inv_value_cents = party_matter_value_cents(world, party)
     party_s = str(party)
     building_book_value_cents = sum(
         int(pb.book_value_cents)

@@ -167,14 +167,28 @@ def get_world_summary(party: Annotated[str, Query()] = "player") -> dict:
     return world_summary_dict(_state.WORLD, PartyId(str(party)))
 
 
+@router.get("/recipes")
+def get_recipes() -> dict:
+    """Seeded recipe catalog (inputs, outputs, workshop ids, gates).
+
+    Fetched once at client boot and after ``/dev/reset``. Party-authored
+    recipes remain on ``GET /world/player`` as ``custom_recipes``."""
+    from realm.production.recipes import recipe_public_list
+
+    return {"recipes": recipe_public_list()}
+
+
 @router.get("/world/static")
 def get_world_static() -> dict:
-    """Read-once tables: recipes, building/hire/chemistry catalogs,
-    scenario id, seed, ticks_per_game_day, grid size + map layout,
-    party display names. Fetch once at boot and after ``/dev/reset``."""
+    """Read-once tables: building/hire/chemistry catalogs, scenario id,
+    seed, ticks_per_game_day, grid size + map layout, party display names.
+
+    Recipe catalog: ``GET /recipes``. Fetch once at boot and after ``/dev/reset``."""
     from realm.world import world_static_dict
 
-    return world_static_dict(_state.WORLD)
+    payload = world_static_dict(_state.WORLD)
+    payload.pop("recipes", None)
+    return payload
 
 
 @router.get("/world/player")

@@ -53,6 +53,7 @@ def test_world_static_exposes_pacing_constants() -> None:
     presets = body["sim_speed_presets"]
     assert 0.0 in presets
     assert 1.0 in presets
+    assert "recipes" not in body
 
 
 def test_sim_control_pauses_and_resumes() -> None:
