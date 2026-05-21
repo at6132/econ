@@ -213,6 +213,16 @@ def dump_world(world: World) -> dict[str, Any]:
             for p in getattr(world, "market_fob_pickups", [])
         ],
         "next_market_pickup_seq": int(getattr(world, "next_market_pickup_seq", 0)),
+        "plot_market_reserves": [
+            {
+                "order_id": r.order_id,
+                "party": str(r.party),
+                "plot_id": str(r.plot_id),
+                "material": str(r.material),
+                "qty": int(r.qty),
+            }
+            for r in getattr(world, "plot_market_reserves", [])
+        ],
         "market_asks": asks,
         "market_bids": bids,
         "reputation": copy.deepcopy(dict(world.reputation)),
@@ -622,6 +632,7 @@ def load_world(d: dict[str, Any]) -> World:
             )
         )
     from realm.economy.market_delivery import MarketFobPickup
+    from realm.economy.market_reserves import PlotMarketReserve
 
     fob_rows: list[MarketFobPickup] = []
     for row in d.get("market_fob_pickups", []):
@@ -636,6 +647,17 @@ def load_world(d: dict[str, Any]) -> World:
                 quality=str(row.get("quality", "standard")),
                 match_tick=int(row.get("match_tick", 0)),
                 order_id=str(row.get("order_id", "")),
+            )
+        )
+    reserve_rows: list[PlotMarketReserve] = []
+    for row in d.get("plot_market_reserves", []):
+        reserve_rows.append(
+            PlotMarketReserve(
+                order_id=str(row["order_id"]),
+                party=PartyId(str(row["party"])),
+                plot_id=PlotId(str(row["plot_id"])),
+                material=MaterialId(str(row["material"])),
+                qty=int(row["qty"]),
             )
         )
     asks_map: dict[str, list[Any]] = {}
@@ -716,6 +738,7 @@ def load_world(d: dict[str, Any]) -> World:
         next_order_seq=int(d.get("next_order_seq", 0)),
         next_market_pickup_seq=int(d.get("next_market_pickup_seq", 0)),
         market_fob_pickups=fob_rows,
+        plot_market_reserves=reserve_rows,
         reputation=copy.deepcopy(dict(d.get("reputation", {}))),
         contracts=[copy.deepcopy(c) for c in d.get("contracts", [])],
         next_contract_seq=int(d.get("next_contract_seq", 0)),

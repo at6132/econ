@@ -27,12 +27,14 @@ def uses_plot_logistics(world: World, party: PartyId) -> bool:
 def party_material_on_plot(
     world: World, party: PartyId, plot_id: PlotId, material: MaterialId
 ) -> int:
-    """Units available to run production on ``plot_id``."""
+    """Units on ``plot_id`` usable for production (excludes market-listed / FOB-committed)."""
     if is_carried_material(material):
         return world.inventory.qty(party, material, "any")
     if not uses_plot_logistics(world, party):
         return world.inventory.qty(party, material, "any")
-    return plot_output_qty(world, plot_id, material)
+    from realm.economy.market_reserves import plot_available_qty
+
+    return plot_available_qty(world, plot_id, material)
 
 
 def party_material_held(
@@ -145,10 +147,12 @@ def pick_plot_with_stock(
     *,
     preferred: PlotId | None = None,
 ) -> PlotId | None:
-    if preferred is not None and plot_output_qty(world, preferred, material) >= qty:
+    from realm.economy.market_reserves import plot_available_qty
+
+    if preferred is not None and plot_available_qty(world, preferred, material) >= qty:
         return preferred
     for pid in owned_plot_ids_sorted(world, party):
-        if plot_output_qty(world, pid, material) >= qty:
+        if plot_available_qty(world, pid, material) >= qty:
             return pid
     return None
 

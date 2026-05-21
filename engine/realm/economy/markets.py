@@ -18,7 +18,7 @@ from typing import Final
 
 from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
-from realm.core.inventory import MatterErr, MatterResult
+from realm.core.inventory import MatterErr, MatterOk, MatterResult
 from realm.core.ledger import MoneyErr, market_escrow_account, party_cash_account, system_reserve_account
 
 
@@ -39,14 +39,16 @@ def _record_genesis_fill(
     record_market_fill(world, material, int(qty), int(unit_px), seller)
 from realm.contracts.social import bump_spot_exchange_honored
 from realm.core.ids import PlotId
-from realm.infrastructure.plot_logistics import (
-    add_party_plot_stock,
-    pick_plot_with_stock,
-    plot_output_qty,
-    remove_party_plot_stock,
+from realm.economy.market_reserves import (
+    consume_reserve_for_order,
+    release_reserve_for_order,
+    reserve_plot_for_ask,
+    uses_plot_market_reserve,
 )
+from realm.infrastructure.plot_logistics import pick_plot_with_stock
 from realm.economy.market_delivery import (
     DELIVERY_DDP,
+    apply_ddp_breach_penalty,
     fulfill_market_matter,
     normalize_delivery_terms,
 )
@@ -130,38 +132,6 @@ class BidOrder:
     iceberg_hidden_qty: int = 0
     min_counterparty_honored: int = 0
     delivery_plot_id: str = ""
-
-
-def _deliver_market_purchase(
-    world: World,
-    buyer: PartyId,
-    material: MaterialId,
-    qty: int,
-    *,
-    quality: str = "standard",
-) -> MatterResult:
-    if party_uses_plot_storage(world, buyer) and not is_carried_material(material):
-        return add_party_plot_stock(world, buyer, material, qty)
-    return try_add_inventory(world, buyer, material, qty, quality=quality)
-
-
-def _remove_ask_stock(world: World, ask: AskOrder, qty: int) -> MatterResult:
-    fp = str(getattr(ask, "from_plot_id", "") or "")
-    if (
-        party_uses_plot_storage(world, ask.party)
-        and not is_carried_material(ask.material)
-        and fp
-    ):
-        return remove_party_plot_stock(
-            world,
-            ask.party,
-            ask.material,
-            qty,
-            preferred_plot=PlotId(fp),
-        )
-    return world.inventory.remove(
-        ask.party, ask.material, qty, quality=str(getattr(ask, "quality", "standard"))
-    )
 
 
 def _asks(world: World, material: MaterialId) -> list[AskOrder]:
@@ -402,6 +372,8 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         if refund > 0:
             world.ledger.transfer(debit=buyer_c, credit=escrow, amount_cents=refund)
         world.ledger.transfer(debit=seller_c, credit=escrow, amount_cents=payment)
+        if normalize_delivery_terms(getattr(ask, "delivery_terms", DELIVERY_DDP)) == DELIVERY_DDP:
+            apply_ddp_breach_penalty(world, ask.party, bid.party, payment)
         return False
     log_event(
         world,
@@ -467,6 +439,8 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
         ask.qty, ask.iceberg_hidden_qty = ask_snap
         world.ledger.transfer(debit=seller_c, credit=escrow, amount_cents=payment)
+        if normalize_delivery_terms(getattr(ask, "delivery_terms", DELIVERY_DDP)) == DELIVERY_DDP:
+            apply_ddp_breach_penalty(world, ask.party, bid.party, payment)
         return False
     log_event(
         world,
@@ -556,7 +530,7 @@ def place_sell_order(
     from_plot_id: PlotId | None = None,
     delivery_terms: str = DELIVERY_DDP,
 ) -> dict:
-    """List material for sale at a limit price (stock removed from plot or carry until filled)."""
+    """List material for sale; bulk on plots stays on-site (reserved), carry is escrowed in inventory."""
     if qty <= 0 or price_per_unit_cents <= 0:
         return {"ok": False, "reason": "invalid qty or price"}
     if min_counterparty_honored < 0:
@@ -571,20 +545,11 @@ def place_sell_order(
     src_plot: PlotId | None = None
     if from_plot_id is not None:
         src_plot = from_plot_id
-    if party_uses_plot_storage(world, party) and not is_carried_material(material):
+    if uses_plot_market_reserve(world, party, material):
         if src_plot is None:
             src_plot = pick_plot_with_stock(world, party, material, qty)
         if src_plot is None:
-            return {"ok": False, "reason": "insufficient material on plots"}
-        have = plot_output_qty(world, src_plot, material)
-        if have < qty:
-            return {
-                "ok": False,
-                "reason": f"you have {have} {material} on {src_plot}, need {qty}",
-            }
-        rm = remove_party_plot_stock(
-            world, party, material, qty, preferred_plot=src_plot
-        )
+            return {"ok": False, "reason": "insufficient unlisted material on plots"}
     else:
         have = world.inventory.qty(party, material, quality)
         if have < qty:
@@ -593,8 +558,8 @@ def place_sell_order(
                 "reason": f"you have {have} {quality}-quality {material}, need {qty}",
             }
         rm = world.inventory.remove(party, material, qty, quality=quality)
-    if isinstance(rm, MatterErr):
-        return {"ok": False, "reason": rm.reason}
+        if isinstance(rm, MatterErr):
+            return {"ok": False, "reason": rm.reason}
     ice_peak = 0
     ice_hid = 0
     vis = qty
@@ -618,13 +583,26 @@ def place_sell_order(
         from_plot_id=str(src_plot) if src_plot is not None else "",
         delivery_terms=normalize_delivery_terms(delivery_terms),
     )
+    if uses_plot_market_reserve(world, party, material) and src_plot is not None:
+        rs = reserve_plot_for_ask(
+            world,
+            order_id=oid,
+            party=party,
+            plot_id=src_plot,
+            material=material,
+            qty=qty,
+        )
+        if isinstance(rs, MatterErr):
+            return {"ok": False, "reason": rs.reason}
     lst = _asks(world, material)
     lst.append(new_ask)
     _sort_asks(lst)
     log_event(
         world,
         "market_list",
-        f"{party} listed {qty}×{material} @ {price_per_unit_cents}¢/u ({oid})"
+        f"{party} listed {qty}×{material} @ {price_per_unit_cents}¢/u"
+        + (f" on {src_plot}" if src_plot is not None else "")
+        + f" ({oid})"
         + (f" [iceberg peak {ice_peak}]" if ice_peak > 0 else ""),
         party=str(party),
         material=str(material),
@@ -649,19 +627,9 @@ def cancel_sell_order(world: World, party: PartyId, order_id: str) -> dict:
                     return {"ok": False, "reason": "not your order"}
                 lst.pop(i)
                 total_back = o.qty + o.iceberg_hidden_qty
-                fp = str(getattr(o, "from_plot_id", "") or "")
-                if (
-                    party_uses_plot_storage(world, party)
-                    and not is_carried_material(o.material)
-                    and fp
-                ):
-                    ad = add_party_plot_stock(
-                        world,
-                        party,
-                        o.material,
-                        total_back,
-                        preferred_plot=PlotId(fp),
-                    )
+                if uses_plot_market_reserve(world, party, o.material):
+                    release_reserve_for_order(world, order_id)
+                    ad = MatterOk()
                 else:
                     ad = try_add_inventory(
                         world,
@@ -1072,15 +1040,6 @@ def sell_into_bids(
         if party_uses_plot_storage(world, seller) and not is_carried_material(material):
             if src_plot is None:
                 src_plot = pick_plot_with_stock(world, seller, material, fill)
-            rm = remove_party_plot_stock(
-                world, seller, material, fill, preferred_plot=src_plot
-            )
-        else:
-            rm = world.inventory.remove(seller, material, fill)
-        if isinstance(rm, MatterErr):
-            bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
-            world.ledger.transfer(debit=seller_cash, credit=escrow, amount_cents=payment)
-            break
         ad = fulfill_market_matter(
             world,
             buyer=bid.party,
@@ -1099,12 +1058,10 @@ def sell_into_bids(
             bid=bid,
         )
         if isinstance(ad, MatterErr):
-            if party_uses_plot_storage(world, seller) and not is_carried_material(material):
-                add_party_plot_stock(world, seller, material, fill)
-            else:
-                world.inventory.add(seller, material, fill)
             bid.qty, bid.iceberg_hidden_qty, bid.escrow_cents = bid_snap
             world.ledger.transfer(debit=seller_cash, credit=escrow, amount_cents=payment)
+            if normalize_delivery_terms(delivery_terms) == DELIVERY_DDP:
+                apply_ddp_breach_penalty(world, seller, bid.party, payment)
             break
         received += payment
         remaining -= fill
@@ -1160,7 +1117,14 @@ def _p2p_trade_execute(
     """Atomic: buyer pays seller total_price_cents; seller delivers qty material."""
     if qty <= 0 or total_price_cents < 0:
         return {"ok": False, "reason": "invalid trade", "code": "P2P_INVALID"}
-    if party_uses_plot_storage(world, seller) and not is_carried_material(material):
+    from realm.economy.market_delivery import fulfill_p2p_delivery
+
+    bulk_plot = (
+        party_uses_plot_storage(world, seller)
+        and party_uses_plot_storage(world, buyer)
+        and not is_carried_material(material)
+    )
+    if bulk_plot:
         if pick_plot_with_stock(world, seller, material, qty) is None:
             return {"ok": False, "reason": "seller lacks material", "code": "P2P_SELLER_LACKS_MATERIAL"}
     elif world.inventory.qty(seller, material) < qty:
@@ -1172,22 +1136,26 @@ def _p2p_trade_execute(
     pay = world.ledger.transfer(debit=bc, credit=sc, amount_cents=total_price_cents)
     if isinstance(pay, MoneyErr):
         return {"ok": False, "reason": pay.reason, "code": "P2P_PAYMENT_FAILED"}
-    if party_uses_plot_storage(world, seller) and not is_carried_material(material):
-        rm = remove_party_plot_stock(world, seller, material, qty)
+    if bulk_plot:
+        ad = fulfill_p2p_delivery(world, seller=seller, buyer=buyer, material=material, qty=qty)
+        if isinstance(ad, MatterErr):
+            world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
+            return {"ok": False, "reason": ad.reason, "code": "P2P_DELIVERY_FAILED"}
     else:
         rm = world.inventory.remove(seller, material, qty)
-    if isinstance(rm, MatterErr):
-        world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
-        return {"ok": False, "reason": rm.reason, "code": "P2P_SELLER_REMOVE_FAILED"}
-    ad = _deliver_market_purchase(world, buyer, material, qty)
-    if isinstance(ad, MatterErr):
-        if party_uses_plot_storage(world, seller) and not is_carried_material(material):
-            add_party_plot_stock(world, seller, material, qty)
-        else:
+        if isinstance(rm, MatterErr):
+            world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
+            return {"ok": False, "reason": rm.reason, "code": "P2P_SELLER_REMOVE_FAILED"}
+        ad = try_add_inventory(world, buyer, material, qty)
+        if isinstance(ad, MatterErr):
             world.inventory.add(seller, material, qty)
-        world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
-        code = "P2P_BUYER_STORAGE_FULL" if ad.reason == "storage capacity exceeded" else "P2P_BUYER_ADD_FAILED"
-        return {"ok": False, "reason": ad.reason, "code": code}
+            world.ledger.transfer(debit=sc, credit=bc, amount_cents=total_price_cents)
+            code = (
+                "P2P_BUYER_STORAGE_FULL"
+                if ad.reason == "storage capacity exceeded"
+                else "P2P_BUYER_ADD_FAILED"
+            )
+            return {"ok": False, "reason": ad.reason, "code": code}
     log_event(
         world,
         "p2p_trade",

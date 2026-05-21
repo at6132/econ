@@ -186,6 +186,8 @@ class World:
     next_order_seq: int = 0
     next_market_pickup_seq: int = 0
     market_fob_pickups: list[object] = field(default_factory=list)
+    plot_market_reserves: list[object] = field(default_factory=list)
+    """Bulk units reserved on ``from_plot_id`` for resting asks (goods remain on-site)."""
     reputation: dict[str, dict[str, int]] = field(default_factory=dict)
     contracts: list[dict] = field(default_factory=list)
     next_contract_seq: int = 0
