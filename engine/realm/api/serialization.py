@@ -31,7 +31,7 @@ from realm.world import (
 from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 16
+SNAPSHOT_VERSION = 17
 
 
 def _blueprint_public_dict(bp: object) -> dict[str, Any]:
@@ -126,6 +126,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 "min_counterparty_honored": o.min_counterparty_honored,
                 "quality": str(getattr(o, "quality", "standard")),
                 "from_plot_id": str(getattr(o, "from_plot_id", "")),
+                "delivery_terms": str(getattr(o, "delivery_terms", "ddp")),
             }
             for o in lst
         ]
@@ -192,9 +193,26 @@ def dump_world(world: World) -> dict[str, Any]:
                 "from_plot_id": str(s.from_plot_id) if s.from_plot_id else None,
                 "dest_dock_owner": s.dest_dock_owner,
                 "inter_island": bool(s.inter_island),
+                "consignee": getattr(s, "consignee", None),
+                "escrowed_market": bool(getattr(s, "escrowed_market", False)),
             }
             for s in world.in_transit
         ],
+        "market_fob_pickups": [
+            {
+                "pickup_id": p.pickup_id,
+                "buyer": str(p.buyer),
+                "seller": str(p.seller),
+                "from_plot_id": str(p.from_plot_id),
+                "material": str(p.material),
+                "qty": int(p.qty),
+                "quality": p.quality,
+                "match_tick": int(p.match_tick),
+                "order_id": p.order_id,
+            }
+            for p in getattr(world, "market_fob_pickups", [])
+        ],
+        "next_market_pickup_seq": int(getattr(world, "next_market_pickup_seq", 0)),
         "market_asks": asks,
         "market_bids": bids,
         "reputation": copy.deepcopy(dict(world.reputation)),
@@ -520,7 +538,7 @@ def _plot_from_snapshot(pid_str: str, saved: dict[str, Any]) -> Plot:
 
 def load_world(d: dict[str, Any]) -> World:
     ver = d.get("version", 1)
-    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15):
+    if ver not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16):
         raise ValueError(f"unsupported snapshot version: {ver!r}")
     seed = int(d["seed"])
     saved_plots: dict[str, Any] = d["plots"]
@@ -599,6 +617,25 @@ def load_world(d: dict[str, Any]) -> World:
                 from_plot_id=PlotId(row["from_plot_id"]) if row.get("from_plot_id") else None,
                 dest_dock_owner=row.get("dest_dock_owner"),
                 inter_island=bool(row.get("inter_island", False)),
+                consignee=row.get("consignee"),
+                escrowed_market=bool(row.get("escrowed_market", False)),
+            )
+        )
+    from realm.economy.market_delivery import MarketFobPickup
+
+    fob_rows: list[MarketFobPickup] = []
+    for row in d.get("market_fob_pickups", []):
+        fob_rows.append(
+            MarketFobPickup(
+                pickup_id=str(row["pickup_id"]),
+                buyer=PartyId(str(row["buyer"])),
+                seller=PartyId(str(row["seller"])),
+                from_plot_id=PlotId(str(row["from_plot_id"])),
+                material=MaterialId(str(row["material"])),
+                qty=int(row["qty"]),
+                quality=str(row.get("quality", "standard")),
+                match_tick=int(row.get("match_tick", 0)),
+                order_id=str(row.get("order_id", "")),
             )
         )
     asks_map: dict[str, list[Any]] = {}
@@ -616,6 +653,7 @@ def load_world(d: dict[str, Any]) -> World:
                 min_counterparty_honored=int(r.get("min_counterparty_honored", 0)),
                 quality=str(r.get("quality", "standard")),
                 from_plot_id=str(r.get("from_plot_id", "")),
+                delivery_terms=str(r.get("delivery_terms", "ddp")),
             )
             for r in rows
         ]
@@ -634,6 +672,7 @@ def load_world(d: dict[str, Any]) -> World:
                 iceberg_peak=int(r.get("iceberg_peak", 0)),
                 iceberg_hidden_qty=int(r.get("iceberg_hidden_qty", 0)),
                 min_counterparty_honored=int(r.get("min_counterparty_honored", 0)),
+                delivery_plot_id=str(r.get("delivery_plot_id", "")),
             )
             for r in rows
         ]
@@ -675,6 +714,8 @@ def load_world(d: dict[str, Any]) -> World:
         market_asks_by_material=asks_map,
         market_bids_by_material=bids_map,
         next_order_seq=int(d.get("next_order_seq", 0)),
+        next_market_pickup_seq=int(d.get("next_market_pickup_seq", 0)),
+        market_fob_pickups=fob_rows,
         reputation=copy.deepcopy(dict(d.get("reputation", {}))),
         contracts=[copy.deepcopy(c) for c in d.get("contracts", [])],
         next_contract_seq=int(d.get("next_contract_seq", 0)),

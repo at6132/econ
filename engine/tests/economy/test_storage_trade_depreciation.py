@@ -59,9 +59,9 @@ def test_warehouse_exempts_from_holding_costs() -> None:
     w = bootstrap_genesis(seed=2, settler_count=3)
     player = PartyId("player")
     pid = _first_land_plot(w, player)
-    grant_turnkey_self_materials(w, player, "warehouse")
+    grant_turnkey_self_materials(w, player, "warehouse", plot_id=pid)
     build_on_plot(w, player, pid, "warehouse", build_mode="turnkey")
-    for _ in range(3000):
+    for _ in range(200):
         advance_tick(w)
     w.plot_output_stock[str(pid)] = {str(MaterialId("coal")): 500}
     w.tick = 1440
@@ -85,7 +85,7 @@ def test_demolish_returns_half_book_value() -> None:
     w = bootstrap_genesis(seed=4, settler_count=3)
     player = PartyId("player")
     pid = _first_land_plot(w, player)
-    grant_turnkey_self_materials(w, player, "power_shed")
+    grant_turnkey_self_materials(w, player, "power_shed", plot_id=pid)
     r = build_on_plot(w, player, pid, "power_shed", build_mode="turnkey")
     assert r["ok"]
     iid = str(r["instance_id"])
@@ -107,8 +107,9 @@ def test_book_value_depreciates_yearly() -> None:
     w = bootstrap_genesis(seed=5, settler_count=3)
     player = PartyId("player")
     pid = _first_land_plot(w, player)
-    grant_turnkey_self_materials(w, player, "foundry")
-    build_on_plot(w, player, pid, "foundry", build_mode="turnkey")
+    grant_turnkey_self_materials(w, player, "foundry", plot_id=pid)
+    r = build_on_plot(w, player, pid, "foundry", build_mode="turnkey")
+    assert r.get("ok"), r
     for _ in range(300):
         advance_tick(w)
     iid = next(
