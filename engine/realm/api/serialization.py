@@ -142,10 +142,18 @@ def dump_world(world: World) -> dict[str, Any]:
             }
             for b in lst
         ]
-    inv: dict[str, dict[str, int]] = {}
+    inv: dict[str, dict[str, object]] = {}
     for party in sorted(world.inventory.parties_with_stock_rows(), key=str):
-        mats = world.inventory.stock_for_party(party)
-        inv[str(party)] = {str(m): q for m, q in mats.items()}
+        party_inv: dict[str, object] = {}
+        for mat, raw in world.inventory.stock.get(party, {}).items():
+            from realm.core.inventory import _normalize_bucket
+
+            bucket = _normalize_bucket(raw)
+            if len(bucket) == 1 and "standard" in bucket:
+                party_inv[str(mat)] = int(bucket["standard"])
+            elif bucket:
+                party_inv[str(mat)] = dict(bucket)
+        inv[str(party)] = party_inv
     return {
         "version": SNAPSHOT_VERSION,
         "seed": world.seed,
@@ -552,7 +560,11 @@ def load_world(d: dict[str, Any]) -> World:
             inv.ensure_party_bucket(party)
         else:
             for ms, q in mats.items():
-                inv.add(party, MaterialId(ms), int(q))
+                if isinstance(q, dict):
+                    for qual, qty in q.items():
+                        inv.add(party, MaterialId(ms), int(qty), quality=str(qual))
+                else:
+                    inv.add(party, MaterialId(ms), int(q))
     parties = {PartyId(p) for p in d["parties"]}
     active: list[ActiveProduction] = []
     for row in d.get("active_production", []):
@@ -594,6 +606,7 @@ def load_world(d: dict[str, Any]) -> World:
                 iceberg_peak=int(r.get("iceberg_peak", 0)),
                 iceberg_hidden_qty=int(r.get("iceberg_hidden_qty", 0)),
                 min_counterparty_honored=int(r.get("min_counterparty_honored", 0)),
+                quality=str(r.get("quality", "standard")),
             )
             for r in rows
         ]

@@ -95,7 +95,7 @@ def _player_net_worth_cents(world: World) -> int:
 
     player = PartyId("player")
     cash = world.ledger.balance(party_cash_account(player))
-    stock = world.inventory.stock.get(player, {}) or {}
+    stock = world.inventory.stock_for_party(player)
     total = cash
     for mid, qty in stock.items():
         if qty <= 0:

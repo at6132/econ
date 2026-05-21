@@ -20,8 +20,7 @@ def validate_linear_recipe_chain(
     catalog_list = recipe_public_list()
     by_id = {r["id"]: r for r in catalog_list}
 
-    bucket = world.inventory.stock.get(party, {})
-    inv: dict[str, int] = {str(k): int(v) for k, v in bucket.items()}
+    inv: dict[str, int] = {str(k): int(v) for k, v in world.inventory.stock_for_party(party).items()}
     errors: list[str] = []
 
     if not terrain_allows_workshop(plot.terrain):

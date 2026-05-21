@@ -45,12 +45,13 @@ def _liquidate_party_to_exchange(world: World, party: PartyId) -> None:
     ex = PartyId("genesis_exchange")
     if ex not in world.parties:
         return
-    for mat, qty in list(world.inventory.stock.get(party, {}).items()):
+    for mat, qty in list(world.inventory.stock_for_party(party).items()):
         if qty <= 0:
             continue
-        tr = world.inventory.transfer(material=mat, qty=qty, from_party=party, to_party=ex)
-        if isinstance(tr, MatterErr):
+        rm = world.inventory.remove(party, mat, qty, quality="any")
+        if isinstance(rm, MatterErr):
             break
+        world.inventory.add(ex, mat, qty)
     for pid_str, bucket in list(world.plot_output_stock.items()):
         plot = world.plots.get(PlotId(pid_str))
         if plot is None or plot.owner != party:

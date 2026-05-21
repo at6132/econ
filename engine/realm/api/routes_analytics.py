@@ -169,6 +169,7 @@ def post_market_sell(
     price_per_unit_cents: Annotated[int, Query()],
     iceberg_display_qty: Annotated[int | None, Query()] = None,
     min_counterparty_honored: Annotated[int, Query()] = 0,
+    quality: Annotated[str, Query()] = "standard",
 ) -> dict:
     r = place_sell_order(
         _state.WORLD,
@@ -178,6 +179,7 @@ def post_market_sell(
         price_per_unit_cents,
         iceberg_display_qty=iceberg_display_qty,
         min_counterparty_honored=min_counterparty_honored,
+        quality=quality,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])

@@ -149,10 +149,18 @@ def world_public_dict(world: "World") -> dict:
             entry["output_stock"] = dict(world.plot_output_stock.get(str(p.plot_id), {}))
         plots_out.append(entry)
     balances = {str(k): v for k, v in world.ledger.snapshot().items()}
-    inv = {
-        str(party): {str(m): q for m, q in mats.items()}
-        for party, mats in world.inventory.snapshot().items()
-    }
+    inv: dict[str, dict[str, object]] = {}
+    for party, mats in world.inventory.snapshot().items():
+        party_inv: dict[str, object] = {}
+        for mat, raw in mats.items():
+            from realm.core.inventory import _normalize_bucket
+
+            bucket = _normalize_bucket(raw)
+            if len(bucket) == 1 and "standard" in bucket:
+                party_inv[str(mat)] = int(bucket["standard"])
+            elif bucket:
+                party_inv[str(mat)] = dict(bucket)
+        inv[str(party)] = party_inv
 
     intel_active = world.tick < world.market_intel_expires_tick
     hist = world.market_history
@@ -437,7 +445,7 @@ def world_summary_dict(world: "World", party: PartyId) -> dict[str, Any]:
     except Exception:
         _FAIR_VALUE_CENTS = {}  # type: ignore[assignment]
     inv_value_cents = 0
-    for mat, qty in world.inventory.stock.get(party, {}).items():
+    for mat, qty in world.inventory.stock_for_party(party).items():
         unit = int(_FAIR_VALUE_CENTS.get(str(mat), 0))
         inv_value_cents += unit * int(qty)
     net_worth_estimate = cash_cents + inv_value_cents
@@ -593,6 +601,7 @@ def world_static_dict(world: "World") -> dict[str, Any]:
         "bank_plot_id": scen.get("bank_plot"),
         "parties": [str(x) for x in world.parties],
         "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
+        "regional_advantages": {str(k): dict(v) for k, v in world.regional_advantages.items()},
     }
 
 
@@ -622,8 +631,22 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
     balances = world.ledger.snapshot()
     cash_cents = int(balances.get(cash_acct, 0))
 
-    inv_party = world.inventory.stock.get(party, {})
-    inventory = {str(m): int(q) for m, q in inv_party.items()}
+    inventory: dict[str, Any] = {}
+    for mat, raw in world.inventory.stock.get(party, {}).items():
+        from realm.core.inventory import _normalize_bucket
+
+        by_q = _normalize_bucket(raw)
+        total = sum(by_q.values())
+        if total <= 0:
+            continue
+        inventory[str(mat)] = {
+            "total": total,
+            "by_quality": {
+                "high": int(by_q.get("high", 0)),
+                "standard": int(by_q.get("standard", 0)),
+                "low": int(by_q.get("low", 0)),
+            },
+        }
 
     owned_plots: list[dict[str, Any]] = []
     party_s = str(party)
@@ -663,6 +686,15 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
             entry["recipe_ids"] = recipe_ids_on_plot_for_owner(world, p)
         if world.use_plot_output_logistics:
             entry["output_stock"] = dict(world.plot_output_stock.get(str(p.plot_id), {}))
+        from realm.production.production import (
+            _count_nearby_buildings_same_owner,
+            cluster_bonus_for_plot,
+        )
+
+        entry["cluster_bonus"] = cluster_bonus_for_plot(world, party, p.plot_id)
+        entry["nearby_buildings_same_owner"] = _count_nearby_buildings_same_owner(
+            world, party, p.plot_id
+        )
         owned_plots.append(entry)
 
     plot_buildings = [
@@ -778,6 +810,9 @@ def world_map_dict(world: "World") -> dict[str, Any]:
             entry["deep_surveyed"] = True
         if density > 0.0:
             entry["population_density"] = density
+        lm_raw = (world.landmass_id or {}).get(str(p.plot_id))
+        if lm_raw is not None and int(lm_raw) >= 0:
+            entry["landmass_id"] = int(lm_raw)
         if not uniform:
             _, _, wt, ht = plot_world_span(p)
             gcw, gch = plot_grid_side(p)
@@ -852,7 +887,7 @@ def world_compact_dict(world: "World") -> dict[str, Any]:
     )[:24]:
         bal_sample[acct] = cents
 
-    inv_player = world.inventory.stock.get(player, {})
+    inv_player = world.inventory.stock_for_party(player)
     inv_top = [
         {"material": str(m), "qty": q}
         for m, q in sorted(inv_player.items(), key=lambda x: -x[1])[:28]

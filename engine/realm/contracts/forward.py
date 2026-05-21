@@ -66,7 +66,7 @@ def _settler_active_forward_count(world: World, settler: str) -> int:
 
 def _settler_surplus_material(world: World, settler: PartyId) -> tuple[str, int] | None:
     """Pick the settler's most-stocked tradeable output (≥ surplus minimum)."""
-    stock = world.inventory.stock.get(settler, {}) or {}
+    stock = world.inventory.stock_for_party(settler)
     if not stock:
         return None
     candidates = [
@@ -182,8 +182,7 @@ def tick_consolidator_forward_proposals(world: World) -> None:
         ps = str(p)
         if not ps.startswith("settler_"):
             continue
-        stock = world.inventory.stock.get(p, {}) or {}
-        qty = int(stock.get(MaterialId(material_s), 0))
+        qty = world.inventory.qty(p, MaterialId(material_s), "any")
         if qty < SETTLER_SURPLUS_MIN_UNITS:
             continue
         candidates.append((ps, qty))
