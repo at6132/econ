@@ -219,9 +219,9 @@ class World:
     scenario_state: dict[str, Any] = field(default_factory=dict)
     """Scenario-scoped scratch (Genesis digest deltas, scripted NPC flags). Persisted in snapshots."""
     use_plot_output_logistics: bool = False
-    """When True, player outputs and inbound shipments stage on plot-local stock (harvest → party inventory)."""
+    """When True, bulk matter for player/settlers lives in ``plot_output_stock`` (yard/warehouse caps)."""
     plot_output_stock: dict[str, dict[str, int]] = field(default_factory=dict)
-    """Per-plot staged materials: plot id str → material id str → qty (not in party inventory yet)."""
+    """Per-plot bulk stock: plot id str → material id str → qty (source of truth for staged goods)."""
     market_seller_registered: set[str] = field(default_factory=set)
     """Genesis: composite keys ``party|material`` after one-time clearinghouse seller registration fee is paid."""
     party_recipe_books: dict[str, set[str]] = field(default_factory=dict)
@@ -971,14 +971,9 @@ def _seed_tier2_agents(
     if isinstance(tr_c, MatterErr):
         raise ValueError(tr_c.reason)
     tcoal = PartyId("t2_coal_spread")
-    tr_coal = inv.transfer(
-        material=MaterialId("coal"),
-        qty=1,
-        from_party=player,
-        to_party=tcoal,
-    )
-    if isinstance(tr_coal, MatterErr):
-        raise ValueError(tr_coal.reason)
+    ad_coal_t2 = inv.add(tcoal, MaterialId("coal"), 1)
+    if isinstance(ad_coal_t2, MatterErr):
+        raise ValueError(ad_coal_t2.reason)
 
 
 def _seed_cartel_grain_overlay(
@@ -1075,7 +1070,15 @@ def bootstrap_frontier(
     )
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
-    # Frontier starter stock so production loop is testable without cheats
+    world.use_plot_output_logistics = True
+    from realm.infrastructure.plot_logistics import try_add_plot_output
+    from realm.production.storage_caps import is_carried_material
+
+    spawn = PlotId(f"p-{grid_width // 2}-{grid_height // 2}")
+    spawn_plot = plots.get(spawn)
+    if spawn_plot is not None:
+        spawn_plot.owner = human
+    # Bulk on home plot; portable goods in personal carry.
     _starter = (
         (MaterialId("timber"), 12),
         (MaterialId("coal"), 12),
@@ -1086,7 +1089,12 @@ def bootstrap_frontier(
         (MaterialId("grain"), 20),
     )
     for mid, qty in _starter:
-        ad = inv.add(human, mid, qty)
+        if is_carried_material(mid):
+            ad = inv.add(human, mid, qty)
+        elif spawn_plot is not None:
+            ad = try_add_plot_output(world, spawn, human, mid, qty)
+        else:
+            ad = inv.add(human, mid, qty)
         if isinstance(ad, MatterErr):
             raise ValueError(ad.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
@@ -1096,9 +1104,9 @@ def bootstrap_frontier(
     world.parties.add(consumer)
     world.reputation[str(vendor)] = {"honored": 0, "breached": 0}
     world.reputation[str(consumer)] = {"honored": 0, "breached": 0}
-    tr_g = inv.transfer(material=MaterialId("grain"), qty=10, from_party=human, to_party=vendor)
-    if isinstance(tr_g, MatterErr):
-        raise ValueError(tr_g.reason)
+    ad_v = inv.add(vendor, MaterialId("grain"), 10)
+    if isinstance(ad_v, MatterErr):
+        raise ValueError(ad_v.reason)
     cc = party_cash_account(consumer)
     world.ledger.ensure_account(cc)
     tr_c = world.ledger.transfer(
@@ -1121,11 +1129,9 @@ def bootstrap_frontier(
     world.parties.add(lumber_buyer)
     world.reputation[str(timber_merch)] = {"honored": 0, "breached": 0}
     world.reputation[str(lumber_buyer)] = {"honored": 0, "breached": 0}
-    tr_tm = inv.transfer(
-        material=MaterialId("timber"), qty=4, from_party=human, to_party=timber_merch
-    )
-    if isinstance(tr_tm, MatterErr):
-        raise ValueError(tr_tm.reason)
+    ad_tm = inv.add(timber_merch, MaterialId("timber"), 4)
+    if isinstance(ad_tm, MatterErr):
+        raise ValueError(ad_tm.reason)
     lb_cash = party_cash_account(lumber_buyer)
     world.ledger.ensure_account(lb_cash)
     tr_lb = world.ledger.transfer(
@@ -1144,12 +1150,12 @@ def bootstrap_frontier(
     for px in (coal_v, clay_v, elec_b):
         world.parties.add(px)
         world.reputation[str(px)] = {"honored": 0, "breached": 0}
-    tr_coal = inv.transfer(material=MaterialId("coal"), qty=3, from_party=human, to_party=coal_v)
-    if isinstance(tr_coal, MatterErr):
-        raise ValueError(tr_coal.reason)
-    tr_clay = inv.transfer(material=MaterialId("clay"), qty=3, from_party=human, to_party=clay_v)
-    if isinstance(tr_clay, MatterErr):
-        raise ValueError(tr_clay.reason)
+    ad_coal = inv.add(coal_v, MaterialId("coal"), 3)
+    if isinstance(ad_coal, MatterErr):
+        raise ValueError(ad_coal.reason)
+    ad_clay = inv.add(clay_v, MaterialId("clay"), 3)
+    if isinstance(ad_clay, MatterErr):
+        raise ValueError(ad_clay.reason)
     eb_cash = party_cash_account(elec_b)
     world.ledger.ensure_account(eb_cash)
     tr_eb = world.ledger.transfer(

@@ -170,7 +170,11 @@ def post_market_sell(
     iceberg_display_qty: Annotated[int | None, Query()] = None,
     min_counterparty_honored: Annotated[int, Query()] = 0,
     quality: Annotated[str, Query()] = "standard",
+    from_plot: Annotated[str | None, Query()] = None,
 ) -> dict:
+    from realm.core.ids import PlotId
+
+    src_plot = PlotId(from_plot) if from_plot else None
     r = place_sell_order(
         _state.WORLD,
         PartyId(party),
@@ -180,6 +184,7 @@ def post_market_sell(
         iceberg_display_qty=iceberg_display_qty,
         min_counterparty_honored=min_counterparty_honored,
         quality=quality,
+        from_plot_id=src_plot,
     )
     if not r["ok"]:
         raise HTTPException(status_code=400, detail=r["reason"])

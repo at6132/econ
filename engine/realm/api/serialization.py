@@ -15,7 +15,7 @@ from typing import Any
 
 from realm.production.decay import BUILDING_CONDITION_FULL_BPS
 from realm.core.ids import MaterialId, PartyId, PlotId
-from realm.core.inventory import Inventory
+from realm.core.inventory import Inventory, MatterErr
 from realm.core.ledger import Ledger
 from realm.economy.markets import AskOrder, BidOrder, _sort_asks, _sort_bids
 from realm.world import (
@@ -31,7 +31,7 @@ from realm.world import (
 from realm.world.terrain import Terrain
 
 # Bump when serialized shape or semantics change; loaders accept older versions they understand.
-SNAPSHOT_VERSION = 15
+SNAPSHOT_VERSION = 16
 
 
 def _blueprint_public_dict(bp: object) -> dict[str, Any]:
@@ -124,6 +124,8 @@ def dump_world(world: World) -> dict[str, Any]:
                 "iceberg_peak": o.iceberg_peak,
                 "iceberg_hidden_qty": o.iceberg_hidden_qty,
                 "min_counterparty_honored": o.min_counterparty_honored,
+                "quality": str(getattr(o, "quality", "standard")),
+                "from_plot_id": str(getattr(o, "from_plot_id", "")),
             }
             for o in lst
         ]
@@ -613,6 +615,7 @@ def load_world(d: dict[str, Any]) -> World:
                 iceberg_hidden_qty=int(r.get("iceberg_hidden_qty", 0)),
                 min_counterparty_honored=int(r.get("min_counterparty_honored", 0)),
                 quality=str(r.get("quality", "standard")),
+                from_plot_id=str(r.get("from_plot_id", "")),
             )
             for r in rows
         ]
@@ -1092,9 +1095,7 @@ def load_world(d: dict[str, Any]) -> World:
             world.regional_advantages[lk] = {
                 str(kk): float(vv) for kk, vv in inner.items()
             }
-    # Sprint 6 — Phase D.1: matter no longer lives in ``plot_output_stock``.
-    # Migrate any staged output from old snapshots (version ≤ 10) into the
-    # plot owner's inventory and reset the per-plot dict to a fresh display log.
+    # Sprint 6 — Phase D.1 (legacy ≤10): display log merged into inventory.
     if int(ver) <= 10:
         migrated = False
         for plot_id_s, mats in list(world.plot_output_stock.items()):
@@ -1111,8 +1112,32 @@ def load_world(d: dict[str, Any]) -> World:
                 world.inventory.add(plot.owner, MaterialId(str(mat_s)), q)
                 migrated = True
         if migrated:
-            # Display log starts fresh — old saves' counters are subsumed into inventory.
             world.plot_output_stock = {}
+    # Plot-local bulk (Option B): move player/settler bulk out of personal carry.
+    if int(ver) <= 15:
+        from realm.infrastructure.plot_logistics import (
+            owned_plot_ids_sorted,
+            try_add_plot_output,
+        )
+        from realm.production.storage_caps import is_carried_material, party_uses_plot_storage
+
+        world.use_plot_output_logistics = True
+        for party in list(world.parties):
+            if not party_uses_plot_storage(world, party):
+                continue
+            owned = owned_plot_ids_sorted(world, party)
+            if not owned:
+                continue
+            depot = owned[0]
+            for mat, total in list(world.inventory.stock_for_party(party).items()):
+                if is_carried_material(mat) or total <= 0:
+                    continue
+                rm = world.inventory.remove(party, mat, total)
+                if isinstance(rm, MatterErr):
+                    continue
+                ad = try_add_plot_output(world, depot, party, mat, total)
+                if isinstance(ad, MatterErr):
+                    world.inventory.add(party, mat, total)
     if not str(world.world_id or "").strip():
         from realm.core.ids import new_world_id
 

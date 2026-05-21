@@ -233,26 +233,48 @@ def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -
         mat = MaterialId(c["material"])
         qty = int(c["qty"])
         price = int(c["total_price_cents"])
-        if plot_logistics_enabled(world):
-            ensure_inventory_from_stash(world, supplier, mat, qty)
-        if world.inventory.qty(supplier, mat) < qty:
-            return {"ok": False, "reason": "insufficient material to fulfill"}
+        from realm.infrastructure.plot_logistics import (
+            add_party_plot_stock,
+            party_material_held,
+            remove_party_plot_stock,
+        )
+        from realm.production.storage_caps import party_uses_plot_storage
+
+        if party_uses_plot_storage(world, supplier):
+            if party_material_held(world, supplier, mat) < qty:
+                return {"ok": False, "reason": "insufficient material to fulfill"}
+            rm = remove_party_plot_stock(world, supplier, mat, qty)
+        else:
+            if world.inventory.qty(supplier, mat) < qty:
+                return {"ok": False, "reason": "insufficient material to fulfill"}
+            rm = world.inventory.remove(supplier, mat, qty)
+        if isinstance(rm, MatterErr):
+            return {"ok": False, "reason": rm.reason}
         bc = party_cash_account(buyer)
         sc = party_cash_account(supplier)
         if world.ledger.balance(bc) < price:
+            if party_uses_plot_storage(world, supplier):
+                add_party_plot_stock(world, supplier, mat, qty)
+            else:
+                world.inventory.add(supplier, mat, qty)
             return {"ok": False, "reason": "buyer insufficient cash"}
         if price > 0:
             pay = world.ledger.transfer(debit=bc, credit=sc, amount_cents=price)
             if isinstance(pay, MoneyErr):
+                if party_uses_plot_storage(world, supplier):
+                    add_party_plot_stock(world, supplier, mat, qty)
+                else:
+                    world.inventory.add(supplier, mat, qty)
                 return {"ok": False, "reason": pay.reason}
-        rm = world.inventory.remove(supplier, mat, qty)
-        if isinstance(rm, MatterErr):
-            if price > 0:
-                world.ledger.transfer(debit=sc, credit=bc, amount_cents=price)
-            return {"ok": False, "reason": rm.reason}
-        ad = try_add_inventory(world, buyer, mat, qty)
+        if party_uses_plot_storage(world, buyer):
+            ad = add_party_plot_stock(world, buyer, mat, qty)
+        else:
+            ad = try_add_inventory(world, buyer, mat, qty)
         if isinstance(ad, MatterErr):
-            world.inventory.add(supplier, mat, qty)
+            if party_uses_plot_storage(world, supplier):
+                add_party_plot_stock(world, supplier, mat, qty)
+            else:
+                world.inventory.add(supplier, mat, qty)
             if price > 0:
                 world.ledger.transfer(debit=sc, credit=bc, amount_cents=price)
             return {"ok": False, "reason": ad.reason}
@@ -261,9 +283,15 @@ def fulfill_supply_contract(world: World, supplier: PartyId, contract_id: str) -
             esc = contract_escrow_account(c["id"])
             trd = world.ledger.transfer(debit=esc, credit=sc, amount_cents=dep)
             if isinstance(trd, MoneyErr):
-                rb = world.inventory.remove(buyer, mat, qty)
-                if not isinstance(rb, MatterErr):
-                    world.inventory.add(supplier, mat, qty)
+                if party_uses_plot_storage(world, buyer):
+                    from realm.infrastructure.plot_logistics import remove_party_plot_stock
+
+                    remove_party_plot_stock(world, buyer, mat, qty)
+                    add_party_plot_stock(world, supplier, mat, qty)
+                else:
+                    rb = world.inventory.remove(buyer, mat, qty)
+                    if not isinstance(rb, MatterErr):
+                        world.inventory.add(supplier, mat, qty)
                 if price > 0:
                     world.ledger.transfer(debit=sc, credit=bc, amount_cents=price)
                 return {"ok": False, "reason": trd.reason}
