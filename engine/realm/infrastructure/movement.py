@@ -1,15 +1,13 @@
 """Goods in transit — Law 3 (time + distance).
 
-Shipping fee (integer cents): ``BASE_SHIP_FEE_CENTS + manhattan(from, to) * per_tile``.
+Bulk shipping fee (integer cents): fixed **trip** cost amortized per unit.
 
-When a registered route operator exists for the two regions the shipment crosses,
-``per_tile`` is that operator's ``fee_per_tile_cents`` (cheapest wins) and the
-entire fee is credited to them. Otherwise the fee falls back to the legacy
-``PER_TILE_SHIP_CENTS`` and is credited to ``system:reserve`` (sink).
+``trip_cost = BASE_TRIP_FEE + distance * per_tile`` (per-tile may come from a
+registered route operator). ``per_unit = max(MIN_PER_UNIT, trip_cost // qty)``;
+``total_fee = per_unit * qty``.
 
-Phase 7A — inter-island shipments (origin and destination on *different*
-landmasses in the genesis four-island layout) pay a ``2×`` open-ocean
-modifier on the per-tile portion of the fee. Land movement across ocean
+Inter-island lanes apply ``OCEAN_TILE_MULTIPLIER``; uncharted lanes (no
+operator) apply ``UNCHARTED_TRIP_MULTIPLIER``. Land movement across ocean
 tiles is impassable (``tile_movement_cost == math.inf``).
 
 Arrival tick uses Manhattan distance × ``TRANSIT_TICKS_PER_TILE`` (game-minutes
@@ -33,8 +31,16 @@ from realm.production.storage_caps import try_add_inventory
 from realm.core.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
 from realm.world import InTransit, World
 
-BASE_SHIP_FEE_CENTS = 100
-PER_TILE_SHIP_CENTS = 50
+# Bulk-friendly trip pricing (Realism Pass 2).
+BASE_TRIP_FEE_CENTS: Final[int] = 500
+PER_TILE_TRIP_FEE_CENTS: Final[int] = 10
+MIN_PER_UNIT_FEE_CENTS: Final[int] = 1
+UNCHARTED_TRIP_MULTIPLIER: Final[float] = 2.0
+OCEAN_TILE_MULTIPLIER: Final[float] = 1.5
+
+# Backward-compat aliases for imports/tests that still reference old names.
+PER_TILE_SHIP_CENTS = PER_TILE_TRIP_FEE_CENTS
+BASE_SHIP_FEE_CENTS = BASE_TRIP_FEE_CENTS
 
 # Sprint 3 — Phase D.2/D.3: coastal advantages.
 COASTAL_ROUTE_DISCOUNT_BPS: int = 4_000  # 40 % discount → multiplier 0.60
@@ -57,23 +63,11 @@ RECEIVING_FEE_CHUNK_UNITS = 20  # +1¢ per this many units after the first
 MOVEMENT_FUEL_TILES_PER_UNIT: int = 20
 INTER_ISLAND_FUEL_MATERIALS: tuple[str, ...] = ("coal", "electricity")
 
-# Phase 9I - mass-weighted shipping surcharge.
-# Before: a 1-unit grain shipment cost the same as a 100-unit stone
-# shipment, which broke Law 3 (distance has cost) for heavy cargo. The
-# surcharge is tons * tiles * MASS_SHIP_TON_TILE_CENTS, so:
-#   - 10 units grain over 20 tiles -> about 8t * 20 * 1 = 160c surcharge
-#   - 10 units stone over 20 tiles -> about 26t * 20 * 1 = 520c surcharge
-# Light cargo (grain/fish) is barely affected; bulk minerals get a
-# real freight cost that makes local sourcing matter.
-MASS_SHIP_TON_TILE_CENTS: Final[int] = 1
-
-# Phase 10B — uncharted voyages. When a shipment crosses two regions with
-# no registered operator, the shipper can still ship but pays a premium
-# (and the voyage takes longer + burns more fuel). The fee sinks to
-# system_reserve until an NPC or player registers an operator on the lane.
+# Phase 10B — uncharted voyages (no registered operator on the lane).
 UNCHARTED_TIME_MULTIPLIER: Final[float] = 2.0
-UNCHARTED_FEE_MULTIPLIER: Final[float] = 1.5
 UNCHARTED_FUEL_MULTIPLIER: Final[float] = 2.0
+# Legacy alias — fee premium is now UNCHARTED_TRIP_MULTIPLIER on trip cost.
+UNCHARTED_FEE_MULTIPLIER: Final[float] = UNCHARTED_TRIP_MULTIPLIER
 
 
 def _inter_island_allows_small_vessel(
@@ -100,6 +94,106 @@ def receiving_fee_cents(qty: int) -> int:
     if qty <= 0:
         return 0
     return RECEIVING_FEE_BASE_CENTS + max(0, qty - 1) // RECEIVING_FEE_CHUNK_UNITS * RECEIVING_FEE_EXTRA_PER_CHUNK_CENTS
+
+
+def _is_ocean_route(world: World, from_plot_id: PlotId, to_plot_id: PlotId) -> bool:
+    from realm.world.islands import is_inter_island_shipment
+
+    return is_inter_island_shipment(world, from_plot_id, to_plot_id)
+
+
+def _best_route_operator(world: World, from_plot_id: PlotId, to_plot_id: PlotId) -> tuple[dict | None, str | None]:
+    """Cheapest registered operator for the region pair, if any."""
+    from_region = region_for_plot(world, from_plot_id)
+    to_region = region_for_plot(world, to_plot_id)
+    if not from_region or not to_region or from_region == to_region:
+        return (None, None)
+    key = route_key(from_region, to_region)
+    return (find_cheapest_operator(world, key), key)
+
+
+def compute_shipping_fee(
+    world: World,
+    from_plot_id: PlotId,
+    to_plot_id: PlotId,
+    qty: int,
+) -> dict:
+    """Preview or compute bulk shipping economics for a lane.
+
+    Returns ``total_fee_cents``, ``per_unit_cents``, ``trip_cost_cents``, and
+    route metadata. Trip cost is fixed for any quantity — larger shipments
+    amortize it.
+    """
+    from_plot = world.plots.get(from_plot_id)
+    to_plot = world.plots.get(to_plot_id)
+    if from_plot is None or to_plot is None:
+        return {"ok": False, "reason": "plot not found"}
+
+    dist = manhattan(world, from_plot_id, to_plot_id)
+    is_ocean = _is_ocean_route(world, from_plot_id, to_plot_id)
+    ocean_mult = OCEAN_TILE_MULTIPLIER if is_ocean else 1.0
+
+    operator, rk = _best_route_operator(world, from_plot_id, to_plot_id)
+    is_uncharted = operator is None and rk is not None
+    uncharted_mult = UNCHARTED_TRIP_MULTIPLIER if is_uncharted else 1.0
+
+    if operator and int(operator.get("fee_per_tile_cents", 999)) < PER_TILE_TRIP_FEE_CENTS:
+        effective_per_tile = int(operator["fee_per_tile_cents"])
+    else:
+        effective_per_tile = PER_TILE_TRIP_FEE_CENTS
+
+    trip_cost = int(
+        (BASE_TRIP_FEE_CENTS + dist * effective_per_tile) * ocean_mult * uncharted_mult
+    )
+    ship_qty = max(1, int(qty))
+    per_unit = max(MIN_PER_UNIT_FEE_CENTS, trip_cost // ship_qty)
+    total_fee = per_unit * ship_qty
+
+    op_party = str(operator.get("operator_party", "")) if operator else None
+    breakeven = (
+        int(trip_cost / max(1, per_unit - MIN_PER_UNIT_FEE_CENTS + 1)) + 1
+        if per_unit > MIN_PER_UNIT_FEE_CENTS
+        else 1
+    )
+
+    return {
+        "ok": True,
+        "trip_cost_cents": trip_cost,
+        "per_unit_cents": per_unit,
+        "total_fee_cents": total_fee,
+        "distance_tiles": dist,
+        "qty": ship_qty,
+        "is_ocean": is_ocean,
+        "is_uncharted": is_uncharted,
+        "operator": op_party,
+        "operator_party": op_party,
+        "route_key": rk,
+        "breakeven_qty": breakeven,
+    }
+
+
+def should_ship_goods(
+    world: World,
+    party: PartyId,
+    material: MaterialId,
+    qty: int,
+    from_pid: PlotId,
+    to_pid: PlotId,
+    *,
+    min_profit_cents: int = 5,
+) -> bool:
+    """True when shipping ``qty`` of ``material`` beats market price by ``min_profit_cents``/unit."""
+    from realm.agents.market_oracle import get_oracle
+
+    fee = compute_shipping_fee(world, from_pid, to_pid, qty)
+    if not fee.get("ok"):
+        return False
+    oracle = get_oracle(world)
+    sell_price = int(oracle.best_bid.get(str(material)) or 0)
+    if sell_price <= 0:
+        sell_price = int(oracle.best_ask.get(str(material), 0) or 0)
+    per_unit_profit = sell_price - int(fee["per_unit_cents"])
+    return per_unit_profit > int(min_profit_cents)
 
 
 def _plot_owned(world: World, party: PartyId, plot_id: PlotId) -> bool:
@@ -252,79 +346,56 @@ def dispatch_shipment(
                     "ok": False,
                     "reason": f"route {simple_key} closed by severe weather",
                 }
-    ocean_mult: float = 2.0 if inter_island else 1.0
-    # Phase 10A — when continental-layout landmasses exist, layer the
-    # continent/island/islet pair modifier on top of the existing 2× open-
-    # ocean modifier. Continent↔continent voyages are most expensive,
-    # island↔island within a chain are cheapest. No-op on legacy worlds
-    # without ``landmass_type`` populated.
-    if inter_island and world.landmass_type:
-        from realm.world.landmasses import landmass_pair_modifier
-
-        from_lid = (world.landmass_id or {}).get(str(from_plot_id))
-        to_lid = (world.landmass_id or {}).get(str(to_plot_id))
-        if from_lid is not None and to_lid is not None:
-            ocean_mult *= landmass_pair_modifier(world, int(from_lid), int(to_lid))
+    fee_info = compute_shipping_fee(world, from_plot_id, to_plot_id, qty)
+    if not fee_info.get("ok"):
+        return fee_info
+    fee = int(fee_info["total_fee_cents"])
+    op_route_key = fee_info.get("route_key")
+    # Fuel/time penalties still apply only on inter-island uncharted lanes.
+    uncharted_voyage = bool(fee_info.get("is_uncharted") and inter_island)
     operator_payee: PartyId | None = None
-    op_route_key: str | None = None
-    # Phase 10B — uncharted-voyage handling. When the route is inter-region
-    # but no operator is registered, the shipper can still ship — at a
-    # premium (1.5× fee, 2× fuel, 2× transit time) — and the fee sinks to
-    # ``system_reserve``. Operators registering later (from any party) lift
-    # the premium and start collecting. ``UNCHARTED_*`` constants live with
-    # the other movement tunables at the top of this module.
-    uncharted_voyage = False
-    if from_region and to_region and from_region != to_region:
-        key = route_key(from_region, to_region)
-        op_route_key = key
-        op = find_cheapest_operator(world, key)
-        if op is not None and str(op.get("operator_party")) != str(party):
-            operator_payee = PartyId(str(op["operator_party"]))
-            per_tile = max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS))) * ocean_mult
-            fee = BASE_SHIP_FEE_CENTS + int(dist * per_tile)
-        elif op is None:
-            # Phase 10B — "uncharted" is an open-ocean / inter-landmass concept.
-            # Cross-region moves on a single landmass (e.g. Frontier wagon hauls)
-            # keep the legacy per-tile fee so existing scenarios and tests stay
-            # stable; only inter-island voyages pay the no-chart premium.
-            uncharted_voyage = bool(inter_island)
-            if uncharted_voyage:
-                per_tile = PER_TILE_SHIP_CENTS * ocean_mult * UNCHARTED_FEE_MULTIPLIER
-                fee = BASE_SHIP_FEE_CENTS + int(dist * per_tile)
-            else:
-                fee = BASE_SHIP_FEE_CENTS + int(dist * PER_TILE_SHIP_CENTS * ocean_mult)
-        else:
-            fee = BASE_SHIP_FEE_CENTS + int(dist * PER_TILE_SHIP_CENTS * ocean_mult)
-    else:
-        fee = BASE_SHIP_FEE_CENTS + int(dist * PER_TILE_SHIP_CENTS * ocean_mult)
-    # Sprint 3 — Phase D.2: 40 % discount for coastal → coastal lanes.
+    op_party = fee_info.get("operator_party")
+    if op_party and str(op_party) != str(party):
+        operator_payee = PartyId(str(op_party))
+
+    if op_route_key:
+        from realm.infrastructure.route_operators import ROUTE_DAILY_CAPACITY
+
+        vol = world.scenario_state.setdefault("route_daily_volume", {})
+        route_data = vol.setdefault(
+            str(op_route_key),
+            {"daily_capacity": ROUTE_DAILY_CAPACITY, "units_shipped_today": 0},
+        )
+        today_vol = int(route_data.get("units_shipped_today", 0))
+        capacity = int(route_data.get("daily_capacity", ROUTE_DAILY_CAPACITY))
+        if today_vol + qty > capacity * 1.5:
+            return {
+                "ok": False,
+                "reason": (
+                    f"Route {op_route_key} is congested today (capacity: {capacity} units). "
+                    "Try tomorrow or use an alternative route."
+                ),
+            }
+        if today_vol + qty > capacity:
+            fee = int(fee * 1.5)
+            log_event(
+                world,
+                "route_congestion",
+                f"Route {op_route_key} congested — surcharge applied",
+                route_key=op_route_key,
+                surcharge_pct=50,
+            )
+        route_data["units_shipped_today"] = today_vol + qty
+
     from realm.production.recipe_sites import plot_is_coastal
+    from realm.infrastructure.roads import compute_road_savings_and_tolls
+    from realm.economy.markets import best_resting_ask_cents, best_resting_bid_cents
 
     coastal_route = False
     from_plot = world.plots.get(from_plot_id)
     to_plot = world.plots.get(to_plot_id)
     if from_plot is not None and to_plot is not None:
         coastal_route = plot_is_coastal(world, from_plot) and plot_is_coastal(world, to_plot)
-    if coastal_route:
-        fee = max(BASE_SHIP_FEE_CENTS, fee * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000)
-    # Sprint 6 — Phase A: roads on the deterministic A→B path cut the per-tile
-    # cost by 50% on covered tiles and optionally collect ad-valorem tolls for
-    # the road owners.
-    from realm.infrastructure.roads import compute_road_savings_and_tolls
-    from realm.economy.markets import best_resting_ask_cents, best_resting_bid_cents
-
-    per_tile_effective = (
-        max(1, int(op.get("fee_per_tile_cents", PER_TILE_SHIP_CENTS)))
-        if operator_payee is not None
-        else PER_TILE_SHIP_CENTS
-    )
-    per_tile_effective = int(per_tile_effective * ocean_mult)
-    if uncharted_voyage:
-        per_tile_effective = int(per_tile_effective * UNCHARTED_FEE_MULTIPLIER)
-    if coastal_route:
-        per_tile_effective = (
-            per_tile_effective * (10_000 - COASTAL_ROUTE_DISCOUNT_BPS) // 10_000
-        )
     unit_value = best_resting_ask_cents(world, material)
     if unit_value is None or unit_value <= 0:
         unit_value = best_resting_bid_cents(world, material)
@@ -335,26 +406,15 @@ def dispatch_shipment(
         world,
         from_plot_id=from_plot_id,
         to_plot_id=to_plot_id,
-        per_tile_cents=per_tile_effective,
+        per_tile_cents=PER_TILE_TRIP_FEE_CENTS,
         goods_value_cents=goods_value_cents,
         shipper=party,
     )
     road_savings: int = int(road_calc["savings_cents"])
     tolls: list[tuple[PartyId, str, int]] = list(road_calc["tolls"])
-    fee = max(BASE_SHIP_FEE_CENTS, fee - road_savings)
-    # Phase 9I - mass-weighted surcharge (Law 3: distance has cost,
-    # *and* hauling 26 tons of stone should cost more than 8 tons of
-    # grain). Looks up the material's mass_per_unit_kg from MATERIALS
-    # and adds tons * tiles * MASS_SHIP_TON_TILE_CENTS to the fee.
-    from realm.materials import MATERIALS
-
-    mat_def = MATERIALS.get(material)
-    if mat_def is not None and mat_def.mass_per_unit_kg > 0:
-        total_kg = mat_def.mass_per_unit_kg * float(qty)
-        total_tons = total_kg / 1000.0
-        mass_surcharge_cents = int(total_tons * dist * MASS_SHIP_TON_TILE_CENTS)
-        fee += mass_surcharge_cents
+    fee = max(BASE_TRIP_FEE_CENTS, fee - road_savings)
     total_toll_cents = sum(amt for _, _, amt in tolls)
+    ocean_mult: float = OCEAN_TILE_MULTIPLIER if inter_island else 1.0
     cash = party_cash_account(party)
     if world.ledger.balance(cash) < fee + total_toll_cents:
         return {"ok": False, "reason": "insufficient cash for shipping"}

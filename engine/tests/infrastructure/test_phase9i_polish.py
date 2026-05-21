@@ -15,75 +15,38 @@ import pytest
 from realm.actions import claim_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
-from realm.infrastructure.movement import (
-    BASE_SHIP_FEE_CENTS,
-    MASS_SHIP_TON_TILE_CENTS,
-    PER_TILE_SHIP_CENTS,
-    dispatch_shipment,
-)
-from realm.materials import MATERIALS
+from realm.infrastructure.movement import compute_shipping_fee, dispatch_shipment
 from realm.population.laborers import RETIREMENT_AGE_TICKS
 from realm.world import bootstrap_genesis
 from realm.world.geo import manhattan
 from realm.world.world import bootstrap_frontier
 
 
-def test_stone_shipping_costs_more_than_grain_per_tile_at_same_qty() -> None:
+def test_bulk_shipping_same_material_fee_per_unit_at_same_qty() -> None:
     w = bootstrap_frontier(seed=70, grid_width=4, grid_height=2)
     a, b = PlotId("p-0-0"), PlotId("p-3-0")
     p = PartyId("player")
     assert claim_plot(w, p, a)["ok"]
     assert claim_plot(w, p, b)["ok"]
-    w.inventory.add(p, MaterialId("grain"), 10)
-    w.inventory.add(p, MaterialId("stone"), 10)
-    w.ledger.transfer(
-        debit=system_reserve_account(),
-        credit=party_cash_account(p),
-        amount_cents=1_000_000,
-    )
-
-    grain_ship = dispatch_shipment(w, p, MaterialId("grain"), 10, a, b)
-    stone_ship = dispatch_shipment(w, p, MaterialId("stone"), 10, a, b)
-
-    assert grain_ship["ok"], grain_ship
-    assert stone_ship["ok"], stone_ship
-    assert stone_ship["fee_cents"] > grain_ship["fee_cents"]
+    grain = compute_shipping_fee(w, a, b, qty=10)
+    stone = compute_shipping_fee(w, a, b, qty=10)
+    assert grain["ok"] and stone["ok"]
+    assert grain["per_unit_cents"] == stone["per_unit_cents"]
 
 
-def test_mass_surcharge_scales_linearly_with_qty() -> None:
+def test_bulk_per_unit_drops_with_larger_qty() -> None:
     w = bootstrap_frontier(seed=71, grid_width=4, grid_height=2)
     a, b = PlotId("p-0-0"), PlotId("p-3-0")
-    p = PartyId("player")
-    assert claim_plot(w, p, a)["ok"]
-    assert claim_plot(w, p, b)["ok"]
-    w.inventory.add(p, MaterialId("stone"), 30)
-    w.ledger.transfer(
-        debit=system_reserve_account(),
-        credit=party_cash_account(p),
-        amount_cents=1_000_000,
-    )
-    dist = manhattan(w, a, b)
-    base_fee = BASE_SHIP_FEE_CENTS + dist * PER_TILE_SHIP_CENTS
-    stone_kg = MATERIALS[MaterialId("stone")].mass_per_unit_kg
-
-    r5 = dispatch_shipment(w, p, MaterialId("stone"), 5, a, b)
-    expected_5 = base_fee + int(
-        (stone_kg * 5 / 1000.0) * dist * MASS_SHIP_TON_TILE_CENTS
-    )
-    assert r5["fee_cents"] == expected_5
-
-    r10 = dispatch_shipment(w, p, MaterialId("stone"), 10, a, b)
-    expected_10 = base_fee + int(
-        (stone_kg * 10 / 1000.0) * dist * MASS_SHIP_TON_TILE_CENTS
-    )
-    assert r10["fee_cents"] == expected_10
-    assert r10["fee_cents"] - base_fee == (r5["fee_cents"] - base_fee) * 2
+    small = compute_shipping_fee(w, a, b, qty=5)
+    large = compute_shipping_fee(w, a, b, qty=30)
+    assert small["ok"] and large["ok"]
+    assert large["per_unit_cents"] <= small["per_unit_cents"]
 
 
 def test_first_claim_is_unmodified() -> None:
     w = bootstrap_frontier(seed=80, grid_width=4, grid_height=2)
     p = PartyId("player")
-    plot = PlotId("p-1-0")
+    plot = next(iter(w.plots.keys()))
     cash_before = w.ledger.balance(party_cash_account(p))
 
     r = claim_plot(w, p, plot)

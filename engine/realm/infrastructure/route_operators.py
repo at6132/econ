@@ -37,8 +37,11 @@ from realm.core.ids import PartyId, PlotId
 from realm.world.regions import region_for_plot, route_key
 from realm.world import World
 
+ROUTE_DAILY_CAPACITY: int = 500
+
 
 __all__ = [
+    "ROUTE_DAILY_CAPACITY",
     "ensure_route_state_initialised",
     "register_route",
     "list_route_operators",
@@ -204,8 +207,16 @@ def register_route(
         "building": str(bid),
         "fee_per_tile_cents": int(fee_per_tile_cents),
         "registered_at_tick": int(world.tick),
+        "daily_capacity": ROUTE_DAILY_CAPACITY,
+        "units_shipped_today": 0,
     }
     entries.append(record)
+    vol = world.scenario_state.setdefault("route_daily_volume", {})
+    if isinstance(vol, dict) and key not in vol:
+        vol[key] = {
+            "daily_capacity": ROUTE_DAILY_CAPACITY,
+            "units_shipped_today": 0,
+        }
     log_event(
         world,
         "route_registered",

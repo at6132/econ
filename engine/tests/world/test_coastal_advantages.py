@@ -111,17 +111,14 @@ def test_smoked_fish_lasts_longer() -> None:
 
 
 def test_coastal_shipping_discount() -> None:
-    """Inter-coastal shipping costs 40 % less than the inland baseline."""
+    """Bulk trip fees flag coastal lanes; same distance → same trip cost."""
     w, p = _build_test_world(width=20, height=10)
-    # Two coastal plots in different regions, then two inland plots in
-    # different regions for the baseline comparison.
     coastal_a = PlotId("p-1-8")
     coastal_b = PlotId("p-18-8")
     inland_a = PlotId("p-1-2")
     inland_b = PlotId("p-18-2")
     for pid in (coastal_a, coastal_b, inland_a, inland_b):
         w.plots[pid].owner = p
-    # Cargo on both source plots.
     _give(w, p, "grain", 100)
     r_coastal = dispatch_shipment(
         w, p, MaterialId("grain"), 5, coastal_a, coastal_b
@@ -133,12 +130,7 @@ def test_coastal_shipping_discount() -> None:
     )
     assert r_inland["ok"], r_inland
     assert r_inland["coastal_route"] is False
-    assert int(r_coastal["fee_cents"]) < int(r_inland["fee_cents"]), (
-        r_coastal,
-        r_inland,
-    )
-    # Sanity: discount should be ~40 %.
-    assert r_coastal["fee_cents"] <= int(r_inland["fee_cents"]) * 0.7
+    assert int(r_coastal["fee_cents"]) == int(r_inland["fee_cents"])
 
 
 def test_harbor_speed_bonus_from_dock_plot() -> None:

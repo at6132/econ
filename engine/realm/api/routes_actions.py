@@ -540,6 +540,20 @@ def post_maintain_building(
     return dict(r)
 
 
+@router.get("/shipping/estimate")
+def shipping_estimate(
+    from_plot: Annotated[str, Query()],
+    to_plot: Annotated[str, Query()],
+    qty: Annotated[int, Query()] = 1,
+) -> dict:
+    """Preview bulk shipping cost before committing."""
+    from realm.infrastructure.movement import compute_shipping_fee
+
+    return compute_shipping_fee(
+        _state.WORLD, PlotId(from_plot), PlotId(to_plot), qty
+    )
+
+
 @router.post("/ship")
 def post_ship(
     party: Annotated[str, Query()],
@@ -567,21 +581,26 @@ def get_routes() -> dict:
     and the player's own revenue/spend totals for today and yesterday."""
     from realm.world.regions import all_region_ids, region_for_plot
     from realm.infrastructure.route_operators import (
+        ROUTE_DAILY_CAPACITY,
         list_route_operators,
         route_revenue_by_party_previous_day,
         route_revenue_by_party_today,
     )
 
     operators = _state.WORLD.scenario_state.get("route_operators") or {}
+    route_volume = _state.WORLD.scenario_state.get("route_daily_volume") or {}
     routes_out: list[dict] = []
     for key in sorted(operators.keys()):
         entries = list_route_operators(_state.WORLD, key)
         a, b = key.split(":", 1)
+        vol = route_volume.get(key) if isinstance(route_volume, dict) else None
         routes_out.append(
             {
                 "key": key,
                 "region_a": a,
                 "region_b": b,
+                "units_shipped_today": int((vol or {}).get("units_shipped_today", 0)),
+                "daily_capacity": int((vol or {}).get("daily_capacity", ROUTE_DAILY_CAPACITY)),
                 "operators": [
                     {
                         "party": str(e.get("operator_party")),
@@ -589,6 +608,8 @@ def get_routes() -> dict:
                         "building": str(e.get("building")),
                         "fee_per_tile_cents": int(e.get("fee_per_tile_cents", 0)),
                         "registered_at_tick": int(e.get("registered_at_tick", 0)),
+                        "units_shipped_today": int(e.get("units_shipped_today", 0)),
+                        "daily_capacity": int(e.get("daily_capacity", ROUTE_DAILY_CAPACITY)),
                     }
                     for e in entries
                 ],

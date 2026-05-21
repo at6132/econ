@@ -71,6 +71,14 @@ def advance_tick(world: World) -> None:
         get_oracle(world)
         tick_order_expiry(world)
         tick_power_grid(world)
+        for route_data in (world.scenario_state.get("route_daily_volume") or {}).values():
+            if isinstance(route_data, dict):
+                route_data["units_shipped_today"] = 0
+        for entries in (world.scenario_state.get("route_operators") or {}).values():
+            if isinstance(entries, list):
+                for e in entries:
+                    if isinstance(e, dict):
+                        e["units_shipped_today"] = 0
     # Phase 8 — Sub-phase 8A: seasonal narration fires on day boundaries.
     # Cheap no-op on every tick except the few days a year that announce
     # spring/summer/autumn/harvest-decline/winter to the world feed.
