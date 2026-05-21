@@ -20,17 +20,18 @@ from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.events.event_log import log_event
 from realm.world import World
 
-ELECTRICITY = MaterialId("electricity")
-
-POWER_PRICE_FLOOR_CENTS: int = 1
+POWER_PRICE_FLOOR_CENTS: int = 1  # per kWh
 POWER_PRICE_CEILING_CENTS: int = 500
 POWER_BASE_PRICE_CENTS: int = 40
 
+from realm.infrastructure.energy_service import WH_PER_LEGACY_ELEC_UNIT  # noqa: E402
+
 BROWNOUT_THRESHOLD: float = 0.95
 
+# Rated export in Wh per game-day (≈ legacy 24 units/day × 1 kWh).
 POWER_GENERATOR_BLUEPRINTS: dict[str, int] = {
-    "power_shed": 24,
-    "tidal_mill": 2,
+    "power_shed": 24 * WH_PER_LEGACY_ELEC_UNIT,
+    "tidal_mill": 2 * WH_PER_LEGACY_ELEC_UNIT,
 }
 
 _TICKS_PER_GAME_DAY: int = 1440
@@ -194,7 +195,8 @@ def _settle_power_payments(
         plot = world.plots.get(PlotId(pid))
         if plot is None or plot.owner is None:
             continue
-        cost = load * price
+        kwh = max(1, (int(load) + WH_PER_LEGACY_ELEC_UNIT - 1) // WH_PER_LEGACY_ELEC_UNIT)
+        cost = kwh * price
         src = party_cash_account(plot.owner)
         bal = world.ledger.balance(src)
         actual = min(cost, bal)
@@ -205,6 +207,11 @@ def _settle_power_payments(
                 amount_cents=actual,
             )
             total_collected += actual
+            from realm.infrastructure.utility_billing import accrue_monthly_usage
+
+            accrue_monthly_usage(
+                world, plot.owner, wh=int(load), cents=actual
+            )
 
     if total_collected <= 0 or not reg.generator_instance_ids:
         return
@@ -292,7 +299,7 @@ def _emit_power_events(world: World, reg: GridRegion) -> None:
             "world_feed",
             f"⚡ POWER CRISIS: Grid region {reg.region_id} at {lf:.0%} load. "
             f"Brownout active — all connected buildings at {eff_pct}% efficiency. "
-            f"Clearing price: {reg.clearing_price_cents}c/unit.",
+            f"Clearing price: {reg.clearing_price_cents}c/kWh.",
             feed_source="power_grid",
             load_factor=lf,
         )
@@ -338,12 +345,19 @@ def tick_power_grid(world: World) -> None:
 
     regions = compute_grid_regions(world)
     load_tracker: dict[str, int] = dict(world.scenario_state.pop("power_load_today", {}) or {})
+    gen_tracker: dict[str, int] = dict(
+        world.scenario_state.pop("power_generation_today", {}) or {}
+    )
     plot_to_region = _build_plot_region_map(regions)
 
     for reg in regions.values():
         region_load = sum(
             v for pid, v in load_tracker.items() if plot_to_region.get(pid) == reg.region_id
         )
+        extra_gen = sum(
+            v for pid, v in gen_tracker.items() if plot_to_region.get(pid) == reg.region_id
+        )
+        reg.capacity_per_day += int(extra_gen)
         reg.load_per_day = region_load
 
         if reg.capacity_per_day == 0:
@@ -363,9 +377,33 @@ def tick_power_grid(world: World) -> None:
     world.scenario_state["power_load_today"] = {}
 
 
-def record_electricity_consumed(world: World, plot_id: PlotId, units: int) -> None:
+def record_energy_wh(
+    world: World,
+    plot_id: PlotId,
+    wh: int,
+    *,
+    party: PartyId | None = None,
+    off_grid: bool = False,
+) -> None:
+    if wh <= 0:
+        return
     tracker = world.scenario_state.setdefault("power_load_today", {})
-    tracker[str(plot_id)] = tracker.get(str(plot_id), 0) + units
+    tracker[str(plot_id)] = tracker.get(str(plot_id), 0) + int(wh)
+    if off_grid:
+        off = world.scenario_state.setdefault("power_off_grid_wh", {})
+        off[str(plot_id)] = off.get(str(plot_id), 0) + int(wh)
+
+
+def record_electricity_consumed(world: World, plot_id: PlotId, units: int) -> None:
+    """Legacy alias — ``units`` are converted to Wh."""
+    record_energy_wh(world, plot_id, int(units) * WH_PER_LEGACY_ELEC_UNIT)
+
+
+def record_generation_wh(world: World, plot_id: PlotId, wh: int) -> None:
+    if wh <= 0:
+        return
+    tracker = world.scenario_state.setdefault("power_generation_today", {})
+    tracker[str(plot_id)] = tracker.get(str(plot_id), 0) + int(wh)
 
 
 def plot_has_grid_capacity(world: World, plot_id: PlotId) -> bool:

@@ -196,7 +196,6 @@ def tick_npc_energy(world: World) -> None:
     if int(world.tick) % _TICKS_PER_GAME_DAY != 0:
         return
     coal_mid = MaterialId("coal")
-    e_mid = MaterialId("electricity")
     for party in NPC_ENERGY_IDS:
         if party not in world.parties:
             continue
@@ -212,10 +211,4 @@ def tick_npc_energy(world: World) -> None:
             market_buy(world, party, coal_mid, need, max_price_per_unit_cents=ceiling)
         # 2. Fire one production batch (idempotent if already running).
         start_production_on_plot(world, party, plot_id, "coal_generator")
-        # 3. List electricity at the current exchange ask if we have surplus.
-        have_e = int(world.inventory.qty(party, e_mid))
-        if have_e <= 0:
-            continue
-        list_qty = max(1, min(have_e, NPC_ENERGY_COAL_PER_DAY))
-        list_px = int(exchange_ask_cents(e_mid))
-        place_sell_order(world, party, e_mid, list_qty, max(1, list_px))
+        # 3. Surplus is exported to the regional grid on coal_generator completion (no commodity listing).
