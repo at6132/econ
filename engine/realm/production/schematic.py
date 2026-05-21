@@ -6,7 +6,8 @@ does not model labor, energy cost, or concurrent production runs.
 
 from __future__ import annotations
 
-from realm.core.ids import PartyId
+from realm.core.ids import MaterialId, PartyId
+from realm.infrastructure.energy_service import is_legacy_electricity_material
 from realm.production.recipe_sites import recipe_allowed_on_terrain, terrain_allows_workshop
 from realm.production.recipe_workshops import plot_has_workshop_for_recipe
 from realm.production.recipes import recipe_public_list
@@ -48,7 +49,11 @@ def validate_linear_recipe_chain(
             )
             break
         display = str(r.get("display_name", rid))
-        inputs: dict[str, int] = r.get("inputs") or {}
+        inputs: dict[str, int] = {
+            str(k): int(v)
+            for k, v in (r.get("inputs") or {}).items()
+            if not is_legacy_electricity_material(MaterialId(str(k)))
+        }
         for mat, need in inputs.items():
             have = inv.get(mat, 0)
             if have < need:
@@ -64,7 +69,11 @@ def validate_linear_recipe_chain(
                 inv.pop(mat, None)
             else:
                 inv[mat] = nxt
-        outputs: dict[str, int] = r.get("outputs") or {}
+        outputs: dict[str, int] = {
+            str(k): int(v)
+            for k, v in (r.get("outputs") or {}).items()
+            if not is_legacy_electricity_material(MaterialId(str(k)))
+        }
         for mat, add in outputs.items():
             inv[mat] = inv.get(mat, 0) + add
 

@@ -41,6 +41,7 @@ _SEEDED_FOOTPRINTS: Final[dict[str, tuple[int, int]]] = {
     "tool_cache": (2, 2),
     "watch_hut": (2, 2),
     "warehouse": (4, 4),
+    "battery_bank": (2, 2),
 }
 
 
@@ -76,6 +77,7 @@ def _category_for(building_id: str) -> str:
         "waystation",
         "road_segment",
         "warehouse",
+        "battery_bank",
     ):
         return "infrastructure"
     if building_id in ("store", "bank_building", "apothecary"):

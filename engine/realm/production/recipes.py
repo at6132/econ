@@ -73,7 +73,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
     ),
     "coal_generator": Recipe(
         recipe_id="coal_generator",
-        display_name="Generator (coal → electricity)",
+        display_name="Generator (coal → grid export)",
         inputs={MaterialId("coal"): 1},
         outputs={MaterialId("electricity"): 2},
         duration_ticks=legacy_scaled(2),
@@ -87,7 +87,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
     # coal generator (1 unit / 720 ticks vs 2 units / 120 ticks) but no fuel.
     "tidal_power": Recipe(
         recipe_id="tidal_power",
-        display_name="Tidal power (no fuel — coastal renewable)",
+        display_name="Tidal power (coastal renewable → grid)",
         inputs={},
         outputs={MaterialId("electricity"): 1},
         duration_ticks=720,
@@ -891,5 +891,18 @@ def recipe_public_list() -> list[dict]:
                 k: [[sub_id, ratio] for sub_id, ratio in pairs]
                 for k, pairs in r.input_substitutes.items()
             }
+        from realm.infrastructure.energy_service import (
+            recipe_energy_wh,
+            recipe_grid_export_wh,
+        )
+
+        ewh = recipe_energy_wh(r)
+        if ewh > 0:
+            row["energy_wh"] = ewh
+            row["energy_kwh"] = round(ewh / 1000.0, 2)
+        gwh = recipe_grid_export_wh(r)
+        if gwh > 0:
+            row["grid_export_wh"] = gwh
+            row["grid_export_kwh"] = round(gwh / 1000.0, 2)
         out.append(row)
     return out

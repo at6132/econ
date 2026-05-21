@@ -339,9 +339,26 @@ BUILDINGS: dict[str, dict[str, Any]] = {
             "grace_ticks": 2880,
         },
     },
+    "battery_bank": {
+        "kind": "contracted",
+        "label": "Battery bank (stores grid energy off-plot)",
+        "description": (
+            "On-site energy storage. Holds Wh from the regional grid; "
+            "not a warehouse good and cannot be traded on the bazaar."
+        ),
+        "self_shell_cents": 90_000,
+        "self_contractor_fee_cents": 35_000,
+        "self_materials": {"lumber": 8, "copper_ingot": 4, "brick": 4},
+        "turnkey_total_cents": 180_000,
+        "maintenance_schedule": {
+            "interval_ticks": 10_080,
+            "materials": {"lumber": 1},
+            "grace_ticks": 2_880,
+        },
+    },
     "tidal_mill": {
         "kind": "contracted",
-        "label": "Tidal mill (coastal renewable electricity — no coal needed)",
+        "label": "Tidal mill (coastal renewable — exports to grid)",
         "self_shell_cents": 120_000,
         "self_contractor_fee_cents": 40_000,
         "self_materials": {"timber": 12, "rope": 4, "stone": 6, "lumber": 4},

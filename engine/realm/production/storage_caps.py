@@ -20,12 +20,7 @@ PLOT_WAREHOUSE_CAP_UNITS: int = 50_000
 BASE_PARTY_STORAGE_UNITS: int = PERSONAL_CARRY_CAP_UNITS
 
 # Materials that may live in party inventory (not plot bulk).
-CARRIED_MATERIAL_IDS: frozenset[str] = frozenset(
-    {
-        "electricity",
-        "mining_pick",
-    }
-)
+CARRIED_MATERIAL_IDS: frozenset[str] = frozenset({"mining_pick"})
 
 
 def is_carried_material(material: MaterialId) -> bool:

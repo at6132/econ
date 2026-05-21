@@ -141,7 +141,9 @@ def _resolve_recipe_inputs(
     """Resolve inputs from plot bulk + personal carry; substitutes when primary short."""
     resolved: dict[str, tuple] = {}
     subs_map = getattr(recipe, "input_substitutes", None) or {}
-    for mat, qty in recipe.inputs.items():
+    from realm.infrastructure.energy_service import material_inputs_excluding_energy
+
+    for mat, qty in material_inputs_excluding_energy(recipe).items():
         mid = str(mat)
         need = int(qty)
         if party_material_on_plot(world, party, plot_id, mat) >= need:
@@ -285,8 +287,10 @@ def _workshop_efficiency_pct_for_run(world: World, run: ActiveProduction, recipe
 
 
 def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe) -> dict[MaterialId, int]:
+    from realm.infrastructure.energy_service import material_outputs_excluding_energy
+
     plot = world.plots.get(run.plot_id)
-    out = {k: int(v) for k, v in recipe.outputs.items()}
+    out = {k: int(v) for k, v in material_outputs_excluding_energy(recipe).items()}
     if plot is not None and recipe.scaled_output is not None:
         field, mid = recipe.scaled_output
         if mid in out:
@@ -759,20 +763,17 @@ def start_production(
     )
     if road_err is not None:
         return road_err
-    electricity_mid = MaterialId("electricity")
-    needs_electricity = int(recipe.inputs.get(electricity_mid, 0)) > 0
-    elec_units_needed = int(recipe.inputs.get(electricity_mid, 0))
-    if needs_electricity:
-        inv_e = world.inventory.qty(party, electricity_mid)
-        if inv_e < elec_units_needed:
-            return {
-                "ok": False,
-                "reason": (
-                    f"need {elec_units_needed} electricity to run {recipe_id} — "
-                    f"you have {inv_e}. Generate electricity with a coal_generator or "
-                    f"tidal_mill, or buy it on the market."
-                ),
-            }
+    from realm.infrastructure.energy_service import (
+        check_energy_for_production,
+        commit_energy_for_production,
+        material_inputs_excluding_energy,
+        recipe_energy_wh,
+    )
+
+    energy_err = check_energy_for_production(world, party, plot_id, recipe)
+    if energy_err is not None:
+        return energy_err
+    energy_wh_needed = recipe_energy_wh(recipe)
     labor_bps = _labor_bps_for_plot(world, party, plot_id)
     labor_cents = recipe.labor_cents * labor_bps // 10_000
     cash = party_cash_account(party)
@@ -785,8 +786,8 @@ def start_production(
     if not ok:
         missing = next(
             (
-                mid
-                for mid, q in recipe.inputs.items()
+                str(mid)
+                for mid in material_inputs_excluding_energy(recipe)
                 if str(mid) not in resolved
             ),
             None,
@@ -860,10 +861,8 @@ def start_production(
             plot_id=str(plot_id),
             event_class="cluster_bonus",
         )
-    if elec_units_needed > 0:
-        from realm.infrastructure.power_grid import record_electricity_consumed
-
-        record_electricity_consumed(world, plot_id, elec_units_needed)
+    if energy_wh_needed > 0:
+        commit_energy_for_production(world, party, plot_id, recipe)
     log_event(
         world,
         "production_start",
@@ -1004,6 +1003,11 @@ def tick_production(world: World) -> None:
             from realm.production.externalities import apply_mining_externality
 
             apply_mining_externality(world, run.plot_id)
+        from realm.infrastructure.energy_service import recipe_grid_export_wh, record_generator_export
+
+        export_wh = recipe_grid_export_wh(recipe)
+        if export_wh > 0:
+            record_generator_export(world, run.plot_id, export_wh)
         # Sprint 6 — Phase D.2: optional auto-listing of fresh output.
         if eff_out:
             _maybe_auto_list_outputs(world, run, eff_out)
