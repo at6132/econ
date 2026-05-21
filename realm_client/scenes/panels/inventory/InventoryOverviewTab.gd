@@ -3,11 +3,13 @@ extends VBoxContainer
 
 signal ship_requested(row: Dictionary)
 signal harvest_requested(plot_id: String, material: String, qty: int)
+signal pickup_requested(pickup_id: String, delivery_plot: String)
 
 const FILTER_ALL := "All"
 const FILTER_CARRIED := "Carried"
 const FILTER_STASH := "On site"
 const FILTER_TRANSIT := "In transit"
+const FILTER_PICKUP := "Awaiting pickup"
 
 const COL_MAT_W := 128.0
 const COL_QTY_W := 52.0
@@ -47,8 +49,9 @@ func _build_chrome() -> void:
 		FILTER_CARRIED: "Carried",
 		FILTER_STASH: "On site",
 		FILTER_TRANSIT: "In transit",
+		FILTER_PICKUP: "FOB pickup",
 	}
-	for key in [FILTER_ALL, FILTER_CARRIED, FILTER_STASH, FILTER_TRANSIT]:
+	for key in [FILTER_ALL, FILTER_CARRIED, FILTER_STASH, FILTER_TRANSIT, FILTER_PICKUP]:
 		var btn := Button.new()
 		btn.text = str(btn_labels.get(key, key))
 		btn.toggle_mode = true
@@ -99,6 +102,8 @@ func refresh() -> void:
 			continue
 		if _filter == FILTER_TRANSIT and kind != "transit":
 			continue
+		if _filter == FILTER_PICKUP and kind != "pickup":
+			continue
 		shown.append(row)
 
 	var carried_n := 0
@@ -119,6 +124,9 @@ func refresh() -> void:
 				stash_n += 1
 				stash_qty += q
 			"transit":
+				transit_n += 1
+				transit_qty += q
+			"pickup":
 				transit_n += 1
 				transit_qty += q
 
@@ -251,6 +259,20 @@ func _add_row(row: Dictionary) -> void:
 		PanelUI.style_btn(ship_btn, true)
 		ship_btn.pressed.connect(func() -> void: ship_requested.emit(row.duplicate(true)))
 		act_box.add_child(ship_btn)
+	elif bool(row.get("can_pickup", false)):
+		var pick_btn := Button.new()
+		pick_btn.text = "Collect"
+		pick_btn.tooltip_text = "Pay freight and dispatch from the seller's plot (FOB)."
+		pick_btn.custom_minimum_size = Vector2(64, 28)
+		PanelUI.style_btn(pick_btn, true)
+		pick_btn.pressed.connect(
+			func() -> void:
+				pickup_requested.emit(
+					str(row.get("pickup_id", "")),
+					WorldState.default_delivery_plot_id(),
+				)
+		)
+		act_box.add_child(pick_btn)
 	elif bool(row.get("can_harvest", false)):
 		var harv_btn := Button.new()
 		harv_btn.text = "To carry"

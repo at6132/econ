@@ -25,6 +25,8 @@ extends HSplitContainer
 var _selected_material: String = "coal"
 var _quality_filter: String = "all"
 var _sell_from_plot: OptionButton
+var _sell_terms: OptionButton
+var _buy_deliver_plot: OptionButton
 
 
 func _ready() -> void:
@@ -51,6 +53,8 @@ func _ready() -> void:
 	WorldState.world_updated.connect(_on_world_updated)
 	_build_quality_filter_row()
 	_build_sell_from_plot_row()
+	_build_sell_terms_row()
+	_build_buy_deliver_row()
 	_select_material(_selected_material)
 
 
@@ -78,6 +82,48 @@ func _build_sell_from_plot_row() -> void:
 	else:
 		sell_vbox.add_child(row)
 		sell_vbox.move_child(row, 0)
+
+
+func _build_sell_terms_row() -> void:
+	var sell_vbox: Node = sell_qty.get_parent()
+	if sell_vbox == null or sell_vbox.get_node_or_null("SellTermsRow") != null:
+		return
+	var row := HBoxContainer.new()
+	row.name = "SellTermsRow"
+	row.add_theme_constant_override("separation", 6)
+	var lbl := Label.new()
+	lbl.text = "Delivery"
+	lbl.add_theme_font_size_override("font_size", 11)
+	row.add_child(lbl)
+	_sell_terms = OptionButton.new()
+	_sell_terms.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sell_terms.add_item("DDP — you ship after sale")
+	_sell_terms.set_item_metadata(0, "ddp")
+	_sell_terms.add_item("FOB — buyer collects at your plot")
+	_sell_terms.set_item_metadata(1, "fob")
+	_sell_terms.select(0)
+	row.add_child(_sell_terms)
+	sell_vbox.add_child(row)
+
+
+func _build_buy_deliver_row() -> void:
+	var buy_vbox: Node = buy_qty.get_parent()
+	if buy_vbox == null or buy_vbox.get_node_or_null("BuyDeliverRow") != null:
+		return
+	var row := HBoxContainer.new()
+	row.name = "BuyDeliverRow"
+	row.add_theme_constant_override("separation", 6)
+	var lbl := Label.new()
+	lbl.text = "Deliver to"
+	lbl.add_theme_font_size_override("font_size", 11)
+	row.add_child(lbl)
+	_buy_deliver_plot = OptionButton.new()
+	_buy_deliver_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_buy_deliver_plot)
+	buy_vbox.add_child(row)
+	var title: Node = buy_vbox.get_node_or_null("BuyTitle")
+	if title != null:
+		buy_vbox.move_child(row, title.get_index() + 1)
 
 
 func _build_quality_filter_row() -> void:
@@ -249,6 +295,7 @@ func _refresh_order_book() -> void:
 		best_bid_label.text = "Best bid: %s" % WorldState.format_money(_bid_price(sorted_bids[0] as Dictionary))
 
 	_refresh_sell_from_plot_options()
+	_refresh_buy_deliver_options()
 	var carried: int = WorldState.player_material_total(_selected_material)
 	var on_site: int = WorldState.player_plot_stash_total(_selected_material)
 	var hq := WorldState.player_material_qty(_selected_material, "high")
@@ -368,10 +415,18 @@ func _make_ask_row(ask: Dictionary) -> HBoxContainer:
 		depth_lbl.modulate = Color(1.0, 0.6, 0.2)
 	row.add_child(depth_lbl)
 
+	var terms := str(ask.get("delivery_terms", "ddp")).to_lower()
+	var fp := str(ask.get("from_plot_id", ""))
 	var seller_lbl := Label.new()
 	seller_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	seller_lbl.add_theme_font_size_override("font_size", 10)
-	seller_lbl.text = WorldState.party_label(party)
+	var site := WorldState.plot_site_label(fp) if not fp.is_empty() else ""
+	var term_tag := "DDP" if terms != "fob" else "FOB"
+	seller_lbl.text = "%s · %s%s" % [
+		WorldState.party_label(party),
+		term_tag,
+		(" @ %s" % site) if not site.is_empty() else "",
+	]
 	if party == WorldState.party_id:
 		seller_lbl.modulate = Color(0.95, 0.82, 0.35)
 	elif party == "genesis_exchange":
@@ -462,7 +517,15 @@ func _quick_buy(ask: Dictionary) -> void:
 	if aq <= 0 or price <= 0:
 		return
 	var qm: int = mini(1, aq)
-	API.market_buy(_selected_material, qm, 0, _on_quick_buy_result, WorldState.party_id, price)
+	API.market_buy(
+		_selected_material,
+		qm,
+		0,
+		_on_quick_buy_result,
+		WorldState.party_id,
+		price,
+		_buy_delivery_plot_id(),
+	)
 
 
 func _on_quick_buy_result(data: Dictionary) -> void:
@@ -508,6 +571,46 @@ func _refresh_sell_from_plot_options() -> void:
 		_sell_from_plot.select(0)
 
 
+func _refresh_buy_deliver_options() -> void:
+	if _buy_deliver_plot == null:
+		return
+	var prev := _buy_delivery_plot_id()
+	_buy_deliver_plot.clear()
+	var opts := WorldState.ship_destination_options()
+	if opts.is_empty():
+		_buy_deliver_plot.add_item("(claim a plot first)")
+		_buy_deliver_plot.set_item_metadata(0, "")
+		_buy_deliver_plot.set_item_disabled(0, true)
+		return
+	for entry in opts:
+		if not (entry is Dictionary):
+			continue
+		var e: Dictionary = entry
+		_buy_deliver_plot.add_item(str(e.get("label", e.get("plot_id", ""))))
+		_buy_deliver_plot.set_item_metadata(_buy_deliver_plot.item_count - 1, str(e.get("plot_id", "")))
+	if not prev.is_empty():
+		for i in _buy_deliver_plot.item_count:
+			if str(_buy_deliver_plot.get_item_metadata(i)) == prev:
+				_buy_deliver_plot.select(i)
+				return
+	if _buy_deliver_plot.item_count > 0:
+		_buy_deliver_plot.select(0)
+
+
+func _sell_delivery_terms() -> String:
+	if _sell_terms == null or _sell_terms.item_count == 0:
+		return "ddp"
+	return str(_sell_terms.get_item_metadata(_sell_terms.selected))
+
+
+func _buy_delivery_plot_id() -> String:
+	if _buy_deliver_plot == null or _buy_deliver_plot.item_count == 0:
+		return ""
+	if _buy_deliver_plot.selected < 0:
+		return ""
+	return str(_buy_deliver_plot.get_item_metadata(_buy_deliver_plot.selected))
+
+
 func _sell_source_plot_id() -> String:
 	if _sell_from_plot == null or _sell_from_plot.item_count == 0:
 		return ""
@@ -541,7 +644,15 @@ func _on_buy() -> void:
 	if qty <= 0 or max_px <= 0:
 		return
 	buy_btn.disabled = true
-	API.market_buy(_selected_material, qty, 0, _on_buy_result, WorldState.party_id, max_px)
+	API.market_buy(
+		_selected_material,
+		qty,
+		0,
+		_on_buy_result,
+		WorldState.party_id,
+		max_px,
+		_buy_delivery_plot_id(),
+	)
 
 
 func _on_buy_result(data: Dictionary) -> void:
@@ -575,6 +686,7 @@ func _on_sell() -> void:
 		_on_sell_result,
 		WorldState.party_id,
 		from_plot,
+		_sell_delivery_terms(),
 	)
 
 

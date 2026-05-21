@@ -93,6 +93,7 @@ var npc_messages: Array = []
 var event_log: Array = []
 var active_world_events: Array = []
 var in_transit: Array = []
+var market_fob_pickups: Array = []
 var forward_contracts: Array = []
 var player_price_alerts: Array = []
 var road_segments: Array = []
@@ -459,6 +460,8 @@ func apply_player(data: Dictionary) -> void:
 		RealmWorkflowSettings.apply_server_snapshot(workflow_settings)
 	var it: Variant = data.get("in_transit", [])
 	in_transit = it if it is Array else []
+	var mp: Variant = data.get("market_fob_pickups", [])
+	market_fob_pickups = mp if mp is Array else []
 	var fc: Variant = data.get("forward_contracts", [])
 	forward_contracts = fc if fc is Array else []
 	var por: Variant = data.get("owned_reports", [])
@@ -1233,15 +1236,43 @@ func inventory_ledger_rows() -> Array:
 		var dest := str(s.get("dest_plot_id", ""))
 		var arrive: int = variant_to_int(s.get("arrive_tick", 0), 0)
 		var eta := maxi(0, arrive - current_tick)
+		var consignee := str(s.get("consignee", ""))
+		var market_ship := bool(s.get("escrowed_market", false))
+		var status := "In transit · %s" % format_ticks_as_gametime(eta)
+		if market_ship and consignee == party_id:
+			status = "Market delivery · %s" % format_ticks_as_gametime(eta)
 		rows.append({
 			"material": mid,
 			"qty": qty,
 			"location": "%s → %s" % [from_p if not from_p.is_empty() else "?", dest],
-			"status": "In transit · %s" % format_ticks_as_gametime(eta),
+			"status": status,
 			"kind": "transit",
 			"plot_id": dest,
 			"can_ship": false,
 			"can_harvest": false,
+		})
+	for pick in market_fob_pickups:
+		if not (pick is Dictionary):
+			continue
+		var pk: Dictionary = pick
+		if str(pk.get("role", "")) != "buyer":
+			continue
+		var mid2 := str(pk.get("material", ""))
+		var q2: int = variant_to_int(pk.get("qty", 0), 0)
+		if mid2.is_empty() or q2 <= 0:
+			continue
+		var seller_lbl := party_label(str(pk.get("seller", "?")))
+		rows.append({
+			"material": mid2,
+			"qty": q2,
+			"location": plot_site_label(str(pk.get("from_plot_id", ""))),
+			"status": "FOB — collect at seller (%s)" % seller_lbl,
+			"kind": "pickup",
+			"plot_id": str(pk.get("from_plot_id", "")),
+			"pickup_id": str(pk.get("pickup_id", "")),
+			"can_ship": false,
+			"can_harvest": false,
+			"can_pickup": true,
 		})
 	rows.sort_custom(func(a, b) -> bool:
 		var ka: String = "%s|%s|%s" % [a["kind"], a["location"], a["material"]]
@@ -1249,6 +1280,13 @@ func inventory_ledger_rows() -> Array:
 		return ka < kb
 	)
 	return rows
+
+
+func default_delivery_plot_id() -> String:
+	for entry in ship_destination_options():
+		if entry is Dictionary:
+			return str((entry as Dictionary).get("plot_id", ""))
+	return ""
 
 
 func ship_destination_options() -> Array:

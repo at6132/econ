@@ -21,6 +21,8 @@ func _build_tabs() -> void:
 		_overview_tab.ship_requested.connect(_on_ship_requested)
 	if _overview_tab.has_signal("harvest_requested"):
 		_overview_tab.harvest_requested.connect(_on_harvest_requested)
+	if _overview_tab.has_signal("pickup_requested"):
+		_overview_tab.pickup_requested.connect(_on_pickup_requested)
 	add_tab(_overview_tab, "All stock")
 	add_tab(_ship_tab, "Dispatch")
 
@@ -29,6 +31,24 @@ func _on_ship_requested(row: Dictionary) -> void:
 	tab_container.current_tab = 1
 	if _ship_tab.has_method("prefill_from_row"):
 		_ship_tab.call("prefill_from_row", row)
+
+
+func _on_pickup_requested(pickup_id: String, delivery_plot: String) -> void:
+	API.market_fob_pickup(
+		pickup_id,
+		func(data: Dictionary) -> void:
+			if bool(data.get("ok", false)):
+				API.get_world(func(w: Dictionary) -> void: WorldState.apply_world(w))
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
+			elif get_tree().current_scene.has_method("show_feedback"):
+				get_tree().current_scene.call(
+					"show_feedback",
+					str(data.get("reason", data.get("detail", "Pickup failed"))),
+					true,
+				),
+		WorldState.party_id,
+		delivery_plot,
+	)
 
 
 func _on_harvest_requested(plot_id: String, material: String, qty: int) -> void:

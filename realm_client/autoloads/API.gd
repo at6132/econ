@@ -394,6 +394,7 @@ func market_buy(
 	cb: Callable,
 	party: String = "player",
 	max_price_per_unit_cents: int = -1,
+	delivery_plot: String = "",
 ) -> void:
 	var q := "/market/buy?party=%s&material=%s&max_qty=%d&min_seller_honored=%d" % [
 		party.uri_encode(),
@@ -403,6 +404,8 @@ func market_buy(
 	]
 	if max_price_per_unit_cents > 0:
 		q += "&max_price_per_unit_cents=%d" % int(max_price_per_unit_cents)
+	if not delivery_plot.is_empty():
+		q += "&delivery_plot=%s" % delivery_plot.uri_encode()
 	post_request(q, {}, cb)
 
 
@@ -413,13 +416,32 @@ func market_sell(
 	cb: Callable,
 	party: String = "player",
 	from_plot: String = "",
+	delivery_terms: String = "ddp",
 ) -> void:
 	var q := (
-		"/market/sell?party=%s&material=%s&qty=%d&price_per_unit_cents=%d"
-		% [party.uri_encode(), material.uri_encode(), int(qty), int(price_per_unit_cents)]
+		"/market/sell?party=%s&material=%s&qty=%d&price_per_unit_cents=%d&delivery_terms=%s"
+		% [
+			party.uri_encode(),
+			material.uri_encode(),
+			int(qty),
+			int(price_per_unit_cents),
+			delivery_terms.uri_encode(),
+		]
 	)
 	if not from_plot.is_empty():
 		q += "&from_plot=%s" % from_plot.uri_encode()
+	post_request(q, {}, cb)
+
+
+func market_fob_pickup(
+	pickup_id: String,
+	cb: Callable,
+	party: String = "player",
+	delivery_plot: String = "",
+) -> void:
+	var q := "/market/fob_pickup?party=%s&pickup_id=%s" % [party.uri_encode(), pickup_id.uri_encode()]
+	if not delivery_plot.is_empty():
+		q += "&delivery_plot=%s" % delivery_plot.uri_encode()
 	post_request(q, {}, cb)
 
 
@@ -437,13 +459,15 @@ func market_bid(
 	max_price_per_unit_cents: int,
 	cb: Callable,
 	party: String = "player",
+	delivery_plot: String = "",
 ) -> void:
-	post_request(
+	var q := (
 		"/market/bid?party=%s&material=%s&qty=%d&max_price_per_unit_cents=%d"
-		% [party.uri_encode(), material.uri_encode(), int(qty), int(max_price_per_unit_cents)],
-		{},
-		cb,
+		% [party.uri_encode(), material.uri_encode(), int(qty), int(max_price_per_unit_cents)]
 	)
+	if not delivery_plot.is_empty():
+		q += "&delivery_plot=%s" % delivery_plot.uri_encode()
+	post_request(q, {}, cb)
 
 
 func market_cancel_bid(order_id: String, cb: Callable, party: String = "player") -> void:

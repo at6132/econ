@@ -76,10 +76,15 @@ func _make_ask_row(ask: Dictionary) -> HBoxContainer:
 	var price: int = int(ask.get("price_per_unit_cents", 0))
 	var qty: int = int(ask.get("qty_total_remaining", ask.get("qty", 0)))
 	var info := Label.new()
-	info.text = "%s × %d @ %d¢  ≈ %s" % [
+	var terms := str(ask.get("delivery_terms", "ddp")).to_upper()
+	var fp := str(ask.get("from_plot_id", ""))
+	var site := (" @ %s" % WorldState.plot_site_label(fp)) if not fp.is_empty() else ""
+	info.text = "%s × %d @ %d¢ (%s%s) ≈ %s" % [
 		mat.replace("_", " ").capitalize(),
 		qty,
 		price,
+		terms,
+		site,
 		WorldState.format_money(price * qty),
 	]
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
