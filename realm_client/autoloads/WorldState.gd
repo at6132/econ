@@ -19,7 +19,7 @@ static func variant_to_int(v: Variant, default_val: int = 0) -> int:
 ## Must match ``engine/realm/core/player_economy.PLAYER_STARTING_CASH_CENTS``.
 const PLAYER_STARTING_CASH_CENTS: int = 10_000_000
 ## Portable goods only — must match ``engine/realm/production/storage_caps.CARRIED_MATERIAL_IDS``.
-const CARRIED_MATERIAL_IDS: Array[String] = ["electricity", "mining_pick"]
+const CARRIED_MATERIAL_IDS: Array[String] = ["mining_pick"]
 var player_cash_cents: int = 0
 ## Canon starting balance for a fresh human (from ``GET /world/static`` / ``/dev/reset``).
 var player_starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS

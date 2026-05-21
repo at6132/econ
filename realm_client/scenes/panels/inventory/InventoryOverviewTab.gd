@@ -190,7 +190,7 @@ func _make_empty_state(world_is_empty: bool) -> Control:
 		match _filter:
 			FILTER_CARRIED:
 				title.text = "No personal carry"
-				body.text = "Portable stock (electricity, tools) is empty. Bulk goods live on plot sites."
+				body.text = "Portable carry (tools) is empty. Bulk goods live on plot sites; power is grid/battery."
 			FILTER_STASH:
 				title.text = "Nothing on site"
 				body.text = "No bulk staged on owned plots. Production and deliveries fill plot stock."

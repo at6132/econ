@@ -431,7 +431,7 @@ func _on_energy_response(data: Dictionary) -> void:
 		var gen_txt := _format_power_generators(data.get("generators", []))
 		if not gen_txt.is_empty():
 			lines.append("Generators: %s" % gen_txt)
-		lines.append("Run coal_generator in a power_shed for electricity stock")
+		lines.append("Run coal_generator in a power_shed to export kWh to the grid")
 		energy_value.text = "\n".join(lines)
 		energy_value.modulate = Color(0.45, 1.0, 0.45) if not bool(data.get("brownout")) else Color(1.0, 0.85, 0.35)
 		return

@@ -465,7 +465,7 @@ func _refresh_warehouse_rules_panel() -> void:
 
 func _common_materials() -> PackedStringArray:
 	return PackedStringArray([
-		"grain", "coal", "timber", "stone", "brick", "lumber", "iron_ore", "electricity",
+		"grain", "coal", "timber", "stone", "brick", "lumber", "iron_ore",
 	])
 
 

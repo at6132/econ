@@ -24,7 +24,7 @@ func _build_form() -> void:
 	hint.add_theme_color_override("font_color", RealmColors.MUTED)
 	hint.text = (
 		"Shipments move bulk goods from one plot stash to another. "
-		+ "Personal carry (electricity, tools) is not shipped here — use production or market for portable stock."
+		+ "Personal carry (tools) is not shipped here — bulk stays on plots; grid power is not a commodity."
 	)
 	add_child(hint)
 

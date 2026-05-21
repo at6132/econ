@@ -68,7 +68,7 @@ func _refresh() -> void:
 	if inv.is_empty() and not WorldState.plots.is_empty():
 		inv = {
 			"grain": 10, "coal": 9, "iron_ore": 6, "clay": 7,
-			"copper_ore": 6, "timber": 8, "electricity": 8,
+			"copper_ore": 6, "timber": 8,
 		}
 	if inv.is_empty():
 		var empty := Label.new()

@@ -360,10 +360,6 @@ func _missing_inputs_reason(recipe_id: String) -> String:
 	for mat in (inputs as Dictionary).keys():
 		var mid := str(mat)
 		if mid == "electricity":
-			var need := int((inputs as Dictionary)[mat])
-			var have := WorldState.player_material_total(mid)
-			if have < need:
-				missing.append("%s need %d (have %d)" % [WorldState.material_display_name(mid), need, have])
 			continue
 		var need := int((inputs as Dictionary)[mat])
 		if not WorldState.player_has_material(mid, need):

@@ -72,7 +72,7 @@ const MATERIAL_CATEGORIES: Dictionary = {
 		"vessel",
 		"small_vessel",
 	],
-	"Energy": ["electricity", "charcoal", "shale_oil"],
+	"Energy": ["charcoal", "shale_oil"],
 	"Chemicals": [
 		"sulfuric_acid",
 		"gunpowder",
@@ -97,7 +97,6 @@ const ALL_MATERIALS: PackedStringArray = [
 		"copper_wire",
 		"drill_bit",
 		"dissipated_energy",
-		"electricity",
 		"fish",
 		"flour",
 		"fused_silica",
