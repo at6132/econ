@@ -100,8 +100,8 @@ def test_fishing_allowed_coastal_produces_fish() -> None:
 
 def test_fish_spoils_quickly() -> None:
     interval = MATERIALS[MaterialId("fish")].spoilage_interval_ticks
-    # 12 game-hours = 720 ticks
-    assert interval == 720
+    # 2 game-days = 2880 ticks
+    assert interval == 2_880
 
 
 def test_smoked_fish_lasts_longer() -> None:

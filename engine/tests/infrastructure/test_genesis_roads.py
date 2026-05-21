@@ -16,11 +16,13 @@ from realm.world.tick import advance_tick
 
 def test_genesis_world_has_starter_roads() -> None:
     w = bootstrap_genesis(seed=42, settler_count=5)
-    assert len(w.road_segments) > 0, "Genesis world should have starter roads"
+    assert len(w.road_segments) >= 12, "Genesis world should have a starter road network"
     town_centers = [
         is_road_accessible(w, t.center_plot) for t in w.towns.values()
     ]
-    assert any(town_centers), "At least one town center should be road-accessible"
+    assert sum(town_centers) >= 3, (
+        f"Expected most town centers road-accessible, got {sum(town_centers)}/{len(town_centers)}"
+    )
     store_access = [
         is_road_accessible(w, sp)
         for t in w.towns.values()

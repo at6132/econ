@@ -5,6 +5,7 @@ from __future__ import annotations
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import party_cash_account, system_reserve_account
+from realm.infrastructure.power_grid import plot_has_grid_capacity
 from realm.world import World
 from stage_materials import stage_material
 
@@ -12,6 +13,44 @@ from stage_materials import stage_material
 # How much to give each test party for turnkey builds.
 # High so any seeded blueprint can be built without cash checks failing.
 _TEST_CASH_CENTS: int = 2_000_000_00  # $2,000,000
+
+
+def ensure_plot_grid_power(world: World, plot_id: PlotId) -> None:
+    """Place an active ``power_shed`` on ``plot_id`` so grid-backed recipes can run."""
+    if plot_has_grid_capacity(world, plot_id):
+        return
+    plot = world.plots.get(plot_id)
+    owner = str(plot.owner) if plot is not None and plot.owner else "player"
+    for pb in world.placed_buildings.values():
+        if str(pb.plot_id) == str(plot_id) and pb.blueprint_id == "power_shed":
+            return
+    from realm.world.plot_scale import cells_free
+    from realm.world.placed_buildings import PlacedBuilding, register_placed_building
+
+    gx, gy = 1, 0
+    if not cells_free(str(plot_id), world, gx, gy, 1, 1):
+        gx, gy = 0, 1
+    world.next_building_instance_seq += 1
+    iid = f"b{world.next_building_instance_seq:06d}"
+    pb = PlacedBuilding(
+        instance_id=iid,
+        blueprint_id="power_shed",
+        plot_id=str(plot_id),
+        grid_x=gx,
+        grid_y=gy,
+        built_at_tick=int(world.tick),
+        built_by=owner,
+        status="active",
+        efficiency_pct=100,
+        missed_maintenance_cycles=0,
+        due_at_tick=int(world.tick) + 7_200,
+    )
+    register_placed_building(world, pb)
+    world.building_maintenance[iid] = {
+        "due_at_tick": int(world.tick) + 7_200,
+        "missed_cycles": 0,
+        "efficiency_pct": 100,
+    }
 
 
 def grant_turnkey_self_materials(
