@@ -18,12 +18,10 @@ from realm.core.ledger import (
     system_reserve_account,
 )
 from realm.infrastructure.plot_logistics import (
-    PLOT_OUTPUT_STORAGE_CAP_UNITS,
-    plot_output_qty,
+    party_material_on_plot,
     plot_output_total,
     remove_plot_output,
     try_add_plot_output,
-    uses_plot_logistics,
 )
 from realm.production.recipe_workshops import plot_has_workshop_for_recipe
 from realm.production.recipe_sites import (
@@ -34,7 +32,15 @@ from realm.production.recipe_sites import (
     terrain_allows_workshop,
 )
 from realm.production.recipes import RECIPES
-from realm.production.storage_caps import party_inventory_unit_total, party_storage_cap_units, try_add_inventory
+from realm.core.inventory import QUALITY_STANDARD
+from realm.production.storage_caps import (
+    is_carried_material,
+    party_inventory_unit_total,
+    party_storage_cap_units,
+    party_uses_plot_storage,
+    plot_storage_cap_units,
+    try_add_inventory,
+)
 from realm.core.time_scale import building_operational
 from realm.world import ActiveProduction, World
 
@@ -130,15 +136,15 @@ def _substitute_qty_needed(primary_qty: int, ratio: float) -> int:
 
 
 def _resolve_recipe_inputs(
-    world: World, party: PartyId, recipe
+    world: World, party: PartyId, plot_id: PlotId, recipe
 ) -> tuple[dict[str, tuple], bool]:
-    """Resolve inputs; substitutes used when primary stock is insufficient."""
+    """Resolve inputs from plot bulk + personal carry; substitutes when primary short."""
     resolved: dict[str, tuple] = {}
     subs_map = getattr(recipe, "input_substitutes", None) or {}
     for mat, qty in recipe.inputs.items():
         mid = str(mat)
         need = int(qty)
-        if world.inventory.qty(party, mat, "any") >= need:
+        if party_material_on_plot(world, party, plot_id, mat) >= need:
             resolved[mid] = ("primary", need)
             continue
         subs = subs_map.get(mid, [])
@@ -146,7 +152,7 @@ def _resolve_recipe_inputs(
         for sub_mat_id, ratio in subs:
             sub_mat = MaterialId(sub_mat_id)
             sub_need = _substitute_qty_needed(need, ratio)
-            if world.inventory.qty(party, sub_mat, "any") >= sub_need:
+            if party_material_on_plot(world, party, plot_id, sub_mat) >= sub_need:
                 resolved[mid] = ("substitute", sub_mat_id, sub_need, need)
                 found = True
                 break
@@ -164,8 +170,30 @@ def _yield_mult_from_removed(removed: dict[str, int], total: int) -> float:
     return weighted / float(total)
 
 
+def _deduct_material_for_production(
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    material: MaterialId,
+    need: int,
+) -> tuple[MatterErr | None, dict[str, int]]:
+    """Pull recipe inputs from plot bulk or personal carry."""
+    if is_carried_material(material):
+        rm, removed = world.inventory.remove_any_quality_lifo(party, material, need)
+        if isinstance(rm, MatterErr):
+            return rm, {}
+        return None, removed
+    rm = remove_plot_output(world, party, plot_id, material, need)
+    if isinstance(rm, MatterErr):
+        return rm, {}
+    return None, {QUALITY_STANDARD: need}
+
+
 def _deduct_resolved_inputs(
-    world: World, party: PartyId, resolved: dict[str, tuple]
+    world: World,
+    party: PartyId,
+    plot_id: PlotId,
+    resolved: dict[str, tuple],
 ) -> tuple[MatterErr | None, float, list[tuple[str, str, int, int]]]:
     """Deduct resolved inputs; return error, composite yield mult, substitution log rows."""
     partial: list[tuple[MaterialId, int, dict[str, int]]] = []
@@ -174,23 +202,31 @@ def _deduct_resolved_inputs(
     for mid, entry in resolved.items():
         if entry[0] == "primary":
             need = int(entry[1])
-            rm, removed = world.inventory.remove_any_quality_lifo(party, MaterialId(mid), need)
+            rm, removed = _deduct_material_for_production(
+                world, party, plot_id, MaterialId(mid), need
+            )
             if isinstance(rm, MatterErr):
-                for mat, qty, by_q in partial:
+                for mat, _qty, by_q in partial:
                     for q, qx in by_q.items():
-                        world.inventory.add(party, mat, qx, quality=q)
+                        if is_carried_material(mat):
+                            world.inventory.add(party, mat, qx, quality=q)
+                        else:
+                            try_add_plot_output(world, plot_id, party, mat, qx)
                 return rm, 1.0, substitutions
             partial.append((MaterialId(mid), need, removed))
             per_input_mults.append(_yield_mult_from_removed(removed, need))
         elif entry[0] == "substitute":
             sub_mat_id, sub_need, primary_need = str(entry[1]), int(entry[2]), int(entry[3])
-            rm, removed = world.inventory.remove_any_quality_lifo(
-                party, MaterialId(sub_mat_id), sub_need
+            rm, removed = _deduct_material_for_production(
+                world, party, plot_id, MaterialId(sub_mat_id), sub_need
             )
             if isinstance(rm, MatterErr):
                 for mat, _qty, by_q in partial:
                     for q, qx in by_q.items():
-                        world.inventory.add(party, mat, qx, quality=q)
+                        if is_carried_material(mat):
+                            world.inventory.add(party, mat, qx, quality=q)
+                        else:
+                            try_add_plot_output(world, plot_id, party, mat, qx)
                 return rm, 1.0, substitutions
             partial.append((MaterialId(sub_mat_id), sub_need, removed))
             per_input_mults.append(_yield_mult_from_removed(removed, sub_need))
@@ -745,7 +781,7 @@ def start_production(
     consumed_inv: dict[MaterialId, int] = {}
     consumed_plot: dict[MaterialId, int] = {}
 
-    resolved, ok = _resolve_recipe_inputs(world, party, recipe)
+    resolved, ok = _resolve_recipe_inputs(world, party, plot_id, recipe)
     if not ok:
         missing = next(
             (
@@ -759,7 +795,9 @@ def start_production(
             "ok": False,
             "reason": f"insufficient {missing or 'inputs'}",
         }
-    deduct_err, input_yield_mult, substitutions = _deduct_resolved_inputs(world, party, resolved)
+    deduct_err, input_yield_mult, substitutions = _deduct_resolved_inputs(
+        world, party, plot_id, resolved
+    )
     if deduct_err is not None:
         return {"ok": False, "reason": deduct_err.reason}
     for primary_mid, sub_mat, sub_qty, primary_qty in substitutions:
@@ -776,11 +814,15 @@ def start_production(
         )
     for mid, entry in resolved.items():
         if entry[0] == "primary":
-            consumed_inv[MaterialId(mid)] = consumed_inv.get(MaterialId(mid), 0) + int(entry[1])
-        elif entry[0] == "substitute":
-            consumed_inv[MaterialId(str(entry[1]))] = consumed_inv.get(
-                MaterialId(str(entry[1])), 0
-            ) + int(entry[2])
+            mat = MaterialId(mid)
+            q = int(entry[1])
+        else:
+            mat = MaterialId(str(entry[1]))
+            q = int(entry[2])
+        if is_carried_material(mat):
+            consumed_inv[mat] = consumed_inv.get(mat, 0) + q
+        else:
+            consumed_plot[mat] = consumed_plot.get(mat, 0) + q
     labor_err = _pay_recipe_labor(world, party, labor_cents, plot_id)
     if labor_err is not None:
         _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
@@ -867,12 +909,25 @@ def tick_production(world: World) -> None:
             continue
         eff_out = effective_outputs_for_completion(world, run, recipe)
         out_total = sum(eff_out.values())
-        # Sprint 6 — Phase D.1: production output always goes to party inventory
-        # (the source of truth for matter). When ``use_plot_output_logistics``
-        # is set the same qty is *also* recorded in ``plot_output_stock`` as a
-        # cumulative per-plot display log — but plot_output_stock is no longer
-        # treated as matter storage.
-        if party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(
+        use_plot = party_uses_plot_storage(world, run.party)
+        if use_plot:
+            cap_left = plot_storage_cap_units(world, run.plot_id) - plot_output_total(
+                world, run.plot_id
+            )
+            if out_total > cap_left:
+                run.ticks_remaining = 1
+                still.append(run)
+                log_event(
+                    world,
+                    "production_stalled_storage",
+                    f"{run.party} plot storage full for {recipe.recipe_id} — retry next tick",
+                    party=str(run.party),
+                    plot_id=str(run.plot_id),
+                    recipe_id=run.recipe_id,
+                    run_id=run.run_id,
+                )
+                continue
+        elif party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(
             world, run.party
         ):
             run.ticks_remaining = 1
@@ -890,15 +945,23 @@ def tick_production(world: World) -> None:
         staged: list[tuple[MaterialId, int]] = []
         blocked = False
         for mid, qty in eff_out.items():
-            out_quality = _output_quality_for_plot(world, run.plot_id, mid)
-            ad = try_add_inventory(world, run.party, mid, qty, quality=out_quality)
+            if use_plot:
+                ad = try_add_plot_output(world, run.plot_id, run.party, mid, int(qty))
+            else:
+                out_quality = _output_quality_for_plot(world, run.plot_id, mid)
+                ad = try_add_inventory(
+                    world, run.party, mid, int(qty), quality=out_quality
+                )
             if isinstance(ad, MatterErr):
                 blocked = True
                 break
-            staged.append((mid, qty))
+            staged.append((mid, int(qty)))
         if blocked:
             for mid, qty in staged:
-                world.inventory.remove(run.party, mid, qty)
+                if use_plot:
+                    remove_plot_output(world, run.party, run.plot_id, mid, qty)
+                else:
+                    world.inventory.remove(run.party, mid, qty)
             run.ticks_remaining = 1
             still.append(run)
             log_event(
@@ -911,12 +974,6 @@ def tick_production(world: World) -> None:
                 run_id=run.run_id,
             )
             continue
-        # Cumulative display log: plot_output_stock records what was produced
-        # on this plot, even though the matter now lives in inventory.
-        if world.use_plot_output_logistics:
-            bucket = world.plot_output_stock.setdefault(str(run.plot_id), {})
-            for mid, qty in eff_out.items():
-                bucket[str(mid)] = int(bucket.get(str(mid), 0)) + int(qty)
         log_event(
             world,
             "production_done",
@@ -1107,7 +1164,7 @@ def _maybe_auto_list_outputs(
     world: World, run: ActiveProduction, eff_out: dict[MaterialId, int]
 ) -> None:
     """If the building has ``auto_list_output: True``, list each output material
-    at ``cost_basis × 1.30`` from the party's inventory.
+    at ``cost_basis × 1.30`` from plot bulk at the workshop site.
 
     Hand recipes are skipped (no workshop row to flag).
     """
@@ -1115,17 +1172,26 @@ def _maybe_auto_list_outputs(
     if b is None or not bool(b.get("auto_list_output")):
         return
     from realm.economy.markets import place_sell_order
+    from realm.infrastructure.plot_logistics import plot_output_qty
 
     for mid, qty in eff_out.items():
         q = int(qty)
         if q <= 0:
             continue
-        if world.inventory.qty(run.party, mid) < q:
+        if party_uses_plot_storage(world, run.party):
+            if plot_output_qty(world, run.plot_id, mid) < q:
+                continue
+            src_plot = run.plot_id
+        elif world.inventory.qty(run.party, mid) < q:
             continue
+        else:
+            src_plot = None
         price = _auto_list_price_cents(world, mid)
         if price is None:
             continue
-        place_sell_order(world, run.party, mid, q, price)
+        place_sell_order(
+            world, run.party, mid, q, price, from_plot_id=src_plot
+        )
 
 
 def set_building_auto_list(

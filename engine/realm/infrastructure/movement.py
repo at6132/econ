@@ -23,11 +23,19 @@ from realm.world.geo import manhattan
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.infrastructure.plot_logistics import plot_output_qty, remove_plot_output, try_add_plot_output, uses_plot_logistics
+from realm.infrastructure.plot_logistics import (
+    plot_output_qty,
+    remove_plot_output,
+    try_add_plot_output,
+)
 from realm.world.regions import region_for_plot, route_key
 from realm.infrastructure.route_operators import find_cheapest_operator, record_route_fee_collected
 from realm.infrastructure.shipping_traffic import record_route_voyage_completed
-from realm.production.storage_caps import try_add_inventory
+from realm.production.storage_caps import (
+    is_carried_material,
+    party_uses_plot_storage,
+    try_add_inventory,
+)
 from realm.core.time_scale import TRANSIT_BASE_TICKS, TRANSIT_TICKS_PER_TILE
 from realm.world import InTransit, World
 
@@ -288,7 +296,11 @@ def dispatch_shipment(
         return {"ok": False, "reason": "intra-island shipping requires owning both plots"}
     if from_plot_id == to_plot_id:
         return {"ok": False, "reason": "same plot"}
-    inv_q = world.inventory.qty(party, material)
+    use_plot = party_uses_plot_storage(world, party) and not is_carried_material(material)
+    if use_plot:
+        inv_q = plot_output_qty(world, from_plot_id, material)
+    else:
+        inv_q = world.inventory.qty(party, material)
     if inv_q < qty:
         return {"ok": False, "reason": "insufficient material"}
     dist = manhattan(world, from_plot_id, to_plot_id)
@@ -514,7 +526,10 @@ def dispatch_shipment(
         fmid, fqty = fuel_consumed
         world.inventory.add(party, fmid, fqty)
 
-    rm = world.inventory.remove(party, material, qty)
+    if use_plot:
+        rm = remove_plot_output(world, party, from_plot_id, material, qty)
+    else:
+        rm = world.inventory.remove(party, material, qty)
     if isinstance(rm, MatterErr):
         _refund_fuel()
         _refund_fee()
@@ -647,10 +662,13 @@ def deliver_transit(world: World) -> None:
                 receiving_fee_cents=recv_fee,
             )
             continue
-        # Sprint 6 — Phase D.1: matter always lands in party inventory; the
-        # destination's plot_output_stock is updated as a display-only log when
-        # plot logistics is enabled.
-        ad = try_add_inventory(world, s.party, s.material, s.qty)
+        use_plot = party_uses_plot_storage(world, s.party) and not is_carried_material(
+            s.material
+        )
+        if use_plot:
+            ad = try_add_plot_output(world, s.dest_plot_id, s.party, s.material, s.qty)
+        else:
+            ad = try_add_inventory(world, s.party, s.material, s.qty)
         if isinstance(ad, MatterErr):
             keep.append(s)
             continue
@@ -682,9 +700,6 @@ def deliver_transit(world: World) -> None:
                 assert not isinstance(rb2, MatterErr)
                 keep.append(s)
                 continue
-        if world.use_plot_output_logistics:
-            bucket = world.plot_output_stock.setdefault(str(s.dest_plot_id), {})
-            bucket[str(s.material)] = int(bucket.get(str(s.material), 0)) + int(s.qty)
         # Phase 10B — record the voyage on its route_key so NPC shippers
         # (or Phase 11 player UI) can identify high-traffic uncharted lanes
         # and register a regular operator.
