@@ -8,15 +8,7 @@ signal plot_layout_changed()
 @onready var create_btn: Button = %CreateBlueprintBtn
 @onready var subdivide_btn: Button = %SubdivideBtn
 
-const CATEGORY_ICONS := {
-	"extraction": "M",
-	"processing": "F",
-	"infrastructure": "E",
-	"commerce": "S",
-	"population": "H",
-	"research": "R",
-	"custom": "*",
-}
+const BlueprintIconsScript := preload("res://scenes/panels/build/BlueprintIcons.gd")
 
 var _all_blueprints: Array = []
 var _terrain: String = "plains"
@@ -45,6 +37,15 @@ func load_blueprints(terrain: String) -> void:
 			_all_blueprints = []
 		_filter(search_box.text)
 	)
+
+
+func select_blueprint_id(blueprint_id: String) -> void:
+	for bp in _all_blueprints:
+		if bp is Dictionary and str((bp as Dictionary).get("blueprint_id", "")) == blueprint_id:
+			_selected_id = blueprint_id
+			blueprint_selected.emit(blueprint_id, bp as Dictionary)
+			_filter(search_box.text)
+			return
 
 
 func _filter(text: String) -> void:
@@ -105,9 +106,20 @@ func _make_blueprint_card(bp: Dictionary) -> PanelContainer:
 	if bid == _selected_id:
 		pc.add_theme_stylebox_override("panel", _make_selected_stylebox())
 	var header := HBoxContainer.new()
-	var cat_icon: String = CATEGORY_ICONS.get(str(bp.get("category", "custom")), "*")
+	var icon_box := PanelContainer.new()
+	var icon_sb := StyleBoxFlat.new()
+	icon_sb.bg_color = BlueprintIconsScript.color_for(bp).darkened(0.55)
+	icon_sb.set_corner_radius_all(4)
+	icon_sb.set_content_margin_all(4)
+	icon_box.add_theme_stylebox_override("panel", icon_sb)
+	var icon_lbl := Label.new()
+	icon_lbl.text = BlueprintIconsScript.icon_for(bp)
+	icon_lbl.add_theme_font_size_override("font_size", 18)
+	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_box.add_child(icon_lbl)
+	header.add_child(icon_box)
 	var name_lbl := Label.new()
-	name_lbl.text = "%s %s" % [cat_icon, str(bp.get("name", bid))]
+	name_lbl.text = str(bp.get("name", bid))
 	name_lbl.add_theme_font_size_override("font_size", 13)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

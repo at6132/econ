@@ -8,6 +8,8 @@ signal closed
 @onready var sidebar: VBoxContainer = %BlueprintSidebar
 @onready var grid_view: Control = %PlotGridView
 @onready var detail_panel: PanelContainer = %BlueprintDetail
+@onready var mode_buildings_btn: Button = %ModeBuildingsBtn
+@onready var mode_roads_btn: Button = %ModeRoadsBtn
 
 var _plot_id: String = ""
 var _plot_data: Dictionary = {}
@@ -25,6 +27,15 @@ func _ready() -> void:
 		sidebar.plot_layout_changed.connect(_refresh_plot_data)
 	if grid_view.has_signal("cell_clicked"):
 		grid_view.cell_clicked.connect(_on_cell_clicked)
+	if grid_view.has_signal("road_path_painted"):
+		grid_view.road_path_painted.connect(_on_road_path_painted)
+	if mode_buildings_btn and mode_roads_btn:
+		var mode_group := ButtonGroup.new()
+		mode_group.allow_unpress = false
+		mode_buildings_btn.button_group = mode_group
+		mode_roads_btn.button_group = mode_group
+		mode_buildings_btn.pressed.connect(func() -> void: _set_build_mode("building"))
+		mode_roads_btn.pressed.connect(func() -> void: _set_build_mode("roads"))
 	if detail_panel.has_signal("build_mode_changed"):
 		detail_panel.build_mode_changed.connect(func(m: String) -> void: _build_mode = m)
 	_apply_theme()
@@ -71,7 +82,24 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 		sidebar.call("set_plot_id", plot_id)
 	if sidebar.has_method("load_blueprints"):
 		sidebar.call("load_blueprints", terrain)
+	_set_build_mode("building")
 	_refresh_plot_data()
+
+
+func _set_build_mode(mode: String) -> void:
+	if grid_view.has_method("set_interaction_mode"):
+		grid_view.call("set_interaction_mode", mode)
+	var roads_on := mode == "roads"
+	if mode_buildings_btn:
+		mode_buildings_btn.button_pressed = not roads_on
+	if mode_roads_btn:
+		mode_roads_btn.pressed = roads_on
+	if roads_on and sidebar.has_method("select_blueprint_id"):
+		sidebar.call("select_blueprint_id", "road_segment")
+	elif not roads_on:
+		_selected_blueprint_id = ""
+		if grid_view.has_method("set_placing_blueprint"):
+			grid_view.call("set_placing_blueprint", "", {})
 
 
 func _refresh_plot_data() -> void:
@@ -127,6 +155,35 @@ func _on_cell_clicked(gx: int, gy: int) -> void:
 	if _selected_blueprint_id.is_empty():
 		return
 	_confirm_placement(gx, gy)
+
+
+func _on_road_path_painted(cells: Array) -> void:
+	if cells.is_empty():
+		return
+	_place_road_cells(cells, 0)
+
+
+func _place_road_cells(cells: Array, index: int) -> void:
+	if index >= cells.size():
+		_refresh_plot_data()
+		MainFeedback.toast("Road segment placed (%d cells)" % cells.size(), false)
+		return
+	var c: Variant = cells[index]
+	if not (c is Vector2i):
+		_place_road_cells(cells, index + 1)
+		return
+	var cell := c as Vector2i
+	API.place_blueprint(
+		_plot_id,
+		"road_segment",
+		cell.x,
+		cell.y,
+		_build_mode,
+		func(data: Dictionary) -> void:
+			if not bool(data.get("ok", false)):
+				_show_placement_failed(str(data.get("reason", "Road placement failed")))
+			_place_road_cells(cells, index + 1),
+	)
 
 
 func _confirm_placement(gx: int, gy: int) -> void:

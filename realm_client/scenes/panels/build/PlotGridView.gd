@@ -3,6 +3,7 @@ extends Control
 
 signal cell_hovered(gx: int, gy: int)
 signal cell_clicked(gx: int, gy: int)
+signal road_path_painted(cells: Array)
 
 const TERRAIN_COLORS := {
 	"plains": Color(0.62, 0.58, 0.38),
@@ -24,6 +25,10 @@ const TILE_LINE := Color(0.32, 0.30, 0.28, 0.85)
 const DEED_LINE := Color(0.12, 0.11, 0.10, 0.95)
 const DEED_LINE_HI := Color(0.85, 0.72, 0.20, 0.55)
 const STREET_COLOR := Color(0.28, 0.28, 0.30, 0.45)
+const ROAD_ASPHALT := Color(0.22, 0.24, 0.28, 0.92)
+const ROAD_EDGE := Color(0.55, 0.58, 0.62, 0.95)
+const ROAD_PREVIEW := Color(0.40, 0.85, 0.95, 0.55)
+const ROAD_LINK := Color(0.85, 0.72, 0.20, 0.65)
 const OCCUPIED_COLOR := Color(0.25, 0.25, 0.30, 0.85)
 const PREVIEW_OK := Color(0.30, 0.90, 0.40, 0.55)
 const PREVIEW_BLOCK := Color(0.90, 0.25, 0.25, 0.55)
@@ -54,6 +59,11 @@ var _confirm_gy: int = -1
 
 var _error_flash_until: float = 0.0
 var _error_message: String = ""
+
+var _interaction_mode: String = "building"
+var _road_drag_active: bool = false
+var _road_last_cell: Vector2i = Vector2i(-1, -1)
+var _road_paint_stroke: Dictionary = {}
 
 
 func _ready() -> void:
@@ -136,12 +146,24 @@ func _set_grid_dims(data: Dictionary) -> void:
 	_grid_h = maxi(1, _grid_h)
 
 
+func set_interaction_mode(mode: String) -> void:
+	_interaction_mode = mode
+	_road_drag_active = false
+	_road_paint_stroke.clear()
+	_confirming = false
+	queue_redraw()
+
+
 func set_placing_blueprint(blueprint_id: String, bp_data: Dictionary) -> void:
 	_placing_blueprint_id = blueprint_id
 	_placing_w = int(bp_data.get("footprint_w", 1))
 	_placing_h = int(bp_data.get("footprint_h", 1))
 	_confirming = false
 	queue_redraw()
+
+
+func _is_road_paint_mode() -> bool:
+	return _interaction_mode == "roads" and _placing_blueprint_id == "road_segment"
 
 
 func is_confirming() -> bool:
@@ -269,14 +291,23 @@ func _draw() -> void:
 		draw_rect(_cell_rect(_hover_gx, _hover_gy), Color(1.0, 1.0, 1.0, 0.08))
 		draw_rect(_cell_rect(_hover_gx, _hover_gy), DEED_LINE_HI, false, 1.5)
 
+	var road_cells := _road_cell_set()
 	for b in _placed_buildings:
 		if not (b is Dictionary):
 			continue
+		var bid := str(b.get("blueprint_id", b.get("building_id", "")))
 		var bx := int(b.get("grid_x", 0))
 		var by := int(b.get("grid_y", 0))
 		var bw := int(b.get("footprint_w", 1))
 		var bh := int(b.get("footprint_h", 1))
 		var building_rect := _cells_rect(bx, by, bw, bh)
+		if bid == "road_segment":
+			for dy in range(bh):
+				for dx in range(bw):
+					var r := _cell_rect(bx + dx, by + dy)
+					draw_rect(r, ROAD_ASPHALT)
+					draw_rect(r, ROAD_EDGE, false, 1.0)
+			continue
 		var eff := int(b.get("efficiency_pct", 100))
 		var fill := OCCUPIED_COLOR
 		if eff >= 90:
@@ -303,7 +334,16 @@ func _draw() -> void:
 			Color(0.85, 0.85, 0.85, 0.8),
 		)
 
-	if not _placing_blueprint_id.is_empty() and _hover_gx >= 0:
+	_draw_road_links(road_cells, cs)
+
+	for key in _road_paint_stroke.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var r := _cell_rect(int(parts[0]), int(parts[1]))
+		draw_rect(r, ROAD_PREVIEW)
+
+	if not _placing_blueprint_id.is_empty() and _hover_gx >= 0 and not _is_road_paint_mode():
 		var can_place := _can_place_at(_hover_gx, _hover_gy)
 		var preview_color := PREVIEW_OK if can_place else PREVIEW_BLOCK
 		for dy in range(_placing_h):
@@ -328,10 +368,11 @@ func _draw() -> void:
 	if cs >= 6.0:
 		var area_m := int(_plot_data.get("area_sq_metres", _deed_cells.size() * 100))
 		var plot_rect := _cells_rect(0, 0, _grid_w, _grid_h)
+		var mode_hint := "Drag to lay road (1 cell each)" if _is_road_paint_mode() else "Click to place building"
 		_draw_text(
 			Vector2(plot_rect.position.x, size.y - 10.0),
-			"%d×%d grid (10m)  |  %d m² deed  |  %d cells free"
-			% [_grid_w, _grid_h, area_m, int(_free_cell_count())],
+			"%d×%d grid (10m)  |  %d m²  |  %d free  |  %s"
+			% [_grid_w, _grid_h, area_m, int(_free_cell_count()), mode_hint],
 			10,
 			METRE_LABEL,
 		)
@@ -546,6 +587,97 @@ func _free_cell_count() -> float:
 	return float(free_n)
 
 
+func _road_cell_set() -> Dictionary:
+	var out := {}
+	for b in _placed_buildings:
+		if not (b is Dictionary):
+			continue
+		if str(b.get("blueprint_id", b.get("building_id", ""))) != "road_segment":
+			continue
+		var bx := int(b.get("grid_x", 0))
+		var by := int(b.get("grid_y", 0))
+		var bw := int(b.get("footprint_w", 1))
+		var bh := int(b.get("footprint_h", 1))
+		for dy in range(bh):
+			for dx in range(bw):
+				out["%d,%d" % [bx + dx, by + dy]] = true
+	return out
+
+
+func _draw_road_links(road_cells: Dictionary, cs: float) -> void:
+	if road_cells.is_empty():
+		return
+	var occ := _occupied_set()
+	for key in road_cells.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 2:
+			continue
+		var gx := int(parts[0])
+		var gy := int(parts[1])
+		var center := _cell_rect(gx, gy).get_center()
+		for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+			var nk := "%d,%d" % [gx + dx, gy + dy]
+			if road_cells.has(nk):
+				draw_line(center, _cell_rect(gx + dx, gy + dy).get_center(), ROAD_EDGE, 2.0, true)
+		for b in _placed_buildings:
+			if not (b is Dictionary):
+				continue
+			var bid := str(b.get("blueprint_id", b.get("building_id", "")))
+			if bid == "road_segment":
+				continue
+			var bx := int(b.get("grid_x", 0))
+			var by := int(b.get("grid_y", 0))
+			var bw := int(b.get("footprint_w", 1))
+			var bh := int(b.get("footprint_h", 1))
+			for dy in range(bh):
+				for dx in range(bw):
+					var cx := bx + dx
+					var cy := by + dy
+					if absi(cx - gx) + absi(cy - gy) == 1:
+						var bcent := _cell_rect(cx, cy).get_center()
+						draw_line(center, bcent, ROAD_LINK, 1.5, true)
+
+
+func _stroke_add_cell(gx: int, gy: int) -> void:
+	if not _in_deed(gx, gy):
+		return
+	if _occupied_set().has("%d,%d" % [gx, gy]):
+		return
+	_road_paint_stroke["%d,%d" % [gx, gy]] = true
+
+
+func _stroke_line_to(gx: int, gy: int) -> void:
+	if _road_last_cell.x < 0:
+		_stroke_add_cell(gx, gy)
+		_road_last_cell = Vector2i(gx, gy)
+		return
+	var x0 := _road_last_cell.x
+	var y0 := _road_last_cell.y
+	var x1 := gx
+	var y1 := gy
+	var n := maxi(absi(x1 - x0), absi(y1 - y0))
+	for i in range(n + 1):
+		var t := float(i) / float(maxi(n, 1))
+		var cx := int(round(lerp(float(x0), float(x1), t)))
+		var cy := int(round(lerp(float(y0), float(y1), t)))
+		_stroke_add_cell(cx, cy)
+	_road_last_cell = Vector2i(gx, gy)
+
+
+func _finish_road_stroke() -> void:
+	if _road_paint_stroke.is_empty():
+		return
+	var cells: Array = []
+	for key in _road_paint_stroke.keys():
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() == 2:
+			cells.append(Vector2i(int(parts[0]), int(parts[1])))
+	_road_paint_stroke.clear()
+	_road_last_cell = Vector2i(-1, -1)
+	if not cells.is_empty():
+		road_path_painted.emit(cells)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var gpos := _screen_to_grid(event.position)
@@ -554,18 +686,35 @@ func _gui_input(event: InputEvent) -> void:
 			_hover_gy = gpos.y
 			_hover_lot_idx = 0 if not _lots.is_empty() else -1
 			cell_hovered.emit(gpos.x, gpos.y)
+			if _is_road_paint_mode() and _road_drag_active:
+				_stroke_line_to(gpos.x, gpos.y)
 			queue_redraw()
 	elif event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			var gpos := _screen_to_grid(event.position)
 			if gpos.x >= 0:
-				if _confirming:
+				if _is_road_paint_mode():
+					_road_drag_active = true
+					_stroke_line_to(gpos.x, gpos.y)
+					accept_event()
+				elif _confirming:
 					finish_confirm(true)
 					accept_event()
 				else:
 					cell_clicked.emit(gpos.x, gpos.y)
+		elif not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			if _road_drag_active:
+				_road_drag_active = false
+				_finish_road_stroke()
+				accept_event()
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-			if _confirming:
+			if _road_drag_active:
+				_road_drag_active = false
+				_road_paint_stroke.clear()
+				_road_last_cell = Vector2i(-1, -1)
+				queue_redraw()
+				accept_event()
+			elif _confirming:
 				finish_confirm(false)
 				accept_event()
 			else:
