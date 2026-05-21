@@ -71,6 +71,139 @@ def _min_grade_for_field(recipe, field: str) -> float:
     return 0.3
 
 
+CLUSTER_RADIUS_TILES: int = 5
+CLUSTER_MIN_BUILDINGS: int = 4
+CLUSTER_EFFICIENCY_BONUS: float = 0.10
+
+
+def _count_nearby_buildings_same_owner(world: World, party: PartyId, plot_id: PlotId) -> int:
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return 0
+    px, py = int(plot.x), int(plot.y)
+    count = 0
+    for pb in world.placed_buildings.values():
+        if str(pb.built_by) != str(party):
+            continue
+        if str(pb.status) != "active":
+            continue
+        other_plot = world.plots.get(PlotId(str(pb.plot_id)))
+        if other_plot is None:
+            continue
+        dist = abs(int(other_plot.x) - px) + abs(int(other_plot.y) - py)
+        if dist <= CLUSTER_RADIUS_TILES:
+            count += 1
+    return count
+
+
+def cluster_bonus_for_plot(world: World, party: PartyId, plot_id: PlotId) -> float:
+    """Returns 0.0 or CLUSTER_EFFICIENCY_BONUS when enough active buildings cluster nearby."""
+    if _count_nearby_buildings_same_owner(world, party, plot_id) >= CLUSTER_MIN_BUILDINGS:
+        return CLUSTER_EFFICIENCY_BONUS
+    return 0.0
+
+
+def _output_quality_for_plot(world: World, plot_id: PlotId, material: MaterialId) -> str:
+    from realm.production.quality import (
+        MATERIAL_GRADE_FIELD,
+        QUALITY_ELIGIBLE_MATERIALS,
+        QUALITY_STANDARD,
+        grade_to_quality,
+    )
+
+    mid = str(material)
+    if mid not in QUALITY_ELIGIBLE_MATERIALS:
+        return QUALITY_STANDARD
+    plot = world.plots.get(plot_id)
+    if plot is None:
+        return QUALITY_STANDARD
+    grade_attr = MATERIAL_GRADE_FIELD.get(mid)
+    if grade_attr is None:
+        return QUALITY_STANDARD
+    grade = float(getattr(plot.subsurface, grade_attr, 0.33))
+    return grade_to_quality(grade)
+
+
+def _substitute_qty_needed(primary_qty: int, ratio: float) -> int:
+    raw = float(primary_qty) * float(ratio)
+    return int(raw) if raw == int(raw) else int(raw) + 1
+
+
+def _resolve_recipe_inputs(
+    world: World, party: PartyId, recipe
+) -> tuple[dict[str, tuple], bool]:
+    """Resolve inputs; substitutes used when primary stock is insufficient."""
+    resolved: dict[str, tuple] = {}
+    subs_map = getattr(recipe, "input_substitutes", None) or {}
+    for mat, qty in recipe.inputs.items():
+        mid = str(mat)
+        need = int(qty)
+        if world.inventory.qty(party, mat, "any") >= need:
+            resolved[mid] = ("primary", need)
+            continue
+        subs = subs_map.get(mid, [])
+        found = False
+        for sub_mat_id, ratio in subs:
+            sub_mat = MaterialId(sub_mat_id)
+            sub_need = _substitute_qty_needed(need, ratio)
+            if world.inventory.qty(party, sub_mat, "any") >= sub_need:
+                resolved[mid] = ("substitute", sub_mat_id, sub_need, need)
+                found = True
+                break
+        if not found:
+            return resolved, False
+    return resolved, True
+
+
+def _yield_mult_from_removed(removed: dict[str, int], total: int) -> float:
+    from realm.production.quality import quality_yield_multiplier
+
+    if total <= 0 or not removed:
+        return 1.0
+    weighted = sum(quality_yield_multiplier(q) * int(qty) for q, qty in removed.items())
+    return weighted / float(total)
+
+
+def _deduct_resolved_inputs(
+    world: World, party: PartyId, resolved: dict[str, tuple]
+) -> tuple[MatterErr | None, float, list[tuple[str, str, int, int]]]:
+    """Deduct resolved inputs; return error, composite yield mult, substitution log rows."""
+    partial: list[tuple[MaterialId, int, dict[str, int]]] = []
+    per_input_mults: list[float] = []
+    substitutions: list[tuple[str, str, int, int]] = []
+    for mid, entry in resolved.items():
+        if entry[0] == "primary":
+            need = int(entry[1])
+            rm, removed = world.inventory.remove_any_quality_lifo(party, MaterialId(mid), need)
+            if isinstance(rm, MatterErr):
+                for mat, qty, by_q in partial:
+                    for q, qx in by_q.items():
+                        world.inventory.add(party, mat, qx, quality=q)
+                return rm, 1.0, substitutions
+            partial.append((MaterialId(mid), need, removed))
+            per_input_mults.append(_yield_mult_from_removed(removed, need))
+        elif entry[0] == "substitute":
+            sub_mat_id, sub_need, primary_need = str(entry[1]), int(entry[2]), int(entry[3])
+            rm, removed = world.inventory.remove_any_quality_lifo(
+                party, MaterialId(sub_mat_id), sub_need
+            )
+            if isinstance(rm, MatterErr):
+                for mat, _qty, by_q in partial:
+                    for q, qx in by_q.items():
+                        world.inventory.add(party, mat, qx, quality=q)
+                return rm, 1.0, substitutions
+            partial.append((MaterialId(sub_mat_id), sub_need, removed))
+            per_input_mults.append(_yield_mult_from_removed(removed, sub_need))
+            substitutions.append((mid, sub_mat_id, sub_need, primary_need))
+    if not per_input_mults:
+        return None, 1.0, substitutions
+    combined = 1.0
+    for m in per_input_mults:
+        combined *= m
+    yield_mult = combined ** (1.0 / len(per_input_mults))
+    return None, yield_mult, substitutions
+
+
 def scale_extraction_output_qty(base: int, grade: float, min_grade: float) -> int:
     """Higher subsurface grade → more units (deterministic; same plot → same scale)."""
     if base <= 0:
@@ -176,6 +309,15 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
         sm = soil_quality_modifier(world, plot.plot_id)
         if sm != 1.0:
             out = {k: max(0, int(round(int(v) * float(sm)))) for k, v in out.items()}
+    input_mult = float(getattr(run, "input_yield_mult", 1.0))
+    if input_mult != 1.0:
+        out = {k: max(0, int(round(int(v) * input_mult))) for k, v in out.items()}
+    cluster_bonus = cluster_bonus_for_plot(world, run.party, run.plot_id)
+    if cluster_bonus > 0.0:
+        out = {
+            k: max(1 if int(v) > 0 else 0, int(round(int(v) * (1.0 + cluster_bonus))))
+            for k, v in out.items()
+        }
     # Phase 8 — Sub-phase 8D: resource depletion. Mining recipes draw down
     # the relevant subsurface grade by a tiny amount per completion (handled
     # at the run-completion site in ``_apply_subsurface_depletion`` below,
@@ -601,15 +743,42 @@ def start_production(
     consumed_inv: dict[MaterialId, int] = {}
     consumed_plot: dict[MaterialId, int] = {}
 
-    for mid, qty in recipe.inputs.items():
-        if world.inventory.qty(party, mid) < qty:
-            return {"ok": False, "reason": f"insufficient {mid}"}
-    for mid, qty in recipe.inputs.items():
-        rm = world.inventory.remove(party, mid, int(qty))
-        if isinstance(rm, MatterErr):
-            _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
-            return {"ok": False, "reason": rm.reason}
-        consumed_inv[mid] = consumed_inv.get(mid, 0) + int(qty)
+    resolved, ok = _resolve_recipe_inputs(world, party, recipe)
+    if not ok:
+        missing = next(
+            (
+                mid
+                for mid, q in recipe.inputs.items()
+                if str(mid) not in resolved
+            ),
+            None,
+        )
+        return {
+            "ok": False,
+            "reason": f"insufficient {missing or 'inputs'}",
+        }
+    deduct_err, input_yield_mult, substitutions = _deduct_resolved_inputs(world, party, resolved)
+    if deduct_err is not None:
+        return {"ok": False, "reason": deduct_err.reason}
+    for primary_mid, sub_mat, sub_qty, primary_qty in substitutions:
+        log_event(
+            world,
+            "production_substitution",
+            f"{party} used {sub_qty} {sub_mat} instead of {primary_qty} {primary_mid} in {recipe_id}",
+            party=str(party),
+            plot_id=str(plot_id),
+            recipe_id=recipe_id,
+            primary_material=primary_mid,
+            substitute_material=sub_mat,
+            substitute_qty=sub_qty,
+        )
+    for mid, entry in resolved.items():
+        if entry[0] == "primary":
+            consumed_inv[MaterialId(mid)] = consumed_inv.get(MaterialId(mid), 0) + int(entry[1])
+        elif entry[0] == "substitute":
+            consumed_inv[MaterialId(str(entry[1]))] = consumed_inv.get(
+                MaterialId(str(entry[1])), 0
+            ) + int(entry[2])
     labor_err = _pay_recipe_labor(world, party, labor_cents, plot_id)
     if labor_err is not None:
         _rollback_consumed_inputs(world, party, plot_id, consumed_inv, consumed_plot)
@@ -629,8 +798,24 @@ def start_production(
             recipe_id=recipe_id,
             ticks_remaining=recipe.duration_ticks,
             runs_remaining=queued,
+            input_yield_mult=float(input_yield_mult),
         )
     )
+    cluster_key = f"cluster_feed|{party}|{plot_id}"
+    if (
+        cluster_bonus_for_plot(world, party, plot_id) >= CLUSTER_EFFICIENCY_BONUS
+        and cluster_key not in world.scenario_state
+    ):
+        world.scenario_state[cluster_key] = True
+        log_event(
+            world,
+            "world_feed",
+            f"🏭 {party} has established an industrial cluster near {plot_id}. "
+            f"+10% production efficiency from coordinated operations.",
+            party=str(party),
+            plot_id=str(plot_id),
+            event_class="cluster_bonus",
+        )
     if elec_units_needed > 0:
         from realm.infrastructure.power_grid import record_electricity_consumed
 
@@ -701,7 +886,8 @@ def tick_production(world: World) -> None:
         staged: list[tuple[MaterialId, int]] = []
         blocked = False
         for mid, qty in eff_out.items():
-            ad = try_add_inventory(world, run.party, mid, qty)
+            out_quality = _output_quality_for_plot(world, run.plot_id, mid)
+            ad = try_add_inventory(world, run.party, mid, qty, quality=out_quality)
             if isinstance(ad, MatterErr):
                 blocked = True
                 break

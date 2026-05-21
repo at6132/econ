@@ -49,6 +49,8 @@ class ActiveProduction:
     completes. ``0`` = one-shot (current behaviour). ``-1`` = continuous (until
     cancelled or the workshop degrades below 60% efficiency). ``> 0`` = queue
     that many more runs sequentially."""
+    input_yield_mult: float = 1.0
+    """Composite output multiplier from input material quality tiers consumed at start."""
 
 
 @dataclass

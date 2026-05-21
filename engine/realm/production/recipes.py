@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final, Mapping
 
 from realm.core.ids import MaterialId
@@ -30,6 +30,8 @@ class Recipe:
     # When True, the recipe must appear in ``world.party_recipe_books[party]`` before it can run.
     # Tier-2/Tier-3 industrial recipes unlock through the assay & deep-survey systems.
     requires_discovery: bool = False
+    # Optional substitutes: primary material id → [(substitute_id, ratio), ...]
+    input_substitutes: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
 
 
 RECIPES: Final[Mapping[str, Recipe]] = {
@@ -54,6 +56,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         duration_ticks=legacy_scaled(3),
         labor_cents=8_00,
         requires_building_id="foundry",
+        input_substitutes={"coal": [("charcoal", 1.5)]},
     ),
     "smelt_copper": Recipe(
         recipe_id="smelt_copper",
@@ -76,6 +79,9 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         duration_ticks=legacy_scaled(2),
         labor_cents=2_00,
         requires_building_id="power_shed",
+        input_substitutes={
+            "coal": [("charcoal", 1.2), ("shale_oil", 0.8)],
+        },
     ),
     # Sprint 3 — Phase D.4: coastal renewable power. Half the rate of a
     # coal generator (1 unit / 720 ticks vs 2 units / 120 ticks) but no fuel.
@@ -228,6 +234,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         duration_ticks=legacy_scaled(3),
         labor_cents=4_00,
         requires_building_id="gristmill",
+        input_substitutes={"flour": [("grain", 2.0)]},
     ),
     "twist_rope": Recipe(
         recipe_id="twist_rope",
@@ -250,6 +257,7 @@ RECIPES: Final[Mapping[str, Recipe]] = {
         duration_ticks=legacy_scaled(3),
         labor_cents=6_00,
         requires_building_id="wood_shop",
+        input_substitutes={"lumber": [("timber", 2.0)]},
     ),
     # Extraction / primary sector — subsurface grades matter once surveyed (Genesis + Frontier).
     "mine_iron_ore": Recipe(
@@ -878,5 +886,9 @@ def recipe_public_list() -> list[dict]:
             row["requires_tool"] = str(r.requires_tool)
         if r.requires_discovery:
             row["requires_discovery"] = True
+        if r.input_substitutes:
+            row["input_substitutes"] = {
+                k: [[sub_id, ratio] for sub_id, ratio in pairs]
+                for k, pairs in r.input_substitutes.items()
+            }
         out.append(row)
-    return out
