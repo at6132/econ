@@ -6,6 +6,7 @@ from realm.actions import claim_plot
 from realm.production.buildings import build_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
+from realm.materials import MATERIALS
 from realm.production.spoilage import tick_material_spoilage
 from realm.production.storage_caps import party_storage_cap_units, try_add_inventory
 from realm.world import bootstrap_frontier
@@ -42,8 +43,14 @@ def test_field_stockade_increases_cap(monkeypatch) -> None:
 
 def test_spoilage_transforms_one_grain_conserving_units() -> None:
     w = bootstrap_frontier(seed=92, grid_width=2, grid_height=2)
-    w.tick = 600
-    p = PartyId("player")
+    interval = int(MATERIALS[MaterialId("grain")].spoilage_interval_ticks)
+    w.tick = interval
+    # NPC party — bulk grain lives in inventory (not plot-staged player/settler path).
+    p = PartyId("spoil_test_npc")
+    w.parties.add(p)
+    assert not isinstance(
+        w.inventory.add(p, MaterialId("grain"), 3), MatterErr
+    )
 
     def rng_stub(_purpose: str):
         class R:
@@ -56,7 +63,7 @@ def test_spoilage_transforms_one_grain_conserving_units() -> None:
 
     g0 = w.inventory.qty(p, MaterialId("grain"))
     sg0 = w.inventory.qty(p, MaterialId("spoiled_grain"))
-    assert g0 > 0
+    assert g0 == 3
     u_before = w.inventory.total_units()
     tick_material_spoilage(w)
     assert w.inventory.total_units() == u_before
