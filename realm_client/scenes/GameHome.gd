@@ -151,6 +151,9 @@ func _make_root_menu() -> VBoxContainer:
 	var b_solo := _menu_button("Solo", false)
 	b_solo.pressed.connect(_on_solo_pressed)
 
+	var b_labs := _menu_button("Labs", false)
+	b_labs.pressed.connect(_on_labs_pressed)
+
 	var b_multi := _menu_button("Multiplayer", true)
 	b_multi.pressed.connect(_on_coming_soon_pressed.bind("Multiplayer"))
 
@@ -158,10 +161,16 @@ func _make_root_menu() -> VBoxContainer:
 	b_quit.pressed.connect(_on_quit_game_pressed)
 
 	v.add_child(b_solo)
+	v.add_child(b_labs)
 	v.add_child(b_multi)
 	v.add_child(b_settings)
 	v.add_child(b_quit)
 	return v
+
+
+func _on_labs_pressed() -> void:
+	LabsSession.clear()
+	get_tree().change_scene_to_file("res://scenes/labs/LabsHub.tscn")
 
 
 func _on_quit_game_pressed() -> void:

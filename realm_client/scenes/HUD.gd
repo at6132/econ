@@ -33,6 +33,12 @@ func _ready() -> void:
 
 
 func _refresh() -> void:
+	if WorldState.lab_mode:
+		lab_btn.text = "Observatory"
+		lab_btn.add_theme_color_override("font_color", RealmColors.ACCENT)
+	else:
+		lab_btn.text = "Lab"
+		lab_btn.remove_theme_color_override("font_color")
 	cash_label.text = WorldState.format_money(WorldState.player_cash_cents)
 	networth_label.text = "NW %s" % WorldState.format_money(WorldState.player_net_worth_cents)
 	time_label.text = "Day %d · %s · Y%d · tick %d" % [

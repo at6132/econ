@@ -16,6 +16,7 @@ const InventoryPanelScene := preload("res://scenes/panels/InventoryPanel.tscn")
 const OperationsPanelScene := preload("res://scenes/panels/OperationsPanel.tscn")
 const CommandPaletteScene := preload("res://scenes/shell/CommandPalette.tscn")
 const SciencePanelScene := preload("res://scenes/panels/SciencePanel.tscn")
+const LabsMonitorPanelScene := preload("res://scenes/panels/LabsMonitorPanel.tscn")
 const EconomicsPanelScene := preload("res://scenes/panels/EconomicsPanel.tscn")
 const TendersPanelScene := preload("res://scenes/panels/TendersPanel.tscn")
 const ProfilePanelScene := preload("res://scenes/panels/ProfilePanel.tscn")
@@ -352,7 +353,13 @@ func _on_nav_pressed(panel_name: String) -> void:
 	if panel_name == "inventory":
 		_toggle_overlay(InventoryPanelScene)
 		return
-	if panel_name == "lab" or panel_name == "science":
+	if panel_name == "lab":
+		if WorldState.lab_mode:
+			_toggle_overlay(LabsMonitorPanelScene)
+		else:
+			_toggle_overlay(SciencePanelScene)
+		return
+	if panel_name == "science":
 		_toggle_overlay(SciencePanelScene)
 		return
 	if panel_name == "economics":

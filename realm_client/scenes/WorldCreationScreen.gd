@@ -42,7 +42,25 @@ const LOAD_DETAILS: Array = [
 	"Agents, population, tick state…",
 ]
 
-enum Mode { CREATE, LOAD }
+const LAB_STAGES: Array = [
+	"Allocating experiment grid",
+	"Seeding market microstructure",
+	"Deploying agent cohorts",
+	"Calibrating ledger conservation",
+	"Recording initial market snapshot",
+	"Opening observatory channel",
+]
+
+const LAB_DETAILS: Array = [
+	"Applying map scale and cash overrides…",
+	"Tier-1 / Tier-2 loops per preset base…",
+	"Genesis settlers or frontier NPCs…",
+	"Money supply locked to designed channels…",
+	"Baseline prices for analysis…",
+	"Lab metadata written to scenario_state…",
+]
+
+enum Mode { CREATE, LOAD, LAB }
 var _mode: int = Mode.CREATE
 var _subtitle: String = ""
 var _t: float = 0.0
@@ -67,9 +85,13 @@ var _genesis_slow: bool = false
 
 
 func _stages() -> Array:
+	if _mode == Mode.LAB:
+		return LAB_STAGES
 	return CREATE_STAGES if _mode == Mode.CREATE else LOAD_STAGES
 
 func _details() -> Array:
+	if _mode == Mode.LAB:
+		return LAB_DETAILS
 	return CREATE_DETAILS if _mode == Mode.CREATE else LOAD_DETAILS
 
 
@@ -77,6 +99,13 @@ func open(scenario: String) -> void:
 	_mode = Mode.CREATE
 	_subtitle = scenario
 	_genesis_slow = scenario == "genesis"
+	_reset_state()
+
+
+func open_lab(preset_title: String) -> void:
+	_mode = Mode.LAB
+	_subtitle = preset_title
+	_genesis_slow = false
 	_reset_state()
 
 
@@ -178,16 +207,24 @@ func _update_labels() -> void:
 	var stages := _stages()
 	var details := _details()
 	if _title_label:
-		_title_label.text = "CREATING WORLD" if _mode == Mode.CREATE else "LOADING WORLD"
+		if _mode == Mode.LAB:
+			_title_label.text = "INITIALIZING LAB"
+		else:
+			_title_label.text = "CREATING WORLD" if _mode == Mode.CREATE else "LOADING WORLD"
 	if _scenario_label:
-		if _mode == Mode.CREATE:
+		if _mode == Mode.LAB:
+			_scenario_label.text = "Experiment: %s" % _subtitle
+		elif _mode == Mode.CREATE:
 			_scenario_label.text = "Scenario: %s" % _subtitle
 		else:
 			_scenario_label.text = _subtitle
 	if _stage_label:
 		var txt: String = stages[_stage_idx] if _stage_idx < stages.size() else "Done"
 		if _done:
-			txt = "World ready" if _mode == Mode.CREATE else "Save loaded"
+			if _mode == Mode.LAB:
+				txt = "Lab ready"
+			else:
+				txt = "World ready" if _mode == Mode.CREATE else "Save loaded"
 		_stage_label.text = txt
 	if _detail_label:
 		var dtxt: String = details[_stage_idx] if _stage_idx < details.size() else ""
