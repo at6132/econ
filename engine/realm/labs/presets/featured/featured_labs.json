@@ -1,0 +1,408 @@
+{
+  "presets": [
+    {
+      "id": "feat_cartel_16x12",
+      "title": "Cartel Grain Stress · 16×12",
+      "description": "Split grain listings on a tight map — watch pool premium vs vendor remainder.",
+      "category": "Markets",
+      "tags": ["featured", "cartel", "grain", "16x12"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 485000, "scenario_id": "cartel"},
+      "overlays": {"cartel_grain": true},
+      "featured": true
+    },
+    {
+      "id": "feat_monopoly_broke",
+      "title": "Monopoly Vendor · Broke Player",
+      "description": "Minimal cash against seeded NPC liquidity — can you survive the first week?",
+      "category": "Strategy",
+      "tags": ["featured", "broke", "npc"],
+      "base": "frontier",
+      "params": {"grid_width": 12, "grid_height": 9, "starting_cash_cents": 75000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_social_two_islands",
+      "title": "Two Islands · Grain Shortage",
+      "description": "Mini genesis with light settlers — observe inter-island grain bids when deficits appear.",
+      "category": "Social",
+      "tags": ["featured", "genesis", "trade", "grain"],
+      "base": "genesis",
+      "params": {"grid_width": 40, "grid_height": 30, "settler_count": 15, "map_layout": "continental"},
+      "featured": true
+    },
+    {
+      "id": "feat_speculator_sandbox",
+      "title": "Speculator Sandbox",
+      "description": "Rich starting float on a 32×24 grid — test inventory plays and market intel.",
+      "category": "Markets",
+      "tags": ["featured", "speculator", "rich"],
+      "base": "frontier",
+      "params": {"grid_width": 32, "grid_height": 24, "starting_cash_cents": 2050000, "scenario_id": "speculator"},
+      "featured": true
+    },
+    {
+      "id": "feat_production_chain",
+      "title": "Production Chain Lab",
+      "description": "Uniform 16×12 grid with normal cash — ideal for schematic validation runs.",
+      "category": "Production",
+      "tags": ["featured", "schematic", "uniform"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 10000000, "scenario_id": "frontier", "uniform_plots": true},
+      "featured": true
+    },
+    {
+      "id": "feat_tutorial_first_claim",
+      "title": "First Claim Tutorial",
+      "description": "Smallest frontier map with generous cash — practice claim, survey, and first build.",
+      "category": "Tutorial",
+      "tags": ["featured", "tutorial", "claim"],
+      "base": "frontier",
+      "params": {"grid_width": 8, "grid_height": 6, "starting_cash_cents": 10000000, "scenario_id": "frontier"},
+      "defaults": {"sim_speed": 1},
+      "featured": true
+    },
+    {
+      "id": "feat_stress_decay",
+      "title": "Decay Stress · Millrace",
+      "description": "Millrace cash on 24×18 — maintain buildings before condition collapses.",
+      "category": "Stress",
+      "tags": ["featured", "decay", "millrace"],
+      "base": "frontier",
+      "params": {"grid_width": 24, "grid_height": 18, "starting_cash_cents": 975000, "scenario_id": "millrace"},
+      "featured": true
+    },
+    {
+      "id": "feat_archive_intel",
+      "title": "Archive Intel Lab",
+      "description": "Archive scenario parameters — extended market history window for intel experiments.",
+      "category": "Markets",
+      "tags": ["featured", "archive", "intel"],
+      "base": "frontier",
+      "params": {"grid_width": 32, "grid_height": 24, "starting_cash_cents": 1080000, "scenario_id": "archive"},
+      "featured": true
+    },
+    {
+      "id": "feat_bootstrapper_tight",
+      "title": "Bootstrapper · Tight Belt",
+      "description": "Classic bootstrapper economics on a 24×18 lab grid.",
+      "category": "Strategy",
+      "tags": ["featured", "bootstrapper"],
+      "base": "frontier",
+      "params": {"grid_width": 24, "grid_height": 18, "starting_cash_cents": 485000, "scenario_id": "bootstrapper"},
+      "featured": true
+    },
+    {
+      "id": "feat_genesis_town_day1",
+      "title": "Genesis Town · Day One",
+      "description": "Small continental genesis with 20 settlers — watch stores and wages emerge.",
+      "category": "Social",
+      "tags": ["featured", "genesis", "towns"],
+      "base": "genesis",
+      "params": {"grid_width": 48, "grid_height": 36, "settler_count": 20, "map_layout": "continental"},
+      "featured": true
+    },
+    {
+      "id": "feat_cartel_24x18_rich",
+      "title": "Cartel · Rich Player 24×18",
+      "description": "Cartel overlay with deep pockets — isolate pricing strategy from liquidity constraints.",
+      "category": "Markets",
+      "tags": ["featured", "cartel", "rich"],
+      "base": "frontier",
+      "params": {"grid_width": 24, "grid_height": 18, "starting_cash_cents": 5000000, "scenario_id": "cartel"},
+      "overlays": {"cartel_grain": true},
+      "featured": true
+    },
+    {
+      "id": "feat_shipping_micro",
+      "title": "Shipping Micro 20×15",
+      "description": "Mid-size frontier for route registration and shipment cost experiments.",
+      "category": "Production",
+      "tags": ["featured", "shipping", "routes"],
+      "base": "frontier",
+      "params": {"grid_width": 20, "grid_height": 15, "starting_cash_cents": 3000000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_contracts_lab",
+      "title": "Contracts Lab",
+      "description": "Normal frontier with cash to post supply and loan stubs freely.",
+      "category": "Strategy",
+      "tags": ["featured", "contracts", "pacts"],
+      "base": "frontier",
+      "params": {"grid_width": 20, "grid_height": 15, "starting_cash_cents": 8000000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_genesis_sparse",
+      "title": "Genesis Sparse Population",
+      "description": "Large mini-map with zero settlers — pure player-driven genesis exchange phase.",
+      "category": "Social",
+      "tags": ["featured", "genesis", "sparse"],
+      "base": "genesis",
+      "params": {"grid_width": 64, "grid_height": 48, "settler_count": 0, "map_layout": "auto"},
+      "featured": true
+    },
+    {
+      "id": "feat_genesis_crowded",
+      "title": "Genesis Crowded Town",
+      "description": "Dense settler boot on 32×24 — stress employment market and store throughput.",
+      "category": "Social",
+      "tags": ["featured", "genesis", "crowded", "employment"],
+      "base": "genesis",
+      "params": {"grid_width": 32, "grid_height": 24, "settler_count": 45, "map_layout": "auto"},
+      "featured": true
+    },
+    {
+      "id": "feat_tier2_watch",
+      "title": "Tier-2 Agent Watch",
+      "description": "24×18 frontier — observe optimizing NPC archetypes alongside your trades.",
+      "category": "Social",
+      "tags": ["featured", "tier2", "agents"],
+      "base": "frontier",
+      "params": {"grid_width": 24, "grid_height": 18, "starting_cash_cents": 10000000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_survey_economics",
+      "title": "Survey Economics",
+      "description": "Tight cash forces paid surveys — test information-cost tradeoffs.",
+      "category": "Strategy",
+      "tags": ["featured", "survey", "intel"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 200000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_p2p_micro",
+      "title": "P2P Trade Micro",
+      "description": "8×6 map — fastest loop for peer trades and inventory transfers.",
+      "category": "Markets",
+      "tags": ["featured", "p2p", "micro"],
+      "base": "frontier",
+      "params": {"grid_width": 8, "grid_height": 6, "starting_cash_cents": 1500000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_millrace_throughput",
+      "title": "Millrace Throughput",
+      "description": "Production-focused millrace parameters on uniform 20×15 parcels.",
+      "category": "Production",
+      "tags": ["featured", "millrace", "throughput"],
+      "base": "frontier",
+      "params": {"grid_width": 20, "grid_height": 15, "starting_cash_cents": 975000, "scenario_id": "millrace", "uniform_plots": true},
+      "featured": true
+    },
+    {
+      "id": "feat_stress_no_cash",
+      "title": "Near-Zero Cash Stress",
+      "description": "Extreme liquidity stress on 12×9 — every cent matters.",
+      "category": "Stress",
+      "tags": ["featured", "stress", "broke"],
+      "base": "frontier",
+      "params": {"grid_width": 12, "grid_height": 9, "starting_cash_cents": 25000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_genesis_continent_tiny",
+      "title": "Continent Tiny · 12×9",
+      "description": "Single-continent genesis layout for deterministic geography teaching.",
+      "category": "Tutorial",
+      "tags": ["featured", "genesis", "continent", "tutorial"],
+      "base": "genesis",
+      "params": {"grid_width": 12, "grid_height": 9, "settler_count": 5, "map_layout": "continent"},
+      "featured": true
+    },
+    {
+      "id": "feat_hire_market",
+      "title": "Hiring Market Lab",
+      "description": "Genesis with medium settlers — focus on job posts and wage transfers.",
+      "category": "Social",
+      "tags": ["featured", "hire", "wages"],
+      "base": "genesis",
+      "params": {"grid_width": 40, "grid_height": 30, "settler_count": 25, "map_layout": "auto"},
+      "featured": true
+    },
+    {
+      "id": "feat_arbitrage_cartel",
+      "title": "Cartel Arbitrage 16×12",
+      "description": "Exploit spread between cartel pool and vendor grain listings.",
+      "category": "Markets",
+      "tags": ["featured", "arbitrage", "cartel"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 2500000, "scenario_id": "cartel"},
+      "featured": true
+    },
+    {
+      "id": "feat_build_race",
+      "title": "Build Race · Uniform 12×9",
+      "description": "Uniform grid, normal cash — race to first production run.",
+      "category": "Production",
+      "tags": ["featured", "build", "race"],
+      "base": "frontier",
+      "params": {"grid_width": 12, "grid_height": 9, "starting_cash_cents": 10000000, "scenario_id": "frontier", "uniform_plots": true},
+      "featured": true
+    },
+    {
+      "id": "feat_speculator_broke",
+      "title": "Speculator Rules · Broke Start",
+      "description": "Speculator scenario id with bootstrapper-level cash — asymmetric challenge.",
+      "category": "Stress",
+      "tags": ["featured", "speculator", "broke"],
+      "base": "frontier",
+      "params": {"grid_width": 32, "grid_height": 24, "starting_cash_cents": 100000, "scenario_id": "speculator"},
+      "featured": true
+    },
+    {
+      "id": "feat_genesis_modest_80x60",
+      "title": "Genesis Modest · 80×60",
+      "description": "Large mini-genesis with modest player cash and 12 settlers.",
+      "category": "Social",
+      "tags": ["featured", "genesis", "large"],
+      "base": "genesis",
+      "params": {"grid_width": 80, "grid_height": 60, "settler_count": 12, "player_starting_cash_cents": 2000000, "map_layout": "continental"},
+      "featured": true
+    },
+    {
+      "id": "feat_frontier_npc_social",
+      "title": "NPC Social Dynamics",
+      "description": "Watch Tier-1/2 loops without player interference — minimal starting stake.",
+      "category": "Social",
+      "tags": ["featured", "npc", "observe"],
+      "base": "frontier",
+      "params": {"grid_width": 24, "grid_height": 18, "starting_cash_cents": 500000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_maintain_or_decay",
+      "title": "Maintain or Decay",
+      "description": "Low cash millrace — upkeep fees bite quickly.",
+      "category": "Stress",
+      "tags": ["featured", "decay", "maintain"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 300000, "scenario_id": "millrace"},
+      "featured": true
+    },
+    {
+      "id": "feat_bazaar_depth",
+      "title": "Bazaar Depth 32×24",
+      "description": "Standard rich frontier for order-book depth and history charts.",
+      "category": "Markets",
+      "tags": ["featured", "bazaar", "charts"],
+      "base": "frontier",
+      "params": {"grid_width": 32, "grid_height": 24, "starting_cash_cents": 10000000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_roads_tolls",
+      "title": "Roads & Tolls Lab",
+      "description": "20×15 frontier with cash to build roads and test toll revenue.",
+      "category": "Production",
+      "tags": ["featured", "roads", "tolls"],
+      "base": "frontier",
+      "params": {"grid_width": 20, "grid_height": 15, "starting_cash_cents": 6000000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_genesis_exchange_only",
+      "title": "Exchange-Only Cold Start",
+      "description": "Genesis with no settlers — only exchange listings until you act.",
+      "category": "Tutorial",
+      "tags": ["featured", "genesis", "exchange"],
+      "base": "genesis",
+      "params": {"grid_width": 32, "grid_height": 24, "settler_count": 0, "map_layout": "continent"},
+      "featured": true
+    },
+    {
+      "id": "feat_cartel_bootstrapper",
+      "title": "Cartel + Bootstrapper Cash",
+      "description": "Cartel overlay with tight bootstrapper wallet — high pressure lab.",
+      "category": "Stress",
+      "tags": ["featured", "cartel", "bootstrapper"],
+      "base": "frontier",
+      "params": {"grid_width": 20, "grid_height": 15, "starting_cash_cents": 485000, "scenario_id": "cartel"},
+      "featured": true
+    },
+    {
+      "id": "feat_strategy_expansion",
+      "title": "Expansion Strategy 24×18",
+      "description": "Balanced grid and cash for multi-plot claim expansion tests.",
+      "category": "Strategy",
+      "tags": ["featured", "expansion", "claims"],
+      "base": "frontier",
+      "params": {"grid_width": 24, "grid_height": 18, "starting_cash_cents": 3500000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_social_labor_pool",
+      "title": "Labor Pool Density",
+      "description": "Genesis 48×36 with 35 settlers — employment market saturation lab.",
+      "category": "Social",
+      "tags": ["featured", "labor", "employment"],
+      "base": "genesis",
+      "params": {"grid_width": 48, "grid_height": 36, "settler_count": 35, "map_layout": "auto"},
+      "featured": true
+    },
+    {
+      "id": "feat_market_maker",
+      "title": "Market Maker Practice",
+      "description": "Rich cash on 16×12 — practice bid/ask placement and cancellation.",
+      "category": "Markets",
+      "tags": ["featured", "orders", "maker"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 12000000, "scenario_id": "frontier"},
+      "featured": true
+    },
+    {
+      "id": "feat_production_stall",
+      "title": "Input Stall Lab",
+      "description": "Bootstrapper cash on uniform 16×12 — study production_input_stall retries.",
+      "category": "Production",
+      "tags": ["featured", "production", "stall"],
+      "base": "frontier",
+      "params": {"grid_width": 16, "grid_height": 12, "starting_cash_cents": 485000, "scenario_id": "frontier", "uniform_plots": true},
+      "featured": true
+    },
+    {
+      "id": "feat_tutorial_genesis_8settlers",
+      "title": "Genesis 8 Settlers Tutorial",
+      "description": "24×18 genesis with eight settlers — gentle introduction to population economy.",
+      "category": "Tutorial",
+      "tags": ["featured", "tutorial", "genesis"],
+      "base": "genesis",
+      "params": {"grid_width": 24, "grid_height": 18, "settler_count": 8, "map_layout": "continent"},
+      "defaults": {"sim_speed": 1},
+      "featured": true
+    },
+    {
+      "id": "feat_stress_cartel_broke",
+      "title": "Cartel · Nearly Broke",
+      "description": "Cartel pricing against a near-empty wallet — ultimate market stress.",
+      "category": "Stress",
+      "tags": ["featured", "cartel", "stress"],
+      "base": "frontier",
+      "params": {"grid_width": 12, "grid_height": 9, "starting_cash_cents": 40000, "scenario_id": "cartel"},
+      "featured": true
+    },
+    {
+      "id": "feat_social_store_economy",
+      "title": "Store Economy Watch",
+      "description": "40×30 genesis, 18 settlers — focus on consumer spending at NPC stores.",
+      "category": "Social",
+      "tags": ["featured", "stores", "consumer"],
+      "base": "genesis",
+      "params": {"grid_width": 40, "grid_height": 30, "settler_count": 18, "map_layout": "continental"},
+      "featured": true
+    },
+    {
+      "id": "feat_strategy_margaux",
+      "title": "Tier-3 Margaux Sandbox",
+      "description": "Archive-sized map with normal cash — room to interact with Tier-3 agent.",
+      "category": "Strategy",
+      "tags": ["featured", "tier3", "llm"],
+      "base": "frontier",
+      "params": {"grid_width": 32, "grid_height": 24, "starting_cash_cents": 10000000, "scenario_id": "archive"},
+      "featured": true
+    }
+  ]
+}
