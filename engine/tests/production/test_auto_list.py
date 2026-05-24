@@ -70,6 +70,9 @@ def test_auto_list_places_order_from_plot_stock() -> None:
     pid = first_terrain_plot_id(w, Terrain.FOREST)
     assert claim_plot(w, party, pid)["ok"] is True
     assert survey_plot(w, party, pid).get("ok") is True
+    from turnkey_fixtures import ensure_plot_grid_power
+
+    ensure_plot_grid_power(w, pid)
     iid = "bld-auto-1"
     w.plot_buildings.append(
         {

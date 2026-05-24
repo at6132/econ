@@ -11,7 +11,7 @@ from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier
 
-from turnkey_fixtures import grant_turnkey_self_materials
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 from plot_helpers import claimable_land_plot_id, first_terrain_plot_id
 
 
@@ -78,12 +78,12 @@ def test_mine_iron_completes_with_scaled_iron_ore_qty() -> None:
     assert survey_plot(w, player, pid)["ok"] is True
     _turnkey(w, player, pid, "strip_mine")
     _advance_until_building_ready(w, player, pid, "strip_mine")
-    e0 = w.inventory.qty(player, MaterialId("electricity"))
+    ensure_plot_grid_power(w, pid)
     assert start_production(w, player, pid, "mine_iron_ore")["ok"] is True
-    assert w.inventory.qty(player, MaterialId("electricity")) == e0 - 2
     _complete_recipe(w, "mine_iron_ore")
-    qty = w.inventory.qty(player, MaterialId("iron_ore"))
-    assert qty >= 2
+    from realm.infrastructure.plot_logistics import plot_output_qty
+
+    assert plot_output_qty(w, pid, MaterialId("iron_ore")) >= 2
 
 
 def test_chop_timber_on_forest_plot() -> None:
@@ -98,6 +98,7 @@ def test_chop_timber_on_forest_plot() -> None:
     assert survey_plot(w, player, pid)["ok"] is True
     _turnkey(w, player, pid, "timber_yard")
     _advance_until_building_ready(w, player, pid, "timber_yard")
+    ensure_plot_grid_power(w, pid)
     assert start_production(w, player, pid, "chop_timber")["ok"] is True
     _complete_recipe(w, "chop_timber")
     assert w.inventory.qty(player, MaterialId("timber")) >= 2

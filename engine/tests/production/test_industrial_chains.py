@@ -12,8 +12,10 @@ from realm.production.recipes import RECIPES
 from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import SubsurfaceRoll, bootstrap_frontier, bootstrap_genesis
-from turnkey_fixtures import grant_turnkey_self_materials
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 from plot_helpers import claimable_land_plot_id, first_land_plot_id
+from realm.infrastructure.plot_logistics import party_material_on_plot, plot_output_qty
+from stage_materials import stage_material
 
 
 def _build_and_finish(w, party: PartyId, pid: PlotId, building_id: str) -> dict:
@@ -55,26 +57,26 @@ def test_tier2_recipe_chain_conservation_pig_iron() -> None:
         (MaterialId("iron_ore"), 6),
         (MaterialId("coal"), 6),
         (MaterialId("limestone"), 4),
-        (MaterialId("electricity"), 4),
     ):
-        ad = w.inventory.add(player, mid, qty)
+        ad = stage_material(w, player, mid, qty, plot_id=pid)
         assert not isinstance(ad, MatterErr)
     total0 = w.ledger.total_cents()
-    iron0 = w.inventory.qty(player, MaterialId("iron_ore"))
-    coal0 = w.inventory.qty(player, MaterialId("coal"))
-    lime0 = w.inventory.qty(player, MaterialId("limestone"))
-    pig0 = w.inventory.qty(player, MaterialId("pig_iron"))
-    slag0 = w.inventory.qty(player, MaterialId("slag"))
+    iron0 = party_material_on_plot(w, player, pid, MaterialId("iron_ore"))
+    coal0 = party_material_on_plot(w, player, pid, MaterialId("coal"))
+    lime0 = party_material_on_plot(w, player, pid, MaterialId("limestone"))
+    pig0 = party_material_on_plot(w, player, pid, MaterialId("pig_iron"))
+    slag0 = party_material_on_plot(w, player, pid, MaterialId("slag"))
+    ensure_plot_grid_power(w, pid)
     r = start_production(w, player, pid, "smelt_pig_iron")
     assert r["ok"] is True and r.get("started") is True, r
     n = RECIPES["smelt_pig_iron"].duration_ticks
     for _ in range(n):
         advance_tick(w)
-    assert w.inventory.qty(player, MaterialId("pig_iron")) == pig0 + 2
-    assert w.inventory.qty(player, MaterialId("slag")) == slag0 + 3
-    assert w.inventory.qty(player, MaterialId("iron_ore")) == iron0 - 3
-    assert w.inventory.qty(player, MaterialId("coal")) == coal0 - 3
-    assert w.inventory.qty(player, MaterialId("limestone")) == lime0 - 2
+    assert party_material_on_plot(w, player, pid, MaterialId("pig_iron")) == pig0 + 2
+    assert party_material_on_plot(w, player, pid, MaterialId("slag")) == slag0 + 3
+    assert party_material_on_plot(w, player, pid, MaterialId("iron_ore")) == iron0 - 3
+    assert party_material_on_plot(w, player, pid, MaterialId("coal")) == coal0 - 3
+    assert party_material_on_plot(w, player, pid, MaterialId("limestone")) == lime0 - 2
     assert w.ledger.total_cents() == total0
 
 
@@ -84,16 +86,19 @@ def test_blast_furnace_build_deducts_materials() -> None:
     player = PartyId("player")
     pid = claimable_land_plot_id(w, PartyId("player"))
     _setup_mountain_plot(w, player, pid)
-    grant_turnkey_self_materials(w, player, "blast_furnace")
+    grant_turnkey_self_materials(w, player, "blast_furnace", plot_id=pid)
     spec = BUILDINGS["blast_furnace"]
     mats = spec["self_materials"]
-    before = {k: w.inventory.qty(player, MaterialId(k)) for k in mats}
+    before = {
+        k: party_material_on_plot(w, player, pid, MaterialId(k)) for k in mats
+    }
     total0 = w.ledger.total_cents()
+    ensure_plot_grid_power(w, pid)
     r = build_on_plot(w, player, pid, "blast_furnace", build_mode="self")
     assert r["ok"] is True
     bp = w.blueprints["blast_furnace"]
     for k in mats:
-        assert w.inventory.qty(player, MaterialId(k)) == before[k] - int(
+        assert party_material_on_plot(w, player, pid, MaterialId(k)) == before[k] - int(
             bp.construction_materials[k]
         )
     assert w.ledger.total_cents() == total0
@@ -110,26 +115,27 @@ def test_tool_manufacturing_chain() -> None:
     for mid, qty in (
         (MaterialId("steel_ingot"), 4),
         (MaterialId("coal"), 4),
-        (MaterialId("electricity"), 6),
         (MaterialId("timber"), 4),
     ):
-        ad = w.inventory.add(player, mid, qty)
+        ad = stage_material(w, player, mid, qty, plot_id=pid)
         assert not isinstance(ad, MatterErr)
     total0 = w.ledger.total_cents()
-    steel0 = w.inventory.qty(player, MaterialId("steel_ingot"))
+    steel0 = party_material_on_plot(w, player, pid, MaterialId("steel_ingot"))
     mp0 = w.inventory.qty(player, MaterialId("mining_pick"))
+    pick0 = plot_output_qty(w, pid, MaterialId("pick_head"))
+    ensure_plot_grid_power(w, pid)
     r = start_production(w, player, pid, "forge_pick_head")
     assert r["ok"] is True, r
     for _ in range(RECIPES["forge_pick_head"].duration_ticks):
         advance_tick(w)
-    assert w.inventory.qty(player, MaterialId("pick_head")) >= 2
-    assert w.inventory.qty(player, MaterialId("steel_ingot")) == steel0 - 1
+    assert plot_output_qty(w, pid, MaterialId("pick_head")) >= pick0 + 2
+    assert party_material_on_plot(w, player, pid, MaterialId("steel_ingot")) == steel0 - 1
     r2 = start_production(w, player, pid, "assemble_mining_pick")
     assert r2["ok"] is True, r2
     for _ in range(RECIPES["assemble_mining_pick"].duration_ticks):
         advance_tick(w)
     assert w.inventory.qty(player, MaterialId("mining_pick")) == mp0 + 1
-    assert w.inventory.qty(player, MaterialId("pick_head")) >= 1
+    assert plot_output_qty(w, pid, MaterialId("pick_head")) >= pick0 + 1
     assert w.ledger.total_cents() == total0
 
 

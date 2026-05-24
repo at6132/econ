@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from realm.actions.blueprint_actions import (
+    _find_free_position,
     blueprints_visible_to,
     compute_turnkey_cost_cents,
     create_blueprint,
@@ -50,6 +51,8 @@ def _unclaimed_land(world, *, coastal: bool = False) -> PlotId:
             continue
         if str(plot.terrain.value).startswith("water"):
             continue
+        if world.plot_placed_buildings.get(str(pid)):
+            continue
         from realm.production.recipe_sites import plot_is_coastal
 
         is_coast = plot_is_coastal(world, plot)
@@ -59,6 +62,22 @@ def _unclaimed_land(world, *, coastal: bool = False) -> PlotId:
             continue
         return pid
     raise AssertionError("no suitable plot")
+
+
+def _place_at_free(
+    world,
+    party: PartyId,
+    pid: PlotId,
+    blueprint_id: str,
+    *,
+    build_mode: str,
+):
+    bp = world.blueprints[blueprint_id]
+    pos = _find_free_position(world, str(pid), bp)
+    assert pos is not None, f"no free position for {blueprint_id}"
+    return place_blueprint(
+        world, party, pid, blueprint_id, pos[0], pos[1], build_mode=build_mode
+    )
 
 
 def test_seeded_blueprints_all_present() -> None:
@@ -103,7 +122,7 @@ def test_place_seeded_blueprint() -> None:
     party = PartyId("player")
     pid = _unclaimed_land(world)
     claim_plot(world, party, pid)
-    r = place_blueprint(world, party, pid, "field_stockade", 0, 0, build_mode="turnkey")
+    r = _place_at_free(world, party, pid, "field_stockade", build_mode="turnkey")
     assert r["ok"], r
     iid = str(r["instance_id"])
     assert iid in world.placed_buildings
@@ -115,8 +134,18 @@ def test_place_rejects_overlap() -> None:
     party = PartyId("player")
     pid = _unclaimed_land(world)
     claim_plot(world, party, pid)
-    assert place_blueprint(world, party, pid, "field_stockade", 0, 0, build_mode="turnkey")["ok"]
-    r2 = place_blueprint(world, party, pid, "watch_hut", 1, 0, build_mode="turnkey")
+    first = _place_at_free(world, party, pid, "field_stockade", build_mode="turnkey")
+    assert first["ok"]
+    stockade = world.placed_buildings[str(first["instance_id"])]
+    r2 = place_blueprint(
+        world,
+        party,
+        pid,
+        "watch_hut",
+        int(stockade.grid_x) + 1,
+        int(stockade.grid_y),
+        build_mode="turnkey",
+    )
     assert not r2["ok"]
 
 
@@ -136,7 +165,7 @@ def test_place_terrain_gate() -> None:
     party = PartyId("player")
     pid = _unclaimed_land(world, coastal=False)
     claim_plot(world, party, pid)
-    r = place_blueprint(world, party, pid, "dock", 0, 0, build_mode="self")
+    r = _place_at_free(world, party, pid, "dock", build_mode="self")
     assert not r["ok"]
 
 
@@ -208,7 +237,7 @@ def test_license_fee_paid_on_place() -> None:
     bid = str(r["blueprint_id"])
     pid = _unclaimed_land(world)
     claim_plot(world, buyer, pid)
-    pr = place_blueprint(world, buyer, pid, bid, 0, 0, build_mode="self")
+    pr = _place_at_free(world, buyer, pid, bid, build_mode="self")
     assert pr["ok"]
     assert_money_conserved(world.ledger, snap.ledger_total_cents)
 
@@ -244,7 +273,7 @@ def test_turnkey_place_without_market_uses_fair_value() -> None:
         credit=cash_acct,
         amount_cents=max(0, need - world.ledger.balance(cash_acct) + 1_000),
     )
-    r = place_blueprint(world, party, pid, "field_stockade", 0, 0, build_mode="turnkey")
+    r = _place_at_free(world, party, pid, "field_stockade", build_mode="turnkey")
     assert r["ok"], r
 
 

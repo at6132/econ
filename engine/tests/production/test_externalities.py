@@ -8,6 +8,7 @@ import pytest
 
 from realm.actions import start_production_on_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.inventory import MatterOk
 from realm.production.externalities import MINING_EXTERNALITY_RADIUS, apply_mining_externality
 from realm.production.production import tick_production
 from realm.world import World, bootstrap_frontier
@@ -105,7 +106,13 @@ def test_soil_remediation_restores_grade() -> None:
     pl.surveyed = True
     pl.subsurface = replace(pl.subsurface, phosphate_grade=0.25)
     p = PartyId("player")
-    w.inventory.add(p, MaterialId("phosphate_meal"), 10)
+    from stage_materials import stage_material
+    from turnkey_fixtures import ensure_plot_grid_power
+
+    ensure_plot_grid_power(w, pid)
+    assert isinstance(
+        stage_material(w, p, MaterialId("phosphate_meal"), 10, plot_id=pid), MatterOk
+    )
     w.inventory.add(p, MaterialId("spade"), 1)
     r = start_production_on_plot(w, p, pid, "soil_remediation")
     assert r["ok"] is True

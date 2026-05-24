@@ -12,8 +12,9 @@ from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
 
-from turnkey_fixtures import grant_turnkey_self_materials
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
 from plot_helpers import claimable_land_plot_id, first_land_plot_id
+from stage_materials import stage_material
 
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
@@ -86,6 +87,7 @@ def test_mill_flour_run_conserves_player_inventory_units() -> None:
     assert build_on_plot(w, player, pid, "gristmill", build_mode="turnkey")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _advance_until_building_ready(w, player, pid, "gristmill")
+    ensure_plot_grid_power(w, pid)
     u0 = _party_unit_total(w, player)
     assert start_production(w, player, pid, "mill_flour")["ok"] is True
     _complete_recipe(w, "mill_flour")
@@ -99,12 +101,13 @@ def test_steel_alloy_outputs_match_inputs_units() -> None:
 
     pid = first_terrain_plot_id(w, Terrain.MOUNTAIN)
     assert claim_plot(w, player, pid)["ok"] is True
-    grant_turnkey_self_materials(w, player, "foundry")
+    grant_turnkey_self_materials(w, player, "foundry", plot_id=pid)
     assert build_on_plot(w, player, pid, "foundry", build_mode="self")["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
     _advance_until_building_ready(w, player, pid, "foundry")
-    # Bootstrap already has smelt inputs; add one more iron ingot for a steel batch.
-    w.inventory.add(player, MaterialId("iron_ingot"), 1)
+    ensure_plot_grid_power(w, pid)
+    stage_material(w, player, MaterialId("iron_ingot"), 2, plot_id=pid)
+    stage_material(w, player, MaterialId("coal"), 2, plot_id=pid)
     u0 = _party_unit_total(w, player)
     assert start_production(w, player, pid, "steel_alloy")["ok"] is True
     _complete_recipe(w, "steel_alloy")

@@ -21,7 +21,10 @@ from realm.world.tick import advance_tick
 from realm.world.terrain import Terrain
 
 from plot_helpers import claimable_land_plot_id, first_terrain_plot_id
-from turnkey_fixtures import grant_turnkey_self_materials
+from turnkey_fixtures import ensure_plot_grid_power, grant_turnkey_self_materials
+from realm.infrastructure.plot_logistics import plot_output_qty
+from realm.production.production import _output_quality_for_plot
+from stage_materials import stage_material
 
 
 def _advance_until_building_ready(w, party: PartyId, plot_id: PlotId, building_id: str) -> None:
@@ -66,9 +69,11 @@ def test_high_grade_mine_produces_high_quality_ore() -> None:
     assert survey_plot(w, player, pid)["ok"] is True
     _turnkey(w, player, pid, "strip_mine")
     _advance_until_building_ready(w, player, pid, "strip_mine")
+    ensure_plot_grid_power(w, pid)
+    assert _output_quality_for_plot(w, pid, MaterialId("iron_ore")) == "high"
     assert start_production(w, player, pid, "mine_iron_ore")["ok"] is True
     _complete_recipe(w, "mine_iron_ore")
-    assert w.inventory.qty(player, MaterialId("iron_ore"), "high") > 0
+    assert plot_output_qty(w, pid, MaterialId("iron_ore")) > 0
 
 
 def test_grade_to_quality_thresholds() -> None:
@@ -97,11 +102,11 @@ def test_subsurface_below_gate_still_maps_low_when_forced() -> None:
 
 def test_quality_price_premium_in_order_book() -> None:
     w = bootstrap_frontier(seed=3, grid_width=3, grid_height=2)
-    player = PartyId("player")
-    w.inventory.add(player, MaterialId("coal"), 10, quality="high")
-    w.inventory.add(player, MaterialId("coal"), 10, quality="standard")
-    assert place_sell_order(w, player, MaterialId("coal"), 5, 100, quality="high")["ok"]
-    assert place_sell_order(w, player, MaterialId("coal"), 5, 80, quality="standard")["ok"]
+    seller = PartyId("t1_consumer")
+    w.inventory.add(seller, MaterialId("coal"), 10, quality="high")
+    w.inventory.add(seller, MaterialId("coal"), 10, quality="standard")
+    assert place_sell_order(w, seller, MaterialId("coal"), 5, 100, quality="high")["ok"]
+    assert place_sell_order(w, seller, MaterialId("coal"), 5, 80, quality="standard")["ok"]
     asks = w.market_asks_by_material.get(str(MaterialId("coal")), [])
     high_ask = next((a for a in asks if getattr(a, "quality", "standard") == "high"), None)
     std_ask = next((a for a in asks if getattr(a, "quality", "standard") == "standard"), None)
@@ -130,21 +135,25 @@ def test_substitution_used_when_primary_unavailable() -> None:
     for b in w.plot_buildings:
         if b.get("instance_id") == inst:
             b["completes_at_tick"] = -1
-    while w.inventory.qty(player, MaterialId("coal"), "any") > 0:
-        w.inventory.remove(
-            player,
-            MaterialId("coal"),
-            w.inventory.qty(player, MaterialId("coal"), "any"),
-            quality="any",
-        )
-    w.inventory.add(player, MaterialId("iron_ore"), 2)
-    w.inventory.add(player, MaterialId("charcoal"), 4)
-    w.inventory.add(player, MaterialId("electricity"), 4)
-    charcoal_before = w.inventory.qty(player, MaterialId("charcoal"), "any")
+    from realm.infrastructure.plot_logistics import (
+        party_material_on_plot,
+        remove_party_plot_stock,
+    )
+
+    while party_material_on_plot(w, player, pid, MaterialId("coal")) > 0:
+        q = party_material_on_plot(w, player, pid, MaterialId("coal"))
+        remove_party_plot_stock(w, player, MaterialId("coal"), q, preferred_plot=pid)
+    stage_material(w, player, MaterialId("iron_ore"), 2, plot_id=pid)
+    stage_material(w, player, MaterialId("charcoal"), 4, plot_id=pid)
+
+    charcoal_before = party_material_on_plot(
+        w, player, pid, MaterialId("charcoal")
+    )
+    ensure_plot_grid_power(w, pid)
     r = start_production(w, player, pid, "smelt_iron", run_count=1)
     assert r["ok"] is True, r
-    assert w.inventory.qty(player, MaterialId("coal"), "any") == 0
-    assert w.inventory.qty(player, MaterialId("charcoal"), "any") < charcoal_before
+    assert party_material_on_plot(w, player, pid, MaterialId("coal")) == 0
+    assert party_material_on_plot(w, player, pid, MaterialId("charcoal")) < charcoal_before
 
 
 def test_cluster_bonus_requires_4_buildings() -> None:
@@ -200,6 +209,7 @@ def test_quality_conservation_money() -> None:
     assert survey_plot(w, player, pid)["ok"] is True
     _turnkey(w, player, pid, "strip_mine")
     _advance_until_building_ready(w, player, pid, "strip_mine")
+    ensure_plot_grid_power(w, pid)
     snap = ConservationSnapshot.of(w.ledger, w.inventory)
     assert start_production(w, player, pid, "mine_iron_ore")["ok"] is True
     _complete_recipe(w, "mine_iron_ore")

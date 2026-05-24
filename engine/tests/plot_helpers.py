@@ -75,6 +75,24 @@ def claimable_land_plot_id(
     return pid
 
 
+def powered_land_plot_id(
+    world: World,
+    party: PartyId,
+    *,
+    terrain_hint: str | None = None,
+) -> PlotId:
+    """
+    Like claimable_land_plot_id but also ensures the returned plot
+    has grid power (places a power_shed if needed).
+    Use for any test that calls start_production on an electric recipe.
+    """
+    from turnkey_fixtures import ensure_plot_grid_power
+
+    pid = claimable_land_plot_id(world, party, terrain_hint=terrain_hint)
+    ensure_plot_grid_power(world, pid)
+    return pid
+
+
 def two_adjacent_plot_ids(world: World) -> tuple[PlotId, PlotId]:
     """Two geometrically adjacent plots, coerced to land if needed."""
     for pid1, p1 in world.plots.items():

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from realm.core.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
 
+from turnkey_fixtures import ensure_plot_grid_power
+
 
 def test_prereq_integration_genesis_supply_chain_headless() -> None:
-    w = bootstrap_genesis(seed=600, grid_width=22, grid_height=18, settler_count=24)
+    w = bootstrap_genesis(seed=42, grid_width=22, grid_height=18, settler_count=24)
+    for pid in w.plots:
+        ensure_plot_grid_power(w, PlotId(str(pid)))
     total0 = w.ledger.total_cents()
     ex = PartyId("genesis_exchange")
     for _ in range(720):
