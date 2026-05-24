@@ -67,6 +67,26 @@ def _grid_is_uniform(world: "World") -> bool:
     return True
 
 
+def _lab_public_fields(world: "World") -> dict[str, Any]:
+    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
+    if not scen.get("lab_mode"):
+        return {
+            "lab_mode": False,
+            "lab_preset_id": None,
+            "lab_title": None,
+            "lab_category": None,
+            "lab_display_id": None,
+        }
+    return {
+        "lab_mode": True,
+        "lab_preset_id": scen.get("lab_preset_id"),
+        "lab_title": scen.get("lab_title"),
+        "lab_category": scen.get("lab_category"),
+        "lab_display_id": scen.get("lab_display_id"),
+        "lab_seed": scen.get("lab_seed", world.seed),
+    }
+
+
 def world_public_dict(world: "World") -> dict:
     """JSON-serializable view for API (hides unsurveyed subsurface).
 
@@ -179,6 +199,7 @@ def world_public_dict(world: "World") -> dict:
         "scenario_id": world.scenario_id,
         "world_id": world.world_id,
         "world_name": world.world_name,
+        **_lab_public_fields(world),
         "market_intel_expires_tick": world.market_intel_expires_tick,
         "market_intel_active": intel_active,
         "market_history_free_window_ticks": FREE_MARKET_HISTORY_TICKS,
@@ -594,6 +615,7 @@ def world_static_dict(world: "World") -> dict[str, Any]:
         "scenario_id": world.scenario_id,
         "world_id": world.world_id,
         "world_name": world.world_name,
+        **_lab_public_fields(world),
         "ticks_per_game_day": TICKS_PER_GAME_DAY,
         # Wall-clock pacing canon (Law 2 / doc 09). Solo / public mode shards
         # both observe these; only the host-loop ``speed`` multiplier varies.

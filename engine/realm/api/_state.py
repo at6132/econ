@@ -98,10 +98,30 @@ def clear_save_metadata() -> None:
     _last_save_kind = ""
 
 
+def is_lab_world(world: "World | None") -> bool:
+    if world is None:
+        return False
+    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
+    return bool(scen.get("lab_mode"))
+
+
+def lab_save_slot_for_world(world: "World | None") -> str:
+    """Manual save slot under ``saves/labs/`` for lab sessions."""
+    if world is None:
+        return "labs/unsaved"
+    scen = world.scenario_state if isinstance(world.scenario_state, dict) else {}
+    preset = str(scen.get("lab_preset_id") or "lab").strip() or "lab"
+    wid = str(getattr(world, "world_id", "") or "").strip() or "run"
+    safe_preset = "".join(c if c.isalnum() or c in "-_" else "_" for c in preset)[:64]
+    return f"labs/{safe_preset}_{wid}"
+
+
 def primary_slot_for_world(world: "World | None") -> str:
     """Primary manual-save filename stem for this playthrough (``saves/<stem>.sqlite``)."""
     if world is None:
         return "current"
+    if is_lab_world(world):
+        return lab_save_slot_for_world(world)
     wid = str(getattr(world, "world_id", "") or "").strip()
     return wid if wid else "current"
 
@@ -147,6 +167,17 @@ def safe_save_path(slot_or_path: str | None) -> Path:
     raw = str(slot_or_path).strip()
     if not raw:
         return _DEFAULT_SAVE_PATH
+    if raw.replace("\\", "/").startswith("labs/"):
+        sub = raw.replace("\\", "/")
+        if not sub.lower().endswith(".sqlite"):
+            sub = f"{sub}.sqlite"
+        p = (_SAVES_DIR / sub).resolve()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            p.relative_to(_SAVES_DIR.resolve())
+        except ValueError as e:
+            raise ValueError(f"save path must live under saves/ (got {p.as_posix()!r})") from e
+        return p
     # Bare slot name like "current" or "frontier_1" → saves/<name>.sqlite
     if "/" not in raw and "\\" not in raw and not raw.lower().endswith(".sqlite"):
         return _SAVES_DIR / f"{raw}.sqlite"
