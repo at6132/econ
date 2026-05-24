@@ -1004,6 +1004,37 @@ func set_world_name(name: String, cb: Callable) -> void:
 	post_request("/dev/world-name?name=%s" % name.uri_encode(), {}, cb)
 
 
+# ── Labs (contained experiment sandboxes) ───────────────────────────────────
+
+func labs_list_presets(query: String, cb: Callable) -> void:
+	get_request(query if query.begins_with("/") else "/labs/presets?%s" % query, cb)
+
+
+func labs_get_preset(preset_id: String, cb: Callable) -> void:
+	get_request("/labs/presets/%s" % preset_id.uri_encode(), cb)
+
+
+func labs_start(
+	preset_id: String,
+	seed: int,
+	overrides: Dictionary,
+	cb: Callable,
+	world_name: String = "",
+) -> void:
+	var body := {"preset_id": preset_id, "seed": seed, "overrides": overrides}
+	if not world_name.is_empty():
+		body["world_name"] = world_name
+	post_request("/labs/start", body, cb)
+
+
+func labs_exit(scenario: String = "frontier", seed: int = 42, cb: Callable = Callable()) -> void:
+	post_request(
+		"/labs/exit?scenario=%s&seed=%d" % [scenario.uri_encode(), int(seed)],
+		{},
+		cb,
+	)
+
+
 func dev_reset(
 	seed: int,
 	scenario: String,

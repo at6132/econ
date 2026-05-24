@@ -76,6 +76,12 @@ var party_display_names: Dictionary = {}
 var scenario_id: String = ""
 var world_id: String = ""
 var world_name: String = ""
+## Labs run metadata (from ``GET /world`` / ``/world/static`` when ``lab_mode``).
+var lab_mode: bool = false
+var lab_preset_id: String = ""
+var lab_title: String = ""
+var lab_category: String = ""
+var lab_seed: int = 0
 ## RNG seed from ``GET /world`` (for HUD / map parity with engine).
 var world_seed: int = 42
 ## Flattened ``market_asks`` / ``market_bids`` / ``market_history`` from ``GET /world``.
@@ -286,6 +292,7 @@ func apply_world(data: Dictionary) -> void:
 	var pdn: Variant = data.get("party_display_names", {})
 	party_display_names = pdn if pdn is Dictionary else {}
 	scenario_id = str(data.get("scenario_id", scenario_id))
+	_apply_lab_fields(data)
 	if data.has("world_id"):
 		world_id = str(data.get("world_id", ""))
 	if data.has("world_name"):
@@ -335,6 +342,7 @@ func apply_static(data: Dictionary) -> void:
 	market_history_free_window_ticks = variant_to_int(data.get("market_history_free_window_ticks", market_history_free_window_ticks), market_history_free_window_ticks)
 	world_seed = variant_to_int(data.get("seed", world_seed), world_seed)
 	scenario_id = str(data.get("scenario_id", scenario_id))
+	_apply_lab_fields(data)
 	if data.has("world_id"):
 		world_id = str(data.get("world_id", ""))
 	if data.has("world_name"):
@@ -1313,6 +1321,22 @@ func ship_destination_options() -> Array:
 		for row in buckets[g]:
 			out.append(row)
 	return out
+
+
+func _apply_lab_fields(data: Dictionary) -> void:
+	if not data.has("lab_mode"):
+		return
+	lab_mode = bool(data.get("lab_mode", false))
+	if lab_mode:
+		lab_preset_id = str(data.get("lab_preset_id", lab_preset_id))
+		lab_title = str(data.get("lab_title", lab_title))
+		lab_category = str(data.get("lab_category", lab_category))
+		lab_seed = variant_to_int(data.get("lab_seed", data.get("seed", lab_seed)), lab_seed)
+	else:
+		lab_preset_id = ""
+		lab_title = ""
+		lab_category = ""
+		lab_seed = 0
 
 
 func format_ticks_as_gametime(ticks: int) -> String:
