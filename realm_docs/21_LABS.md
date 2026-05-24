@@ -47,7 +47,19 @@ Run `pytest engine/tests/labs/test_preset_catalog.py` after edits.
 | POST | `/labs/start` | Body: `{ preset_id, seed?, overrides?, world_name? }` |
 | POST | `/labs/exit` | Reset to campaign scenario (default `frontier`) |
 
-## Web routes
+## Godot client (primary solo UI)
+
+| Flow | Scene |
+|------|--------|
+| Main menu → **Labs** | `realm_client/scenes/GameHome.gd` |
+| Catalog (analytical grid) | `scenes/labs/LabsHub.tscn` |
+| Parameter tuning | `scenes/labs/LabsLaunch.tscn` |
+| Boot overlay | `WorldCreationScreen.open_lab()` |
+| In-run observatory | HUD **Observatory** → `LabsMonitorPanel` |
+
+Web (`web/app/`) has a parallel Labs path for browser testing; **Godot is the ship target.**
+
+## Web routes (optional browser client)
 
 | Route | Role |
 |-------|------|
