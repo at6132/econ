@@ -878,7 +878,8 @@ func _format_save_label(slot: Dictionary) -> String:
 	var file_name := str(slot.get("name", ""))
 	if file_name.is_empty():
 		file_name = str(slot.get("path", "")).get_file().get_basename()
-	var tick := int(slot.get("tick", 0))
+	var tick := int(slot.get("tick", -1))
+	var tick_s := "?" if tick < 0 else str(tick)
 	var saved_at := int(slot.get("saved_at", 0))
 	var when := ""
 	if saved_at > 0:
@@ -892,8 +893,8 @@ func _format_save_label(slot: Dictionary) -> String:
 		else:
 			when = "%d d ago" % int(ago / 86400)
 	if when.is_empty():
-		return "%s  ·  tick %d" % [file_name, tick]
-	return "%s  ·  tick %d  ·  %s" % [file_name, tick, when]
+		return "%s  ·  tick %s" % [file_name, tick_s]
+	return "%s  ·  tick %s  ·  %s" % [file_name, tick_s, when]
 
 
 func _refresh_continue_worlds_list() -> void:
@@ -928,13 +929,19 @@ func _on_persistence_list_loaded(data: Dictionary) -> void:
 	if slots.is_empty():
 		slots = _list_saves_from_disk()
 	if slots.is_empty():
-		if not _grouped_slots.is_empty():
-			return
 		var saves_dir := Transport.repo_saves_dir()
 		if not bool(data.get("ok", false)):
 			var reason := str(data.get("reason", "")).strip_edges()
 			if reason.is_empty():
 				reason = "solo engine on port 9000 not reachable"
+			if not _grouped_slots.is_empty():
+				_show_continue_list_message(
+					"Showing files on disk only (tick unknown). Engine list failed: %s.\n\n"
+					+ "Restart solo engine in Settings, then reopen Continue."
+					% reason,
+					RealmColors.WARN,
+				)
+				return
 			_show_continue_list_message(
 				"Could not list saves: %s.\n\nFolder: %s\n\nRestart solo engine in Settings."
 				% [reason, saves_dir],
@@ -983,10 +990,11 @@ func _list_saves_from_disk() -> Array:
 					"name": file.get_basename(),
 					"mtime": mtime,
 					"saved_at": mtime,
-					"tick": 0,
+					"tick": -1,
 					"scenario_id": "",
 					"seed": 0,
 					"world_name": "",
+					"from_disk_only": true,
 				}
 			)
 		file = dir.get_next()
