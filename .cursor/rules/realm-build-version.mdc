@@ -1,0 +1,58 @@
+---
+description: Engine ↔ Godot build identity — realm_build.json, /version, and compatibility checks
+alwaysApply: true
+---
+
+# Realm — build version system
+
+Solo Godot and the Python engine must stay **version-matched**. A stale `realm_solo.py` on port 9000 is the most common cause of "no /version endpoint" errors.
+
+## Single source of truth
+
+**`realm_build.json`** at the repo root is the canonical manifest:
+
+```json
+{
+  "build_id": "2026-05-20-cash-100k-v2",
+  "player_starting_cash_cents": 10000000
+}
+```
+
+Do **not** hardcode `build_id` or starting-cash strings in multiple places. Read from this file (or the wrappers below).
+
+## Where each side reads it
+
+| Layer | File | Usage |
+|-------|------|--------|
+| Manifest | `realm_build.json` | Edit here when bumping compatibility |
+| Engine | `engine/realm/core/build_info.py` | `REALM_BUILD_ID`, `version_payload()` |
+| HTTP `/version` | `engine/realm/api/routes_world.py` | calls `version_payload()` |
+| Solo socket `/version` | `engine/realm/api/solo_fast_routes.py` | calls `version_payload()` |
+| Godot client | `realm_client/autoloads/WorldState.gd` | loads manifest → `REALM_BUILD_ID`, `PLAYER_STARTING_CASH_CENTS` |
+| Godot verify | `realm_client/scenes/GameHome.gd` | `_stale_engine_message()` compares engine vs client |
+| Tests | `engine/tests/core/test_build_info.py` | manifest ↔ `player_economy` contract |
+
+## When to bump `build_id`
+
+Bump **`build_id` in `realm_build.json`** when a change breaks compatibility between Godot and the running solo engine — e.g. new required API fields, changed starting-economy constants the client validates, or socket protocol changes.
+
+Use a dated, descriptive slug (e.g. `2026-06-04-grid-utility-v1`). You do **not** need to bump for internal refactors that do not cross the Godot↔engine boundary.
+
+If you change **`PLAYER_STARTING_CASH_CENTS`** in `engine/realm/core/player_economy.py`, also update `player_starting_cash_cents` in `realm_build.json` (tests will fail if they diverge).
+
+## Agent checklist (engine / Godot / solo API work)
+
+1. **Never** duplicate `build_id` literals in Python or GDScript — use `build_info.py` / `WorldState` / `realm_build.json`.
+2. After changing compatibility-sensitive behavior, **bump `build_id`** in `realm_build.json`.
+3. Run `python -m pytest engine/tests/core/test_build_info.py` (or full engine tests).
+4. If the user sees stale-engine errors: orphaned `realm_solo.py` on :9000 — restart via Godot Settings → Restart solo engine, or kill `python.exe` processes and reopen Godot.
+
+## `/version` response shape
+
+Both HTTP and solo socket expose:
+
+```python
+version_payload()  # ok, build_id, player_starting_cash_cents, features
+```
+
+Godot's Transport handshake calls `GET /version` before marking the engine ready; `GameHome` rejects mismatched `build_id` or starting cash.
