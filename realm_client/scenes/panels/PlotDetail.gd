@@ -78,7 +78,10 @@ const MINERAL_ROWS := [
 @onready var coords_value: Label = %CoordsValue
 @onready var landmass_value: Label = %LandmassValue
 @onready var owner_value: Label = %OwnerValue
+@onready var energy_section: VBoxContainer = %EnergySection
 @onready var energy_value: Label = %EnergyValue
+@onready var energy_manage_btn: Button = %EnergyManageBtn
+@onready var energy_status_lbl: Label = %EnergyStatusLabel
 @onready var soil_row: HBoxContainer = %SoilRow
 @onready var soil_value: Label = %SoilValue
 @onready var claim_section: VBoxContainer = %ClaimSection
@@ -129,6 +132,7 @@ var _geology_jobs: Label
 var _buy_plot_btn: Button
 
 const ProductionControlScene := preload("res://scenes/panels/ProductionControl.tscn")
+const PlotElectricityWindowScript := preload("res://scenes/panels/PlotElectricityWindow.gd")
 
 
 func _ready() -> void:
@@ -149,6 +153,7 @@ func _ready() -> void:
 	survey_btn.pressed.connect(_on_survey)
 	build_btn.pressed.connect(_on_build_btn)
 	list_for_sale_btn.pressed.connect(_on_list_for_sale)
+	energy_manage_btn.pressed.connect(_on_energy_manage)
 	_setup_geology_and_buy()
 	if not get_viewport().size_changed.is_connected(_on_viewport_resized):
 		get_viewport().size_changed.connect(_on_viewport_resized)
@@ -222,6 +227,7 @@ func _apply_theme() -> void:
 	_style_gold_button(survey_btn)
 	_style_gold_button(build_btn)
 	_style_gold_button(list_for_sale_btn)
+	_style_gold_button(energy_manage_btn)
 	for n in panel.find_children("*", "Label", true, false):
 		var lbl := n as Label
 		lbl.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
@@ -229,6 +235,9 @@ func _apply_theme() -> void:
 	title_label.clip_text = true
 	energy_value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	energy_value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if energy_status_lbl:
+		energy_status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		energy_status_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if roads_summary:
 		roads_summary.add_theme_color_override("font_color", Color(0.75, 0.73, 0.68))
 	for lbl in [
@@ -447,6 +456,8 @@ func _populate(p: Dictionary) -> void:
 	build_btn.visible = is_mine
 	buildings_section.visible = is_mine
 	roads_section.visible = is_mine
+	energy_section.visible = is_mine
+	energy_manage_btn.visible = is_mine
 	real_estate_section.visible = not is_unclaimed
 	if _geology_section:
 		_geology_section.visible = is_mine and is_surveyed
@@ -488,53 +499,118 @@ func _format_power_generators(generators: Array) -> String:
 	return ", ".join(parts)
 
 
+func _plot_energy_power(data: Dictionary) -> Dictionary:
+	if data.get("power") is Dictionary:
+		return data["power"] as Dictionary
+	return data
+
+
+func _access_status_label(data: Dictionary) -> String:
+	var mode := str(data.get("access_mode", ""))
+	match mode:
+		"own_generation":
+			return "Self-supplied"
+		"utility_contract":
+			var n := 0
+			for c in data.get("connections", []) as Array:
+				if c is Dictionary and str((c as Dictionary).get("status", "")) == "active":
+					n += 1
+			return "%d contract(s)" % n
+		"requires_contract":
+			return "Needs contract"
+		"unpowered":
+			return "Off grid"
+		_:
+			var pw := _plot_energy_power(data)
+			if bool(pw.get("powered", false)):
+				return "On grid"
+			return "Off grid"
+
+
+func _update_energy_strip(data: Dictionary) -> void:
+	if energy_status_lbl == null:
+		return
+	var status := _access_status_label(data)
+	var pw := _plot_energy_power(data)
+	if bool(pw.get("powered", false)):
+		status += " · %d¢/kWh clearing" % int(pw.get("clearing_price_cents", 0))
+	energy_status_lbl.text = status
+	if not bool(data.get("may_draw_grid_energy", true)):
+		var block := str(data.get("block_reason", ""))
+		if not block.is_empty():
+			energy_status_lbl.text += "\n" + block
+			energy_status_lbl.modulate = Color(0.79, 0.64, 0.15)
+		else:
+			energy_status_lbl.modulate = Color(1.0, 0.5, 0.3)
+	else:
+		energy_status_lbl.modulate = Color(0.75, 0.9, 0.55)
+
+
 func _on_energy_response(data: Dictionary) -> void:
 	if not _is_live():
 		return
 	if data.is_empty() or not bool(data.get("ok", true)):
 		energy_value.text = "—"
 		energy_value.modulate = Color(0.7, 0.7, 0.7)
+		if energy_status_lbl:
+			energy_status_lbl.text = "—"
 		return
 
+	_update_energy_strip(data)
+	var pw := _plot_energy_power(data)
 	var lines: PackedStringArray = []
-	if bool(data.get("powered", false)):
-		var note := str(data.get("status_note", "Grid power available"))
+	if bool(pw.get("powered", false)):
+		var note := str(pw.get("status_note", "Grid power available"))
 		lines.append(note)
-		var cap := int(data.get("capacity_per_day", 0))
-		var load := int(data.get("load_per_day", 0))
-		var price := int(data.get("clearing_price_cents", 0))
+		var cap := int(pw.get("capacity_per_day", 0))
+		var load := int(pw.get("load_per_day", 0))
+		var price := int(pw.get("clearing_price_cents", 0))
 		lines.append(
 			"Capacity %d/day · load %d/day · price %s/unit"
 			% [cap, load, WorldState.format_money(price)]
 		)
-		var lf := float(data.get("load_factor", 0.0))
-		if bool(data.get("brownout", false)):
+		var lf := float(pw.get("load_factor", 0.0))
+		if bool(pw.get("brownout", false)):
 			lines.append("Brownout — demand exceeds ~95%% of capacity (%.0f%% load)" % (lf * 100.0))
 		elif lf >= 0.95:
 			lines.append("Near capacity (%.0f%% load)" % (lf * 100.0))
-		var gen_txt := _format_power_generators(data.get("generators", []))
+		var gen_txt := _format_power_generators(pw.get("generators", []))
 		if not gen_txt.is_empty():
 			lines.append("Generators: %s" % gen_txt)
-		lines.append("Run coal_generator in a power_shed to export kWh to the grid")
+		var block := str(data.get("block_reason", ""))
+		if block != "":
+			lines.append(block)
+		elif not bool(data.get("may_draw_grid_energy", true)):
+			lines.append("Sign a utility contract (Manage) to draw from the grid")
 		energy_value.text = "\n".join(lines)
-		energy_value.modulate = Color(0.45, 1.0, 0.45) if not bool(data.get("brownout")) else Color(1.0, 0.85, 0.35)
+		energy_value.modulate = Color(0.45, 1.0, 0.45) if not bool(pw.get("brownout")) else Color(1.0, 0.85, 0.35)
 		_reset_scroll_layout()
 		return
 
-	var reason := str(data.get("reason", ""))
+	var reason := str(pw.get("reason", data.get("block_reason", "")))
 	if reason.is_empty():
 		reason = "No grid power"
 	lines.append(reason)
-	var gen_txt := _format_power_generators(data.get("generators", []))
+	var gen_txt := _format_power_generators(pw.get("generators", []))
 	if not gen_txt.is_empty():
 		lines.append("On region: %s" % gen_txt)
-	if not bool(data.get("grid_connected", true)):
+	if not bool(pw.get("grid_connected", true)):
 		lines.append(
 			"Tip: cyan ports in Build → Roads link to neighbors for a shared grid"
 		)
+	lines.append("Tap Manage to review providers and sign a utility contract.")
 	energy_value.text = "\n".join(lines)
 	energy_value.modulate = Color(1.0, 0.5, 0.3)
 	_reset_scroll_layout()
+
+
+func _on_energy_manage() -> void:
+	if _plot_id.is_empty():
+		return
+	var win: CanvasLayer = PlotElectricityWindowScript.new()
+	win.setup(_plot_id, WorldState.party_id)
+	win.closed.connect(_refresh_plot_energy)
+	add_child(win)
 
 
 func _sync_section_visibility() -> void:

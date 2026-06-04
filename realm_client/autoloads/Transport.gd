@@ -8,7 +8,14 @@ enum Mode { SOLO, SERVER }
 var mode: Mode = Mode.SOLO
 var _server_base: String = "http://127.0.0.1:8000"
 const SOLO_HOST := "127.0.0.1"
-const SOLO_PORT := 9000
+const SOLO_PORT_DEFAULT := 9000
+const SOLO_PORT_CANDIDATES: Array[int] = [9000, 9001, 9002, 9003]
+const HANDSHAKE_PROBE_ID := "handshake"
+const HANDSHAKE_TIMEOUT_MS := 8_000
+
+var solo_port: int = SOLO_PORT_DEFAULT
+var last_engine_status: String = ""
+var _handshake_version: Dictionary = {}
 
 var _stream: StreamPeerTCP = null
 var _read_buf: String = ""
@@ -19,8 +26,11 @@ var _queued: Array = []  # [method, path, body, callback]
 var _next_id: int = 1
 var _python_pid: int = -1
 var _ready_flag: bool = false
-var _connect_attempts: int = 0
-const MAX_CONNECT_ATTEMPTS := 40
+var _spawn_in_progress: bool = false
+const SOLO_POST_SPAWN_WAIT_S := 1.5
+const TCP_CONNECT_TIMEOUT_MS := 12_000
+const PORT_FREE_POLL_MS := 200
+const PORT_FREE_WAIT_MS := 8_000
 
 signal engine_ready
 signal engine_error(msg: String)
@@ -39,9 +49,47 @@ func is_engine_ready() -> bool:
 	return _ready_flag
 
 
+func get_solo_port() -> int:
+	return solo_port
+
+
+## Version payload from the TCP handshake (``GET /version``). Empty if not connected yet.
+func get_handshake_version() -> Dictionary:
+	return _handshake_version.duplicate()
+
+
+## Block until the solo engine is ready, ``engine_error`` fires, or timeout.
+## Returns an empty string on success, otherwise a user-facing error message.
+func await_engine_ready(timeout_s: float = 60.0) -> String:
+	if mode != Transport.Mode.SOLO:
+		return ""
+	if is_engine_ready():
+		return ""
+	if not _spawn_in_progress and not _ready_flag:
+		use_solo_mode()
+	var tree := get_tree()
+	if tree == null:
+		return "Scene exited."
+	var deadline_ms := Time.get_ticks_msec() + int(timeout_s * 1000.0)
+	var error_msg := ""
+	var on_err := func(msg: String) -> void:
+		error_msg = msg
+	engine_error.connect(on_err, CONNECT_ONE_SHOT)
+	while not is_engine_ready() and error_msg.is_empty():
+		if Time.get_ticks_msec() > deadline_ms:
+			var st := last_engine_status.strip_edges()
+			if st.is_empty():
+				st = "no response from solo engine"
+			return "Solo engine did not start within %d s (%s)." % [int(timeout_s), st]
+		await tree.process_frame
+	if not error_msg.is_empty():
+		return "Solo engine failed: %s" % error_msg
+	return ""
+
+
 func use_solo_mode() -> void:
 	mode = Mode.SOLO
-	if _ready_flag:
+	if _ready_flag or _spawn_in_progress:
 		return
 	_spawn_python_async()
 
@@ -54,11 +102,11 @@ func restart_solo_engine() -> void:
 	_kill_python()
 	_stream = null
 	_read_buf = ""
+	_handshake_version = {}
 	_pending.clear()
 	_pending_started_ms.clear()
 	_queued.clear()
 	_ready_flag = false
-	_connect_attempts = 0
 	await get_tree().create_timer(0.75).timeout
 	await _spawn_python_async()
 
@@ -80,28 +128,167 @@ func use_server_mode(base_url: String) -> void:
 
 
 func _spawn_python_async() -> void:
+	if _spawn_in_progress:
+		return
+	_spawn_in_progress = true
+	_ready_flag = false
+
 	var engine_path := _find_engine_path()
 	if engine_path.is_empty():
+		last_engine_status = "Engine not found (realm_solo.py)"
 		push_error("Transport: cannot find realm_solo.py")
+		_spawn_in_progress = false
 		engine_error.emit("Engine not found")
 		return
 
-	# Always purge anything still bound to :9000 before starting a fresh Python.
-	# Windows allows multiple processes to bind the same port (SO_REUSEADDR), and
-	# orphaned realm_solo workers running OLD bytecode silently win the race.
-	_free_solo_listen_port()
-	await get_tree().create_timer(0.4).timeout
-
 	var python := _find_python()
-	var err := OS.create_process(python, PackedStringArray([engine_path]), false)
-	if err == -1:
-		push_error("Transport: failed to spawn Python engine")
-		engine_error.emit("Failed to spawn engine")
-		return
-	_python_pid = err if err > 0 else -1
+	last_engine_status = "Freeing port %d…" % SOLO_PORT_DEFAULT
+	await _clear_solo_ports_before_spawn()
 
-	await get_tree().create_timer(1.5).timeout
-	_connect_socket()
+	var tried: PackedStringArray = PackedStringArray()
+	for port in SOLO_PORT_CANDIDATES:
+		last_engine_status = "Starting engine on port %d…" % port
+		tried.append(str(port))
+		if port == SOLO_PORT_DEFAULT:
+			await _clear_solo_ports_before_spawn()
+		else:
+			_kill_python()
+			_free_solo_listen_port(port)
+			await _await_port_free(port, 3_000)
+
+		var err := OS.create_process(
+			python,
+			PackedStringArray([engine_path, "--port", str(port)]),
+			false,
+		)
+		if err == -1:
+			last_engine_status = "Failed to spawn Python on port %d" % port
+			push_warning("Transport: create_process failed for port %d" % port)
+			continue
+		_python_pid = err if err > 0 else -1
+
+		await get_tree().create_timer(SOLO_POST_SPAWN_WAIT_S).timeout
+		var handshake := await _try_connect_handshake(port)
+		if handshake.get("ok", false):
+			solo_port = port
+			_ready_flag = true
+			last_engine_status = "Engine ready on %s:%d" % [SOLO_HOST, port]
+			push_warning("Transport: solo engine on port %d (pid %s)" % [port, str(_python_pid)])
+			_spawn_in_progress = false
+			engine_ready.emit()
+			_flush_queued()
+			return
+
+		var reason := str(handshake.get("reason", "handshake failed")).strip_edges()
+		last_engine_status = "Port %d: %s" % [port, reason]
+		push_warning("Transport: port %d failed handshake: %s" % [port, reason])
+		_kill_python()
+
+	last_engine_status = "No solo engine on ports %s" % ", ".join(tried)
+	_spawn_in_progress = false
+	var msg := (
+		"Could not start solo engine on ports %s.\nPython: %s\nLog: %s"
+		% [", ".join(tried), python, solo_log_path()]
+	)
+	push_error("Transport: %s" % msg)
+	_fail_queued_requests(msg)
+	engine_error.emit("All ports failed")
+
+
+func _try_connect_handshake(port: int) -> Dictionary:
+	var stream := StreamPeerTCP.new()
+	var err := stream.connect_to_host(SOLO_HOST, port)
+	if err != OK:
+		return {"ok": false, "reason": "connect_to_host error %s" % err}
+
+	# connect_to_host() returning OK only means the request was queued — poll until
+	# STATUS_CONNECTED (or ERROR) before sending /version.
+	last_engine_status = "Connecting %s:%d…" % [SOLO_HOST, port]
+	var connect_deadline_ms := Time.get_ticks_msec() + TCP_CONNECT_TIMEOUT_MS
+	while true:
+		stream.poll()
+		var st := stream.get_status()
+		if st == StreamPeerTCP.STATUS_CONNECTED:
+			break
+		if st == StreamPeerTCP.STATUS_ERROR:
+			stream.disconnect_from_host()
+			return {"ok": false, "reason": "TCP connection error"}
+		if st == StreamPeerTCP.STATUS_NONE:
+			stream.disconnect_from_host()
+			return {"ok": false, "reason": "TCP connect aborted"}
+		if Time.get_ticks_msec() > connect_deadline_ms:
+			stream.disconnect_from_host()
+			return {"ok": false, "reason": "TCP connect timeout"}
+		var tree := get_tree()
+		if tree == null:
+			stream.disconnect_from_host()
+			return {"ok": false, "reason": "scene exited"}
+		await tree.create_timer(0.05).timeout
+
+	last_engine_status = "Verifying engine on port %d…" % port
+	var msg := (
+		JSON.stringify(
+			{
+				"id": HANDSHAKE_PROBE_ID,
+				"method": "GET",
+				"path": "/version",
+				"body": {},
+			}
+		)
+		+ "\n"
+	)
+	stream.put_data(msg.to_utf8_buffer())
+	var resp := await _poll_stream_line(stream, HANDSHAKE_PROBE_ID, HANDSHAKE_TIMEOUT_MS)
+	if not bool(resp.get("ok", false)):
+		if resp.is_empty():
+			resp = {"ok": false, "reason": "no /version response (stale listener?)"}
+		stream.disconnect_from_host()
+		return resp
+
+	_stream = stream
+	_read_buf = ""
+	_handshake_version = resp.duplicate()
+	_pending.clear()
+	_pending_started_ms.clear()
+	_next_id = 1
+	return resp
+
+
+func _poll_stream_line(
+	stream: StreamPeerTCP,
+	req_id: String,
+	timeout_ms: int,
+) -> Dictionary:
+	var buf := ""
+	var deadline_ms := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline_ms:
+		stream.poll()
+		if stream.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+			return {"ok": false, "reason": "socket closed during handshake"}
+		var available := stream.get_available_bytes()
+		if available > 0:
+			var raw := stream.get_data(available)
+			if raw[0] == OK:
+				buf += raw[1].get_string_from_utf8()
+			while "\n" in buf:
+				var nl := buf.find("\n")
+				var line := buf.substr(0, nl).strip_edges()
+				buf = buf.substr(nl + 1)
+				if line.is_empty():
+					continue
+				var parsed: Variant = JSON.parse_string(line)
+				if not parsed is Dictionary:
+					continue
+				var resp: Dictionary = parsed
+				if str(resp.get("id", "")) == req_id:
+					return resp
+				if resp.has("kind"):
+					continue
+		var tree := get_tree()
+		if tree == null:
+			return {"ok": false, "reason": "scene exited"}
+		await tree.create_timer(0.05).timeout
+	return {"ok": false, "reason": "handshake timeout", "timed_out": true}
 
 
 func _find_engine_path() -> String:
@@ -134,25 +321,6 @@ func _find_python() -> String:
 	return "python3"
 
 
-func _connect_socket() -> void:
-	_stream = StreamPeerTCP.new()
-	var err := _stream.connect_to_host(SOLO_HOST, SOLO_PORT)
-	if err != OK:
-		_connect_attempts += 1
-		if _connect_attempts >= MAX_CONNECT_ATTEMPTS:
-			push_error("Transport: could not connect to solo engine on %s:%d" % [SOLO_HOST, SOLO_PORT])
-			_fail_queued_requests("solo engine not running (port %d)" % SOLO_PORT)
-			engine_error.emit("Socket connect failed")
-			return
-		await get_tree().create_timer(0.25).timeout
-		_connect_socket()
-		return
-	_ready_flag = true
-	_connect_attempts = 0
-	engine_ready.emit()
-	_flush_queued()
-
-
 func _flush_queued() -> void:
 	while not _queued.is_empty():
 		var item: Array = _queued.pop_front()
@@ -166,11 +334,53 @@ func _kill_python() -> void:
 		else:
 			OS.kill(_python_pid)
 		_python_pid = -1
-	_free_solo_listen_port()
+	_handshake_version = {}
+	_free_all_solo_ports()
+	_kill_stale_realm_solo_processes()
 
 
-func _free_solo_listen_port() -> void:
-	# Orphan realm_solo children can keep :9000 while Godot talks to a stuck bootstrap.
+## Stop tracked child, orphan realm_solo.py processes, and anything listening on 9000+.
+func _clear_solo_ports_before_spawn() -> void:
+	_kill_python()
+	_free_all_solo_ports()
+	_kill_stale_realm_solo_processes()
+	var tree := get_tree()
+	if tree != null:
+		await tree.create_timer(0.35).timeout
+	if not await _await_port_free(SOLO_PORT_DEFAULT, PORT_FREE_WAIT_MS):
+		last_engine_status = "Port %d still in use" % SOLO_PORT_DEFAULT
+		push_warning("Transport: port %d not free after cleanup" % SOLO_PORT_DEFAULT)
+
+
+func _is_port_free(port: int) -> bool:
+	var probe := TCPServer.new()
+	var err := probe.listen(port, SOLO_HOST)
+	if err == OK:
+		probe.stop()
+		return true
+	return false
+
+
+func _await_port_free(port: int, timeout_ms: int) -> bool:
+	var tree := get_tree()
+	if tree == null:
+		return _is_port_free(port)
+	var deadline_ms := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline_ms:
+		if _is_port_free(port):
+			return true
+		_free_solo_listen_port(port)
+		_kill_stale_realm_solo_processes()
+		await tree.create_timer(float(PORT_FREE_POLL_MS) / 1000.0).timeout
+	return _is_port_free(port)
+
+
+func _free_all_solo_ports() -> void:
+	for port in SOLO_PORT_CANDIDATES:
+		_free_solo_listen_port(port)
+
+
+func _kill_stale_realm_solo_processes() -> void:
 	if OS.get_name() == "Windows":
 		OS.execute(
 			"powershell",
@@ -178,10 +388,40 @@ func _free_solo_listen_port() -> void:
 				"-NoProfile",
 				"-Command",
 				(
-					"Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue "
-					+ "| ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
-				)
-				% SOLO_PORT,
+					"Get-CimInstance Win32_Process -ErrorAction SilentlyContinue "
+					+ "| Where-Object { $_.CommandLine -like '*realm_solo*' } "
+					+ "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+				),
+			],
+			[],
+			true,
+		)
+	elif OS.get_name() in ["macOS", "Linux"]:
+		OS.execute(
+			"sh",
+			["-c", "pkill -f 'realm_solo.py' 2>/dev/null || true"],
+			[],
+			true,
+		)
+
+
+func _free_solo_listen_port(port: int) -> void:
+	# Orphan realm_solo children can keep a port while Godot talks to a stuck listener.
+	if OS.get_name() == "Windows":
+		OS.execute(
+			"powershell",
+			[
+				"-NoProfile",
+				"-Command",
+				(
+					"$p=%d; "
+					% port
+					+ "Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue "
+					+ "| ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; "
+					+ "netstat -ano | Select-String (\":$p\\s+.*LISTENING\") "
+					+ "| ForEach-Object { if ($_ -match '\\s(\\d+)\\s*$') "
+					+ "{ Stop-Process -Id ([int]$matches[1]) -Force -ErrorAction SilentlyContinue } }"
+				),
 			],
 			[],
 			true,
@@ -189,20 +429,14 @@ func _free_solo_listen_port() -> void:
 	elif OS.get_name() == "macOS":
 		OS.execute(
 			"sh",
-			[
-				"-c",
-				"lsof -ti tcp:%d | xargs kill -9 2>/dev/null || true" % SOLO_PORT,
-			],
+			["-c", "lsof -ti tcp:%d | xargs kill -9 2>/dev/null || true" % port],
 			[],
 			true,
 		)
 	elif OS.get_name() == "Linux":
 		OS.execute(
 			"sh",
-			[
-				"-c",
-				"fuser -k %d/tcp 2>/dev/null || true" % SOLO_PORT,
-			],
+			["-c", "fuser -k %d/tcp 2>/dev/null || true" % port],
 			[],
 			true,
 		)
@@ -290,11 +524,11 @@ func _process(_delta: float) -> void:
 			continue
 		var parsed: Variant = JSON.parse_string(line)
 		if not parsed is Dictionary:
-			push_error(
-				"Transport: failed to parse engine response (%d chars) — map load may stall"
-				% line.length()
+			# Do not fail an unrelated pending request — a garbled line must not
+			# make persistence/load or /dev/reset look like they failed.
+			push_warning(
+				"Transport: skipped non-JSON engine line (%d chars)" % line.length()
 			)
-			_fail_oldest_pending("JSON parse error")
 			continue
 		var resp: Dictionary = parsed
 		var rid: String = str(resp.get("id", ""))

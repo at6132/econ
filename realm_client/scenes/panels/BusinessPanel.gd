@@ -9,6 +9,7 @@ func _init() -> void:
 func _build_tabs() -> void:
 	var desk := preload("res://scenes/panels/business/BusinessDeskTab.gd").new() as VBoxContainer
 	add_tab(desk, "Desk")
+	add_tab(preload("res://scenes/panels/business/GridUtilityLicensesTab.gd").new(), "Grid utility")
 	add_tab(preload("res://scenes/panels/build/BlueprintCatalogTab.gd").new(), "Blueprints")
 	add_tab(preload("res://scenes/panels/business/CodexStubTab.gd").new(), "Codex")
 	_add_api_tab("Public registry", func(cb): API.get_businesses_public(cb))

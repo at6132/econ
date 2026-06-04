@@ -328,7 +328,13 @@ func _run_save() -> void:
 	save_status.add_theme_color_override("font_color", RealmColors.MAGIC)
 	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
 		save_status.text = "waiting for engine…"
-		await Transport.engine_ready
+		var eng_err := await Transport.await_engine_ready(60.0)
+		if not eng_err.is_empty():
+			_saving = false
+			save_button.disabled = false
+			save_status.add_theme_color_override("font_color", RealmColors.DANGER)
+			save_status.text = eng_err
+			return
 	var on_saved := func(data: Dictionary) -> void:
 		_saving = false
 		save_button.disabled = false

@@ -38,6 +38,10 @@ var _grouped_slots: Dictionary = {}
 var _world_row_buttons: Dictionary = {}
 var _pending_new_world_name: String = ""
 var _pending_new_world_id: String = ""
+## Bumped on each Continue open so late ``persistence/list`` callbacks cannot
+## repaint the menu with stale or disk-placeholder rows.
+var _continue_list_seq: int = 0
+var _persistence_list_done: Dictionary = {}  # seq -> bool
 
 var _dialog: AcceptDialog
 var _confirm_clear_saves: ConfirmationDialog
@@ -70,13 +74,15 @@ func _ready() -> void:
 	_confirm_restart_engine = ConfirmationDialog.new()
 	_confirm_restart_engine.title = "Restart solo engine?"
 	_confirm_restart_engine.dialog_text = (
-		"Stops and respawns the Python process on port 9000.\n\n"
+		"Stops and respawns the Python process (tries ports 9000–9003).\n\n"
 		+ "Use this after engine code changes or if Continue/New world acts stale."
 	)
 	_confirm_restart_engine.ok_button_text = "Restart"
 	_confirm_restart_engine.confirmed.connect(_on_restart_engine_confirmed)
 	add_child(_confirm_restart_engine)
 	WorldState.sim_clock_updated.connect(_on_world_sim_clock_updated)
+	Transport.engine_ready.connect(_on_transport_engine_ready)
+	Transport.engine_error.connect(_on_transport_engine_error)
 	_build_panels()
 	_show_panel("root")
 	if RealmFonts:
@@ -620,7 +626,7 @@ func _sync_settings_prefs_ui() -> void:
 func _refresh_settings_diagnostics() -> void:
 	if not is_instance_valid(_settings_about):
 		return
-	var port := Transport.SOLO_PORT
+	var port := Transport.get_solo_port()
 	var log_p := Transport.solo_log_path()
 	var saves_p := Transport.repo_saves_dir()
 	_settings_about.text = (
@@ -637,7 +643,7 @@ func _refresh_settings_diagnostics() -> void:
 				return
 			var build := str(ver.get("build_id", "?"))
 			var cash := WorldState.variant_to_int(ver.get("player_starting_cash_cents", 0), 0)
-			var line := "Build: %s" % build
+			var line := "Build: %s (client %s)" % [build, WorldState.REALM_BUILD_ID]
 			if cash > 0:
 				line += "  ·  starting cash %s" % WorldState.format_money(cash)
 			if not bool(ver.get("ok", false)):
@@ -775,18 +781,173 @@ func _on_continue_pressed() -> void:
 
 
 func _continue_load_list() -> void:
-	_set_continue_list_loading()
-	# Show anything on disk immediately (don't wait on solo engine / socket).
-	var disk_early := _list_saves_from_disk()
-	if not disk_early.is_empty():
-		_populate_continue_from_slots(disk_early)
-	await _ensure_engine_ready()
-	if not is_instance_valid(self) or not _panel_continue.visible:
+	_continue_list_seq += 1
+	var seq := _continue_list_seq
+	_set_continue_loading_status("Starting solo engine…")
+	var start_err := await _wait_for_solo_socket(seq, 45.0)
+	if not is_instance_valid(self) or not _panel_continue.visible or seq != _continue_list_seq:
 		return
-	_refresh_save_list()
+	if not start_err.is_empty():
+		var detail := Transport.last_engine_status.strip_edges()
+		if not detail.is_empty():
+			start_err = "%s\n\n%s" % [start_err, detail]
+		_show_continue_list_message(
+			"%s\n\nSettings → Restart solo engine, then open Continue again." % start_err,
+			RealmColors.WARN,
+		)
+		return
+	_set_continue_loading_status("Loading saves…")
+	# Transport handshake already verified /version at connect.
+	await _fetch_continue_slots_from_engine(seq)
+
+
+func _on_transport_engine_ready() -> void:
+	pass
+
+
+func _on_transport_engine_error(msg: String) -> void:
+	if not _panel_continue.visible:
+		return
+	_continue_list_seq += 1
+	_show_continue_list_message(
+		"Solo engine disconnected: %s\n\nSettings → Restart solo engine." % msg,
+		RealmColors.WARN,
+	)
 
 
 func _set_continue_list_loading() -> void:
+	_set_continue_loading_status("Loading saves…")
+
+
+func _set_continue_loading_status(status: String) -> void:
+	for c in _worlds_vbox.get_children():
+		c.queue_free()
+	for c in _saves_detail_vbox.get_children():
+		c.queue_free()
+	_world_row_buttons.clear()
+	_grouped_slots.clear()
+	_selected_world_key = ""
+	if is_instance_valid(_saves_detail_heading):
+		_saves_detail_heading.text = status
+	var loading := Label.new()
+	loading.text = status
+	loading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loading.add_theme_color_override("font_color", RealmColors.DIM)
+	_worlds_vbox.add_child(loading)
+
+
+func _wait_for_solo_socket(seq: int, timeout_s: float) -> String:
+	if seq != _continue_list_seq:
+		return ""
+	if Transport.mode != Transport.Mode.SOLO or Transport.is_engine_ready():
+		return ""
+	Transport.use_solo_mode()
+	var tree := get_tree()
+	var deadline_ms := Time.get_ticks_msec() + int(timeout_s * 1000.0)
+	var error_msg := ""
+	Transport.engine_error.connect(
+		func(msg: String) -> void:
+			error_msg = msg,
+		CONNECT_ONE_SHOT,
+	)
+	while not Transport.is_engine_ready() and error_msg.is_empty():
+		if seq != _continue_list_seq:
+			return ""
+		var status := Transport.last_engine_status.strip_edges()
+		if not status.is_empty() and is_instance_valid(_saves_detail_heading):
+			_saves_detail_heading.text = status
+		if Time.get_ticks_msec() > deadline_ms:
+			if status.is_empty():
+				status = "no response from solo engine"
+			return (
+				"Solo engine did not start within %d s (%s).\nLog: %s"
+				% [int(timeout_s), status, Transport.solo_log_path()]
+			)
+		await tree.process_frame
+	if seq != _continue_list_seq:
+		return ""
+	if not error_msg.is_empty():
+		return "Solo engine failed: %s\nLog: %s" % [error_msg, Transport.solo_log_path()]
+	if not Transport.is_engine_ready():
+		return (
+			"Solo engine did not start (port %d).\nLog: %s"
+			% [Transport.get_solo_port(), Transport.solo_log_path()]
+		)
+	return ""
+
+
+func _ensure_engine_ready() -> void:
+	if Transport.mode != Transport.Mode.SOLO or Transport.is_engine_ready():
+		return
+	await Transport.await_engine_ready(60.0)
+
+
+func _solo_engine_verify_error() -> String:
+	if Transport.mode != Transport.Mode.SOLO:
+		return ""
+	var start_err := await Transport.await_engine_ready(60.0)
+	if not start_err.is_empty():
+		return start_err
+	var ver := Transport.get_handshake_version()
+	if ver.is_empty():
+		ver = await _await_api_get("/version", 8_000)
+	return _stale_engine_message(ver)
+
+
+func _await_version_with_retry(seq: int, total_timeout_ms: int) -> Dictionary:
+	var tree := get_tree()
+	var deadline_ms := Time.get_ticks_msec() + total_timeout_ms
+	var attempt := 0
+	while Time.get_ticks_msec() < deadline_ms:
+		if seq != _continue_list_seq:
+			return {"timed_out": true}
+		attempt += 1
+		var left_ms := deadline_ms - Time.get_ticks_msec()
+		var slice_ms := mini(8000, maxi(2000, left_ms))
+		var ver := await _await_api_get("/version", slice_ms)
+		if not bool(ver.get("timed_out", false)) and bool(ver.get("ok", false)):
+			return ver
+		if not bool(ver.get("timed_out", false)) and not ver.is_empty():
+			return ver
+		if is_instance_valid(_saves_detail_heading):
+			_saves_detail_heading.text = "Waiting for engine… (attempt %d)" % attempt
+		if tree == null:
+			return {"timed_out": true}
+		await tree.create_timer(0.5).timeout
+	return {"ok": false, "timed_out": true}
+
+
+func _await_api_get(endpoint: String, timeout_ms: int = 15_000) -> Dictionary:
+	var done := false
+	var result: Dictionary = {}
+	API.get_request(
+		endpoint,
+		func(data: Dictionary) -> void:
+			result = data
+			done = true
+	)
+	var tree := get_tree()
+	var deadline_ms := Time.get_ticks_msec() + timeout_ms
+	while not done:
+		if tree == null:
+			return {"ok": false, "reason": "scene exited", "timed_out": false}
+		if Time.get_ticks_msec() > deadline_ms:
+			return {"ok": false, "reason": "request timed out", "timed_out": true}
+		await tree.process_frame
+	return result
+
+
+func _refresh_save_list() -> void:
+	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
+		_continue_load_list()
+		return
+	_continue_list_seq += 1
+	await _fetch_continue_slots_from_engine(_continue_list_seq)
+
+
+func _fetch_continue_slots_from_engine(seq: int) -> void:
+	if not is_instance_valid(_worlds_vbox):
+		return
 	for c in _worlds_vbox.get_children():
 		c.queue_free()
 	for c in _saves_detail_vbox.get_children():
@@ -801,25 +962,40 @@ func _set_continue_list_loading() -> void:
 	loading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	loading.add_theme_color_override("font_color", RealmColors.DIM)
 	_worlds_vbox.add_child(loading)
-
-
-func _ensure_engine_ready() -> void:
-	if Transport.mode != Transport.Mode.SOLO or Transport.is_engine_ready():
+	var list_cb := func(data: Dictionary) -> void:
+		_on_persistence_list_loaded(data, seq)
+	API.persistence_list(list_cb)
+	var list_wait := await _await_persistence_list_done(list_cb, seq, 30_000)
+	if seq != _continue_list_seq:
 		return
-	# Poll instead of awaiting engine_ready — avoids hanging if the signal already fired.
-	var deadline_ms := Time.get_ticks_msec() + 120_000
-	while not Transport.is_engine_ready():
-		if Time.get_ticks_msec() > deadline_ms:
-			push_warning("GameHome: solo engine not ready after 120s (Continue list)")
-			return
-		var tree := get_tree()
+	if list_wait == "timeout":
+		_show_continue_list_message(
+			"Loading saves timed out (engine on port %d).\n\n"
+			% Transport.get_solo_port()
+			+ "Settings → Restart solo engine, then try Continue again.\n\n"
+			+ "Log: %s" % Transport.solo_log_path(),
+			RealmColors.WARN,
+		)
+	elif list_wait == "cancelled":
+		pass
+
+
+func _await_persistence_list_done(_list_cb: Callable, seq: int, timeout_ms: int) -> String:
+	_persistence_list_done[seq] = false
+	var tree := get_tree()
+	var deadline_ms := Time.get_ticks_msec() + timeout_ms
+	while not bool(_persistence_list_done.get(seq, false)):
 		if tree == null:
-			return
-		await tree.create_timer(0.2).timeout
-
-
-func _refresh_save_list() -> void:
-	_refresh_continue_worlds_list()
+			return "exited"
+		if Time.get_ticks_msec() > deadline_ms:
+			_persistence_list_done.erase(seq)
+			return "timeout"
+		if seq != _continue_list_seq:
+			_persistence_list_done.erase(seq)
+			return "cancelled"
+		await tree.process_frame
+	_persistence_list_done.erase(seq)
+	return "ok"
 
 
 func _world_group_key(slot: Dictionary) -> String:
@@ -897,62 +1073,36 @@ func _format_save_label(slot: Dictionary) -> String:
 	return "%s  ·  tick %s  ·  %s" % [file_name, tick_s, when]
 
 
-func _refresh_continue_worlds_list() -> void:
-	for c in _worlds_vbox.get_children():
-		c.queue_free()
-	for c in _saves_detail_vbox.get_children():
-		c.queue_free()
-	_world_row_buttons.clear()
-	_grouped_slots.clear()
-	_selected_world_key = ""
-	if is_instance_valid(_saves_detail_heading):
-		_saves_detail_heading.text = "Select a world on the left."
-
-	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
-		_show_continue_list_message(
-			"Solo engine still starting… try again in a few seconds, or use Settings → Restart solo engine.",
-			RealmColors.WARN,
-		)
+func _on_persistence_list_loaded(data: Dictionary, seq: int) -> void:
+	_persistence_list_done[seq] = true
+	if seq != _continue_list_seq or not is_instance_valid(_worlds_vbox):
 		return
-
-	API.persistence_list(_on_persistence_list_loaded)
-
-
-func _on_persistence_list_loaded(data: Dictionary) -> void:
-	if not is_instance_valid(_worlds_vbox):
+	if not _panel_continue.visible:
 		return
 	var slots: Array = []
 	if bool(data.get("ok", false)):
 		var raw: Variant = data.get("slots", [])
 		if raw is Array:
 			slots = raw as Array
+	else:
+		var reason := str(data.get("reason", "")).strip_edges()
+		if reason.is_empty():
+			reason = "solo engine on port %d did not answer" % Transport.get_solo_port()
+		var st := Transport.last_engine_status.strip_edges()
+		if not st.is_empty():
+			reason = "%s\n%s" % [reason, st]
+		_show_continue_list_message(
+			"Could not list saves: %s.\n\nFolder: %s\n\nRestart solo engine in Settings."
+			% [reason, Transport.repo_saves_dir()],
+			RealmColors.WARN,
+		)
+		return
 	if slots.is_empty():
-		slots = _list_saves_from_disk()
-	if slots.is_empty():
-		var saves_dir := Transport.repo_saves_dir()
-		if not bool(data.get("ok", false)):
-			var reason := str(data.get("reason", "")).strip_edges()
-			if reason.is_empty():
-				reason = "solo engine on port 9000 not reachable"
-			if not _grouped_slots.is_empty():
-				_show_continue_list_message(
-					"Showing files on disk only (tick unknown). Engine list failed: %s.\n\n"
-					+ "Restart solo engine in Settings, then reopen Continue."
-					% reason,
-					RealmColors.WARN,
-				)
-				return
-			_show_continue_list_message(
-				"Could not list saves: %s.\n\nFolder: %s\n\nRestart solo engine in Settings."
-				% [reason, saves_dir],
-				RealmColors.WARN,
-			)
-		else:
-			_show_continue_list_message(
-				"No .sqlite files in:\n%s\n\nPlay a New world (autosaves on quit) or Save in-game."
-				% saves_dir,
-				RealmColors.DIM,
-			)
+		_show_continue_list_message(
+			"No .sqlite files in:\n%s\n\nPlay a New world (autosaves on quit) or Save in-game."
+			% Transport.repo_saves_dir(),
+			RealmColors.DIM,
+		)
 		return
 	_populate_continue_from_slots(slots)
 
@@ -965,45 +1115,6 @@ func _show_continue_list_message(text: String, color: Color) -> void:
 	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	msg.add_theme_color_override("font_color", color)
 	_worlds_vbox.add_child(msg)
-
-
-func _list_saves_from_disk() -> Array:
-	var out: Array = []
-	var dir_path := Transport.repo_saves_dir()
-	if not DirAccess.dir_exists_absolute(dir_path):
-		return out
-	var dir := DirAccess.open(dir_path)
-	if dir == null:
-		push_warning("GameHome: cannot open saves dir: %s" % dir_path)
-		return out
-	dir.list_dir_begin()
-	var file := dir.get_next()
-	while file != "":
-		if not dir.current_is_dir() and file.ends_with(".sqlite"):
-			var full := dir_path.path_join(file)
-			var mtime := 0
-			if FileAccess.file_exists(full):
-				mtime = int(FileAccess.get_modified_time(full))
-			out.append(
-				{
-					"path": "saves/%s" % file,
-					"name": file.get_basename(),
-					"mtime": mtime,
-					"saved_at": mtime,
-					"tick": -1,
-					"scenario_id": "",
-					"seed": 0,
-					"world_name": "",
-					"from_disk_only": true,
-				}
-			)
-		file = dir.get_next()
-	dir.list_dir_end()
-	out.sort_custom(
-		func(a: Dictionary, b: Dictionary) -> bool:
-			return int(a.get("mtime", 0)) > int(b.get("mtime", 0))
-	)
-	return out
 
 
 func _populate_continue_from_slots(slots: Array) -> void:
@@ -1112,20 +1223,31 @@ func _populate_saves_for_world(slots: Array) -> void:
 
 
 func _on_pick_save(relative_path: String) -> void:
-	await _ensure_engine_ready()
+	var err := await _solo_engine_verify_error()
+	if not err.is_empty():
+		_dialog.dialog_text = err
+		_dialog.popup_centered()
+		return
 	_footer.text = ""
+	if is_instance_valid(_creation_screen):
+		_creation_screen.queue_free()
+		_creation_screen = null
 
-	# Show loading screen overlay
 	_creation_screen = CreationScreenScene.instantiate()
 	add_child(_creation_screen)
 	var display_name := relative_path.get_file().get_basename()
 	_creation_screen.open_load(display_name)
-	_creation_screen.creation_finished.connect(_on_creation_screen_done)
+	_creation_screen.creation_finished.connect(_on_creation_screen_done, CONNECT_ONE_SHOT)
 
 	API.persistence_load_path(
 		relative_path,
 		func(data: Dictionary) -> void:
+			if not is_instance_valid(self):
+				return
 			if bool(data.get("ok", false)):
+				var loaded_tick := int(data.get("tick", -1))
+				if loaded_tick < 0:
+					push_warning("GameHome: load ok but no tick in response for %s" % relative_path)
 				var wid := str(data.get("world_id", "")).strip_edges()
 				if not wid.is_empty():
 					WorldState.world_id = wid
@@ -1145,7 +1267,13 @@ func _on_pick_save(relative_path: String) -> void:
 					_creation_screen.visible = false
 					_creation_screen.queue_free()
 					_creation_screen = null
-				_dialog.dialog_text = "Load failed: %s" % str(data)
+				var reason := str(data.get("reason", data))
+				if reason.is_empty():
+					reason = "unknown error (check engine/logs/realm_solo.log)"
+				_dialog.dialog_text = (
+					"Load failed: %s\n\nTry Settings → Restart solo engine, then Continue again."
+					% reason
+				)
 				_dialog.popup_centered()
 	)
 
@@ -1154,13 +1282,14 @@ var _creation_screen: Control = null
 
 
 func _on_start_new_world() -> void:
-	await _ensure_engine_ready()
+	if is_instance_valid(_creation_screen):
+		return
 	var scenario: String = str(_scenario_opt.get_item_metadata(_scenario_opt.selected))
 	var seed_val := int(_seed_spin.value)
 	var wname: String = _name_edit.text.strip_edges() if is_instance_valid(_name_edit) else ""
 	_footer.text = ""
 
-	# Show creation screen overlay
+	# Loading overlay first — engine verify and reset can take a minute on Genesis.
 	_creation_screen = CreationScreenScene.instantiate()
 	add_child(_creation_screen)
 	_creation_screen.open(scenario)
@@ -1176,6 +1305,11 @@ func _on_start_new_world() -> void:
 
 	var reset_timeout_s := 180.0 if scenario == "genesis" else 90.0
 	_creation_screen.begin_waiting_for_engine(reset_timeout_s)
+
+	var err := await _solo_engine_verify_error()
+	if not err.is_empty():
+		_abort_creation_screen(err)
+		return
 
 	# Hit /version FIRST so we fail fast if a stale realm_solo.py is on :9000.
 	API.get_version(
@@ -1198,11 +1332,29 @@ func _on_start_new_world() -> void:
 
 
 func _stale_engine_message(version_resp: Dictionary) -> String:
-	if not bool(version_resp.get("ok", false)):
+	var port := Transport.get_solo_port()
+	if bool(version_resp.get("timed_out", false)):
 		return (
-			"Solo engine on port 9000 is too old (no /version endpoint).\n\n"
-			+ "An orphaned realm_solo.py from a previous run is winning the bind. "
+			"Solo engine on port %d did not answer /version in time.\n\n"
+			% port
+			+ "Settings → Restart solo engine, or quit Godot, end any python.exe in Task Manager, then reopen."
+		)
+	if not bool(version_resp.get("ok", false)):
+		var detail := str(version_resp.get("reason", "")).strip_edges()
+		if detail.is_empty():
+			detail = "no /version endpoint (stale listener?)"
+		return (
+			"Solo engine on port %d: %s.\n\n"
+			% [port, detail]
+			+ "An orphaned realm_solo.py from a previous run may be bound to this port. "
 			+ "Quit Godot, end any python.exe processes in Task Manager, then reopen."
+		)
+	var engine_build := str(version_resp.get("build_id", "")).strip_edges()
+	if not engine_build.is_empty() and engine_build != WorldState.REALM_BUILD_ID:
+		return (
+			"Solo engine build %s does not match this client (%s).\n\n"
+			% [engine_build, WorldState.REALM_BUILD_ID]
+			+ "Restart the solo engine (Settings) so it loads the current realm_solo.py."
 		)
 	var engine_starting := WorldState.variant_to_int(
 		version_resp.get("player_starting_cash_cents", 0), 0
@@ -1214,7 +1366,8 @@ func _stale_engine_message(version_resp: Dictionary) -> String:
 				WorldState.format_money(engine_starting),
 				WorldState.format_money(WorldState.PLAYER_STARTING_CASH_CENTS),
 			]
-			+ "Stale realm_solo.py is bound to :9000. Quit Godot, end every python.exe in Task Manager, then reopen."
+			+ "Stale realm_solo.py is bound to :%d. Quit Godot, end every python.exe in Task Manager, then reopen."
+			% port
 		)
 	return ""
 

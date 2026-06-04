@@ -16,8 +16,44 @@ static func variant_to_int(v: Variant, default_val: int = 0) -> int:
 
 
 # ── Player state ─────────────────────────────────────────────────────────────
+## Loaded from ``realm_build.json`` (repo root) — must match engine ``build_info.py``.
+const _BUILD_MANIFEST_FALLBACK: Dictionary = {
+	"build_id": "2026-05-20-cash-100k-v2",
+	"player_starting_cash_cents": 10_000_000,
+}
+static var _build_manifest: Dictionary = {}
+static var REALM_BUILD_ID: String = ""
 ## Must match ``engine/realm/core/player_economy.PLAYER_STARTING_CASH_CENTS``.
-const PLAYER_STARTING_CASH_CENTS: int = 10_000_000
+static var PLAYER_STARTING_CASH_CENTS: int = 10_000_000
+
+
+static func _load_build_manifest() -> void:
+	if not _build_manifest.is_empty():
+		return
+	var path := ProjectSettings.globalize_path("res://../realm_build.json")
+	if FileAccess.file_exists(path):
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f:
+			var parsed: Variant = JSON.parse_string(f.get_as_text())
+			if parsed is Dictionary:
+				_build_manifest = parsed
+	if _build_manifest.is_empty():
+		push_warning("WorldState: realm_build.json missing — using fallback manifest")
+		_build_manifest = _BUILD_MANIFEST_FALLBACK.duplicate()
+	REALM_BUILD_ID = str(_build_manifest.get("build_id", "")).strip_edges()
+	PLAYER_STARTING_CASH_CENTS = variant_to_int(
+		_build_manifest.get("player_starting_cash_cents", 10_000_000),
+		10_000_000,
+	)
+	if REALM_BUILD_ID.is_empty():
+		push_error("WorldState: build_id missing in realm_build.json")
+
+
+func _ready() -> void:
+	_load_build_manifest()
+	player_starting_cash_cents = PLAYER_STARTING_CASH_CENTS
+
+
 ## Portable goods only — must match ``engine/realm/production/storage_caps.CARRIED_MATERIAL_IDS``.
 const CARRIED_MATERIAL_IDS: Array[String] = ["mining_pick"]
 ## Plot bulk caps — must match ``engine/realm/production/storage_caps.py``.

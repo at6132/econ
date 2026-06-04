@@ -110,9 +110,27 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="EnergyTitle" type="Label" parent="Panel/Scroll/VBoxMain/EnergySection"]
+[node name="EnergyHeader" type="HBoxContainer" parent="Panel/Scroll/VBoxMain/EnergySection"]
 layout_mode = 2
-text = "Energy"
+size_flags_horizontal = 3
+
+[node name="EnergyTitle" type="Label" parent="Panel/Scroll/VBoxMain/EnergySection/EnergyHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.88, 0.55)
+text = "ELECTRICITY"
+
+[node name="EnergyManageBtn" type="Button" parent="Panel/Scroll/VBoxMain/EnergySection/EnergyHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Manage"
+
+[node name="EnergyStatusLabel" type="Label" parent="Panel/Scroll/VBoxMain/EnergySection"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "—"
 
 [node name="EnergyValue" type="Label" parent="Panel/Scroll/VBoxMain/EnergySection"]
 unique_name_in_owner = true

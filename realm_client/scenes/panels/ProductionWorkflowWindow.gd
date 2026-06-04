@@ -224,9 +224,7 @@ func _apply_building_profile() -> void:
 		return
 	_profile_mode = "production"
 	_title.text = "%s · %s" % [_short_building_name(_building), cat.capitalize()]
-	var recipe_bit := "%d recipe%s on this deed" % [recipe_on_plot, "" if recipe_on_plot == 1 else "s"]
-	if recipe_on_plot != recipe_on_blueprint:
-		recipe_bit += " (%d on blueprint)" % recipe_on_blueprint
+	var recipe_bit := "%d recipe%s on deed" % [recipe_on_plot, "" if recipe_on_plot == 1 else "s"]
 	_subtitle.text = "%s · %s · %s%s" % [_terrain_label(terrain), _plot_coords_text(), recipe_bit, footprint]
 	var can_run := WorldState.building_supports_production(_building)
 	_tab_overview.visible = true
@@ -308,21 +306,38 @@ func _refresh_context_strip() -> void:
 	PanelUI.clear_children(_context_strip_host)
 	if _plot_id.is_empty():
 		return
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.1, 0.1, 0.13, 0.9)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.4, 0.36, 0.28, 0.45)
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(10)
+	panel.add_theme_stylebox_override("panel", sb)
 	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", 20)
+	bar.add_theme_constant_override("separation", 12)
+	panel.add_child(bar)
 	var used := WorldState.plot_stash_units_total(_plot_id)
 	var cap := WorldState.plot_storage_cap_units(_plot_id)
-	_add_status_chip(bar, "Stash", "%d / %d u" % [used, cap], used >= cap)
-	_add_status_chip(bar, "Building", _building_status_blurb())
+	var parts: PackedStringArray = PackedStringArray()
+	parts.append("Stash %d / %d u" % [used, cap])
+	parts.append(_building_status_short())
 	var inst := _instance_id()
 	if not inst.is_empty() and _profile_mode == "production":
 		var edges := BuildingHubKnowledge.material_edges(inst, _plot_id, _selected_recipe_id_or_empty())
 		var in_n: int = (edges["inputs"] as Array).size()
 		var out_n: int = (edges["outputs"] as Array).size()
-		_add_status_chip(bar, "Routes", "%d in · %d out" % [in_n, out_n])
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(spacer)
+		parts.append("Routes %d in / %d out" % [in_n, out_n])
+	var stats := Label.new()
+	stats.text = "  ·  ".join(parts)
+	stats.autowrap_mode = TextServer.AUTOWRAP_OFF
+	stats.clip_text = true
+	stats.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if used >= cap:
+		stats.add_theme_color_override("font_color", RealmColors.WARN)
+	bar.add_child(stats)
 	var map_btn := Button.new()
 	map_btn.text = "Site map"
 	PanelUI.style_btn(map_btn)
@@ -334,7 +349,7 @@ func _refresh_context_strip() -> void:
 		PanelUI.style_btn(log_btn)
 		log_btn.pressed.connect(func() -> void: _show_tab("routing"))
 		bar.add_child(log_btn)
-	_context_strip_host.add_child(bar)
+	_context_strip_host.add_child(panel)
 
 
 func _append_knowledge_edges_block(parent: Node, title: String, recipe_id: String) -> void:
@@ -629,6 +644,19 @@ func _format_generators_short(generators: Variant) -> String:
 	return ", ".join(parts)
 
 
+func _building_status_short() -> String:
+	var eff := int(_building.get("_efficiency_pct", 100))
+	var missed := int(_building.get("_missed_cycles", 0))
+	var done_at := int(_building.get("completes_at_tick", 0))
+	if done_at > WorldState.current_tick:
+		return "Building (%s)" % WorldState.format_ticks_as_gametime(done_at - WorldState.current_tick)
+	if eff <= 0:
+		return "Stopped — needs maintenance"
+	if missed > 0:
+		return "Upkeep overdue (%d%%)" % eff
+	return "Operational (%d%%)" % eff
+
+
 func _building_status_blurb() -> String:
 	var eff := int(_building.get("_efficiency_pct", 100))
 	var missed := int(_building.get("_missed_cycles", 0))
@@ -846,23 +874,6 @@ func _add_bullet_list(parent: Node, items: PackedStringArray) -> void:
 		lbl.text = "• %s" % item
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		parent.add_child(lbl)
-
-
-func _add_status_chip(bar: HBoxContainer, label: String, value: String, warn: bool = false) -> void:
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 0)
-	var k := Label.new()
-	k.text = label
-	k.add_theme_font_size_override("font_size", 10)
-	k.add_theme_color_override("font_color", RealmColors.MUTED)
-	var v := Label.new()
-	v.text = value
-	v.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	if warn:
-		v.add_theme_color_override("font_color", RealmColors.WARN)
-	col.add_child(k)
-	col.add_child(v)
-	bar.add_child(col)
 
 
 func _add_section_title_to(parent: Node, text: String) -> void:

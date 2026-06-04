@@ -236,8 +236,99 @@ func demolish_building(instance_id: String, cb: Callable, party: String = "playe
 	)
 
 
-func get_plot_energy(plot_id: String, cb: Callable) -> void:
-	get_request("/plots/%s/energy" % plot_id.uri_encode(), cb)
+func get_plot_energy(plot_id: String, cb: Callable, party: String = "player") -> void:
+	get_request(
+		"/plots/%s/energy?party=%s" % [plot_id.uri_encode(), party.uri_encode()],
+		cb,
+	)
+
+
+func get_grid_utility_contract_preview(
+	plot_id: String, provider: String, cb: Callable, party: String = "player"
+) -> void:
+	get_request(
+		"/plots/%s/grid-utility/contract-preview?party=%s&provider=%s"
+		% [plot_id.uri_encode(), party.uri_encode(), provider.uri_encode()],
+		cb,
+	)
+
+
+func connect_grid_utility(
+	plot_id: String,
+	provider: String,
+	rate_cents_per_kwh: int,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/plots/%s/grid-utility/connect?party=%s&provider=%s&agreed_to_terms=true&payment_method=party_cash&rate_cents_per_kwh=%d"
+		% [plot_id.uri_encode(), party.uri_encode(), provider.uri_encode(), rate_cents_per_kwh],
+		{},
+		cb,
+	)
+
+
+func disconnect_grid_utility(connection_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/grid-utility/disconnect?party=%s&connection_id=%s"
+		% [party.uri_encode(), connection_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func configure_grid_utility(
+	plot_id: String, body: Dictionary, cb: Callable, party: String = "player"
+) -> void:
+	post_request(
+		"/plots/%s/grid-utility/config?party=%s" % [plot_id.uri_encode(), party.uri_encode()],
+		body,
+		cb,
+	)
+
+
+func get_grid_operators_registry(cb: Callable, party: String = "player") -> void:
+	get_request("/registry/grid-operators?party=%s" % party.uri_encode(), cb)
+
+
+func register_grid_operator(
+	plot_id: String,
+	rate_cents_per_kwh: int,
+	min_wh_per_day: int,
+	max_wh_per_day: int,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	var q := (
+		"/registry/grid-operators/register?party=%s&plot_id=%s&rate_cents_per_kwh=%d&min_wh_per_day=%d"
+		% [party.uri_encode(), plot_id.uri_encode(), rate_cents_per_kwh, min_wh_per_day]
+	)
+	if max_wh_per_day >= 0:
+		q += "&max_wh_per_day=%d" % max_wh_per_day
+	post_request(q, {}, cb)
+
+
+func unregister_grid_operator(plot_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/registry/grid-operators/unregister?party=%s&plot_id=%s"
+		% [party.uri_encode(), plot_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func update_grid_operator_tariff(
+	plot_id: String,
+	rate_cents_per_kwh: int,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/registry/grid-operators/tariff?party=%s&plot_id=%s&rate_cents_per_kwh=%d"
+		% [party.uri_encode(), plot_id.uri_encode(), rate_cents_per_kwh],
+		{},
+		cb,
+	)
 
 
 func get_plot_grid(plot_id: String, cb: Callable) -> void:

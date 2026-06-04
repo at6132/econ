@@ -323,7 +323,9 @@ func _ensure_engine() -> void:
 	if Transport.is_engine_ready():
 		return
 	_footer.text = "Starting solo engine…"
-	await Transport.engine_ready
+	var err := await Transport.await_engine_ready(90.0)
+	if not err.is_empty():
+		_abort(err)
 
 
 func _abort(msg: String) -> void:

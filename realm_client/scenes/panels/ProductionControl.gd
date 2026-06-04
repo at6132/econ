@@ -460,6 +460,12 @@ func _production_blocker(recipe_id: String) -> String:
 	return _missing_inputs_reason(recipe_id)
 
 
+func _energy_power_view() -> Dictionary:
+	if _energy_info.get("power") is Dictionary:
+		return _energy_info["power"] as Dictionary
+	return _energy_info
+
+
 func _energy_blocker(recipe_id: String) -> String:
 	var row := _recipe_row(recipe_id)
 	var inputs: Variant = row.get("inputs", {})
@@ -468,14 +474,15 @@ func _energy_blocker(recipe_id: String) -> String:
 	# Same source as Plot detail Energy (``GET /plots/{id}/energy``), not map ``powered``
 	# which historically meant road-linked grid only and skipped on-plot microgrids.
 	if not _energy_info.is_empty():
-		if bool(_energy_info.get("powered", false)):
-			if bool(_energy_info.get("brownout", false)):
+		var pw := _energy_power_view()
+		if bool(_energy_info.get("may_draw_grid_energy", pw.get("powered", false))):
+			if bool(pw.get("brownout", false)):
 				return "Grid brownout — demand exceeds capacity; add generation or wait"
 			return ""
-		var reason := str(_energy_info.get("reason", ""))
+		var reason := str(_energy_info.get("block_reason", pw.get("reason", "")))
 		if not reason.is_empty():
 			return reason
-		return "No grid capacity for this recipe — build or maintain a generator"
+		return "No grid capacity for this recipe — sign a utility contract or build a generator"
 	if bool(_plot_ui().get("powered", false)):
 		return ""
 	return ""

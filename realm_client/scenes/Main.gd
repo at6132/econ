@@ -105,8 +105,11 @@ func _boot_shell() -> void:
 	_setup_map_overlay_bar()
 	_layout_shell()
 	_refresh_shell_hud()
-	if Transport.mode == Transport.Mode.SOLO and not Transport.is_engine_ready():
-		await Transport.engine_ready
+	if Transport.mode == Transport.Mode.SOLO:
+		var err := await Transport.await_engine_ready(90.0)
+		if not err.is_empty():
+			push_error("Realm: %s" % err)
+			return
 	_initial_world_load()
 
 
