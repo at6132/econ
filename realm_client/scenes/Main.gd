@@ -54,7 +54,13 @@ var _plot_detail_scene: PackedScene
 
 func _plot_detail_packed() -> PackedScene:
 	if _plot_detail_scene == null:
-		_plot_detail_scene = load(PLOT_DETAIL_SCENE_PATH) as PackedScene
+		var loaded: Resource = load(PLOT_DETAIL_SCENE_PATH)
+		if loaded == null:
+			push_error("Main: failed to load %s — check Godot Output for .tscn parse errors" % PLOT_DETAIL_SCENE_PATH)
+			return null
+		_plot_detail_scene = loaded as PackedScene
+		if _plot_detail_scene == null:
+			push_error("Main: %s is not a PackedScene" % PLOT_DETAIL_SCENE_PATH)
 	return _plot_detail_scene
 
 
@@ -421,7 +427,11 @@ func _open_plot_detail(plot_id: String) -> void:
 	var merged: Dictionary = WorldState.get_plot_ui(plot_id)
 	if merged.is_empty():
 		merged = WorldState.plots.get(plot_id, {})
-	var panel: Node = _plot_detail_packed().instantiate()
+	var packed := _plot_detail_packed()
+	if packed == null:
+		show_feedback("Plot panel failed to load — see Godot Output", true)
+		return
+	var panel: Node = packed.instantiate()
 	_mount_overlay(panel)
 	if panel.has_method("open"):
 		panel.call("open", plot_id, merged)

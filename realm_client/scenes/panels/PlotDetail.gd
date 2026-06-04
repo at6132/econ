@@ -450,14 +450,8 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	_refresh_research_ui()
 	_reset_scroll_layout()
 	_slide_in()
-	var energy_cb := func(data: Dictionary) -> void:
-		if _is_live(gen):
-			_on_energy_response(data)
-	var value_cb := func(data: Dictionary) -> void:
-		if _is_live(gen):
-			_on_plot_value_response(data)
-	API.get_plot_energy(plot_id, energy_cb)
-	API.get_plot_value(plot_id, value_cb)
+	API.get_plot_energy(plot_id, _on_plot_energy_async.bind(gen), WorldState.party_id)
+	API.get_plot_value(plot_id, _on_plot_value_async.bind(gen))
 	call_deferred("_deferred_after_open", gen)
 
 
@@ -596,13 +590,21 @@ func _populate(p: Dictionary) -> void:
 func _refresh_plot_energy() -> void:
 	if not _is_live() or _plot_id.is_empty():
 		return
-	var gen := _session_gen
 	API.get_plot_energy(
 		_plot_id,
-		func(data: Dictionary) -> void:
-			if _is_live(gen):
-				_on_energy_response(data)
+		_on_plot_energy_async.bind(_session_gen),
+		WorldState.party_id,
 	)
+
+
+func _on_plot_energy_async(data: Dictionary, gen: int) -> void:
+	if _is_live(gen):
+		_on_energy_response(data)
+
+
+func _on_plot_value_async(data: Dictionary, gen: int) -> void:
+	if _is_live(gen):
+		_on_plot_value_response(data)
 
 
 func _format_power_generators(generators: Array) -> String:
@@ -746,7 +748,7 @@ func _on_energy_manage() -> void:
 		push_error("PlotElectricityWindow failed to instantiate")
 		return
 	win.setup(_plot_id, WorldState.party_id)
-	win.closed.connect(_refresh_plot_energy)
+	win.closed.connect(Callable(self, "_refresh_plot_energy"))
 	add_child(win)
 
 
