@@ -1,6 +1,9 @@
 extends Node2D
 ## Organic jittered mesh map — Google Maps–style 5-level LOD + parity with web ``RealmMapMeshPixi``.
 
+const _MapSiteDraw := preload("res://map/map_site_draw.gd")
+const _BuildingMapIcons := preload("res://map/building_map_icons.gd")
+
 const WORLD_CELL_PX := 28.0
 ## World-space jitter amplitude derives from cell size (``MapOrganicMesh``).
 const MESH_PAD := 12.0
@@ -23,7 +26,7 @@ const DEED_STROKE := Color(0, 0, 0, 0.72)
 const LOD_CONTINENT_MAX := 3.5
 const LOD_ISLAND_MAX := 14.0
 const LOD_REGION_MAX := 32.0
-## Above: PLOT (labels, mine ring). At SITE and closer: per-building pads + abbrev on the parcel.
+## Above: PLOT (labels, mine ring). At SITE: 10m-grid roads + building silhouettes on the deed.
 const LOD_PLOT_MAX := 56.0
 ## When more than this many cells are visible, use pre-aggregated paths (see ``MapLodCache``).
 const OVERVIEW_DRAW_CELL_THRESHOLD := 1800
@@ -66,6 +69,8 @@ var _cam_zoom: float = 1.0
 var _plot_building_counts: Dictionary = {}
 ## plot_id → Array of building rows (same source) for SITE-level layout.
 var _plot_buildings_by_plot: Dictionary = {}
+## plot_id → ``{ worst_eff, count, attention }`` for maintenance LOD markers.
+var _plot_maintenance_summary: Dictionary = {}
 ## Cached visible-plot range (grid col/row bounds) — recalculated per draw.
 var _vis_min_x: int = 0
 var _vis_max_x: int = 0
@@ -145,7 +150,7 @@ func focus_plot(plot_id: String) -> void:
 	_selected_gy = anchor_gy
 	var z_fit := _min_zoom_viewport_cover_map()
 	_fit_ref_zoom = z_fit
-	var z_max := minf(z_fit * ZOOM_RELATIVE_MAX, CAM_ZOOM_ABS_MAX)
+	var z_max := _max_cam_zoom(z_fit)
 	_cam_zoom = z_max
 	_sync_camera_zoom()
 	camera.position = centroid
@@ -364,10 +369,21 @@ func _rebuild_building_cache() -> void:
 func _rebuild_building_cache_only() -> void:
 	_plot_building_counts.clear()
 	_plot_buildings_by_plot.clear()
+	_plot_maintenance_summary.clear()
 	for row in WorldState.plot_buildings:
 		if not (row is Dictionary):
 			continue
-		var d: Dictionary = row as Dictionary
+		var d: Dictionary = (row as Dictionary).duplicate(true)
+		var m: Variant = d.get("maintenance", {})
+		if m is Dictionary:
+			d["_efficiency_pct"] = WorldState.variant_to_int(
+				(m as Dictionary).get("efficiency_pct", 100), 100
+			)
+		else:
+			d["_efficiency_pct"] = 100
+		var fp := _MapSiteDraw.footprint_wh(d)
+		d["footprint_w"] = fp.x
+		d["footprint_h"] = fp.y
 		var pid := str(d.get("plot_id", ""))
 		if pid.is_empty():
 			continue
@@ -375,6 +391,16 @@ func _rebuild_building_cache_only() -> void:
 		if not _plot_buildings_by_plot.has(pid):
 			_plot_buildings_by_plot[pid] = []
 		(_plot_buildings_by_plot[pid] as Array).append(d)
+	for pid in _plot_buildings_by_plot.keys():
+		_plot_maintenance_summary[pid] = _BuildingMapIcons.summarize_plot_buildings(
+			_plot_buildings_by_plot[pid] as Array
+		)
+
+
+func _maintenance_summary_for(pid: String) -> Dictionary:
+	if _plot_maintenance_summary.has(pid):
+		return _plot_maintenance_summary[pid] as Dictionary
+	return {"worst_eff": 100, "count": 0, "attention": 0}
 
 
 func _rebuild_cell_cache() -> void:
@@ -723,8 +749,18 @@ func _clamp_cam_zoom() -> void:
 	var z_fit := _min_zoom_viewport_cover_map()
 	_fit_ref_zoom = z_fit
 	var z_min := z_fit * ZOOM_RELATIVE_MIN
-	var z_max := minf(z_fit * ZOOM_RELATIVE_MAX, CAM_ZOOM_ABS_MAX)
+	var z_max := _max_cam_zoom(z_fit)
 	_cam_zoom = clampf(_cam_zoom, z_min, z_max)
+
+
+## Max camera zoom. On large maps ``z_fit * ZOOM_RELATIVE_MAX`` alone never
+## reaches SITE LOD (``cell_px * zoom >= LOD_PLOT_MAX``), so the road/building
+## art is unreachable. Guarantee enough zoom to enter SITE with margin.
+func _max_cam_zoom(z_fit: float) -> float:
+	var z_rel := z_fit * ZOOM_RELATIVE_MAX
+	var cp := _mesh.cell_px if _mesh != null else WORLD_CELL_PX
+	var z_site := (LOD_PLOT_MAX + cp) / maxf(cp, FIT_ZOOM_EPS)
+	return minf(maxf(z_rel, z_site), CAM_ZOOM_ABS_MAX)
 
 
 func _sync_camera_zoom() -> void:
@@ -781,6 +817,8 @@ func _draw() -> void:
 	if _uses_overview_draw():
 		_draw_overview_terrain()
 		_draw_town_dots()
+		if lod < 3:
+			_draw_building_maintenance_lod(lod)
 		_draw_vector_overlays()
 		_draw_selection_highlight(sel_gx, sel_gy)
 		return
@@ -805,14 +843,13 @@ func _draw() -> void:
 	_draw_town_dots()
 	_draw_town_chrome(lod, csp)
 
-	if lod >= 2 and lod < 4:
-		_draw_building_dots()
-	elif lod >= 4:
-		_draw_site_layout()
-
-	if lod >= 3:
+	if lod < 3:
+		_draw_building_maintenance_lod(lod)
+	elif lod == 3:
 		_draw_plot_detail_labels()
 	_draw_vector_overlays()
+	if lod >= 4:
+		_draw_site_layout()
 	_draw_selection_highlight(sel_gx, sel_gy)
 
 
@@ -964,7 +1001,7 @@ func _draw_parcel_edges(lod: int) -> void:
 			draw_outline = true
 		if draw_outline:
 			_draw_polyline_world(poly, stroke_c, stroke_w, true)
-		if lod >= 3 and (flags & 0x2) != 0:
+		if lod == 3 and (flags & 0x2) != 0:
 			var ctr := _parcel_centroid(cell_set)
 			draw_arc(ctr, _mesh.cell_px * 0.32, 0.0, TAU, 12, mine_c, _world_line_width(1.25))
 
@@ -1027,7 +1064,7 @@ func _draw_parcel_boundaries_large_map(lod: int) -> void:
 			if not _neighbor_same_parcel(gx, gy, 1, 0):
 				draw_line(r.end, r.end - Vector2(0.0, r.size.y), edge_c, edge_w)
 
-			if lod >= 3 and (flags & 0x2) != 0:
+			if lod == 3 and (flags & 0x2) != 0:
 				var ctr := r.position + r.size * 0.5
 				draw_arc(ctr, _mesh.cell_px * 0.28, 0.0, TAU, 10, mine_c, _world_line_width(1.0))
 
@@ -1084,7 +1121,7 @@ func _draw_aligned_cell_terrain_stroked(sel_gx: int, sel_gy: int, lod: int) -> v
 			if not _neighbor_same_parcel(gx, gy, 1, 0):
 				draw_line(r.end, r.end - Vector2(0.0, r.size.y), stroke_c, stroke_w)
 
-			if lod >= 3 and is_mine:
+			if lod == 3 and is_mine:
 				var ctr := r.position + r.size * 0.5
 				var ring_c := RealmColors.MAGIC
 				ring_c.a = 0.35
@@ -1361,23 +1398,28 @@ func _draw_town_chrome(lod: int, csp: float) -> void:
 			draw_string(font, label_pos, label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size_world, label_col)
 
 
-func _draw_building_dots() -> void:
-	var dot_r := _world_line_width(2.5)
+## LOD 0–2: one efficiency-colored marker per plot (size grows with zoom).
+func _draw_building_maintenance_lod(lod: int) -> void:
+	if lod >= 3 or lod < 0:
+		return
+	var line_w := Callable(self, "_world_line_width")
 	if _uses_parcel_polygon_draw():
 		for entry in _parcel_entries:
 			var pid: String = str(entry.get("pid", ""))
-			if pid.is_empty() or not _plot_building_counts.has(pid):
+			if pid.is_empty():
+				continue
+			var summary: Dictionary = _maintenance_summary_for(pid)
+			if WorldState.variant_to_int(summary.get("count", 0), 0) <= 0:
 				continue
 			var cell_set: Dictionary = entry.get("cell_set", {})
 			if not _cell_set_visible(cell_set):
 				continue
 			var ctr := _parcel_centroid(cell_set)
-			var is_mine := (WorldState.variant_to_int(entry.get("flags", 0), 0) & 0x2) != 0
-			var dot_col := RealmColors.ACCENT if is_mine else RealmColors.MUTED
-			dot_col.a = 0.85
-			draw_circle(ctr, dot_r, dot_col)
+			var worst: int = WorldState.variant_to_int(summary.get("worst_eff", 100), 100)
+			_BuildingMapIcons.draw_plot_efficiency_marker(self, ctr, worst, lod, line_w)
 		return
 	var bx := _last_mesh_bounds.x
+	var drawn: Dictionary = {}
 	for gy in range(_vis_min_y, _vis_max_y):
 		var row_off := gy * bx
 		for gx in range(_vis_min_x, _vis_max_x):
@@ -1385,13 +1427,15 @@ func _draw_building_dots() -> void:
 			if (_cell_flags[idx] & 0x1) == 0:
 				continue
 			var pid := _cell_pids[idx]
-			if not _plot_building_counts.has(pid):
+			if pid.is_empty() or drawn.has(pid):
 				continue
+			var summary: Dictionary = _maintenance_summary_for(pid)
+			if WorldState.variant_to_int(summary.get("count", 0), 0) <= 0:
+				continue
+			drawn[pid] = true
 			var ctr := _mesh.plot_centroid(gx, gy)
-			var is_mine := (_cell_flags[idx] & 0x2) != 0
-			var dot_col := RealmColors.ACCENT if is_mine else RealmColors.MUTED
-			dot_col.a = 0.85
-			draw_circle(ctr, dot_r, dot_col)
+			var worst: int = WorldState.variant_to_int(summary.get("worst_eff", 100), 100)
+			_BuildingMapIcons.draw_plot_efficiency_marker(self, ctr, worst, lod, line_w)
 
 
 func _plot_aabb_from_poly(poly: PackedVector2Array) -> Rect2:
@@ -1407,71 +1451,9 @@ func _plot_aabb_from_poly(poly: PackedVector2Array) -> Rect2:
 	return Rect2(mn, mx - mn)
 
 
-func _draw_site_layout_in_bbox(
-	pid: String,
-	entry: Dictionary,
-	bbox: Rect2,
-	font: Font,
-	pad_w: float,
-	label_fs: int,
-) -> void:
-	var inset := _mesh.cell_px * 0.12
-	bbox = bbox.grow(-inset)
-	if bbox.size.x < 4.0 or bbox.size.y < 4.0:
-		return
-	var rows: Array = _plot_buildings_by_plot[pid] as Array
-	var n := rows.size()
-	if n < 1:
-		return
-	var is_mine := (WorldState.variant_to_int(entry.get("flags", 0), 0) & 0x2) != 0
-	var cols_i := maxi(1, int(ceil(sqrt(float(n)))))
-	var nrows_i := maxi(1, int(ceil(float(n) / float(cols_i))))
-	var gap := _mesh.cell_px * 0.06
-	var cell_w := (bbox.size.x - gap * float(cols_i - 1)) / float(cols_i)
-	var cell_h := (bbox.size.y - gap * float(nrows_i - 1)) / float(nrows_i)
-	cell_w = maxf(cell_w, _mesh.cell_px * 0.08)
-	cell_h = maxf(cell_h, _mesh.cell_px * 0.08)
-	for i in range(n):
-		var row: Dictionary = rows[i] as Dictionary
-		var row_i := int(floor(float(i) / float(cols_i)))
-		var col_i := i % cols_i
-		var x0 := bbox.position.x + float(col_i) * (cell_w + gap)
-		var y0 := bbox.position.y + float(row_i) * (cell_h + gap)
-		var pad := Rect2(Vector2(x0, y0), Vector2(cell_w, cell_h))
-		var fill_c := RealmColors.PANEL
-		fill_c.a = 0.72 if is_mine else 0.5
-		var stroke_c := RealmColors.ACCENT if is_mine else RealmColors.BORDER_LIT
-		stroke_c.a = 0.95 if is_mine else 0.65
-		draw_rect(pad, fill_c, true)
-		draw_rect(pad, stroke_c, false, pad_w)
-		var bid := str(row.get("building_id", "?"))
-		var abbrev := _abbrev_building_id(bid)
-		if font != null and not abbrev.is_empty():
-			var tc := RealmColors.TEXT
-			tc.a = 0.92
-			var sz := font.get_string_size(abbrev, HORIZONTAL_ALIGNMENT_CENTER, -1, label_fs)
-			var tp := Vector2(
-				pad.position.x + (pad.size.x - sz.x) * 0.5,
-				pad.position.y + (pad.size.y - sz.y) * 0.5
-			)
-			draw_string(font, tp, abbrev, HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, tc)
-
-
-func _abbrev_building_id(building_id: String) -> String:
-	var s := building_id
-	var u := s.rfind("_")
-	if u >= 0 and u + 1 < s.length():
-		s = s.substr(u + 1)
-	if s.length() > 6:
-		s = s.substr(0, 6)
-	return s
-
-
-## SITE LOD: building footpads in a grid inside the plot, readable at very high zoom.
+## SITE LOD: 10m roads (black cells) + type-specific building art on the deed grid.
 func _draw_site_layout() -> void:
-	var font: Font = RealmFonts.font_body
-	var pad_w := _world_line_width(1.25)
-	var label_fs := clampi(int(_world_line_width(10.0)), 6, 20)
+	var line_w := Callable(self, "_world_line_width")
 	if _uses_parcel_polygon_draw():
 		for entry in _parcel_entries:
 			var pid: String = str(entry.get("pid", ""))
@@ -1480,13 +1462,15 @@ func _draw_site_layout() -> void:
 			var cell_set: Dictionary = entry.get("cell_set", {})
 			if not _cell_set_visible(cell_set):
 				continue
-			var poly: PackedVector2Array = entry.get("poly", PackedVector2Array())
-			if poly.size() < 3:
+			var p: Dictionary = WorldState.plots.get(pid, {})
+			if p.is_empty():
 				continue
-			var bbox := _plot_aabb_from_poly(poly)
-			_draw_site_layout_in_bbox(pid, entry, bbox, font, pad_w, label_fs)
+			_MapSiteDraw.draw_plot_site(
+				self, _mesh, p, _plot_buildings_by_plot[pid] as Array, line_w
+			)
 		return
 	var bx := _last_mesh_bounds.x
+	var drawn: Dictionary = {}
 	for gy in range(_vis_min_y, _vis_max_y):
 		var row_off := gy * bx
 		for gx in range(_vis_min_x, _vis_max_x):
@@ -1494,16 +1478,15 @@ func _draw_site_layout() -> void:
 			if (_cell_flags[idx] & 0x1) == 0:
 				continue
 			var pid := _cell_pids[idx]
-			if not _plot_buildings_by_plot.has(pid):
+			if pid.is_empty() or drawn.has(pid) or not _plot_buildings_by_plot.has(pid):
 				continue
+			drawn[pid] = true
 			var p: Dictionary = WorldState.plots.get(pid, {})
 			if p.is_empty():
 				continue
-			var poly := _mesh.plot_polygon(gx, gy)
-			var pts := PackedVector2Array([poly[0], poly[1], poly[2], poly[3]])
-			var bbox := _plot_aabb_from_poly(pts)
-			var entry := {"flags": _cell_flags[idx]}
-			_draw_site_layout_in_bbox(pid, entry, bbox, font, pad_w, label_fs)
+			_MapSiteDraw.draw_plot_site(
+				self, _mesh, p, _plot_buildings_by_plot[pid] as Array, line_w
+			)
 
 
 func _draw_plot_detail_labels() -> void:
@@ -1540,13 +1523,21 @@ func _draw_plot_detail_labels() -> void:
 			if not _cell_set_visible(cell_set):
 				continue
 			var ctr := _parcel_centroid(cell_set)
-			var bcount: int = WorldState.variant_to_int(_plot_building_counts.get(pid, 0), 0)
+			var summary: Dictionary = _maintenance_summary_for(pid)
+			var bcount: int = WorldState.variant_to_int(summary.get("count", 0), 0)
 			if bcount > 0:
+				var worst: int = WorldState.variant_to_int(summary.get("worst_eff", 100), 100)
 				var badge := "⚙%d" % bcount
-				var badge_col := RealmColors.ACCENT
-				badge_col.a = 0.9
+				var badge_col := _BuildingMapIcons.efficiency_color(worst)
+				badge_col.a = 0.92
 				var bpos := ctr + Vector2(_world_line_width(-6.0), _world_line_width(-4.0))
 				draw_string(font, bpos, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, badge_col)
+				if worst < 95:
+					var eff_lbl := "min %d%%" % worst
+					var eff_col := _BuildingMapIcons.efficiency_color(worst)
+					eff_col.a = 0.9
+					var epos := ctr + Vector2(_world_line_width(4.0), _world_line_width(-3.0))
+					draw_string(font, epos, eff_lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size - 2, eff_col)
 			if (flags & 0x4) == 0:
 				continue
 			var p: Dictionary = WorldState.plots.get(pid, {})
@@ -1569,6 +1560,7 @@ func _draw_plot_detail_labels() -> void:
 		return
 
 	var bx := _last_mesh_bounds.x
+	var drawn: Dictionary = {}
 	for gy in range(_vis_min_y, _vis_max_y):
 		var row_off := gy * bx
 		for gx in range(_vis_min_x, _vis_max_x):
@@ -1576,16 +1568,27 @@ func _draw_plot_detail_labels() -> void:
 			if (_cell_flags[idx] & 0x3) != 0x3:
 				continue
 			var pid := _cell_pids[idx]
+			if pid.is_empty() or drawn.has(pid):
+				continue
+			drawn[pid] = true
 
 			var ctr := _mesh.plot_centroid(gx, gy)
 
-			var bcount: int = WorldState.variant_to_int(_plot_building_counts.get(pid, 0), 0)
+			var summary: Dictionary = _maintenance_summary_for(pid)
+			var bcount: int = WorldState.variant_to_int(summary.get("count", 0), 0)
 			if bcount > 0:
+				var worst: int = WorldState.variant_to_int(summary.get("worst_eff", 100), 100)
 				var badge := "⚙%d" % bcount
-				var badge_col := RealmColors.ACCENT
-				badge_col.a = 0.9
+				var badge_col := _BuildingMapIcons.efficiency_color(worst)
+				badge_col.a = 0.92
 				var bpos := ctr + Vector2(_world_line_width(-6.0), _world_line_width(-4.0))
 				draw_string(font, bpos, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, badge_col)
+				if worst < 95:
+					var eff_lbl := "min %d%%" % worst
+					var eff_col := _BuildingMapIcons.efficiency_color(worst)
+					eff_col.a = 0.9
+					var epos := ctr + Vector2(_world_line_width(4.0), _world_line_width(-3.0))
+					draw_string(font, epos, eff_lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size - 2, eff_col)
 
 			if (_cell_flags[idx] & 0x4) == 0:
 				continue
