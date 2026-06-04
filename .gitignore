@@ -103,6 +103,9 @@ secrets/
 # --- Godot (realm_client) ---
 *.import
 
+# --- graphify (regenerable AST cache; commit graph.json + report at root) ---
+graphify-out/cache/
+
 # --- OS junk ---
 .DS_Store
 Thumbs.db
