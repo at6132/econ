@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from realm.agents.genesis import tick_genesis_agents
 from realm.actions.assay_actions import tick_assay_jobs
+from realm.research.patents import (
+    tick_era_advancement,
+    tick_patent_licensing,
+    tick_research_competition,
+)
 from realm.research.research_lab import tick_research_progress
 from realm.actions.deep_survey_actions import tick_deep_survey_jobs
 from realm.genesis.digest import tick_genesis_world_feed
@@ -103,6 +108,9 @@ def advance_tick(world: World) -> None:
         tick_holding_costs(world)
         tick_trade_balance(world)
         tick_research_progress(world)
+        tick_era_advancement(world)
+        tick_patent_licensing(world)
+        tick_research_competition(world)
         for route_data in (world.scenario_state.get("route_daily_volume") or {}).values():
             if isinstance(route_data, dict):
                 route_data["units_shipped_today"] = 0

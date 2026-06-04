@@ -18,7 +18,14 @@ from __future__ import annotations
 
 from realm.agents.genesis_settlers import tick_settler_business
 from realm.agents.settler_identity import tick_settler_world_models
+from realm.corporations.acquisitions import tick_acquisition_offers
+from realm.corporations.formation import tick_partnership_proposals
 from realm.infrastructure.npc_self_roads import tick_npc_self_roads
+from realm.intelligence.market_intel import (
+    tick_knowledge_decay,
+    tick_market_rumors,
+    tick_scout_actions,
+)
 from realm.genesis.exchange_restock import tick_genesis_exchange_restock
 from realm.genesis.margaux import tick_genesis_margaux_scripts
 from realm.genesis.settler_cycle import tick_genesis_settler_lifecycle
@@ -37,7 +44,6 @@ from realm.genesis.settler_upgrades import (
     tick_settler_perishable_sales,
 )
 from realm.agents.settler_archetypes import tick_researcher_experiments
-from realm.research.patents import tick_patents_and_eras
 from realm.contracts.tenders import (
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
@@ -51,12 +57,16 @@ def tick_genesis_agents(world: World) -> None:
     tick_genesis_exchange_restock(world)
     tick_genesis_settler_lifecycle(world)
     tick_settler_world_models(world)
+    tick_partnership_proposals(world)
+    tick_acquisition_offers(world)
+    tick_knowledge_decay(world)
+    tick_scout_actions(world)
+    tick_market_rumors(world)
     tick_settler_business(world)
     tick_npc_self_roads(world)
     tick_settler_perishable_sales(world)
     tick_settler_margin_review(world)
     tick_researcher_experiments(world)
-    tick_patents_and_eras(world)
     tick_settler_tender_bidding(world)
     tick_tender_lifecycle(world)
     tick_consolidator(world)
