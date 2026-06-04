@@ -20,6 +20,17 @@ var _building: Dictionary = {}
 var _terrain: String = "plains"
 var _run_continuous: bool = false
 var _throughput_label: Label
+var _start_in_flight: bool = false
+var _energy_info: Dictionary = {}
+var _grid_info: Dictionary = {}
+var _last_start_error: String = ""
+
+# Mirror engine ``ROAD_REQUIREMENT_GRACE_TICKS`` / ``ROAD_EXEMPT_RECIPES``.
+const ROAD_GRACE_TICKS: int = 43_200
+const ROAD_EXEMPT_RECIPES: Array = [
+	"hand_mine_coal", "hand_mine_ore", "hand_dig_clay", "hand_mine_sulfur", "hand_mine_tin",
+	"fishing", "gather_herbs", "grow_grain", "coal_generator", "tidal_power",
+]
 
 
 func _ready() -> void:
@@ -49,6 +60,7 @@ func _ready() -> void:
 	_throughput_label.visible = false
 	add_child(_throughput_label)
 	recipe_selector.item_selected.connect(func(_i: int) -> void:
+		_last_start_error = ""
 		_refresh_status()
 		_refresh_recipe_hints()
 		_refresh_throughput()
@@ -102,6 +114,9 @@ func setup(plot_id: String, building: Dictionary, terrain: String) -> void:
 	_plot_id = plot_id
 	_building = building.duplicate(true)
 	_terrain = terrain
+	_last_start_error = ""
+	_energy_info = {}
+	_grid_info = {}
 	var bname := WorldState.building_display_name(_building)
 	title_label.text = bname
 	auto_list_toggle.set_pressed_no_signal(bool(_building.get("auto_list_output", false)))
@@ -122,6 +137,7 @@ func _on_recipes_catalog_ready() -> void:
 
 func _apply_setup_refresh() -> void:
 	_populate_recipes()
+	_fetch_plot_logistics()
 	_on_world_refreshed()
 	_refresh_recipe_hints()
 	_refresh_throughput()
@@ -133,6 +149,7 @@ func _building_id() -> String:
 
 
 func _populate_recipes() -> void:
+	var previous_rid := _selected_recipe_id()
 	recipe_selector.clear()
 	var bid := _building_id()
 	if bid.is_empty():
@@ -141,29 +158,75 @@ func _populate_recipes() -> void:
 		recipe_selector.disabled = true
 		return
 	var idx := 0
+	var skipped := 0
 	for r in _recipes_for_this_building():
 		if not (r is Dictionary):
 			continue
 		var row: Dictionary = r
 		var rid := str(row.get("id", ""))
-		if rid.is_empty():
+		if rid.is_empty() or not _recipe_listable_on_plot(rid):
+			skipped += 1
 			continue
-		var label := str(row.get("display_name", rid))
-		var gate := _recipe_plot_gate_reason(rid)
-		if not gate.is_empty():
-			label += " — %s" % gate
-		recipe_selector.add_item(label)
+		recipe_selector.add_item(str(row.get("display_name", rid)))
 		recipe_selector.set_item_metadata(idx, rid)
 		idx += 1
 	if idx == 0:
 		if WorldState.recipes.is_empty():
 			recipe_selector.add_item("Recipe catalog not loaded — reopen in a moment")
+		elif skipped > 0:
+			recipe_selector.add_item(
+				"No recipes for this plot — survey, terrain, or subsurface grades block the rest"
+			)
 		else:
 			recipe_selector.add_item("No recipes for this building type")
 		recipe_selector.set_item_metadata(0, "")
 		recipe_selector.disabled = true
 	else:
 		recipe_selector.disabled = false
+		if not previous_rid.is_empty() and _select_recipe_by_id(previous_rid):
+			pass
+		else:
+			_ensure_runnable_recipe_selected()
+
+
+func _index_for_recipe_id(recipe_id: String) -> int:
+	if recipe_id.is_empty():
+		return -1
+	for i in recipe_selector.item_count:
+		if str(recipe_selector.get_item_metadata(i)) == recipe_id:
+			return i
+	return -1
+
+
+func _select_recipe_by_id(recipe_id: String) -> bool:
+	var idx := _index_for_recipe_id(recipe_id)
+	if idx < 0:
+		return false
+	recipe_selector.select(idx)
+	return true
+
+
+func _recipe_is_ready(recipe_id: String) -> bool:
+	return not recipe_id.is_empty() and _production_blocker(recipe_id).is_empty()
+
+
+func _first_ready_recipe_index() -> int:
+	for i in recipe_selector.item_count:
+		var rid := str(recipe_selector.get_item_metadata(i))
+		if _recipe_is_ready(rid):
+			return i
+	return -1
+
+
+func _ensure_runnable_recipe_selected() -> void:
+	if recipe_selector.disabled or recipe_selector.item_count == 0:
+		return
+	var rid := _selected_recipe_id()
+	if _recipe_is_ready(rid):
+		return
+	var fallback := _first_ready_recipe_index()
+	if fallback >= 0:
+		recipe_selector.select(fallback)
 
 
 func _recipes_for_this_building() -> Array:
@@ -181,6 +244,19 @@ func _plot_recipe_ids() -> Array:
 	var pd: Dictionary = WorldState.plots.get(_plot_id, {})
 	var pr: Variant = pd.get("recipe_ids", [])
 	return pr if pr is Array else []
+
+
+func count_plot_listable_recipes() -> int:
+	var n := 0
+	for r in _recipes_for_this_building():
+		if r is Dictionary and _recipe_listable_on_plot(str((r as Dictionary).get("id", ""))):
+			n += 1
+	return n
+
+
+func _recipe_listable_on_plot(recipe_id: String) -> bool:
+	## Hard plot/building eligibility — recipes that cannot run here are omitted from the picker.
+	return _recipe_plot_gate_reason(recipe_id).is_empty()
 
 
 func _recipe_plot_gate_reason(recipe_id: String) -> String:
@@ -293,7 +369,33 @@ func _on_world_refreshed() -> void:
 			auto_list_toggle.set_pressed_no_signal(bool(_building.get("auto_list_output", false)))
 			break
 	_populate_recipes()
+	_fetch_plot_logistics()
 	_refresh_status()
+
+
+func _fetch_plot_logistics() -> void:
+	if _plot_id.is_empty():
+		_energy_info = {}
+		_grid_info = {}
+		return
+	API.get_plot_energy(_plot_id, _on_plot_energy_loaded)
+	API.get_plot_grid(_plot_id, _on_plot_grid_loaded)
+
+
+func _on_plot_energy_loaded(data: Dictionary) -> void:
+	if not is_instance_valid(self):
+		return
+	_energy_info = data.duplicate(true) if not data.is_empty() else {}
+	if is_inside_tree():
+		_refresh_status()
+
+
+func _on_plot_grid_loaded(data: Dictionary) -> void:
+	if not is_instance_valid(self):
+		return
+	_grid_info = data.duplicate(true) if not data.is_empty() else {}
+	if is_inside_tree():
+		_refresh_status()
 
 
 func _on_ws_tick(event: Dictionary) -> void:
@@ -302,10 +404,11 @@ func _on_ws_tick(event: Dictionary) -> void:
 
 
 func _refresh_status() -> void:
+	if not _last_start_error.is_empty():
+		_set_stalled(_last_start_error)
+		return
+	_ensure_runnable_recipe_selected()
 	var rid := _selected_recipe_id()
-	if rid.is_empty() and recipe_selector.item_count > 0 and not recipe_selector.disabled:
-		recipe_selector.select(0)
-		rid = _selected_recipe_id()
 	var run: Dictionary = WorldState.active_production_run_for_building(_plot_id, _building)
 	if run.is_empty():
 		var blocker := _production_blocker(rid)
@@ -348,7 +451,102 @@ func _production_blocker(recipe_id: String) -> String:
 		return gate.capitalize()
 	if recipe_id.is_empty():
 		return "Select a recipe"
+	var energy := _energy_blocker(recipe_id)
+	if not energy.is_empty():
+		return energy
+	var road := _road_blocker(recipe_id)
+	if not road.is_empty():
+		return road
 	return _missing_inputs_reason(recipe_id)
+
+
+func _energy_blocker(recipe_id: String) -> String:
+	var row := _recipe_row(recipe_id)
+	var inputs: Variant = row.get("inputs", {})
+	if not (inputs is Dictionary) or int((inputs as Dictionary).get("electricity", 0)) <= 0:
+		return ""
+	# Same source as Plot detail Energy (``GET /plots/{id}/energy``), not map ``powered``
+	# which historically meant road-linked grid only and skipped on-plot microgrids.
+	if not _energy_info.is_empty():
+		if bool(_energy_info.get("powered", false)):
+			if bool(_energy_info.get("brownout", false)):
+				return "Grid brownout — demand exceeds capacity; add generation or wait"
+			return ""
+		var reason := str(_energy_info.get("reason", ""))
+		if not reason.is_empty():
+			return reason
+		return "No grid capacity for this recipe — build or maintain a generator"
+	if bool(_plot_ui().get("powered", false)):
+		return ""
+	return ""
+
+
+func _road_blocker(recipe_id: String) -> String:
+	if WorldState.current_tick < ROAD_GRACE_TICKS:
+		return ""
+	if recipe_id in ROAD_EXEMPT_RECIPES:
+		return ""
+	if not _grid_info.is_empty():
+		if bool(_grid_info.get("road_accessible", false)):
+			return ""
+		if bool(_grid_info.get("site_roads_connect_workshops", false)):
+			return ""
+		if bool(_grid_info.get("site_roads_link_world", false)):
+			return ""
+		return (
+			"No road access — route site roads beside each workshop (Build → Roads) "
+			+ "or link this plot to the world road network"
+		)
+	for seg in WorldState.road_segments:
+		if seg is Dictionary:
+			var s: Dictionary = seg
+			if str(s.get("from_plot", "")) == _plot_id or str(s.get("to_plot", "")) == _plot_id:
+				return ""
+	return (
+		"No road access — connect workshops to site roads (Build → Roads) "
+		+ "or link this plot to the world road network"
+	)
+
+
+func _response_error_message(data: Dictionary) -> String:
+	if data.is_empty():
+		return "No response from server"
+	if bool(data.get("ok", false)):
+		return ""
+	if data.has("reason"):
+		return str(data.get("reason", ""))
+	if data.has("detail"):
+		return str(data.get("detail", ""))
+	return "Failed to start production"
+
+
+func _upsert_active_run_from_response(data: Dictionary) -> void:
+	var rid := str(data.get("recipe_id", ""))
+	if rid.is_empty():
+		return
+	var ticks: int = int(data.get("ticks_remaining", 0))
+	var run_id := str(data.get("run_id", ""))
+	if ticks <= 0 and run_id.is_empty():
+		return
+	var run := {
+		"run_id": run_id,
+		"party": WorldState.party_id,
+		"plot_id": str(data.get("plot_id", _plot_id)),
+		"recipe_id": rid,
+		"ticks_remaining": ticks,
+		"runs_remaining": int(data.get("runs_remaining", 0)),
+	}
+	var kept: Array = []
+	for existing in WorldState.active_production:
+		if not (existing is Dictionary):
+			continue
+		var ex: Dictionary = existing
+		if str(ex.get("plot_id", "")) == _plot_id and str(ex.get("party", "")) == WorldState.party_id:
+			continue
+		kept.append(ex)
+	kept.append(run)
+	WorldState.active_production = kept
+	WorldState.player_updated.emit()
 
 
 func _missing_inputs_reason(recipe_id: String) -> String:
@@ -427,7 +625,7 @@ func _set_blocked(reason: String) -> void:
 	status_label.modulate = Color(1.0, 0.55, 0.25)
 	progress_bar.value = 0.0
 	start_btn.show()
-	start_btn.disabled = false
+	start_btn.disabled = true
 	stop_btn.hide()
 	var rid := _selected_recipe_id()
 	var needs_inputs := not _missing_inputs_reason(rid).is_empty()
@@ -515,22 +713,57 @@ func _toggle_run_mode() -> void:
 
 
 func _on_start() -> void:
+	if _start_in_flight:
+		return
 	var rid := _selected_recipe_id()
-	if rid.is_empty():
+	var blocker := _production_blocker(rid)
+	if not blocker.is_empty():
+		_set_blocked(blocker)
+		MainFeedback.toast(blocker, true)
 		return
 	var run_count := -1 if _run_continuous else 1
+	_start_in_flight = true
 	start_btn.disabled = true
-	API.start_production(
-		_plot_id,
-		rid,
-		run_count,
-		func(data: Dictionary) -> void:
-			start_btn.disabled = false
-			if bool(data.get("ok", false)):
-				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
-				_refresh_status()
-			else:
-				_set_stalled(str(data.get("reason", "Failed to start")))
+	status_label.text = "Starting…"
+	API.start_production(_plot_id, rid, run_count, _on_start_completed)
+
+
+func _on_start_completed(data: Dictionary) -> void:
+	_start_in_flight = false
+	start_btn.disabled = false
+	var err := _response_error_message(data)
+	if not err.is_empty():
+		_last_start_error = err
+		_set_stalled(err)
+		MainFeedback.toast(err, true)
+		return
+	_last_start_error = ""
+	var started := bool(data.get("started", false))
+	var snap := data.duplicate(true)
+	if started:
+		_upsert_active_run_from_response(snap)
+	var rid := str(data.get("recipe_id", _selected_recipe_id()))
+	var label := str(_recipe_row(rid).get("display_name", rid))
+	if started:
+		MainFeedback.toast("Production started: %s" % label, false)
+		_refresh_status()
+	else:
+		var msg := str(data.get("message", "Production already active on this plot"))
+		MainFeedback.toast(msg, false)
+		_last_start_error = msg
+		_set_stalled(msg)
+	API.get_world_player(
+		func(p: Dictionary) -> void:
+			if not p.is_empty():
+				WorldState.apply_player(p)
+			elif started:
+				WorldState.player_updated.emit()
+			if started and is_instance_valid(self):
+				if WorldState.active_production_run_for_building(_plot_id, _building).is_empty():
+					_upsert_active_run_from_response(snap)
+			if is_instance_valid(self):
+				_refresh_status(),
+		WorldState.party_id,
 	)
 
 

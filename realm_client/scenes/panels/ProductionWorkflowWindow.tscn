@@ -24,7 +24,7 @@ grow_vertical = 2
 
 [node name="CenterPanel" type="PanelContainer" parent="Center"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(920, 640)
+custom_minimum_size = Vector2(1000, 720)
 
 [node name="Margin" type="MarginContainer" parent="Center/CenterPanel"]
 layout_mode = 2
@@ -44,7 +44,7 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Production workflow"
+text = "Building hub"
 
 [node name="CloseBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/Header"]
 unique_name_in_owner = true
@@ -55,49 +55,93 @@ text = "✕"
 unique_name_in_owner = true
 layout_mode = 2
 autowrap_mode = 3
-text = "Route inputs and outputs; warehouse replenish rules save locally until server workflow API."
+text = "Terrain · tile · recipes"
+
+[node name="ContextStripHost" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
 
 [node name="TabBar" type="HBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="TabRunBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+[node name="TabOverviewBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
 button_pressed = true
+text = "Overview"
+
+[node name="TabRunBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
 text = "Run"
 
 [node name="TabRoutingBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
-text = "I/O routing"
+text = "Logistics"
 
 [node name="TabWarehouseBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
-text = "Warehouses"
+text = "Supply"
+
+[node name="TabAutomationBtn" type="Button" parent="Center/CenterPanel/Margin/VBox/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Automation"
 
 [node name="TabPages" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="RunPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="RoutingPage" type="ScrollContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+[node name="OverviewPage" type="ScrollContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
+[node name="OverviewInner" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages/OverviewPage"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="RunPage" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RoutingPage" type="ScrollContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
 [node name="RoutingInner" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages/RoutingPage"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="AutomationPage" type="ScrollContainer" parent="Center/CenterPanel/Margin/VBox/TabPages"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="AutomationInner" type="VBoxContainer" parent="Center/CenterPanel/Margin/VBox/TabPages/AutomationPage"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
