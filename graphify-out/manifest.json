@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis.py": {
-    "mtime": 1780610867.4122083,
-    "ast_hash": "e375781a1b1f63d62e21c378403dee56",
+    "mtime": 1780614602.6521018,
+    "ast_hash": "d1b591a9c265ecf318a8b30930ee21d9",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis_settlers.py": {
@@ -905,8 +905,8 @@
     "semantic_hash": "3140774c4b1075d546e54c9993d2ffc0"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\world\\tick.py": {
-    "mtime": 1780607128.3810165,
-    "ast_hash": "030d8231872a418b9b7985ad8dad3e77",
+    "mtime": 1780614603.2877855,
+    "ast_hash": "cea71d7f9c2fb918afb28d3300dbaeed",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\world\\world.py": {
@@ -1030,9 +1030,9 @@
     "semantic_hash": "4dc3db75010130f753b727cc7043dc36"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\api\\test_api_routes.py": {
-    "mtime": 1780586564.5573807,
-    "ast_hash": "f450d37c9de8cb1e630015449e592e9b",
-    "semantic_hash": "f450d37c9de8cb1e630015449e592e9b"
+    "mtime": 1780614605.4660919,
+    "ast_hash": "cddbee578a6eb28b466df3ab05116ce1",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\api\\test_dev_reset_scenarios.py": {
     "mtime": 1780586564.5543563,
@@ -2385,8 +2385,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\acquisitions.py": {
-    "mtime": 1780609879.4596865,
-    "ast_hash": "614f2598b91ecedc0c3ee1ef626110e2",
+    "mtime": 1780612904.404283,
+    "ast_hash": "94deb841ac31c103be67094724d155ab",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\company.py": {
@@ -2395,8 +2395,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\formation.py": {
-    "mtime": 1780609882.535133,
-    "ast_hash": "7f7195670d01ba848b87c218e05921d7",
+    "mtime": 1780612904.1127093,
+    "ast_hash": "31c4ac32cbc0f4d7b9707b7ac5d032aa",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\__init__.py": {
@@ -2420,8 +2420,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\corporations\\test_corporations.py": {
-    "mtime": 1780609937.5858223,
-    "ast_hash": "cd3b75686a924599b7094d25201889ce",
+    "mtime": 1780612906.4723356,
+    "ast_hash": "cc7a5e43db3fdaf1a787d894ca0fab83",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\research\\test_patents.py": {
