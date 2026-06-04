@@ -702,6 +702,9 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
             return (pick_nc[0], pick_nc[1])
 
     if not opts:
+        # Universal fallback — mine_stone works on any non-ocean terrain
+        if recipe_allowed_on_terrain(plot.terrain, "mine_stone"):
+            return ("mine_stone", "stone_works")
         return None
     opts.sort(key=lambda t: -t[2])
     top = opts[: min(6, len(opts))]
@@ -823,6 +826,9 @@ def _settler_try_hand_extraction(
         candidates.append("hand_chop")
     if world.inventory.qty(party, MaterialId("spade")) >= 1:
         candidates.append("hand_dig_clay")
+    # Universal fallback: hand_mine_ore works on mountain terrain with a pick
+    if world.inventory.qty(party, MaterialId("mining_pick")) >= 1:
+        candidates.append("hand_mine_ore")
     seen: set[str] = set()
     ordered: list[str] = []
     for c in candidates:
@@ -1042,6 +1048,8 @@ _STOCKPILE_MATS: tuple[str, ...] = (
     "copper_ore",
     "glass",
     "mortar",
+    "coal",
+    "fish",
 )
 
 
@@ -1179,6 +1187,10 @@ def _settler_pipeline_step(
         return False
     _recipe_id, building_id = line
     _ensure_settler_boot_tools(world, party, _recipe_id)
+
+    # Always flush accumulated stash to market, regardless of workshop status.
+    _liquidate_settler_stockpiles(world, party, owned_plot_ids)
+
     if not _ensure_workshop(world, party, owned, building_id):
         _settler_try_hand_extraction(world, party, owned, plot, prefer_recipe=_recipe_id)
         return False
@@ -1191,7 +1203,6 @@ def _settler_pipeline_step(
 
     _settler_probabilistic_discovery(world, party)
     _settler_maintain_buildings(world, party)
-    _liquidate_settler_stockpiles(world, party, owned_plot_ids)
 
     from realm.infrastructure.npc_self_roads import try_party_self_roads
 

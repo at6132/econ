@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from realm.agents.genesis_settlers import tick_settler_business
 from realm.infrastructure.npc_self_roads import tick_npc_self_roads
+from realm.genesis.exchange_restock import tick_genesis_exchange_restock
 from realm.genesis.margaux import tick_genesis_margaux_scripts
 from realm.genesis.settler_cycle import tick_genesis_settler_lifecycle
 from realm.genesis.broker import tick_survey_broker
@@ -44,6 +45,7 @@ from realm.world import World
 def tick_genesis_agents(world: World) -> None:
     tick_npc_shippers(world)
     tick_npc_energy(world)
+    tick_genesis_exchange_restock(world)
     tick_genesis_settler_lifecycle(world)
     tick_settler_business(world)
     tick_npc_self_roads(world)

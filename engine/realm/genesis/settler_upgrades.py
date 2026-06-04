@@ -664,6 +664,9 @@ def _maybe_build_power_shed(world: World, party: PartyId) -> bool:
                 plot_id=str(pid),
                 instance_id=str(result.get("instance_id", "")),
             )
+            from realm.infrastructure.grid_operators import seed_grid_operator
+
+            seed_grid_operator(world, party, pid)
             return True
     return False
 

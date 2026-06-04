@@ -81,6 +81,13 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_financiers = 1 if FINANCIER_PARTY_ID in w.parties else 0
     n_road_builders = 1 if FRONTIER_ROADS_PARTY_ID in w.parties else 0
     n_insurer = 1 if PartyId("frontier_insurance_co") in w.parties else 0
+    from realm.genesis.home_builders import HOME_BUILDER_STARTING_CASH_CENTS
+    from realm.population.laborers import LABORER_STARTING_CASH_CENTS
+    from realm.population.stores import NPC_STOREKEEPER_STARTING_CASH_CENTS
+
+    n_laborers = len(w.laborers)
+    n_home_builders = sum(1 for p in w.parties if str(p).startswith("frontier_homes_co_"))
+    n_storekeeper = 1 if PartyId("genesis_storekeeper") in w.parties else 0
     reserved_out = (
         PLAYER_STARTING_CASH_CENTS  # player
         + 4 * GENESIS_SETTLER_STARTING_CASH_CENTS  # settlers
@@ -100,6 +107,9 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_road_builders * FRONTIER_ROADS_STARTING_CASH_CENTS  # Sprint 6 Frontier Roads Co.
         + n_genesis_construction * GENESIS_CONSTRUCTION_STARTING_CASH_CENTS  # Phase 10D NPC builder
         + n_insurer * 10_000_000  # frontier_insurance_co NPC seed ($100k)
+        + n_laborers * LABORER_STARTING_CASH_CENTS
+        + n_home_builders * HOME_BUILDER_STARTING_CASH_CENTS
+        + n_storekeeper * NPC_STOREKEEPER_STARTING_CASH_CENTS
         - n_listed * MARKET_SELLER_REGISTRATION_CENTS  # clearinghouse seller registration per material
     )
     assert w.ledger.balance(system_reserve_account()) == 100_000_000_000 - reserved_out

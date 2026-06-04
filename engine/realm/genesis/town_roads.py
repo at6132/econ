@@ -398,6 +398,9 @@ def seed_genesis_power_sheds(world: World) -> int:
             "efficiency_pct": 100,
         }
         placed += 1
+        from realm.infrastructure.grid_operators import seed_grid_operator
+
+        seed_grid_operator(world, owner, target_pid)
 
     return placed
 

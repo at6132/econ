@@ -209,7 +209,7 @@ def tick_genesis_settler_lifecycle(world: World) -> None:
 
 
 def genesis_settler_population_plan(
-    *, settler_count: int, settler_spawn_cap: int | None = None
+    *, settler_count: int, settler_spawn_cap: int | None = None, allow_organic_growth: bool = True
 ) -> tuple[int, int, bool]:
     """
     Returns ``(initial_funded_settlers, settler_cap, cycle_enabled)``.
@@ -226,6 +226,9 @@ def genesis_settler_population_plan(
         cap = settler_spawn_cap
     elif initial >= GENESIS_DEFAULT_START_SETTLERS:
         cap = GENESIS_DEFAULT_MAX_SETTLERS
+    elif allow_organic_growth:
+        # Small explicit count on solo-sized worlds: allow organic growth.
+        cap = max(initial * 6, 50)
     else:
         cap = initial
     cycle_enabled = cap > initial

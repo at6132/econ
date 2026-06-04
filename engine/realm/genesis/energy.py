@@ -167,6 +167,9 @@ def seed_npc_energy(world: World, *, starting_cash_cents: int | None = None) -> 
             x=int(plot.x),
             y=int(plot.y),
         )
+        from realm.infrastructure.grid_operators import seed_grid_operator
+
+        seed_grid_operator(world, energy_id, plot_id)
     return created
 
 
