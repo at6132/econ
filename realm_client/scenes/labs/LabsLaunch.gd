@@ -158,7 +158,7 @@ func _wrap_slider_block(label: String, slider: HSlider, value_lbl: Label) -> VBo
 	return row
 
 
-func _param_row_settlers() -> HBoxContainer:
+func _param_row_settlers() -> VBoxContainer:
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	var head := HBoxContainer.new()

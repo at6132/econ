@@ -72,9 +72,9 @@ func _make_message_card(d: Dictionary) -> PanelContainer:
 	var body := Label.new()
 	body.text = str(d.get("text", d.get("message", "")))
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_color_override("font_color", RealmColors.TEXT)
 	if is_margaux:
-		body.add_theme_font_override("font", null) # italic via modulate trick
-		body.modulate = Color(1, 1, 1, 0.95)
+		body.add_theme_color_override("font_color", RealmColors.ACCENT_DIM)
+	else:
+		body.add_theme_color_override("font_color", RealmColors.TEXT)
 	v.add_child(body)
 	return pc

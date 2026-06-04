@@ -252,6 +252,8 @@ func _open_workflow_for_plot(plot_id: String) -> void:
 
 func _open_workflow_for_building(plot_id: String, building: Dictionary) -> void:
 	var host := WorldState.find_game_shell()
-	if host != null and host.has_method("open_production_workflow"):
-		var pd: Dictionary = WorldState.get_plot_ui(plot_id)
+	var pd: Dictionary = WorldState.get_plot_ui(plot_id)
+	if host != null and host.has_method("open_building_hub"):
+		host.call("open_building_hub", plot_id, building, pd)
+	elif host != null and host.has_method("open_production_workflow"):
 		host.call("open_production_workflow", plot_id, building, pd)

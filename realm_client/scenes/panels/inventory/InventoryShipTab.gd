@@ -157,12 +157,6 @@ func _refresh_plot_selectors() -> void:
 		_from_sel.select(0)
 
 	_dest_sel.clear()
-	var group_titles := {
-		"warehouse": "Warehouses",
-		"store": "Stores",
-		"factory": "Factories & plants",
-		"other": "Other owned plots",
-	}
 	var last_group := ""
 	for opt in WorldState.ship_destination_options():
 		if not (opt is Dictionary):
@@ -171,7 +165,8 @@ func _refresh_plot_selectors() -> void:
 		if g != last_group:
 			last_group = g
 			var sep_idx := _dest_sel.item_count
-			_dest_sel.add_item("── %s ──" % group_titles.get(g, g))
+			var gtitle := str(opt.get("group_label", WorldState.logistics_site_group_label(g)))
+			_dest_sel.add_item("── %s ──" % gtitle)
 			_dest_sel.set_item_disabled(sep_idx, true)
 			_dest_sel.set_item_metadata(sep_idx, "")
 		var pid := str(opt.get("plot_id", ""))
