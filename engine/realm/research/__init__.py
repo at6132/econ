@@ -1,6 +1,12 @@
 """Technology eras, research labs, and party research progress."""
 
 from realm.research.bonuses import research_output_multiplier
+from realm.research.patents import (
+    grant_patent,
+    tick_era_advancement,
+    tick_patent_licensing,
+    tick_research_competition,
+)
 from realm.research.research_lab import (
     complete_research,
     party_research_summary,
@@ -15,6 +21,10 @@ __all__ = [
     "TECH_NODES",
     "TechEraId",
     "TechNodeId",
+    "grant_patent",
+    "tick_era_advancement",
+    "tick_patent_licensing",
+    "tick_research_competition",
     "complete_research",
     "party_research_summary",
     "start_research",

@@ -11,7 +11,7 @@ from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.events.event_log import log_event
 from realm.production.recipes import RECIPES
 from realm.research.capabilities import grant_capabilities
-from realm.research.patents import party_patent_ids, try_award_patent
+from realm.research.patents import era_globally_unlocked, grant_patent, party_patent_ids
 from realm.research.tech_tree import ERAS, TECH_NODES, era_node_ids, era_spec, node_spec
 from realm.world import World, ensure_party_recipe_book
 
@@ -178,8 +178,10 @@ def start_research(world: World, party: PartyId, node_id: str) -> ActionResult:
     if not _party_has_research_lab(world, party):
         return {"ok": False, "reason": "no operational research_lab"}
     era_id = str(node["era"])
+    if not era_globally_unlocked(world, era_id):
+        return {"ok": False, "reason": f"era {era_id} not unlocked globally"}
     if not _era_unlocked_for_party(world, party, era_id):
-        return {"ok": False, "reason": f"era {era_id} not unlocked"}
+        return {"ok": False, "reason": f"era {era_id} not unlocked for party"}
     completed = _completed_for_party(world, party)
     if node_id in completed:
         return {"ok": False, "reason": "research already completed"}
@@ -262,7 +264,7 @@ def complete_research(world: World, party: PartyId, node_id: str) -> ActionResul
         node_id=node_id,
         new_recipe_count=len(new_recipes),
     )
-    patented = try_award_patent(world, party, node_id)
+    patented = grant_patent(world, party, node_id)
     if new_caps:
         log_event(
             world,

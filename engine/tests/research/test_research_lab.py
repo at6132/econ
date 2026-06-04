@@ -15,6 +15,7 @@ from realm.research.research_lab import (
     research_daily_bonus,
     start_research,
 )
+from realm.research.patents import tick_era_advancement
 from realm.research.tech_tree import TECH_NODES
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_frontier
@@ -54,9 +55,11 @@ def _advance_game_days(w, days: int) -> None:
 
 
 def _finish_industrial_era(w, party: PartyId) -> None:
-    """Electrical-era nodes require all industrial tech nodes complete."""
+    """Electrical-era nodes require all industrial tech nodes complete globally."""
     for nid in ("precision_tooling", "workshop_engineering"):
         assert complete_research(w, party, nid)["ok"] is True
+    w.tick = max(int(w.tick), TICKS_PER_GAME_DAY)
+    tick_era_advancement(w)
 
 
 def test_start_requires_research_lab() -> None:

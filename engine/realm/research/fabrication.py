@@ -59,7 +59,14 @@ def validate_blueprint_registration(
 
 
 def validate_blueprint_public_license(world: World, party: PartyId, is_public: bool) -> str | None:
-    if is_public and not party_has_capability(world, party, "blueprint_public_license"):
+    if not is_public:
+        return None
+    # RESEARCHER archetype always has public licensing — it's their defining ability.
+    from realm.agents.settler_archetypes import Archetype, get_archetype
+
+    if get_archetype(party) == Archetype.RESEARCHER:
+        return None
+    if not party_has_capability(world, party, "blueprint_public_license"):
         return "public blueprint licensing not unlocked — research Molecular assembly"
     return None
 
