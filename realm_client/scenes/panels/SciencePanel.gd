@@ -10,6 +10,8 @@ func _build_tabs() -> void:
 	_add_api_tab("Elements", func(cb): API.get_science_elements(cb))
 	_add_api_tab("Reactions", func(cb): API.get_science_reactions(cb))
 	add_tab(preload("res://scenes/panels/science/AssayBookTab.gd").new(), "Assay book")
+	add_tab(preload("res://scenes/panels/science/ScienceDiscoveryTab.gd").new(), "Discovery")
+	add_tab(preload("res://scenes/panels/science/ScienceResearchTab.gd").new(), "Research")
 	add_tab(preload("res://scenes/panels/science/ScienceExperimentTab.gd").new(), "Experiment")
 
 

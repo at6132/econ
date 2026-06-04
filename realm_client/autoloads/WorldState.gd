@@ -105,6 +105,11 @@ var active_production: Array = [] # engine ``active_production`` list (plot-leve
 var recipes: Array = []
 var custom_recipes: Array = []
 var custom_materials: Array = [] # ``recipe_public_list()`` rows
+## From ``GET /world/player`` → ``discovery`` (capabilities, research, patents, custom authorship).
+var discovery_digest: Dictionary = {}
+var capability_ids: Array = []
+var max_blueprint_cells: int = 0
+var workshop_focuses: Dictionary = {}
 ## Server-backed production routing + warehouse replenish (``workflow_settings``).
 var workflow_settings: Dictionary = {}
 var building_catalog: Array = []
@@ -515,6 +520,14 @@ func apply_player(data: Dictionary) -> void:
 	player_owned_reports = por if por is Array else []
 	var pa: Variant = data.get("price_alerts", [])
 	player_price_alerts = pa if pa is Array else []
+	var disc: Variant = data.get("discovery", {})
+	discovery_digest = disc if disc is Dictionary else {}
+	capability_ids = discovery_digest.get("capability_ids", [])
+	if capability_ids is not Array:
+		capability_ids = []
+	max_blueprint_cells = int(discovery_digest.get("max_blueprint_cells", 0))
+	var wfoc: Variant = discovery_digest.get("workshop_focuses", {})
+	workshop_focuses = wfoc if wfoc is Dictionary else {}
 	_update_time_from_tick()
 	player_updated.emit()
 	# DELIBERATELY does NOT emit world_updated — that signal triggers a

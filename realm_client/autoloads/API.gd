@@ -133,6 +133,52 @@ func get_assay_book(cb: Callable, party: String = "player") -> void:
 	get_request("/assay/book?party=%s" % party.uri_encode(), cb)
 
 
+func get_research_catalog(cb: Callable, party: String = "player") -> void:
+	get_request("/research/catalog?party=%s" % party.uri_encode(), cb)
+
+
+func get_research_status(cb: Callable, party: String = "player") -> void:
+	get_request("/research/status?party=%s" % party.uri_encode(), cb)
+
+
+func start_research(node_id: String, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/research/start?party=%s&node_id=%s"
+		% [party.uri_encode(), node_id.uri_encode()],
+		{},
+		cb,
+	)
+
+
+func get_discovery_digest(cb: Callable, party: String = "player") -> void:
+	get_request("/discovery?party=%s" % party.uri_encode(), cb)
+
+
+func get_fabrication_status(cb: Callable, party: String = "player") -> void:
+	get_request("/fabrication/status?party=%s" % party.uri_encode(), cb)
+
+
+func get_buildable_recipes(cb: Callable, party: String = "player") -> void:
+	get_request("/fabrication/buildable-recipes?party=%s" % party.uri_encode(), cb)
+
+
+func set_workshop_focus(
+	plot_id: String,
+	recipe_id: String,
+	cb: Callable,
+	party: String = "player",
+) -> void:
+	post_request(
+		"/fabrication/workshop-focus",
+		{
+			"party": party,
+			"plot_id": plot_id,
+			"recipe_id": recipe_id,
+		},
+		cb,
+	)
+
+
 func deep_survey_plot(plot_id: String, cb: Callable, party: String = "player") -> void:
 	post_request(
 		"/deep_survey?party=%s&plot_id=%s" % [party.uri_encode(), plot_id.uri_encode()],
@@ -461,6 +507,14 @@ func create_custom_recipe(
 		},
 		cb,
 	)
+
+
+func get_factory_machines(cb: Callable, party: String = "player") -> void:
+	get_request("/factory/machines?party=%s" % party.uri_encode(), cb)
+
+
+func design_custom_factory(body: Dictionary, cb: Callable) -> void:
+	post_request("/factory/design", body, cb)
 
 
 func validate_plot_schematic(plot_id: String, recipe_ids: Array, cb: Callable, party: String = "player") -> void:
