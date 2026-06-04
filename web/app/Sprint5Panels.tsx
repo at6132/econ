@@ -71,6 +71,37 @@ export type Sprint5Snapshot = {
   bank_rates: BankRatesView | null;
   bank_loans: BankLoan[];
   bank_plot_id: string | null;
+  grid_operators?: GridOperatorsView | null;
+};
+
+type GridOperatorRecord = {
+  operator_party: string;
+  operator_name: string;
+  operator_plot: string;
+  region_id: string;
+  shed_instance_id: string;
+  business_name: string;
+  rate_cents_per_kwh: number;
+  min_wh_per_day: number;
+  max_wh_per_day: number;
+  registered_at_tick: number;
+  status: string;
+  suspend_reason?: string;
+};
+
+type EligibleFranchisePlot = {
+  plot_id: string;
+  region_id: string;
+  shed_instance_id: string;
+  capacity_kwh_per_day: number;
+  already_registered: boolean;
+};
+
+type GridOperatorsView = {
+  franchise_fee_cents: number;
+  player_operators: GridOperatorRecord[];
+  eligible_plots: EligibleFranchisePlot[];
+  has_business: boolean;
 };
 
 function formatUsdFromCents(cents: number | null | undefined): string {
@@ -647,6 +678,203 @@ function BankSection({
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// Grid utility licenses (Registry)
+// ────────────────────────────────────────────────────────────────────────
+
+function GridUtilityLicensesSection({
+  snap,
+  apiBase,
+  onMutate,
+}: {
+  snap: Sprint5Snapshot;
+  apiBase: ApiBase;
+  onMutate: () => void;
+}) {
+  const grid = snap.grid_operators;
+  const playerOps = grid?.player_operators ?? [];
+  const eligible = (grid?.eligible_plots ?? []).filter((p) => !p.already_registered);
+  const feeCents = grid?.franchise_fee_cents ?? 2500;
+  const hasBusiness = grid?.has_business ?? Boolean(snap.business_registry?.player);
+
+  const [plotId, setPlotId] = useState("");
+  const [rate, setRate] = useState("12");
+  const [minKwh, setMinKwh] = useState("0");
+  const [maxKwh, setMaxKwh] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedPlot = eligible.find((p) => p.plot_id === plotId) ?? eligible[0];
+
+  async function registerFranchise() {
+    if (!plotId && !selectedPlot) return;
+    const pid = plotId || selectedPlot?.plot_id;
+    if (!pid) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        party: "player",
+        plot_id: pid,
+        rate_cents_per_kwh: String(Math.round(Number(rate) || 0)),
+        min_wh_per_day: String(Math.round((Number(minKwh) || 0) * 1000)),
+      });
+      const maxVal = maxKwh.trim();
+      if (maxVal) {
+        params.set("max_wh_per_day", String(Math.round(Number(maxVal) * 1000)));
+      }
+      const res = await fetch(`${apiBase}/registry/grid-operators/register?${params}`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(typeof body.detail === "string" ? body.detail : "registration failed");
+        return;
+      }
+      setPlotId("");
+      onMutate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelFranchise(opPlot: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ party: "player", plot_id: opPlot });
+      const res = await fetch(`${apiBase}/registry/grid-operators/unregister?${params}`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(typeof body.detail === "string" ? body.detail : "cancel failed");
+        return;
+      }
+      onMutate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={sectionStyle}>
+      <h3 style={titleStyle}>Grid utility licenses</h3>
+      <p style={helpStyle}>
+        Register as a regional grid operator to sell power to other players. Requires a
+        registered business, a road-accessible plot with an active power shed, and a{" "}
+        {formatUsdFromCents(feeCents)} franchise fee. Published rates appear in the Electricity
+        panel on consumer plots in your region.
+      </p>
+
+      {!hasBusiness ? (
+        <p style={{ ...helpStyle, color: "#e0b060", marginBottom: 8 }}>
+          Register a business identity above before applying for a grid franchise.
+        </p>
+      ) : null}
+
+      {playerOps.length > 0 ? (
+        <table style={{ ...tableStyle, marginBottom: 10 }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Plot</th>
+              <th style={thStyle}>Region</th>
+              <th style={thStyle}>Rate</th>
+              <th style={thStyle}>Status</th>
+              <th style={thStyle} />
+            </tr>
+          </thead>
+          <tbody>
+            {playerOps.map((op) => (
+              <tr key={`${op.region_id}-${op.operator_plot}`}>
+                <td style={tdStyle}>{op.operator_plot}</td>
+                <td style={tdStyle}>{op.region_id}</td>
+                <td style={tdStyle}>{op.rate_cents_per_kwh}¢/kWh</td>
+                <td style={tdStyle}>
+                  {op.status}
+                  {op.suspend_reason ? ` — ${op.suspend_reason}` : ""}
+                </td>
+                <td style={tdStyle}>
+                  {op.status === "active" ? (
+                    <button
+                      type="button"
+                      style={ghostBtnStyle}
+                      disabled={busy}
+                      onClick={() => void cancelFranchise(op.operator_plot)}
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ ...helpStyle, marginBottom: 8 }}>No grid franchises registered yet.</p>
+      )}
+
+      {hasBusiness && eligible.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+          <select
+            style={inputStyle}
+            value={plotId || selectedPlot?.plot_id || ""}
+            onChange={(e) => setPlotId(e.target.value)}
+          >
+            {eligible.map((p) => (
+              <option key={p.plot_id} value={p.plot_id}>
+                {p.plot_id} · {p.region_id} · {p.capacity_kwh_per_day} kWh/day cap
+              </option>
+            ))}
+          </select>
+          <input
+            style={{ ...inputStyle, width: 72 }}
+            type="number"
+            min={1}
+            placeholder="¢/kWh"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
+          <input
+            style={{ ...inputStyle, width: 72 }}
+            type="number"
+            min={0}
+            step={0.1}
+            placeholder="min kWh/d"
+            value={minKwh}
+            onChange={(e) => setMinKwh(e.target.value)}
+          />
+          <input
+            style={{ ...inputStyle, width: 72 }}
+            type="number"
+            min={0}
+            step={0.1}
+            placeholder="max kWh/d"
+            value={maxKwh}
+            onChange={(e) => setMaxKwh(e.target.value)}
+          />
+          <button
+            type="button"
+            style={btnStyle}
+            disabled={busy || eligible.length === 0}
+            onClick={() => void registerFranchise()}
+          >
+            Register ({formatUsdFromCents(feeCents)})
+          </button>
+        </div>
+      ) : hasBusiness ? (
+        <p style={helpStyle}>
+          Build and maintain a power shed on a road-connected plot to register as a provider.
+        </p>
+      ) : null}
+
+      {error ? (
+        <div style={{ marginTop: 6, color: "#e07a7a", fontSize: 12 }}>{error}</div>
+      ) : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // Public components
 // ────────────────────────────────────────────────────────────────────────
 
@@ -662,6 +890,7 @@ export function Sprint5MarketSection({
   return (
     <>
       <IdentitySection snap={snap} apiBase={apiBase} onMutate={onMutate} />
+      <GridUtilityLicensesSection snap={snap} apiBase={apiBase} onMutate={onMutate} />
       <AccountsSection snap={snap} apiBase={apiBase} onMutate={onMutate} />
       <BankSection snap={snap} apiBase={apiBase} onMutate={onMutate} />
     </>

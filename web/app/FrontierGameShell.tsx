@@ -39,6 +39,7 @@ import { playFrontierSfx, resumeFrontierAudio } from "./frontierSfx";
 import { collectBazaarSymbolIds, normalizeBazaarSymbolId } from "./bazaarSymbols";
 import { Sprint4MarketSection, Sprint4PactsSection, type Sprint4Snapshot } from "./Sprint4Panels";
 import { Sprint5MarketSection, type Sprint5Snapshot } from "./Sprint5Panels";
+import { GridUtilityPanel } from "./GridUtilityPanel";
 import { PlotSchematicPanel } from "./PlotSchematicPanel";
 import { RecipeBookPanel } from "./RecipeBookPanel";
 import type { SchematicRecipe } from "./plotSchematic";
@@ -421,6 +422,7 @@ type WorldDto = {
   player_accounts?: import("./Sprint5Panels").Sprint5Snapshot["player_accounts"];
   bank_rates?: import("./Sprint5Panels").Sprint5Snapshot["bank_rates"];
   bank_loans?: import("./Sprint5Panels").Sprint5Snapshot["bank_loans"];
+  grid_operators?: import("./Sprint5Panels").Sprint5Snapshot["grid_operators"];
   bank_plot_id?: string | null;
 };
 
@@ -612,71 +614,6 @@ function DeepSurveyControl({
         </p>
       ) : null}
     </div>
-  );
-}
-
-type PlotEnergyDto = {
-  ok: boolean;
-  plot_id: string;
-  powered: boolean;
-  coverage_radius_tiles: number;
-  power_sources: Array<{
-    operator: string;
-    building_id: string;
-    distance_tiles: number;
-  }>;
-  nearest_power_source: {
-    operator: string;
-    building_id: string;
-    distance_tiles: number;
-  } | null;
-};
-
-function PlotPowerStatus({ plotId, worldTick }: { plotId: string; worldTick: number }): JSX.Element {
-  const [data, setData] = useState<PlotEnergyDto | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const r = await fetch(`/api/engine/plots/${encodeURIComponent(plotId)}/energy`, {
-          cache: "no-store",
-        });
-        if (!r.ok) return;
-        const j = (await r.json()) as PlotEnergyDto;
-        if (!cancelled) setData(j);
-      } catch {
-        /* ignore — power detail is optional UX */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // Recompute whenever the plot or world clock changes (coverage flips on power_shed builds).
-  }, [plotId, worldTick]);
-  if (!data) return <></>;
-  if (data.powered) {
-    const src = data.power_sources[0];
-    return (
-      <span style={{ display: "block", marginTop: 4 }}>
-        Power: <strong style={{ color: "#ffc870" }}>on-grid</strong>
-        {src ? (
-          <span style={{ opacity: 0.85 }}>
-            {" "}
-            — covered by {src.operator} ({src.distance_tiles} tile{src.distance_tiles === 1 ? "" : "s"} away)
-          </span>
-        ) : null}
-      </span>
-    );
-  }
-  const n = data.nearest_power_source;
-  return (
-    <span style={{ display: "block", marginTop: 4 }}>
-      Power: <strong style={{ color: "#9aa0a6" }}>off-grid</strong>{" "}
-      <span style={{ opacity: 0.85 }}>
-        — no power source within {data.coverage_radius_tiles} tiles
-        {n ? `; nearest: ${n.operator} (${n.distance_tiles} tiles away)` : ""}
-      </span>
-    </span>
   );
 }
 
@@ -2897,7 +2834,13 @@ export default function FrontierGameShell({ mode = "frontier" }: { mode?: GameSh
                               Survey status:{" "}
                               <strong>{selectedPlot.surveyed ? "complete — industry unlocked" : "not surveyed"}</strong>
                             </span>
-                            <PlotPowerStatus plotId={selectedPlot.id} worldTick={world?.tick ?? 0} />
+                            {selectedPlot.owner === "player" ? (
+                              <GridUtilityPanel
+                                plotId={selectedPlot.id}
+                                worldTick={world?.tick ?? 0}
+                                onWorldChange={() => void load()}
+                              />
+                            ) : null}
 
                             {!selectedPlot.surveyed && selectedPlot.owner === "player" ? (
                               <span style={{ display: "block", marginTop: 6, fontSize: 11, lineHeight: 1.45 }}>
@@ -3684,6 +3627,7 @@ export default function FrontierGameShell({ mode = "frontier" }: { mode?: GameSh
                           bank_rates: world.bank_rates ?? null,
                           bank_loans: world.bank_loans ?? [],
                           bank_plot_id: world.bank_plot_id ?? null,
+                          grid_operators: world.grid_operators ?? null,
                         } satisfies Sprint5Snapshot}
                         apiBase="/api/engine"
                         onMutate={() => void load()}
