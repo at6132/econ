@@ -70,6 +70,8 @@ const MINERAL_ROWS := [
 
 @onready var panel: Panel = %Panel
 @onready var scroll: ScrollContainer = %Scroll
+@onready var vbox_main: VBoxContainer = %VBoxMain
+@onready var info_grid: GridContainer = %InfoGrid
 @onready var title_label: Label = %TitleLabel
 @onready var close_btn: Button = %CloseBtn
 @onready var terrain_value: Label = %TerrainValue
@@ -116,6 +118,12 @@ const ROAD_BLUEPRINT_ID := "road_segment"
 var _plot_id: String = ""
 var _plot_data: Dictionary = {}
 var _production_control: Node = null
+var _refreshing_buildings: bool = false
+var _buildings_list_sig: String = ""
+var _player_refresh_earliest_msec: int = 0
+var _session_gen: int = 0
+var _accepting_updates: bool = false
+const PLAYER_REFRESH_MIN_MS := 800
 var _geology_section: VBoxContainer
 var _geology_jobs: Label
 var _buy_plot_btn: Button
@@ -142,19 +150,63 @@ func _ready() -> void:
 	build_btn.pressed.connect(_on_build_btn)
 	list_for_sale_btn.pressed.connect(_on_list_for_sale)
 	_setup_geology_and_buy()
-	get_viewport().size_changed.connect(_on_viewport_resized)
-	WorldState.player_updated.connect(_on_world_state_player_updated)
+	if not get_viewport().size_changed.is_connected(_on_viewport_resized):
+		get_viewport().size_changed.connect(_on_viewport_resized)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var vbox := %VBoxMain
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.custom_minimum_size = Vector2.ZERO
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	panel.clip_contents = true
+	scroll.clip_contents = true
+	_reset_scroll_layout()
+	_configure_info_grid()
 
 
 func _on_viewport_resized() -> void:
+	if not is_inside_tree():
+		return
 	var vp := get_viewport().get_visible_rect().size
 	panel.size = Vector2(PANEL_WIDTH, vp.y - HUD_BAR_TOP)
-	if panel.position.x < vp.x - PANEL_WIDTH + 1.0:
-		panel.position.x = vp.x - PANEL_WIDTH
+	panel.position.x = clampf(panel.position.x, 0.0, maxf(0.0, vp.x - PANEL_WIDTH))
+
+
+func _reset_scroll_layout() -> void:
+	if not is_instance_valid(scroll) or not is_instance_valid(vbox_main):
+		return
+	vbox_main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox_main.custom_minimum_size = Vector2.ZERO
+	scroll.scroll_horizontal = 0
+
+
+func _is_live(gen: int = -1) -> bool:
+	if not _accepting_updates or not is_instance_valid(self) or not is_inside_tree():
+		return false
+	return gen < 0 or gen == _session_gen
+
+
+func _teardown_signals() -> void:
+	_accepting_updates = false
+	_session_gen += 1
+	if WorldState.player_updated.is_connected(_on_world_state_player_updated):
+		WorldState.player_updated.disconnect(_on_world_state_player_updated)
+
+
+func _configure_info_grid() -> void:
+	info_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	subsurface_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	const KEY_COL_W := 88.0
+	var i := 0
+	for child in info_grid.get_children():
+		if not (child is Label):
+			i += 1
+			continue
+		var lbl := child as Label
+		if i % 2 == 0:
+			lbl.custom_minimum_size.x = KEY_COL_W
+			lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		else:
+			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		i += 1
 
 
 func _apply_theme() -> void:
@@ -173,8 +225,6 @@ func _apply_theme() -> void:
 	for n in panel.find_children("*", "Label", true, false):
 		var lbl := n as Label
 		lbl.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
-		if lbl.autowrap_mode != TextServer.AUTOWRAP_OFF:
-			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.clip_text = true
 	energy_value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -207,11 +257,13 @@ func _setup_geology_and_buy() -> void:
 	real_estate_section.add_child(_buy_plot_btn)
 	_geology_section = VBoxContainer.new()
 	_geology_section.name = "GeologySection"
+	_geology_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var gtitle := Label.new()
 	gtitle.text = "Geology & assays"
 	gtitle.add_theme_color_override("font_color", RealmColors.ACCENT)
 	_geology_section.add_child(gtitle)
 	_geology_jobs = Label.new()
+	_geology_jobs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_geology_jobs.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_geology_section.add_child(_geology_jobs)
 	var deep_btn := Button.new()
@@ -255,29 +307,52 @@ func _style_gold_button(btn: Button) -> void:
 
 
 func open(plot_id: String, plot_data: Dictionary) -> void:
+	_teardown_signals()
+	_accepting_updates = true
+	var gen := _session_gen
 	_plot_id = plot_id
 	_plot_data = plot_data.duplicate(true)
+	_buildings_list_sig = ""
+	_player_refresh_earliest_msec = 0
+	WorldState.player_updated.connect(_on_world_state_player_updated)
 	_populate(_plot_data)
+	_reset_scroll_layout()
 	_slide_in()
-	API.get_plot_energy(plot_id, _on_energy_response)
-	API.get_plot_value(plot_id, _on_plot_value_response)
+	var energy_cb := func(data: Dictionary) -> void:
+		if _is_live(gen):
+			_on_energy_response(data)
+	var value_cb := func(data: Dictionary) -> void:
+		if _is_live(gen):
+			_on_plot_value_response(data)
+	API.get_plot_energy(plot_id, energy_cb)
+	API.get_plot_value(plot_id, value_cb)
+	call_deferred("_deferred_after_open", gen)
+
+
+func _deferred_after_open(gen: int) -> void:
+	if not _is_live(gen):
+		return
 	_refresh_buildings()
+	_reset_scroll_layout()
 
 
 func close() -> void:
-	if WorldState.player_updated.is_connected(_on_world_state_player_updated):
-		WorldState.player_updated.disconnect(_on_world_state_player_updated)
+	_teardown_signals()
 	_slide_out()
 
 
+func _exit_tree() -> void:
+	_teardown_signals()
+
+
 func _on_world_state_player_updated() -> void:
-	if _plot_id.is_empty() or not is_inside_tree():
+	if not _is_live() or _plot_id.is_empty():
 		return
-	# Tick-level player payloads only need building rows refreshed — full
-	# _populate() retriggers layout and was paired with scroll width syncing
-	# that drifted content left over time.
+	var now := Time.get_ticks_msec()
+	if now < _player_refresh_earliest_msec:
+		return
+	_player_refresh_earliest_msec = now + PLAYER_REFRESH_MIN_MS
 	_refresh_buildings()
-	_refresh_plot_energy()
 
 
 func _refresh_plot_panel_from_state() -> void:
@@ -290,8 +365,11 @@ func _refresh_plot_panel_from_state() -> void:
 
 func _slide_in() -> void:
 	var vp := get_viewport().get_visible_rect().size
+	panel.position.x = vp.x
+	panel.position.y = HUD_BAR_TOP
+	var target_x := maxf(0.0, vp.x - PANEL_WIDTH)
 	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(panel, "position:x", vp.x - PANEL_WIDTH, 0.25)
+	tw.tween_property(panel, "position:x", target_x, 0.25)
 
 
 func _slide_out() -> void:
@@ -382,9 +460,15 @@ func _populate(p: Dictionary) -> void:
 
 
 func _refresh_plot_energy() -> void:
-	if _plot_id.is_empty():
+	if not _is_live() or _plot_id.is_empty():
 		return
-	API.get_plot_energy(_plot_id, _on_energy_response)
+	var gen := _session_gen
+	API.get_plot_energy(
+		_plot_id,
+		func(data: Dictionary) -> void:
+			if _is_live(gen):
+				_on_energy_response(data)
+	)
 
 
 func _format_power_generators(generators: Array) -> String:
@@ -405,7 +489,7 @@ func _format_power_generators(generators: Array) -> String:
 
 
 func _on_energy_response(data: Dictionary) -> void:
-	if not is_instance_valid(self) or not is_inside_tree():
+	if not _is_live():
 		return
 	if data.is_empty() or not bool(data.get("ok", true)):
 		energy_value.text = "—"
@@ -434,6 +518,7 @@ func _on_energy_response(data: Dictionary) -> void:
 		lines.append("Run coal_generator in a power_shed to export kWh to the grid")
 		energy_value.text = "\n".join(lines)
 		energy_value.modulate = Color(0.45, 1.0, 0.45) if not bool(data.get("brownout")) else Color(1.0, 0.85, 0.35)
+		_reset_scroll_layout()
 		return
 
 	var reason := str(data.get("reason", ""))
@@ -449,6 +534,7 @@ func _on_energy_response(data: Dictionary) -> void:
 		)
 	energy_value.text = "\n".join(lines)
 	energy_value.modulate = Color(1.0, 0.5, 0.3)
+	_reset_scroll_layout()
 
 
 func _sync_section_visibility() -> void:
@@ -494,24 +580,52 @@ func _populate_subsurface(sub: Dictionary) -> void:
 			continue
 		var lbl := Label.new()
 		lbl.text = disp
-		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.custom_minimum_size.x = 88.0
+		lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		lbl.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
 		var val := Label.new()
 		val.text = _grade_label(grade)
 		val.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		val.size_flags_stretch_ratio = 1.0
 		val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		val.modulate = _grade_color(grade)
 		subsurface_grid.add_child(lbl)
 		subsurface_grid.add_child(val)
 
 
+func _buildings_signature() -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	for b in _plot_data.get("buildings", []):
+		if not (b is Dictionary):
+			continue
+		var row: Dictionary = b as Dictionary
+		parts.append(
+			"%s:%d:%d:%d"
+			% [
+				str(row.get("instance_id", "")),
+				int(row.get("_efficiency_pct", 100)),
+				int(row.get("completes_at_tick", 0)),
+				int(row.get("_due_in_ticks", 0)),
+			]
+		)
+	parts.sort()
+	return "|".join(parts)
+
+
 func _refresh_buildings() -> void:
-	for child in buildings_list.get_children():
-		child.queue_free()
-	for child in roads_list.get_children():
-		child.queue_free()
-	_production_control = null
+	if _refreshing_buildings:
+		return
+	if not is_instance_valid(buildings_list) or not is_instance_valid(roads_list):
+		return
 	_plot_data = WorldState.get_plot_ui(_plot_id)
+	var sig := _buildings_signature()
+	if sig == _buildings_list_sig and buildings_list.get_child_count() > 0:
+		return
+	_buildings_list_sig = sig
+	_refreshing_buildings = true
+	PanelUI.clear_children(buildings_list)
+	PanelUI.clear_children(roads_list)
+	_production_control = null
 	var all_buildings: Array = _plot_data.get("buildings", [])
 	var workshops: Array = []
 	var roads: Array = []
@@ -526,6 +640,8 @@ func _refresh_buildings() -> void:
 		buildings_list.add_child(_make_building_row(b as Dictionary))
 	_refresh_roads_list(roads)
 	_refresh_plot_energy()
+	_refreshing_buildings = false
+	_reset_scroll_layout()
 
 
 func _is_road_building(b: Dictionary) -> bool:
@@ -778,22 +894,12 @@ func _make_road_row(b: Dictionary) -> PanelContainer:
 		cond_lbl.modulate = Color(0.7, 0.7, 0.75)
 		vbox.add_child(cond_lbl)
 
-	if _building_operational(b) and _road_needs_attention(b):
-		var needs: Dictionary = b.get("_maintenance_materials", {}) as Dictionary
-		if needs.is_empty():
-			var maint: Variant = b.get("maintenance", {})
-			if maint is Dictionary:
-				var mm: Variant = (maint as Dictionary).get("materials", {})
-				if mm is Dictionary:
-					needs = mm as Dictionary
-		var maintain_btn := Button.new()
-		maintain_btn.text = "Maintain"
-		_style_gold_button(maintain_btn)
-		maintain_btn.pressed.connect(func() -> void: _on_maintain(b))
-		if not needs.is_empty():
-			maintain_btn.tooltip_text = "Consumes: %s" % _format_material_list(needs)
-		vbox.add_child(maintain_btn)
-
+	var hint := Label.new()
+	hint.text = "Click to open building hub →"
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color(0.75, 0.72, 0.55))
+	vbox.add_child(hint)
+	_wire_building_card_click(pc, b)
 	return pc
 
 
@@ -882,57 +988,32 @@ func _make_building_row(b: Dictionary) -> PanelContainer:
 	if details.get_child_count() > 0:
 		vbox.add_child(details)
 
-	var book_val := int(b.get("book_value_cents", 0))
-	var missed_b: int = int(b.get("_missed_cycles", 0))
+	var hint := Label.new()
+	hint.text = "Click to open building hub →"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color(0.75, 0.72, 0.55))
+	vbox.add_child(hint)
 
-	var btns := HBoxContainer.new()
-	btns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _building_operational(b) and (missed_b > 0 or eff < 100):
-		var maintain_btn := Button.new()
-		var needs: Dictionary = b.get("_maintenance_materials", {}) as Dictionary
-		maintain_btn.text = "Maintain"
-		_style_gold_button(maintain_btn)
-		maintain_btn.pressed.connect(func() -> void: _on_maintain(b))
-		if not needs.is_empty():
-			var parts: PackedStringArray = []
-			for mat in needs.keys():
-				parts.append("%s×%d" % [str(mat), int(needs[mat])])
-			maintain_btn.tooltip_text = "Consumes: %s" % ", ".join(parts)
-		btns.add_child(maintain_btn)
-
-	if WorldState.building_supports_production(b):
-		var is_wh := WorldState.building_is_warehouse(b)
-		var prod_btn := Button.new()
-		prod_btn.text = "Warehouse" if is_wh else "Production"
-		_style_gold_button(prod_btn)
-		prod_btn.disabled = not _building_operational(b)
-		if prod_btn.disabled:
-			prod_btn.tooltip_text = "Available when construction finishes"
-		elif is_wh:
-			prod_btn.tooltip_text = "Replenish rules and stash for this warehouse"
-		else:
-			var n := WorldState.recipes_for_workshop_building(b).size()
-			prod_btn.tooltip_text = "%d recipe(s) on this blueprint" % n
-		prod_btn.pressed.connect(func() -> void: _show_production_for(b))
-		btns.add_child(prod_btn)
-	if WorldState.recipes_for_workshop_building(b).size() > 0:
-		var chain_btn := Button.new()
-		chain_btn.text = "Chain"
-		_style_gold_button(chain_btn)
-		chain_btn.tooltip_text = "Recipe chain planner (Operations)"
-		chain_btn.pressed.connect(_open_operations_chains)
-		btns.add_child(chain_btn)
-	if _building_operational(b) and str(b.get("instance_id", "")) != "":
-		var demolish_btn := Button.new()
-		demolish_btn.text = "🔨 Demolish (salvage %s)" % WorldState.format_money(book_val / 2)
-		demolish_btn.modulate = Color(1.0, 0.4, 0.4)
-		demolish_btn.pressed.connect(
-			func() -> void: _confirm_demolish(str(b.get("instance_id", "")), book_val / 2)
-		)
-		btns.add_child(demolish_btn)
-	vbox.add_child(btns)
-
+	_wire_building_card_click(pc, b)
 	return pc
+
+
+func _wire_building_card_click(pc: PanelContainer, b: Dictionary) -> void:
+	if bool(pc.get_meta(&"hub_wired", false)):
+		return
+	pc.set_meta(&"hub_wired", true)
+	pc.mouse_filter = Control.MOUSE_FILTER_STOP
+	pc.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	pc.gui_input.connect(_on_building_card_gui_input.bind(b))
+
+
+func _on_building_card_gui_input(event: InputEvent, b: Dictionary) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			_open_building_hub(b)
+			get_viewport().set_input_as_handled()
 
 
 func _confirm_demolish(instance_id: String, salvage_cents: int) -> void:
@@ -957,18 +1038,15 @@ func _confirm_demolish(instance_id: String, salvage_cents: int) -> void:
 	)
 
 
-func _show_production_for(b: Dictionary) -> void:
+func _open_building_hub(b: Dictionary) -> void:
 	var host := WorldState.find_game_shell()
+	if host != null and host.has_method("open_building_hub"):
+		host.call("open_building_hub", _plot_id, b, _plot_data)
+		return
 	if host != null and host.has_method("open_production_workflow"):
 		host.call("open_production_workflow", _plot_id, b, _plot_data)
 		return
-	push_warning("PlotDetail: open_production_workflow unavailable on game shell")
-
-
-func _open_operations_chains() -> void:
-	var host := WorldState.find_game_shell()
-	if host != null and host.has_method("_on_nav_pressed"):
-		host.call("_on_nav_pressed", "operations")
+	push_warning("PlotDetail: open_building_hub unavailable on game shell")
 
 
 func _on_claim_btn() -> void:
@@ -1039,7 +1117,7 @@ func _on_survey() -> void:
 
 
 func _on_plot_value_response(data: Dictionary) -> void:
-	if not is_instance_valid(self) or not is_inside_tree():
+	if not _is_live():
 		return
 	if data.is_empty():
 		return
