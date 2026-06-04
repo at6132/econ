@@ -123,14 +123,180 @@ def get_throughput(
 
 
 @router.get("/plots/{plot_id}/energy")
-def get_plot_energy(plot_id: str) -> dict:
-    """Regional power market status for a single plot."""
-    from realm.infrastructure.power_grid import get_plot_power_info
+def get_plot_energy(
+    plot_id: str,
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    """Regional power + grid utility subscription status for a plot."""
+    from realm.infrastructure.grid_utility import grid_utility_status_for_plot
 
     pid = PlotId(plot_id)
     if _state.WORLD.plots.get(pid) is None:
         raise HTTPException(status_code=404, detail="unknown plot")
-    return get_plot_power_info(_state.WORLD, pid)
+    return grid_utility_status_for_plot(_state.WORLD, PartyId(party), pid)
+
+
+@router.get("/plots/{plot_id}/grid-utility/contract-preview")
+def get_grid_utility_contract_preview(
+    plot_id: str,
+    party: Annotated[str, Query()],
+    provider: Annotated[str, Query()],
+) -> dict:
+    from realm.infrastructure.grid_utility import preview_utility_contract
+
+    r = preview_utility_contract(
+        _state.WORLD, PartyId(party), PlotId(plot_id), PartyId(provider)
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/plots/{plot_id}/grid-utility/connect")
+def post_grid_utility_connect(
+    plot_id: str,
+    party: Annotated[str, Query()],
+    provider: Annotated[str, Query()],
+    payment_method: Annotated[str, Query()] = "party_cash",
+    rate_cents_per_kwh: Annotated[int | None, Query()] = None,
+    agreed_to_terms: Annotated[bool, Query()] = False,
+) -> dict:
+    from realm.infrastructure.grid_utility import connect_grid_utility
+
+    r = connect_grid_utility(
+        _state.WORLD,
+        PartyId(party),
+        PlotId(plot_id),
+        PartyId(provider),
+        rate_cents_per_kwh=rate_cents_per_kwh,
+        payment_method=payment_method,
+        agreed_to_terms=agreed_to_terms,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/plots/{plot_id}/grid-utility/config")
+def post_grid_utility_config(
+    plot_id: str,
+    party: Annotated[str, Query()],
+    body: dict = Body(...),
+) -> dict:
+    from realm.infrastructure.grid_utility import update_plot_utility_config
+
+    kwargs: dict[str, object] = {}
+    if "primary_connection_id" in body:
+        kwargs["primary_connection_id"] = str(body.get("primary_connection_id") or "")
+    if "backup_connection_ids" in body:
+        raw = body.get("backup_connection_ids")
+        kwargs["backup_connection_ids"] = [str(x) for x in raw] if isinstance(raw, list) else []
+    if "battery_instance_ids" in body:
+        raw = body.get("battery_instance_ids")
+        kwargs["battery_instance_ids"] = [str(x) for x in raw] if isinstance(raw, list) else []
+    r = update_plot_utility_config(
+        _state.WORLD,
+        PartyId(party),
+        PlotId(plot_id),
+        **kwargs,  # type: ignore[arg-type]
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/grid-utility/disconnect")
+def post_grid_utility_disconnect(
+    party: Annotated[str, Query()],
+    connection_id: Annotated[str, Query()],
+) -> dict:
+    from realm.infrastructure.grid_utility import disconnect_grid_utility
+
+    r = disconnect_grid_utility(_state.WORLD, PartyId(party), connection_id)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.get("/registry/grid-operators")
+def get_grid_operators_registry(party: Annotated[str, Query()] = "player") -> dict:
+    """Player grid utility franchises + eligible plots for registration."""
+    from realm.infrastructure.grid_operators import (
+        GRID_UTILITY_FRANCHISE_FEE_CENTS,
+        eligible_franchise_plots,
+        list_grid_operators,
+        list_party_grid_operators,
+    )
+
+    w = _state.WORLD
+    player = PartyId(party)
+    return {
+        "ok": True,
+        "franchise_fee_cents": GRID_UTILITY_FRANCHISE_FEE_CENTS,
+        "player_operators": list_party_grid_operators(w, player),
+        "eligible_plots": eligible_franchise_plots(w, player),
+        "regional_operators": list_grid_operators(w, active_only=True),
+        "has_business": str(player) in w.business_registry,
+    }
+
+
+@router.post("/registry/grid-operators/register")
+def post_register_grid_operator(
+    party: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+    rate_cents_per_kwh: Annotated[int, Query()],
+    min_wh_per_day: Annotated[int, Query()] = 0,
+    max_wh_per_day: Annotated[int | None, Query()] = None,
+) -> dict:
+    from realm.actions import register_grid_operator as _register
+
+    r = _register(
+        _state.WORLD,
+        PartyId(party),
+        PlotId(plot_id),
+        rate_cents_per_kwh=rate_cents_per_kwh,
+        min_wh_per_day=min_wh_per_day,
+        max_wh_per_day=max_wh_per_day,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/registry/grid-operators/tariff")
+def post_update_grid_operator_tariff(
+    party: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+    rate_cents_per_kwh: Annotated[int | None, Query()] = None,
+    min_wh_per_day: Annotated[int | None, Query()] = None,
+    max_wh_per_day: Annotated[int | None, Query()] = None,
+) -> dict:
+    from realm.actions import update_grid_operator_tariff as _update
+
+    r = _update(
+        _state.WORLD,
+        PartyId(party),
+        PlotId(plot_id),
+        rate_cents_per_kwh=rate_cents_per_kwh,
+        min_wh_per_day=min_wh_per_day,
+        max_wh_per_day=max_wh_per_day,
+    )
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
+
+
+@router.post("/registry/grid-operators/unregister")
+def post_unregister_grid_operator(
+    party: Annotated[str, Query()],
+    plot_id: Annotated[str, Query()],
+) -> dict:
+    from realm.actions import unregister_grid_operator as _unregister
+
+    r = _unregister(_state.WORLD, PartyId(party), PlotId(plot_id))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["reason"])
+    return dict(r)
 
 
 @router.post("/plots/{plot_id}/survey")

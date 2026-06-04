@@ -2,10 +2,12 @@
 """
 Entry point for Realm solo mode.
 Godot spawns this as a child process.
-Writes REALM_READY:<host>:<port> to stdout when the TCP listener is up.
+
+Writes REALM_LOG / REALM_HTTP_READY / REALM_READY to stdout when ready.
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 
@@ -19,8 +21,21 @@ os.environ.setdefault("REALM_SOLO_MODE", "1")
 from realm.api.solo_logging import configure_solo_logging
 from realm.api.socket_server import run
 
-if __name__ == "__main__":
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Realm solo TCP engine for Godot")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("REALM_TCP_PORT", "9000")),
+        help="TCP port to bind (Godot tries 9000–9003 if this one is stuck)",
+    )
+    args = parser.parse_args()
     log_path = configure_solo_logging()
     print(f"REALM_LOG:{log_path}", flush=True)
-    port = int(os.environ.get("REALM_TCP_PORT", "9000"))
-    run(port=port)
+    print(f"REALM_SOLO_PORT:{args.port}", flush=True)
+    run(port=args.port)
+
+
+if __name__ == "__main__":
+    main()

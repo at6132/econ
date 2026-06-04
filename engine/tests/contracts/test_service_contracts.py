@@ -90,9 +90,9 @@ def test_power_supply_breach_when_plot_unpowered() -> None:
     from realm.infrastructure.roads import build_road
 
     w = bootstrap_frontier(seed=905, grid_width=12, grid_height=10)
-    plots = sorted(w.plots.keys(), key=str)
-    shed = plots[0]
-    target = plots[1]
+    from tests.plot_helpers import two_adjacent_plot_ids
+
+    shed, target = two_adjacent_plot_ids(w)
     w.plots[shed].owner = PartyId("player")
     w.plots[target].owner = PartyId("player")
     w.next_building_instance_seq += 1
@@ -118,7 +118,10 @@ def test_power_supply_breach_when_plot_unpowered() -> None:
     player = PartyId("player")
     w.inventory.add(player, MaterialId("lumber"), 4)
     w.inventory.add(player, MaterialId("stone"), 4)
-    assert build_road(w, player, shed, target)["ok"]
+    w.inventory.add(player, MaterialId("lumber"), 4)
+    w.inventory.add(player, MaterialId("stone"), 4)
+    road = build_road(w, player, shed, target)
+    assert road["ok"], road.get("reason")
     assert plot_has_grid_capacity(w, target)
     pr = propose_service_sub(
         w,

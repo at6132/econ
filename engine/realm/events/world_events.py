@@ -188,7 +188,7 @@ def active_event_for_plot(
 
 
 # Drought (per island per game-day during summer/autumn).
-DROUGHT_BASE_DAILY_PROB: float = 0.002
+DROUGHT_BASE_DAILY_PROB: float = 0.005
 DROUGHT_ARID_DAILY_PROB: float = 0.004  # Island D (arid bias)
 DROUGHT_MIN_DAYS: int = 7
 DROUGHT_MAX_DAYS: int = 20
@@ -196,18 +196,18 @@ DROUGHT_MAX_YIELD_REDUCTION: float = 0.40  # at severity 1.0
 DROUGHT_PREDISASTER_DAYS: int = 2  # advance warning lead time
 
 # Blight (per island per week during summer).
-BLIGHT_WEEKLY_PROB: float = 0.01
+BLIGHT_WEEKLY_PROB: float = 0.025
 BLIGHT_MIN_DAYS: int = 5
 BLIGHT_MAX_DAYS: int = 10
 
 # Mine collapse (per strip_mine per game-day; scales with missed_cycles).
-MINE_BASE_DAILY_PROB: float = 0.0001
+MINE_BASE_DAILY_PROB: float = 0.0003
 MINE_MISSED_CYCLE_MULT: float = 1.0  # P = base × (missed_cycles + 1)
 MINE_COLLAPSE_INJURY_HEALTH: float = 0.30
 MINE_RUBBLE_DAYS: int = 2
 
 # Storm (per island per game-day during autumn/winter).
-STORM_BASE_DAILY_PROB: float = 0.003
+STORM_BASE_DAILY_PROB: float = 0.007
 STORM_WINTER_MULT: float = 1.5
 STORM_MIN_TRANSIT_DELAY_TICKS: int = TICKS_PER_GAME_DAY
 STORM_MAX_TRANSIT_DELAY_TICKS: int = TICKS_PER_GAME_DAY * 7 // 2  # ~3.5 days

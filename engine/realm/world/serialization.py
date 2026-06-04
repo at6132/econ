@@ -290,6 +290,7 @@ def world_public_dict(world: "World") -> dict:
         "bank_rates": _bank_rates_public(world),
         "bank_loans": _bank_loans_for_player(world),
         "bank_plot_id": world.scenario_state.get("bank_plot"),
+        "grid_operators": _grid_operators_public(world),
         "road_segments": _road_segments_public(world),
         "player_price_alerts": list(
             (world.scenario_state.get("player_price_alerts") or [])
@@ -350,6 +351,29 @@ def _business_registry_public(world: "World") -> dict[str, dict]:
             "registered_at_tick": int(rec.registered_at_tick),
         }
     return out
+
+
+def _grid_operators_public(world: "World") -> dict:
+    """Player grid utility franchises for the Market / Registry tab."""
+    try:
+        from realm.infrastructure.grid_operators import (
+            GRID_UTILITY_FRANCHISE_FEE_CENTS,
+            eligible_franchise_plots,
+            list_party_grid_operators,
+        )
+    except Exception:
+        return {
+            "franchise_fee_cents": 0,
+            "player_operators": [],
+            "eligible_plots": [],
+        }
+    player = PartyId("player")
+    return {
+        "franchise_fee_cents": GRID_UTILITY_FRANCHISE_FEE_CENTS,
+        "player_operators": list_party_grid_operators(world, player),
+        "eligible_plots": eligible_franchise_plots(world, player),
+        "has_business": str(player) in world.business_registry,
+    }
 
 
 def _business_entities_public(world: "World") -> list[dict]:

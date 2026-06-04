@@ -79,10 +79,14 @@ def advance_tick(world: World) -> None:
         from realm.economy.holding_costs import tick_holding_costs
         from realm.economy.markets import tick_order_expiry
         from realm.economy.trade_balance import tick_trade_balance
+        from realm.infrastructure.grid_operators import tick_grid_operators
+        from realm.infrastructure.grid_utility import tick_grid_utility_connections
         from realm.infrastructure.power_grid import tick_power_grid
 
         get_oracle(world)
         tick_order_expiry(world)
+        tick_grid_operators(world)
+        tick_grid_utility_connections(world)
         tick_power_grid(world)
         from realm.infrastructure.utility_billing import tick_monthly_utility_bills
 

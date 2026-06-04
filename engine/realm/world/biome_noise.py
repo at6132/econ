@@ -265,7 +265,7 @@ GENESIS_DEFAULT_GRID_HEIGHT: int = 240
 # Below this many plots, fall back to ``terrain_for_cell`` (legacy single-
 # continent map) so existing tests with tiny grids stay valid. Backwards
 # compat is mandatory.
-CONTINENTAL_LAYOUT_MIN_PLOTS: int = 10_000
+CONTINENTAL_LAYOUT_MIN_PLOTS: int = 1_500
 
 # Mask thresholds (after FBM): below LAND_THRESHOLD is ocean, between LAND_
 # and SHALLOW_THRESHOLD is the beach band, above is land. Boost cells (see

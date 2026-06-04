@@ -15,6 +15,25 @@ def test_dispatch_health_without_world() -> None:
     assert out.get("status") == "ok"
 
 
+def test_fast_dispatch_version_without_test_client() -> None:
+    """Menu routes must not require the heavy FastAPI TestClient."""
+    import realm.api.socket_server as ss
+
+    ss._test_client = None  # type: ignore[attr-defined]
+    out = _dispatch("GET", "/version", {})
+    assert out.get("ok") is True
+    assert "build_id" in out
+
+
+def test_fast_dispatch_persistence_list_without_test_client() -> None:
+    import realm.api.socket_server as ss
+
+    ss._test_client = None  # type: ignore[attr-defined]
+    out = _dispatch("GET", "/persistence/list", {})
+    assert out.get("ok") is True
+    assert isinstance(out.get("slots"), list)
+
+
 def test_dispatch_dev_reset_frontier() -> None:
     out = _dispatch("POST", "/dev/reset?seed=1&scenario=frontier", {})
     assert out.get("ok") is True
@@ -38,7 +57,8 @@ def test_tcp_line_protocol() -> None:
     host, port = "127.0.0.1", 19001
     thread = threading.Thread(target=run, kwargs={"host": host, "port": port}, daemon=True)
     thread.start()
-    deadline = time.time() + 5.0
+    # ``run()`` warms HTTP before ``listen()`` — cold CI can take 30–90s.
+    deadline = time.time() + 120.0
     sock: socket.socket | None = None
     while time.time() < deadline:
         try:

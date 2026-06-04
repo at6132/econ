@@ -697,6 +697,9 @@ def bootstrap_genesis(
     if isinstance(tr, MoneyErr):
         raise ValueError(tr.reason)
     world.reputation[str(human)] = {"honored": 0, "breached": 0}
+    from realm.world.biome_noise import CONTINENTAL_LAYOUT_MIN_PLOTS
+
+    min_plots_for_solo = max(500, CONTINENTAL_LAYOUT_MIN_PLOTS // 4)
     if effective_layout == "continental":
         from realm.world.landmasses import compute_landmasses
 
@@ -705,7 +708,18 @@ def bootstrap_genesis(
 
         seed_regional_advantages(world)
     else:
-        world.scenario_state["plot_islands"] = {}
+        # Single-continent layout — connected-component islands so town/laborer
+        # seeding works on medium grids below the continental threshold. Skip
+        # tiny test grids where NPC bootstrap would consume all claimable land.
+        from realm.world.islands import compute_plot_islands
+        from realm.world.regional_advantage import seed_regional_advantages
+
+        if len(world.plots) >= min_plots_for_solo:
+            world.scenario_state["plot_islands"] = compute_plot_islands(world)
+            if world.scenario_state["plot_islands"]:
+                seed_regional_advantages(world)
+        else:
+            world.scenario_state["plot_islands"] = {}
     if settler_count is None:
         from realm.population.landmass_density import genesis_settler_count_for_world
 
@@ -719,6 +733,7 @@ def bootstrap_genesis(
     initial_n, settler_cap, cycle_enabled = genesis_settler_population_plan(
         settler_count=settler_count,
         settler_spawn_cap=settler_spawn_cap,
+        allow_organic_growth=len(world.plots) >= min_plots_for_solo,
     )
     for i in range(1, initial_n + 1):
         sid = PartyId(f"settler_{i:03d}")

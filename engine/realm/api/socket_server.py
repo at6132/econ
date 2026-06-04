@@ -88,6 +88,26 @@ def _get_test_client() -> Any:
         return _test_client
 
 
+def warm_http_stack() -> None:
+    """Touch menu-only modules so Continue/version are instant; defer full API.
+
+    The full FastAPI ``TestClient`` (all routers + actions) loads on the first
+    ``/dev/reset``, ``/persistence/load``, or in-game route — not at process
+    start. That keeps Godot's Continue menu at ~sub-second cost instead of
+    paying a multi-second (sometimes 30–60s on cold Windows) import tax up front.
+    """
+    t0 = time.perf_counter()
+    from realm.api import solo_fast_routes
+
+    solo_fast_routes.get_version()
+    elapsed = time.perf_counter() - t0
+    _log.info(
+        "Realm: solo menu routes ready in %.2fs (full API loads on first world action).",
+        elapsed,
+    )
+    print(f"REALM_HTTP_READY:{elapsed:.1f}", flush=True)
+
+
 def _http_response_to_dict(response: Any) -> dict[str, Any]:
     if response.status_code < 400:
         data = response.json()
@@ -115,8 +135,13 @@ def _dispatch(method: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
     in parallel with a state-mutating request (claim, trade, build, …).
     """
     from realm.api import _state
+    from realm.api.solo_fast_routes import try_fast_dispatch
 
     path_only, query = _parse_path(path)
+    fast = try_fast_dispatch(method, path_only)
+    if fast is not None:
+        return fast
+
     params = {**query, **{k: str(v) for k, v in body.items() if k not in ("params",)}}
     json_body: dict[str, Any] | None = None
     if method in ("POST", "PUT", "PATCH") and body:
@@ -323,6 +348,7 @@ def run(host: str = "127.0.0.1", port: int = 9000) -> None:
     sim_loop.subscribe(_broadcast_push)
     sim_loop.start_sim_loop()
     _start_solo_autosave()
+    warm_http_stack()
 
     if not _is_windows():
         threading.Thread(target=_run_unix, args=(_socket_path(),), daemon=True).start()
@@ -349,6 +375,7 @@ def _run_tcp(host: str, port: int, log_path: Path | str) -> None:
     server.bind((host, port))
     server.listen(1)
     _log.info("Realm solo TCP socket listening on %s:%d (log %s)", host, port, log_path)
+    # HTTP is already warm (``warm_http_stack`` in ``run()``); safe to connect now.
     print(f"REALM_READY:{host}:{port}", flush=True)
     print(f"REALM_LOG:{log_path}", flush=True)
     while True:

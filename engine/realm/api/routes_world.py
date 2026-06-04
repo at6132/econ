@@ -86,19 +86,11 @@ def health() -> dict[str, str]:
 @router.get("/version")
 def get_version() -> dict:
     """Engine build identity. The Godot client uses this to detect a stale
-    realm_solo.py bound to :9000 from a previous run. Bump REALM_BUILD_ID
-    whenever shipping a change that breaks compatibility with older clients."""
-    from realm.core.player_economy import PLAYER_STARTING_CASH_CENTS
+    realm_solo.py bound to :9000 from a previous run. Bump ``build_id`` in
+    ``realm_build.json`` whenever shipping a change that breaks compatibility."""
+    from realm.core.build_info import version_payload
 
-    return {
-        "ok": True,
-        "build_id": "2026-05-20-cash-100k-v2",
-        "player_starting_cash_cents": PLAYER_STARTING_CASH_CENTS,
-        "features": {
-            "ensure_player_starting_cash": True,
-            "dev_reset_returns_player_cash": True,
-        },
-    }
+    return version_payload()
 
 
 @router.get("/code/status")
