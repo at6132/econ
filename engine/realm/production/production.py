@@ -330,6 +330,14 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
             skill_mult = skill_yield_multiplier_for_laborer(worker, str(recipe.recipe_id))
             health_mult = laborer_health_output_multiplier(worker)
             combined = skill_mult * health_mult
+            plot_islands = world.scenario_state.get("plot_islands") or {}
+            isl_raw = plot_islands.get(str(run.plot_id))
+            if isl_raw is not None:
+                unrest = world.scenario_state.get("labor_unrest") or {}
+                if isinstance(unrest, dict) and (
+                    unrest.get(str(isl_raw)) or unrest.get(int(isl_raw))
+                ):
+                    combined *= 0.7
             if combined != 1.0:
                 out = {
                     k: max(0, int(round(int(v) * float(combined))))
@@ -779,6 +787,11 @@ def start_production(
     ev_blocked, ev_reason = recipe_blocked_by_active_event(world, recipe_id, plot)
     if ev_blocked:
         return {"ok": False, "reason": ev_reason}
+    from realm.research.patents import recipe_blocked_by_patent
+
+    pat_blocked, pat_reason = recipe_blocked_by_patent(world, party, recipe_id)
+    if pat_blocked:
+        return {"ok": False, "reason": pat_reason or "recipe blocked by patent"}
     from realm.infrastructure.road_connectivity import require_road_access
 
     road_err = require_road_access(

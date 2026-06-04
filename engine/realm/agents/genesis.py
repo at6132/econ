@@ -31,11 +31,13 @@ from realm.contracts.forward import (
 )
 from realm.genesis.shippers import tick_npc_shippers
 from realm.population.labor import tick_labor_migration, tick_labor_transport_arrivals
+from realm.population.laborers import TICKS_PER_GAME_DAY
 from realm.genesis.settler_upgrades import (
     tick_settler_margin_review,
     tick_settler_perishable_sales,
 )
 from realm.agents.settler_archetypes import tick_researcher_experiments
+from realm.research.patents import tick_patents_and_eras
 from realm.contracts.tenders import (
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
@@ -54,6 +56,7 @@ def tick_genesis_agents(world: World) -> None:
     tick_settler_perishable_sales(world)
     tick_settler_margin_review(world)
     tick_researcher_experiments(world)
+    tick_patents_and_eras(world)
     tick_settler_tender_bidding(world)
     tick_tender_lifecycle(world)
     tick_consolidator(world)
@@ -65,4 +68,23 @@ def tick_genesis_agents(world: World) -> None:
     tick_archetype_agents(world)
     tick_labor_transport_arrivals(world)
     tick_labor_migration(world)
+    if world.scenario_id == "genesis":
+        now = int(world.tick)
+        if now > 0:
+            day = TICKS_PER_GAME_DAY
+            week = 7 * day
+            poach = 3 * day
+            if now % day == 0 or now % poach == 0 or now % week == 0:
+                from realm.population.labor_competition import (
+                    tick_labor_organizing,
+                    tick_labor_poaching,
+                    tick_labor_training,
+                )
+
+                if now % day == 0:
+                    tick_labor_training(world)
+                if now % poach == 0:
+                    tick_labor_poaching(world)
+                if now % week == 0:
+                    tick_labor_organizing(world)
     tick_genesis_margaux_scripts(world)

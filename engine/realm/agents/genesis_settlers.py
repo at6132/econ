@@ -32,6 +32,7 @@ from realm.production import plot_has_active_production
 from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.production.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.production.recipes import RECIPES
+from realm.research.patents import has_active_patent_exclusivity, recipe_blocked_by_patent
 from realm.production.storage_caps import party_inventory_unit_total, party_storage_cap_units
 from realm.core.time_scale import legacy_scaled
 from realm.world.terrain import Terrain
@@ -1088,12 +1089,23 @@ def _recipe_rank_score(
     if recipe_id in ARCHETYPE_RECIPE_AVOID.get(archetype, set()):
         arch_bonus = -2.5
 
+    era_bonus = 0.0
+    bonus_root = world.scenario_state.get("research_bonuses")
+    if isinstance(bonus_root, dict):
+        party_bonuses = bonus_root.get(str(party))
+        if isinstance(party_bonuses, dict):
+            eff_mult = 1.0 + float(party_bonuses.get("all", 0.0))
+            eff_mult += float(party_bonuses.get(recipe_id, 0.0))
+            if eff_mult > 1.0:
+                era_bonus = (eff_mult - 1.0) * 4.0
+
     return (
         bonus
         + labor_ok
         - miss * 0.38
         + margin_bonus
         + arch_bonus
+        + era_bonus
         + rng.random() * 0.06
     )
 
@@ -1113,19 +1125,23 @@ def _pick_recipe_to_start(
     ]
     if not eligible:
         return None
+    check_patents = has_active_patent_exclusivity(world)
     if prefer_recipe_id and prefer_recipe_id in eligible:
         rid = prefer_recipe_id
-        _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
-        if _recipe_inputs_satisfied(world, party, rid, plot_id):
-            rec = RECIPES[rid]
-            if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents:
-                return rid
+        if not check_patents or not recipe_blocked_by_patent(world, party, rid)[0]:
+            _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
+            if _recipe_inputs_satisfied(world, party, rid, plot_id):
+                rec = RECIPES[rid]
+                if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents:
+                    return rid
     rng = world.rng(f"gen:recipe_pick:{party}:{plot.plot_id}:{world.tick}")
     ranked = sorted(
         eligible,
         key=lambda rid: -_recipe_rank_score(world, party, plot_id, rid, rng=rng),
     )
     for rid in ranked[:14]:
+        if check_patents and recipe_blocked_by_patent(world, party, rid)[0]:
+            continue
         _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
         if not _recipe_inputs_satisfied(world, party, rid, plot_id):
             continue
