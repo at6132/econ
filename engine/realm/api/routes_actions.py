@@ -619,6 +619,96 @@ def get_assay_book(party: Annotated[str, Query()] = "player") -> dict:
     return party_recipe_book_summary(_state.WORLD, PartyId(party))
 
 
+@router.get("/research/catalog")
+def get_research_catalog(party: Annotated[str, Query()] = "player") -> dict:
+    """Technology tree with per-party eligibility."""
+    from realm.actions.research_actions import research_catalog_public
+
+    return research_catalog_public(_state.WORLD, PartyId(party))
+
+
+@router.get("/research/status")
+def get_research_status(party: Annotated[str, Query()] = "player") -> dict:
+    """Active research, completed nodes, bonuses, and patents for ``party``."""
+    from realm.actions.research_actions import party_research_status
+
+    return party_research_status(_state.WORLD, PartyId(party))
+
+
+@router.post("/research/start")
+def post_research_start(
+    node_id: Annotated[str, Query()],
+    party: Annotated[str, Query()] = "player",
+) -> dict:
+    """Begin researching a tech node (requires operational ``research_lab``)."""
+    from realm.actions.research_actions import start_research_action
+
+    r = start_research_action(_state.WORLD, PartyId(party), node_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "research rejected")))
+    return dict(r)
+
+
+@router.get("/discovery")
+def get_discovery_digest(party: Annotated[str, Query()] = "player") -> dict:
+    """Assay + research + patents + custom content in one digest."""
+    from realm.actions.fabrication_actions import discovery_digest_action
+
+    return discovery_digest_action(_state.WORLD, PartyId(party))
+
+
+@router.get("/fabrication/status")
+def get_fabrication_status(party: Annotated[str, Query()] = "player") -> dict:
+    """Capabilities, buildable recipes, workshop focus, and discovery summary."""
+    from realm.actions.fabrication_actions import fabrication_status_action
+
+    return fabrication_status_action(_state.WORLD, PartyId(party))
+
+
+@router.get("/fabrication/buildable-recipes")
+def get_buildable_recipes(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.actions.fabrication_actions import buildable_recipes_action
+
+    return buildable_recipes_action(_state.WORLD, PartyId(party))
+
+
+@router.get("/factory/machines")
+def get_factory_machines(party: Annotated[str, Query()] = "player") -> dict:
+    from realm.actions.factory_design_actions import machines_catalog_action
+
+    return machines_catalog_action(_state.WORLD, PartyId(party))
+
+
+@router.post("/factory/design")
+def post_factory_design(body: dict) -> dict:
+    from realm.actions.factory_design_actions import design_factory_action
+
+    party = PartyId(str(body.get("party", "player")))
+    r = design_factory_action(_state.WORLD, party, body)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "factory rejected")))
+    return dict(r)
+
+
+@router.post("/fabrication/workshop-focus")
+def post_workshop_focus(body: dict) -> dict:
+    from realm.actions.fabrication_actions import (
+        clear_workshop_focus_action,
+        set_workshop_focus_action,
+    )
+
+    party = PartyId(str(body.get("party", "player")))
+    plot_id = PlotId(str(body.get("plot_id", "")))
+    recipe_id = str(body.get("recipe_id", "")).strip()
+    if not recipe_id:
+        r = clear_workshop_focus_action(_state.WORLD, party, plot_id)
+    else:
+        r = set_workshop_focus_action(_state.WORLD, party, plot_id, recipe_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "focus rejected")))
+    return dict(r)
+
+
 @router.post("/deep_survey")
 def post_deep_survey(
     plot_id: Annotated[str, Query()],
