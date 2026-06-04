@@ -12,6 +12,7 @@ Submodules:
   * ``realm.actions.employment_actions``    — hire_*, tick_stub_employment, poach_worker
   * ``realm.actions.production_actions``    — start_production_on_plot, harvest helpers
   * ``realm.actions.shipping_actions``      — register_route, revise_route_fee
+  * ``realm.actions.grid_operator_actions`` — grid utility franchise registration
   * ``realm.actions.assay_actions``         — Tier-2 mineral assay (formerly ``realm.assay``)
   * ``realm.actions.deep_survey_actions``   — Deep survey (formerly ``realm.deep_survey``)
 
@@ -54,4 +55,9 @@ from realm.actions.production_actions import (  # noqa: F401
 from realm.actions.shipping_actions import (  # noqa: F401
     register_route,
     revise_route_fee,
+)
+from realm.actions.grid_operator_actions import (  # noqa: F401
+    register_grid_operator,
+    unregister_grid_operator,
+    update_grid_operator_tariff,
 )

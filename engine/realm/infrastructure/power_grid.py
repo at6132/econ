@@ -186,7 +186,13 @@ def _settle_power_payments(
     if price <= 0:
         return
 
+    from realm.infrastructure.grid_utility import (
+        party_has_own_generation_in_region,
+        settlement_rate_for_plot_load,
+    )
+
     total_collected = 0
+    pool_for_generators = 0
     for pid, load in load_tracker.items():
         if plot_to_region.get(pid) != reg.region_id:
             continue
@@ -195,9 +201,31 @@ def _settle_power_payments(
         plot = world.plots.get(PlotId(pid))
         if plot is None or plot.owner is None:
             continue
+        owner = plot.owner
+        if party_has_own_generation_in_region(world, owner, reg.region_id):
+            continue
+        unit_price, provider = settlement_rate_for_plot_load(
+            world, owner, PlotId(pid)
+        )
         kwh = max(1, (int(load) + WH_PER_LEGACY_ELEC_UNIT - 1) // WH_PER_LEGACY_ELEC_UNIT)
+        if unit_price > 0 and provider is not None:
+            cost = kwh * unit_price
+            src = party_cash_account(owner)
+            bal = world.ledger.balance(src)
+            actual = min(cost, bal)
+            if actual > 0:
+                world.ledger.transfer(
+                    debit=src,
+                    credit=party_cash_account(provider),
+                    amount_cents=actual,
+                )
+                total_collected += actual
+                from realm.infrastructure.utility_billing import accrue_monthly_usage
+
+                accrue_monthly_usage(world, owner, wh=int(load), cents=actual)
+            continue
         cost = kwh * price
-        src = party_cash_account(plot.owner)
+        src = party_cash_account(owner)
         bal = world.ledger.balance(src)
         actual = min(cost, bal)
         if actual > 0:
@@ -206,28 +234,25 @@ def _settle_power_payments(
                 credit=system_reserve_account(),
                 amount_cents=actual,
             )
+            pool_for_generators += actual
             total_collected += actual
             from realm.infrastructure.utility_billing import accrue_monthly_usage
 
-            accrue_monthly_usage(
-                world, plot.owner, wh=int(load), cents=actual
-            )
+            accrue_monthly_usage(world, owner, wh=int(load), cents=actual)
 
-    if total_collected <= 0 or not reg.generator_instance_ids:
-        return
-
-    total_cap = reg.capacity_per_day or 1
-    for iid in reg.generator_instance_ids:
-        owner, cap = _generator_owner_and_capacity(world, iid)
-        if owner is None or cap <= 0:
-            continue
-        share = int(total_collected * cap / total_cap)
-        if share > 0:
-            world.ledger.transfer(
-                debit=system_reserve_account(),
-                credit=party_cash_account(owner),
-                amount_cents=share,
-            )
+    if pool_for_generators > 0 and reg.generator_instance_ids:
+        total_cap = reg.capacity_per_day or 1
+        for iid in reg.generator_instance_ids:
+            owner, cap = _generator_owner_and_capacity(world, iid)
+            if owner is None or cap <= 0:
+                continue
+            share = int(pool_for_generators * cap / total_cap)
+            if share > 0:
+                world.ledger.transfer(
+                    debit=system_reserve_account(),
+                    credit=party_cash_account(owner),
+                    amount_cents=share,
+                )
     reg.revenue_settled_cents = total_collected
 
 

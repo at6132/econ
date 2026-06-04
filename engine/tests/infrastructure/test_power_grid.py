@@ -110,15 +110,27 @@ def test_electricity_not_waived_without_inventory() -> None:
     _give(world, consumer, "coal", 0)
     r = start_production(world, consumer, pid, "mine_coal", run_count=1)
     assert not r["ok"], r
-    assert "electricity" in r["reason"].lower()
+    assert "grid" in r["reason"].lower() or "kwh" in r["reason"].lower()
 
 
-def test_production_succeeds_with_electricity_inventory() -> None:
-    world, _gen, consumer = _build_world()
-    pid = PlotId("p-5-5")
+def test_production_succeeds_with_utility_contract() -> None:
+    from realm.infrastructure.grid_utility import connect_grid_utility
+
+    world, gen, consumer = _build_world()
+    gen_plot = PlotId("p-4-4")
+    pid = PlotId("p-5-4")
+    _claim(world, gen, gen_plot)
     _claim(world, consumer, pid)
+    _install_building(world, gen, gen_plot, "power_shed")
     _install_building(world, consumer, pid, "strip_mine")
-    _give(world, consumer, "electricity", 4)
+    world.inventory.add(gen, MaterialId("lumber"), 4)
+    world.inventory.add(gen, MaterialId("stone"), 4)
+    assert build_road(world, gen, gen_plot, pid)["ok"]
+    from realm.infrastructure.grid_operators import seed_grid_operator
+
+    assert seed_grid_operator(world, gen, gen_plot)["ok"]
+    assert connect_grid_utility(world, consumer, pid, gen, agreed_to_terms=True)["ok"]
+    _give(world, consumer, "coal", 4)
     r = start_production(world, consumer, pid, "mine_coal", run_count=1)
     assert r["ok"], r
 
@@ -154,7 +166,7 @@ def test_isolated_plot_with_power_shed_has_microgrid_capacity() -> None:
     _install_building(world, gen, iso, "power_shed")
     info = get_plot_power_info(world, iso)
     assert info["powered"] is True
-    assert info["capacity_per_day"] == 24
+    assert info["capacity_per_day"] == 24 * 1000  # legacy 24 kWh/day in Wh
     assert info["grid_connected"] is False
     assert "microgrid" in str(info.get("status_note", "")).lower()
 
@@ -183,8 +195,14 @@ def test_generator_earns_revenue_from_consumers() -> None:
     world.inventory.add(gen, MaterialId("lumber"), 4)
     world.inventory.add(gen, MaterialId("stone"), 4)
     assert build_road(world, gen, gen_plot, use_plot)["ok"]
+    from realm.infrastructure.grid_operators import seed_grid_operator
+    from realm.infrastructure.grid_utility import connect_grid_utility
+
+    assert seed_grid_operator(world, gen, gen_plot)["ok"]
+    assert connect_grid_utility(world, consumer, use_plot, gen, agreed_to_terms=True)["ok"]
     snap = ConservationSnapshot.of(world.ledger, world.inventory)
     gen_cash_before = world.ledger.balance(party_cash_account(gen))
+    _give(world, consumer, "coal", 4)
     assert start_production(world, consumer, use_plot, "mine_coal")["ok"]
     world.tick = 1440
     tick_power_grid(world)
@@ -224,7 +242,7 @@ def test_brownout_reduces_consumer_efficiency() -> None:
     world.inventory.add(gen, MaterialId("lumber"), 4)
     world.inventory.add(gen, MaterialId("stone"), 4)
     assert build_road(world, gen, gen_plot, use_plot)["ok"]
-    world.scenario_state["power_load_today"] = {str(use_plot): 100}
+    world.scenario_state["power_load_today"] = {str(use_plot): 50_000}
     world.tick = 1440
     tick_power_grid(world)
     maint = world.building_maintenance[kiln_iid]

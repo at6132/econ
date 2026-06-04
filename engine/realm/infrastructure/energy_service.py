@@ -145,7 +145,12 @@ def check_energy_for_production(
     from realm.infrastructure.power_grid import plot_has_grid_capacity
 
     if plot_has_grid_capacity(world, plot_id):
-        return None
+        from realm.infrastructure.grid_utility import party_may_draw_grid_energy
+
+        allowed, reason = party_may_draw_grid_energy(world, party, plot_id)
+        if allowed:
+            return None
+        return {"ok": False, "reason": reason or "grid access not authorized"}
     from_battery = _discharge_battery(world, plot_id, need)
     if from_battery >= need:
         return None
@@ -171,8 +176,11 @@ def commit_energy_for_production(
     from realm.infrastructure.power_grid import plot_has_grid_capacity, record_energy_wh
 
     if plot_has_grid_capacity(world, plot_id):
-        record_energy_wh(world, plot_id, need, party=party)
-        return
+        from realm.infrastructure.grid_utility import party_may_draw_grid_energy
+
+        if party_may_draw_grid_energy(world, party, plot_id)[0]:
+            record_energy_wh(world, plot_id, need, party=party)
+            return
     taken = _discharge_battery(world, plot_id, need)
     if taken > 0:
         record_energy_wh(world, plot_id, taken, party=party, off_grid=True)
