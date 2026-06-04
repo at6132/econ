@@ -812,6 +812,7 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
 
     from realm.infrastructure.building_workflow import workflow_public_dict
     from realm.production.custom_content import custom_materials_public, custom_recipes_for_party
+    from realm.research.discovery import party_discovery_digest
 
     price_alerts = list(world.scenario_state.get("player_price_alerts") or []) if party_s == "player" else []
 
@@ -838,6 +839,7 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
         "custom_recipes": custom_recipes_for_party(world, party),
         "custom_materials": custom_materials_public(world),
         "workflow_settings": workflow_public_dict(world, party),
+        "discovery": party_discovery_digest(world, party),
     }
 
 

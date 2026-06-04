@@ -169,6 +169,14 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "self_materials": {"brick": 4, "timber": 2, "coal": 2, "glass": 2},
         "turnkey_total_cents": 110_000,
     },
+    "research_lab": {
+        "kind": "contracted",
+        "label": "Research laboratory (technology tree & patents)",
+        "self_shell_cents": 85_000,
+        "self_contractor_fee_cents": 35_000,
+        "self_materials": {"brick": 6, "lumber": 4, "glass": 4, "timber": 3, "coal": 2},
+        "turnkey_total_cents": 195_000,
+    },
     "blast_furnace": {
         "kind": "contracted",
         "label": "Blast furnace (large-scale iron smelting, pig iron)",

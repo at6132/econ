@@ -247,6 +247,28 @@ MATERIALS: Final[Mapping[MaterialId, MaterialDef]] = {
     MaterialId("medicine"): MaterialDef(
         MaterialId("medicine"), "Medicine", 90.0, "processed"
     ),
+    # ───────── Research-era industrial goods (technology tree outputs) ─────────
+    MaterialId("telegraph_relay"): MaterialDef(
+        MaterialId("telegraph_relay"), "Telegraph relay", 4.5, "processed"
+    ),
+    MaterialId("synthetic_dye"): MaterialDef(
+        MaterialId("synthetic_dye"), "Synthetic dye", 1200.0, "processed"
+    ),
+    MaterialId("vacuum_tube"): MaterialDef(
+        MaterialId("vacuum_tube"), "Vacuum tube", 0.4, "processed"
+    ),
+    MaterialId("transistor"): MaterialDef(
+        MaterialId("transistor"), "Transistor", 0.05, "processed"
+    ),
+    MaterialId("control_module"): MaterialDef(
+        MaterialId("control_module"), "Control module", 2.2, "processed"
+    ),
+    MaterialId("carbon_fiber"): MaterialDef(
+        MaterialId("carbon_fiber"), "Carbon fiber", 1.8, "processed"
+    ),
+    MaterialId("nanofiber"): MaterialDef(
+        MaterialId("nanofiber"), "Nanofiber", 0.3, "processed"
+    ),
 }
 
 PLUGIN_MATERIALS: dict[MaterialId, MaterialDef] = {}
