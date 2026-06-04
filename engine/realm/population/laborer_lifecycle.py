@@ -111,48 +111,6 @@ def laborers_at_workplace(
     return out
 
 
-def _store_plot_in_town(world: World, plot_id: str, town_id: str) -> bool:
-    town = world.towns.get(town_id)
-    if town is None:
-        return False
-    if plot_id in {str(p) for p in town.store_plots}:
-        return True
-    from realm.population.towns import town_for_plot
-
-    return town_for_plot(world, PlotId(plot_id)) == town_id
-
-
-def _town_had_food_store_purchases(world: World, town_id: str, since_tick: int) -> bool:
-    for ev in reversed(world.event_log):
-        tick = int(ev.get("tick", 0))
-        if tick < since_tick:
-            break
-        if ev.get("kind") != "store_purchase":
-            continue
-        mat = str(ev.get("material", ""))
-        if mat not in FOOD_HEALTH_MATERIALS:
-            continue
-        plot_id = str(ev.get("plot_id", ""))
-        if _store_plot_in_town(world, plot_id, town_id):
-            return True
-    return False
-
-
-def _laborer_had_wage_unpaid_quit_recent(
-    world: World, laborer_id: str, *, within_days: int = 3
-) -> bool:
-    cutoff = int(world.tick) - within_days * TICKS_PER_GAME_DAY
-    for ev in reversed(world.event_log):
-        tick = int(ev.get("tick", 0))
-        if tick < cutoff:
-            break
-        if ev.get("kind") != "wage_unpaid_quit":
-            continue
-        if str(ev.get("laborer_id", "")) == laborer_id:
-            return True
-    return False
-
-
 def tick_laborer_health(world: World) -> dict[str, int]:
     """Daily health pass: aging, food bonus, stress, retirement at zero health."""
     stats = {"processed": 0, "retired": 0}
