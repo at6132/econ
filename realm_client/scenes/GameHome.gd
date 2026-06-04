@@ -55,6 +55,7 @@ var _opt_default_overlay: OptionButton
 var _edit_save_slot: LineEdit
 var _settings_pause_btn: Button
 var _settings_speed_btns: Array[Button] = []
+var _btn_continue_last: Button
 
 
 func _ready() -> void:
@@ -194,11 +195,15 @@ func _make_solo_menu() -> VBoxContainer:
 	var b_cont := _menu_button("Continue", false)
 	b_cont.pressed.connect(_on_continue_pressed)
 
+	_btn_continue_last = _menu_button("Continue last", false)
+	_btn_continue_last.pressed.connect(_on_continue_last_pressed)
+
 	var b_back := _menu_button("Back", false)
 	b_back.pressed.connect(func(): _show_panel("root"))
 
 	v.add_child(b_new)
 	v.add_child(b_cont)
+	v.add_child(_btn_continue_last)
 	v.add_child(b_back)
 	return v
 
@@ -555,6 +560,8 @@ func _show_panel(which: String) -> void:
 			_seed_spin.value = _roll_new_world_seed_spin()
 		if is_instance_valid(_name_edit):
 			_name_edit.text = ""
+	if which == "solo":
+		_sync_continue_last_button()
 
 
 func _roll_new_world_seed_spin() -> int:
@@ -761,6 +768,8 @@ func _on_clear_all_saves_confirmed() -> void:
 			if bool(data.get("ok", false)):
 				var n := int(data.get("count", 0))
 				_footer.text = "Removed %d save file(s)." % n
+				RealmSettings.clear_last_continue()
+				_sync_continue_last_button()
 				if _panel_continue.visible:
 					_refresh_save_list()
 			else:
@@ -778,6 +787,84 @@ func _on_solo_pressed() -> void:
 func _on_continue_pressed() -> void:
 	_show_panel("continue")
 	_continue_load_list()
+
+
+func _sync_continue_last_button() -> void:
+	if not is_instance_valid(_btn_continue_last):
+		return
+	var path := RealmSettings.last_continue_path.strip_edges()
+	if path.is_empty():
+		_btn_continue_last.text = "Continue last"
+		_btn_continue_last.modulate = Color(1.0, 1.0, 1.0, 0.55)
+	else:
+		var label := path.get_file().get_basename().replace("_", " ")
+		_btn_continue_last.text = "Continue last · %s" % label
+		_btn_continue_last.modulate = Color.WHITE
+
+
+func _on_continue_last_pressed() -> void:
+	_footer.text = "Loading last save…"
+	var err := await _solo_engine_verify_error()
+	if not err.is_empty():
+		_footer.text = ""
+		_dialog.dialog_text = err
+		_dialog.popup_centered()
+		return
+	var path := await _fetch_last_continue_path()
+	if path.is_empty():
+		_footer.text = ""
+		_dialog.dialog_text = (
+			"No previous save found.\n\nStart a New world or pick a save under Continue."
+		)
+		_dialog.popup_centered()
+		return
+	_footer.text = ""
+	await _on_pick_save(path)
+
+
+func _fetch_last_continue_path() -> String:
+	var status_done := false
+	var status_path := ""
+	API.persistence_status(
+		func(st: Dictionary) -> void:
+			if bool(st.get("ok", false)):
+				status_path = str(st.get("last_save_path", "")).strip_edges()
+			status_done = true,
+	)
+	while not status_done:
+		if get_tree() == null:
+			return ""
+		await get_tree().process_frame
+	if not status_path.is_empty():
+		return status_path
+
+	var cached := RealmSettings.last_continue_path.strip_edges()
+	if not cached.is_empty():
+		return cached
+
+	var list_done := false
+	var best_path := ""
+	var best_at := 0
+	API.persistence_list(
+		func(data: Dictionary) -> void:
+			if bool(data.get("ok", false)):
+				for row in data.get("slots", []):
+					if not (row is Dictionary):
+						continue
+					var d: Dictionary = row as Dictionary
+					var at := int(d.get("saved_at", 0))
+					if at <= 0:
+						at = int(d.get("mtime", 0))
+					if at >= best_at:
+						best_at = at
+						best_path = str(d.get("path", "")).strip_edges()
+			list_done = true,
+	)
+	while not list_done:
+		if get_tree() == null:
+			return ""
+		await get_tree().process_frame
+	return best_path
 
 
 func _continue_load_list() -> void:
@@ -1248,6 +1335,10 @@ func _on_pick_save(relative_path: String) -> void:
 				var loaded_tick := int(data.get("tick", -1))
 				if loaded_tick < 0:
 					push_warning("GameHome: load ok but no tick in response for %s" % relative_path)
+				var loaded_path := str(data.get("path", relative_path)).strip_edges()
+				if not loaded_path.is_empty():
+					RealmSettings.record_last_continue(loaded_path)
+					_sync_continue_last_button()
 				var wid := str(data.get("world_id", "")).strip_edges()
 				if not wid.is_empty():
 					WorldState.world_id = wid
@@ -1459,6 +1550,9 @@ func _finish_dev_reset_cash_check(data: Dictionary, cash_cents: int) -> void:
 	if cash_cents > 0:
 		WorldState.player_cash_cents = cash_cents
 		WorldState.summary_updated.emit()
+	var wid := str(data.get("world_id", _pending_new_world_id)).strip_edges()
+	if not wid.is_empty():
+		RealmSettings.record_last_continue("saves/%s.sqlite" % wid)
 	_autosave_new_world_snapshot(data)
 	if is_instance_valid(_creation_screen):
 		_creation_screen.mark_done()

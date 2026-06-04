@@ -22,6 +22,8 @@ var default_speed: float = 1.0
 var default_overlay: String = "none"
 ## Empty = use active world's ``world_id``; ``current`` = legacy shared file (avoid).
 var default_save_slot: String = ""
+## Repo-relative path (``saves/….sqlite``) for Solo → Continue last.
+var last_continue_path: String = ""
 
 
 func _ready() -> void:
@@ -40,6 +42,7 @@ func load_from_disk() -> void:
 	default_speed = _snap_speed(float(f.get_value(SECTION, "default_speed", 1.0)))
 	default_overlay = str(f.get_value(SECTION, "default_overlay", "none"))
 	default_save_slot = str(f.get_value(SECTION, "default_save_slot", "")).strip_edges()
+	last_continue_path = str(f.get_value(SECTION, "last_continue_path", "")).strip_edges()
 	if overlay_index_from_id(default_overlay) < 0:
 		default_overlay = "none"
 
@@ -50,6 +53,7 @@ func save_to_disk() -> void:
 	f.set_value(SECTION, "default_speed", default_speed)
 	f.set_value(SECTION, "default_overlay", default_overlay)
 	f.set_value(SECTION, "default_save_slot", default_save_slot)
+	f.set_value(SECTION, "last_continue_path", last_continue_path)
 	var err := f.save(FILE_PATH)
 	if err != OK:
 		push_warning("RealmSettings: could not save (%s)" % err)
@@ -83,4 +87,19 @@ func speed_index_from_value(speed: float) -> int:
 
 
 func persist() -> void:
+	save_to_disk()
+
+
+func record_last_continue(relative_path: String) -> void:
+	var p := relative_path.strip_edges()
+	if p.is_empty():
+		return
+	last_continue_path = p
+	save_to_disk()
+
+
+func clear_last_continue() -> void:
+	if last_continue_path.is_empty():
+		return
+	last_continue_path = ""
 	save_to_disk()

@@ -28,6 +28,14 @@ const CATEGORIES := [
 
 func _ready() -> void:
 	layer = 50
+	var max_cells := WorldState.max_blueprint_cells
+	if max_cells <= 0:
+		fee_label.text = "Research Workshop engineering to design custom facilities."
+		create_btn.disabled = true
+	else:
+		var side := int(floor(sqrt(float(max_cells))))
+		width_spin.max_value = side
+		height_spin.max_value = side
 	for cat in CATEGORIES:
 		category_opt.add_item(cat.capitalize())
 		category_opt.set_item_metadata(category_opt.item_count - 1, cat)
@@ -76,6 +84,9 @@ func _update_fee() -> void:
 
 
 func _on_create() -> void:
+	if WorldState.max_blueprint_cells <= 0:
+		MainFeedback.toast("Custom blueprints locked — research Workshop engineering", "warn")
+		return
 	if name_input.text.strip_edges().is_empty():
 		return
 	var w := int(width_spin.value)

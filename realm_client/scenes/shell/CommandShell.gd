@@ -340,6 +340,9 @@ func _run_save() -> void:
 		save_button.disabled = false
 		if bool(data.get("ok", false)):
 			_last_save_at = int(Time.get_unix_time_from_system())
+			var saved_path := str(data.get("path", "")).strip_edges()
+			if not saved_path.is_empty():
+				RealmSettings.record_last_continue(saved_path)
 			save_button.modulate = RealmColors.OK
 			var t := get_tree().create_timer(0.25)
 			t.timeout.connect(func(): save_button.modulate = Color.WHITE)

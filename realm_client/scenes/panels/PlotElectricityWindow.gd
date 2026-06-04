@@ -48,10 +48,6 @@ func _build_main_ui() -> void:
 	panel.position = Vector2((vp.x - PANEL_W) * 0.5, maxf(48.0, (vp.y - PANEL_H) * 0.5))
 	panel.size = Vector2(PANEL_W, minf(PANEL_H, vp.y - 64.0))
 	PanelUI.style_panel(panel)
-	panel.add_theme_constant_override("margin_left", 12)
-	panel.add_theme_constant_override("margin_right", 12)
-	panel.add_theme_constant_override("margin_top", 12)
-	panel.add_theme_constant_override("margin_bottom", 12)
 	add_child(panel)
 
 	var root := VBoxContainer.new()
@@ -220,7 +216,7 @@ func _make_dim(on_click: Callable) -> ColorRect:
 
 
 func _close() -> void:
-	if _contract_layer.visible:
+	if _contract_layer != null and _contract_layer.visible:
 		_close_contract()
 		return
 	closed.emit()
@@ -394,8 +390,8 @@ func _render_routing_controls(parent: VBoxContainer, conns: Array, storage: Arra
 	for i in conns.size():
 		var c: Dictionary = conns[i]
 		var cid := str(c.get("connection_id", ""))
-		var label := "%s (%d¢/kWh)" % [c.get("provider_name", c.get("provider", "?")), int(c.get("rate_cents_per_kwh", 0))]
-		prim_opt.add_item(label)
+		var item_label := "%s (%d¢/kWh)" % [c.get("provider_name", c.get("provider", "?")), int(c.get("rate_cents_per_kwh", 0))]
+		prim_opt.add_item(item_label)
 		prim_opt.set_item_metadata(i + 1, cid)
 		if cid == primary_id:
 			sel_idx = i + 1
@@ -515,13 +511,13 @@ func _make_provider_card(row: Dictionary, is_offer: bool) -> PanelContainer:
 	v.add_theme_constant_override("separation", 4)
 	pc.add_child(v)
 
-	var name := Label.new()
+	var name_lbl := Label.new()
 	if is_offer:
-		name.text = str(row.get("display_name", row.get("provider_party", "?")))
+		name_lbl.text = str(row.get("display_name", row.get("provider_party", "?")))
 	else:
-		name.text = str(row.get("provider_name", row.get("provider", "?")))
-	name.add_theme_color_override("font_color", RealmColors.TEXT)
-	v.add_child(name)
+		name_lbl.text = str(row.get("provider_name", row.get("provider", "?")))
+	name_lbl.add_theme_color_override("font_color", RealmColors.TEXT)
+	v.add_child(name_lbl)
 
 	var detail := Label.new()
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

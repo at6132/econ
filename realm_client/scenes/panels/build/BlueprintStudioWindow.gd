@@ -32,6 +32,11 @@ var _recipe_list: ItemList
 var _attached_recipes: Array = []
 var _extra_inputs: VBoxContainer
 var _extra_outputs: VBoxContainer
+var _new_product_name: LineEdit
+var _new_product_mass: SpinBox
+var _machines_box: VBoxContainer
+var _process_name_in: LineEdit
+var _process_labor_spin: SpinBox
 var _status: Label
 var _tab_group: ButtonGroup
 
@@ -151,23 +156,32 @@ func _build_bom_page() -> void:
 
 func _build_process_page() -> void:
 	var hint := _label(
-		"Register new matter types, compose processes, attach them to this building."
+		"Design a NEW product this world has never shipped. Install discovered "
+		+ "machines (pumps, gears, controls). Inputs + power must balance outputs."
 	)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_process_page.add_child(hint)
-	var mat_row := HBoxContainer.new()
-	var mat_name := LineEdit.new()
-	mat_name.placeholder_text = "New material name"
-	mat_row.add_child(mat_name)
-	var mat_btn := Button.new()
-	mat_btn.text = "Register material ($50)"
-	PanelUI.style_btn(mat_btn, true)
-	mat_btn.pressed.connect(_on_register_material.bind(mat_name))
-	mat_row.add_child(mat_btn)
-	_process_page.add_child(mat_row)
-	var rec_name := LineEdit.new()
-	rec_name.placeholder_text = "Process name"
-	_process_page.add_child(rec_name)
+	var novel := _label("New product (required for custom factories)")
+	_process_page.add_child(novel)
+	var prod_row := HBoxContainer.new()
+	_new_product_name = LineEdit.new()
+	_new_product_name.placeholder_text = "e.g. Avi Protein Bar"
+	_new_product_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	prod_row.add_child(_new_product_name)
+	_new_product_mass = SpinBox.new()
+	_new_product_mass.prefix = "kg/unit "
+	_new_product_mass.min_value = 0.1
+	_new_product_mass.max_value = 5000
+	_new_product_mass.value = 0.4
+	prod_row.add_child(_new_product_mass)
+	_process_page.add_child(prod_row)
+	_process_name_in = LineEdit.new()
+	_process_name_in.placeholder_text = "Process / line name"
+	_process_page.add_child(_process_name_in)
+	_process_page.add_child(_label("Machines to install in this factory"))
+	_machines_box = VBoxContainer.new()
+	_process_page.add_child(_machines_box)
+	_refresh_machines_ui()
 	_process_page.add_child(_label("Inputs (add multiple)"))
 	var in_row := HBoxContainer.new()
 	var in_mat := OptionButton.new()
@@ -204,16 +218,14 @@ func _build_process_page() -> void:
 	_process_page.add_child(_extra_outputs)
 	var dur_lab := SpinBox.new()
 	dur_lab.prefix = "Duration ticks "
-	dur_lab.min_value = 1
-	dur_lab.value = 60
+	dur_lab.min_value = 360
+	dur_lab.value = 1440
 	_process_page.add_child(dur_lab)
-	var rec_btn := Button.new()
-	rec_btn.text = "Create process ($100)"
-	PanelUI.style_btn(rec_btn, true)
-	rec_btn.pressed.connect(
-		_on_create_recipe.bind(rec_name, in_mat, in_qty, out_mat, out_qty, dur_lab)
-	)
-	_process_page.add_child(rec_btn)
+	_process_labor_spin = SpinBox.new()
+	_process_labor_spin.prefix = "Labor ¢ "
+	_process_labor_spin.max_value = 1_000_000
+	_process_labor_spin.value = 500
+	_process_page.add_child(_process_labor_spin)
 	_recipe_list = ItemList.new()
 	_recipe_list.custom_minimum_size = Vector2(0, 100)
 	_process_page.add_child(_recipe_list)
@@ -476,15 +488,88 @@ func _enabled_recipe_ids() -> Array:
 	return ids
 
 
+func _installed_machines_dict() -> Dictionary:
+	var d: Dictionary = {}
+	if _machines_box == null:
+		return d
+	for row in _machines_box.get_children():
+		if row is HBoxContainer and row.has_meta("machine_id"):
+			var q := int(row.get_meta("qty"))
+			if q > 0:
+				d[str(row.get_meta("machine_id"))] = q
+	return d
+
+
+func _refresh_machines_ui() -> void:
+	if _machines_box == null:
+		return
+	for c in _machines_box.get_children():
+		c.queue_free()
+	API.get_factory_machines(func(data: Dictionary) -> void:
+		for row in data.get("machines", []) as Array:
+			if row is not Dictionary:
+				continue
+			var mid := str((row as Dictionary).get("machine_id", ""))
+			if mid.is_empty():
+				continue
+			var h := HBoxContainer.new()
+			h.set_meta("machine_id", mid)
+			var lbl := Label.new()
+			var disc: bool = bool((row as Dictionary).get("discovered", false))
+			var on_hand: int = int((row as Dictionary).get("on_hand", 0))
+			lbl.text = "%s%s (have %d)" % [
+				str((row as Dictionary).get("label", mid)),
+				"" if disc else " [locked]",
+				on_hand,
+			]
+			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			if not disc:
+				lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
+			h.add_child(lbl)
+			var sp := SpinBox.new()
+			sp.min_value = 0
+			sp.max_value = maxi(1, on_hand)
+			sp.value = 0
+			sp.value_changed.connect(func(v: float) -> void: h.set_meta("qty", int(v)))
+			h.set_meta("qty", 0)
+			h.add_child(sp)
+			_machines_box.add_child(h)
+	)
+
+
+func _build_factory_outputs() -> Dictionary:
+	var outputs := _io_dict_from_list(_extra_outputs)
+	var novel := _new_product_name.text.strip_edges() if _new_product_name else ""
+	if not novel.is_empty():
+		outputs[novel] = maxi(1, int(outputs.get(novel, 1)))
+	return outputs
+
+
 func _on_publish(pub: CheckButton, lic: SpinBox, labor: SpinBox) -> void:
 	if _name_in.text.strip_edges().is_empty():
 		_status.text = "Name required."
 		return
+	var novel := _new_product_name.text.strip_edges() if _new_product_name else ""
+	if novel.is_empty():
+		_status.text = "Name your new product on the Process tab."
+		return
+	var outputs := _build_factory_outputs()
+	if outputs.is_empty():
+		_status.text = "Add at least one output (your new product)."
+		return
+	var inputs := _io_dict_from_list(_extra_inputs)
+	if not inputs.has("electricity"):
+		inputs["electricity"] = 1
 	var desc := _desc_in.text.strip_edges()
 	if not desc.is_empty():
 		desc += "\n"
 	desc += _layout_json()
-	API.create_blueprint(
+	var proc_name := (
+		_process_name_in.text.strip_edges()
+		if _process_name_in
+		else "Line: %s" % novel
+	)
+	API.design_custom_factory(
 		{
 			"party": WorldState.party_id,
 			"name": _name_in.text.strip_edges(),
@@ -495,7 +580,6 @@ func _on_publish(pub: CheckButton, lic: SpinBox, labor: SpinBox) -> void:
 			"construction_labor_cents": int(labor.value),
 			"construction_materials": _construction_dict(),
 			"construction_ticks": 1440,
-			"enabled_recipe_ids": _enabled_recipe_ids(),
 			"maintenance_interval_ticks": 14400,
 			"maintenance_materials": _maintenance_dict(),
 			"maintenance_grace_ticks": 1440,
@@ -504,6 +588,20 @@ func _on_publish(pub: CheckButton, lic: SpinBox, labor: SpinBox) -> void:
 			"terrain_requirements": [],
 			"requires_coastal": false,
 			"requires_power": _footprint_designer.get_layout().values().has("power"),
+			"installed_machines": _installed_machines_dict(),
+			"process_name": proc_name,
+			"process_inputs": inputs,
+			"process_outputs": outputs,
+			"process_duration_ticks": 1440,
+			"process_labor_cents": int(_process_labor_spin.value) if _process_labor_spin else 500,
+			"new_products": [
+				{
+					"display_name": novel,
+					"output_slot": novel,
+					"mass_per_unit_kg": float(_new_product_mass.value) if _new_product_mass else 0.4,
+					"category": "processed",
+				}
+			],
 		},
 		func(data: Dictionary) -> void:
 			if bool(data.get("ok", false)):
@@ -513,9 +611,11 @@ func _on_publish(pub: CheckButton, lic: SpinBox, labor: SpinBox) -> void:
 					"name": _name_in.text,
 					"footprint_w": int(_w_spin.value),
 					"footprint_h": int(_h_spin.value),
+					"recipe_id": str(data.get("recipe_id", "")),
 				}
 				blueprint_created.emit(bid, bp_data)
-				MainFeedback.toast("Blueprint registered")
+				MainFeedback.toast("Custom factory registered — place it on a plot")
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
 				close()
 			else:
 				_status.text = str(data.get("reason", data.get("detail", "Failed"))),

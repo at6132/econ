@@ -50,6 +50,7 @@ const BUILDING_CATEGORIES := {
 	"residence": "Population",
 	"assay_lab": "Research",
 	"laboratory": "Research",
+	"research_lab": "Research",
 }
 
 const MINERAL_ROWS := [
@@ -67,6 +68,25 @@ const MINERAL_ROWS := [
 	["oil_shale_grade", "Oil shale"],
 	["rare_earth_grade", "Rare earth"],
 ]
+
+const ROAD_BLUEPRINT_ID := "road_segment"
+const PLAYER_REFRESH_MIN_MS := 800
+
+var _plot_id: String = ""
+var _plot_data: Dictionary = {}
+var _production_control: Node = null
+var _refreshing_buildings: bool = false
+var _buildings_list_sig: String = ""
+var _player_refresh_earliest_msec: int = 0
+var _session_gen: int = 0
+var _accepting_updates: bool = false
+var _geology_section: VBoxContainer
+var _geology_jobs: Label
+var _research_section: VBoxContainer
+var _research_status: Label
+var _research_node_opt: OptionButton
+var _workshop_focus_opt: OptionButton
+var _buy_plot_btn: Button
 
 @onready var panel: Panel = %Panel
 @onready var scroll: ScrollContainer = %Scroll
@@ -116,24 +136,6 @@ const MINERAL_ROWS := [
 @onready var _sep_before_roads: HSeparator = %SepBeforeRoads
 @onready var _sep_before_production: HSeparator = %SepBeforeProduction
 
-const ROAD_BLUEPRINT_ID := "road_segment"
-
-var _plot_id: String = ""
-var _plot_data: Dictionary = {}
-var _production_control: Node = null
-var _refreshing_buildings: bool = false
-var _buildings_list_sig: String = ""
-var _player_refresh_earliest_msec: int = 0
-var _session_gen: int = 0
-var _accepting_updates: bool = false
-const PLAYER_REFRESH_MIN_MS := 800
-var _geology_section: VBoxContainer
-var _geology_jobs: Label
-var _buy_plot_btn: Button
-
-const ProductionControlScene := preload("res://scenes/panels/ProductionControl.tscn")
-const PlotElectricityWindowScript := preload("res://scenes/panels/PlotElectricityWindow.gd")
-
 
 func _ready() -> void:
 	_apply_theme()
@@ -155,6 +157,7 @@ func _ready() -> void:
 	list_for_sale_btn.pressed.connect(_on_list_for_sale)
 	energy_manage_btn.pressed.connect(_on_energy_manage)
 	_setup_geology_and_buy()
+	_setup_research_and_focus()
 	if not get_viewport().size_changed.is_connected(_on_viewport_resized):
 		get_viewport().size_changed.connect(_on_viewport_resized)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -303,6 +306,125 @@ func _setup_geology_and_buy() -> void:
 	vbox.move_child(_geology_section, idx)
 
 
+func _setup_research_and_focus() -> void:
+	_research_section = VBoxContainer.new()
+	_research_section.name = "ResearchSection"
+	_research_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var rtitle := Label.new()
+	rtitle.text = "Technology & workshop focus"
+	rtitle.add_theme_color_override("font_color", RealmColors.ACCENT)
+	_research_section.add_child(rtitle)
+	_research_status = Label.new()
+	_research_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_research_section.add_child(_research_status)
+	var research_row := HBoxContainer.new()
+	_research_node_opt = OptionButton.new()
+	_research_node_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	research_row.add_child(_research_node_opt)
+	var start_btn := Button.new()
+	start_btn.text = "Research"
+	start_btn.pressed.connect(func() -> void:
+		if _research_node_opt.selected < 0 or _plot_id.is_empty():
+			return
+		API.start_research(
+			str(_research_node_opt.get_item_metadata(_research_node_opt.selected)),
+			func(data: Dictionary) -> void:
+				if bool(data.get("ok", false)):
+					MainFeedback.toast("Research started")
+					_refresh_research_ui()
+				else:
+					_show_error(str(data.get("reason", "Research failed")))
+		)
+	)
+	research_row.add_child(start_btn)
+	_research_section.add_child(research_row)
+	var focus_row := HBoxContainer.new()
+	_workshop_focus_opt = OptionButton.new()
+	_workshop_focus_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	focus_row.add_child(_workshop_focus_opt)
+	var focus_btn := Button.new()
+	focus_btn.text = "Set focus"
+	focus_btn.pressed.connect(_on_set_workshop_focus)
+	focus_row.add_child(focus_btn)
+	var clear_focus_btn := Button.new()
+	clear_focus_btn.text = "Clear"
+	clear_focus_btn.pressed.connect(func() -> void:
+		if _plot_id.is_empty():
+			return
+		API.set_workshop_focus(_plot_id, "", func(data: Dictionary) -> void:
+			if bool(data.get("ok", false)):
+				MainFeedback.toast("Workshop focus cleared")
+				API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
+		)
+	)
+	focus_row.add_child(clear_focus_btn)
+	_research_section.add_child(focus_row)
+	_style_gold_button(start_btn)
+	_style_gold_button(focus_btn)
+	_style_gold_button(clear_focus_btn)
+	var vbox := %VBoxMain
+	var idx := _geology_section.get_index() + 1 if _geology_section != null else vbox.get_child_count()
+	vbox.add_child(_research_section)
+	vbox.move_child(_research_section, idx)
+
+
+func _refresh_research_ui() -> void:
+	if _research_status == null or _research_node_opt == null:
+		return
+	API.get_research_status(func(st: Dictionary) -> void:
+		var active: Variant = st.get("active")
+		if active is Dictionary and not active.is_empty():
+			_research_status.text = "Research: %s (%.1f days)" % [
+				str(active.get("node_id", "")),
+				float(active.get("progress_days", 0)),
+			]
+		else:
+			_research_status.text = "No active research"
+	)
+	API.get_research_catalog(func(cat: Dictionary) -> void:
+		_research_node_opt.clear()
+		var nodes: Dictionary = cat.get("nodes", {})
+		for nid in nodes.keys():
+			var spec: Dictionary = nodes[nid] if nodes[nid] is Dictionary else {}
+			if not bool(spec.get("can_start", false)):
+				continue
+			_research_node_opt.add_item(str(nid).replace("_", " "))
+			_research_node_opt.set_item_metadata(_research_node_opt.item_count - 1, nid)
+	)
+	API.get_buildable_recipes(func(br: Dictionary) -> void:
+		if _workshop_focus_opt == null:
+			return
+		_workshop_focus_opt.clear()
+		_workshop_focus_opt.add_item("(no focus)")
+		_workshop_focus_opt.set_item_metadata(0, "")
+		for rid in br.get("recipe_ids", []) as Array:
+			_workshop_focus_opt.add_item(str(rid))
+			_workshop_focus_opt.set_item_metadata(
+				_workshop_focus_opt.item_count - 1, str(rid)
+			)
+		var cur: String = str(WorldState.workshop_focuses.get(_plot_id, ""))
+		for i in _workshop_focus_opt.item_count:
+			if str(_workshop_focus_opt.get_item_metadata(i)) == cur:
+				_workshop_focus_opt.select(i)
+				break
+	)
+
+
+func _on_set_workshop_focus() -> void:
+	if _plot_id.is_empty() or _workshop_focus_opt == null:
+		return
+	if _workshop_focus_opt.selected < 0:
+		return
+	var rid: String = str(_workshop_focus_opt.get_item_metadata(_workshop_focus_opt.selected))
+	API.set_workshop_focus(_plot_id, rid, func(data: Dictionary) -> void:
+		if bool(data.get("ok", false)):
+			MainFeedback.toast("Workshop focus set" if rid else "Focus cleared")
+			API.get_world_player(func(p): WorldState.apply_player(p), WorldState.party_id)
+		else:
+			_show_error(str(data.get("reason", "Focus failed")))
+	)
+
+
 func _style_gold_button(btn: Button) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.12, 0.12, 0.14)
@@ -325,6 +447,7 @@ func open(plot_id: String, plot_data: Dictionary) -> void:
 	_player_refresh_earliest_msec = 0
 	WorldState.player_updated.connect(_on_world_state_player_updated)
 	_populate(_plot_data)
+	_refresh_research_ui()
 	_reset_scroll_layout()
 	_slide_in()
 	var energy_cb := func(data: Dictionary) -> void:
@@ -505,17 +628,21 @@ func _plot_energy_power(data: Dictionary) -> Dictionary:
 	return data
 
 
+func _active_contract_count(data: Dictionary) -> int:
+	var n := 0
+	for c in data.get("connections", []) as Array:
+		if c is Dictionary and str((c as Dictionary).get("status", "")) == "active":
+			n += 1
+	return n
+
+
 func _access_status_label(data: Dictionary) -> String:
 	var mode := str(data.get("access_mode", ""))
 	match mode:
 		"own_generation":
 			return "Self-supplied"
 		"utility_contract":
-			var n := 0
-			for c in data.get("connections", []) as Array:
-				if c is Dictionary and str((c as Dictionary).get("status", "")) == "active":
-					n += 1
-			return "%d contract(s)" % n
+			return "%d contract(s)" % _active_contract_count(data)
 		"requires_contract":
 			return "Needs contract"
 		"unpowered":
@@ -566,8 +693,11 @@ func _on_energy_response(data: Dictionary) -> void:
 		var load := int(pw.get("load_per_day", 0))
 		var price := int(pw.get("clearing_price_cents", 0))
 		lines.append(
-			"Capacity %d/day · load %d/day · price %s/unit"
-			% [cap, load, WorldState.format_money(price)]
+			"Capacity %d/day · load %d/day · price %s/unit" % [
+				cap,
+				load,
+				WorldState.format_money(price),
+			]
 		)
 		var lf := float(pw.get("load_factor", 0.0))
 		if bool(pw.get("brownout", false)):
@@ -607,7 +737,14 @@ func _on_energy_response(data: Dictionary) -> void:
 func _on_energy_manage() -> void:
 	if _plot_id.is_empty():
 		return
-	var win: CanvasLayer = PlotElectricityWindowScript.new()
+	var script: GDScript = load("res://scenes/panels/PlotElectricityWindow.gd") as GDScript
+	if script == null:
+		push_error("PlotElectricityWindow.gd failed to load")
+		return
+	var win: CanvasLayer = script.new() as CanvasLayer
+	if win == null:
+		push_error("PlotElectricityWindow failed to instantiate")
+		return
 	win.setup(_plot_id, WorldState.party_id)
 	win.closed.connect(_refresh_plot_energy)
 	add_child(win)
@@ -676,8 +813,7 @@ func _buildings_signature() -> String:
 			continue
 		var row: Dictionary = b as Dictionary
 		parts.append(
-			"%s:%d:%d:%d"
-			% [
+			"%s:%d:%d:%d" % [
 				str(row.get("instance_id", "")),
 				int(row.get("_efficiency_pct", 100)),
 				int(row.get("completes_at_tick", 0)),

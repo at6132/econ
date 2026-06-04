@@ -1,7 +1,8 @@
 extends Node2D
 ## Solo shell — map in SubViewport; one exclusive overlay panel at a time.
 
-const PlotDetailScene := preload("res://scenes/panels/PlotDetail.tscn")
+## PlotDetail uses autoloads (WorldState, API, …); preload() at class scope fails on Godot 4.3+.
+const PLOT_DETAIL_SCENE_PATH := "res://scenes/panels/PlotDetail.tscn"
 const BazaarPanelScene := preload("res://scenes/panels/BazaarPanel.tscn")
 const BuildPanelScene := preload("res://scenes/panels/BuildPanel.tscn")
 const ProductionWorkflowScene := preload("res://scenes/panels/ProductionWorkflowWindow.tscn")
@@ -48,6 +49,17 @@ var _last_refresh_msec: int = -1
 var _refresh_in_flight: bool = false
 var _pause_menu: CanvasLayer = null
 var _command_palette: CanvasLayer = null
+var _plot_detail_scene: PackedScene
+
+
+func _plot_detail_packed() -> PackedScene:
+	if _plot_detail_scene == null:
+		_plot_detail_scene = load(PLOT_DETAIL_SCENE_PATH) as PackedScene
+	return _plot_detail_scene
+
+
+func _is_overlay_path(scene_path: String) -> bool:
+	return is_instance_valid(_active_overlay) and _active_overlay.scene_file_path == scene_path
 
 
 func _ready() -> void:
@@ -391,7 +403,7 @@ func _toggle_overlay(scene: PackedScene) -> void:
 
 
 func _on_plot_clicked(plot_id: String, _plot_data_unused: Dictionary) -> void:
-	if _is_overlay(PlotDetailScene) and _resume_plot_id == plot_id:
+	if _is_overlay_path(PLOT_DETAIL_SCENE_PATH) and _resume_plot_id == plot_id:
 		_close_active_overlay()
 		return
 	_open_plot_detail(plot_id)
@@ -409,7 +421,7 @@ func _open_plot_detail(plot_id: String) -> void:
 	var merged: Dictionary = WorldState.get_plot_ui(plot_id)
 	if merged.is_empty():
 		merged = WorldState.plots.get(plot_id, {})
-	var panel: Node = PlotDetailScene.instantiate()
+	var panel: Node = _plot_detail_packed().instantiate()
 	_mount_overlay(panel)
 	if panel.has_method("open"):
 		panel.call("open", plot_id, merged)
@@ -584,7 +596,7 @@ func _on_overlay_tree_exited(node: Node) -> void:
 	if _active_overlay == node:
 		_active_overlay = null
 	var path: String = node.scene_file_path
-	if path == PlotDetailScene.resource_path:
+	if path == PLOT_DETAIL_SCENE_PATH:
 		if _build_return_plot_id == "":
 			_resume_plot_id = ""
 		return
