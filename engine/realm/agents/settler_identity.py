@@ -120,6 +120,12 @@ def assign_settler_personality(world: World, party: PartyId) -> SettlerPersonali
         "personality": personality_to_dict(personality),
         "world_model": world_model_to_dict(SettlerWorldModel()),
     }
+    # Researchers get their core capabilities at spawn — not gated behind research.
+    from realm.agents.settler_archetypes import Archetype, get_archetype
+    from realm.research.capabilities import grant_capabilities
+
+    if get_archetype(party) == Archetype.RESEARCHER:
+        grant_capabilities(world, party, ["custom_recipe", "custom_blueprint", "blueprint_public_license"])
     return personality
 
 
@@ -279,6 +285,9 @@ def _build_world_model_from_parsed(
             "reputation_score": _reputation_score(world, PartyId(party_s)),
         }
 
+    from realm.intelligence.market_intel import merge_material_intel_entry
+
+    old_intel = get_settler_world_model(world, observer).material_intel
     material_intel: dict[str, dict[str, Any]] = {}
     materials = set(ask_prices) | set(bid_prices) | set(list_parties_by_material)
     for material in materials:
@@ -290,12 +299,22 @@ def _build_world_model_from_parsed(
         second_ask = [p for t, p in asks if t >= mid_tick]
         trend = _price_trend(first_ask, second_ask)
         producers = sorted(list_parties_by_material.get(material, set()))
-        material_intel[material] = {
-            "last_seen_ask": last_seen_ask,
-            "last_seen_bid": last_seen_bid,
-            "trend": trend,
-            "known_producers": producers,
-        }
+        material_intel[material] = merge_material_intel_entry(
+            observed=True,
+            tick=int(world.tick),
+            previous=old_intel.get(material),
+            market_fields={
+                "last_seen_ask": last_seen_ask,
+                "last_seen_bid": last_seen_bid,
+                "trend": trend,
+                "known_producers": producers,
+            },
+        )
+
+    for material, prev in old_intel.items():
+        if material not in material_intel:
+            material_intel[material] = dict(prev)
+            material_intel[material].setdefault("uncertainty", 0.0)
 
     return SettlerWorldModel(
         known_settlers=known,
