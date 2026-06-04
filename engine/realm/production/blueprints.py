@@ -31,6 +31,7 @@ _SEEDED_FOOTPRINTS: Final[dict[str, tuple[int, int]]] = {
     "forge_press": (3, 3),
     "tool_workshop": (3, 3),
     "assay_lab": (3, 2),
+    "research_lab": (4, 3),
     "bank_building": (4, 3),
     "chemical_works": (4, 3),
     "machine_shop": (4, 4),
@@ -84,7 +85,7 @@ def _category_for(building_id: str) -> str:
         return "commerce"
     if building_id in ("residence",):
         return "population"
-    if building_id in ("assay_lab", "laboratory"):
+    if building_id in ("assay_lab", "laboratory", "research_lab"):
         return "research"
     return "custom"
 
@@ -184,8 +185,8 @@ def seed_world_blueprints(world: object) -> None:
         world.blueprints.update(SEEDED_BLUEPRINTS)
 
 
-def blueprint_public_dict(bp: Blueprint) -> dict:
-    return {
+def blueprint_public_dict(bp: Blueprint, *, world: object | None = None) -> dict:
+    row = {
         "blueprint_id": bp.blueprint_id,
         "name": bp.name,
         "description": bp.description,
@@ -207,3 +208,10 @@ def blueprint_public_dict(bp: Blueprint) -> dict:
         "requires_coastal": bp.requires_coastal,
         "requires_power": bp.requires_power,
     }
+    if world is not None:
+        from realm.production.factory_design import factory_design_public
+
+        fd = factory_design_public(world, bp.blueprint_id)  # type: ignore[arg-type]
+        if fd is not None:
+            row["factory_design"] = fd
+    return row

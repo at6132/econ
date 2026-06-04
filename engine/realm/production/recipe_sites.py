@@ -105,6 +105,25 @@ RECIPE_ALLOWED_TERRAINS: Final[dict[str, frozenset[Terrain]]] = {
     "assemble_mining_pick": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
     "assemble_hand_saw": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
     "assemble_pick_axe": frozenset({T.MOUNTAIN, T.PLAINS, T.FOREST}),
+    # Technology tree (research unlocks).
+    "electric_pump": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "electric_drill": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.FOREST, T.TUNDRA}),
+    "telegraph_line": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "turbine_generator": frozenset(
+        {T.PLAINS, T.FOREST, T.MOUNTAIN, T.DESERT, T.TUNDRA, T.SWAMP}
+    ),
+    "dye_synthesis": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    "blast_mining": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.FOREST, T.TUNDRA}),
+    "fertilizer_plant": frozenset({T.PLAINS}),
+    "radio_broadcast": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "semiconductor_fab": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "automated_factory": frozenset({T.MOUNTAIN, T.PLAINS}),
+    "composite_build": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    "nano_fabrication": frozenset({T.PLAINS, T.DESERT, T.MOUNTAIN, T.SWAMP}),
+    "fusion_reactor": frozenset(
+        {T.PLAINS, T.FOREST, T.MOUNTAIN, T.DESERT, T.TUNDRA, T.SWAMP}
+    ),
+    "assembler": frozenset({T.MOUNTAIN, T.PLAINS}),
     # Tier-3 extraction & refining (drill rig + downstream foundry/chemical_works).
     "mine_platinum": frozenset({T.MOUNTAIN, T.DESERT, T.PLAINS, T.TUNDRA}),
     "mine_oil_shale": frozenset({T.SWAMP, T.PLAINS, T.MOUNTAIN, T.FOREST, T.TUNDRA}),
@@ -255,12 +274,40 @@ def footprint_borders_water(
     return False
 
 
+def _custom_recipe_plot_gate(
+    world, plot: Plot, recipe_id: str
+) -> tuple[bool, str | None] | None:
+    """Player-authored factory lines use blueprint terrain, not ``RECIPE_ALLOWED_TERRAINS``."""
+    if not str(recipe_id).startswith("custom_recipe_"):
+        return None
+    from realm.production.custom_content import custom_recipes_store
+
+    row = custom_recipes_store(world).get(str(recipe_id))
+    if not isinstance(row, dict):
+        return (False, "unknown custom recipe")
+    bid = str(row.get("requires_building_id", ""))
+    bp = world.blueprints.get(bid)
+    if bp is None:
+        return (False, "custom recipe has no blueprint")
+    if not terrain_allows_workshop(plot.terrain):
+        return (False, f"recipe not available on {plot.terrain.value} terrain")
+    allowed = {str(t) for t in bp.terrain_requirements}
+    if allowed and plot.terrain.value not in allowed:
+        return (False, f"recipe not available on {plot.terrain.value} terrain")
+    if bp.requires_coastal and not plot_is_coastal(world, plot):
+        return (False, f"{recipe_id} requires a coastal plot (adjacent to water)")
+    return (True, None)
+
+
 def recipe_allowed_on_plot(world, plot: Plot, recipe_id: str) -> tuple[bool, str | None]:
     """Strict plot-level gate. Returns ``(ok, reason)``.
 
     Adds the coastal check on top of ``recipe_allowed_on_terrain``: coastal-only
     recipes reject any dry plot that does not border a water tile.
     """
+    custom_gate = _custom_recipe_plot_gate(world, plot, recipe_id)
+    if custom_gate is not None:
+        return custom_gate
     if not recipe_allowed_on_terrain(plot.terrain, recipe_id):
         return (False, f"recipe not available on {plot.terrain.value} terrain")
     if recipe_id in COASTAL_ONLY_RECIPES and not plot_is_coastal(world, plot):

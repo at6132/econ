@@ -109,6 +109,11 @@ def register_custom_material(
     category: str = "processed",
     material_id: str = "",
 ) -> dict[str, Any]:
+    from realm.research.fabrication import validate_custom_material_registration
+
+    cap_err = validate_custom_material_registration(world, party)
+    if cap_err:
+        return {"ok": False, "reason": cap_err}
     if not display_name or len(display_name) > 80:
         return {"ok": False, "reason": "display_name must be 1–80 characters"}
     cat = str(category).strip().lower() or "processed"
@@ -131,6 +136,7 @@ def register_custom_material(
         "display_name": display_name,
         "category": cat,
         "creator_party": str(party),
+        "mass_per_unit_kg": 400.0,
     }
     return {"ok": True, "material_id": mid, "fee_cents": fee}
 
@@ -147,6 +153,18 @@ def create_custom_recipe(
     *,
     is_public: bool = False,
 ) -> dict[str, Any]:
+    from realm.research.fabrication import (
+        validate_custom_recipe_creation,
+        validate_custom_recipe_public,
+    )
+
+    cap_err = validate_custom_recipe_creation(world, party)
+    if cap_err:
+        return {"ok": False, "reason": cap_err}
+    if is_public:
+        pub_err = validate_custom_recipe_public(world, party)
+        if pub_err:
+            return {"ok": False, "reason": pub_err}
     if not display_name or len(display_name) > 80:
         return {"ok": False, "reason": "display_name must be 1–80 characters"}
     if duration_ticks < 1:

@@ -72,6 +72,13 @@ _FAIR_VALUE_CENTS: dict[str, int] = {
     "drill_bit": 6_500,
     "pump_unit": 18_000,
     "gear_set": 11_000,
+    "telegraph_relay": 4_200,
+    "synthetic_dye": 6_800,
+    "vacuum_tube": 2_400,
+    "transistor": 8_500,
+    "control_module": 22_000,
+    "carbon_fiber": 14_000,
+    "nanofiber": 45_000,
     # Transport capital (durable; Sprint 2 — required for coastal route registration).
     "vessel": 45_000,
     "small_vessel": 18_000,

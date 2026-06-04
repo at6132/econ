@@ -54,12 +54,18 @@ def legacy_plot_building_row(world: World, pb: PlacedBuilding) -> dict[str, Any]
 
 
 def sync_plot_buildings_from_placed(world: World) -> None:
-    """Rebuild ``plot_buildings`` list from ``placed_buildings`` (legacy readers)."""
-    rows: list[dict[str, Any]] = []
-    for iid in sorted(world.placed_buildings.keys()):
-        pb = world.placed_buildings[iid]
-        rows.append(legacy_plot_building_row(world, pb))
-    world.plot_buildings = rows
+    """Rebuild placed-building rows in ``plot_buildings``, preserving legacy entries."""
+    placed_iids = set(world.placed_buildings.keys())
+    legacy_rows = [
+        b
+        for b in world.plot_buildings
+        if str(b.get("instance_id", "")) not in placed_iids
+    ]
+    placed_rows = [
+        legacy_plot_building_row(world, pb)
+        for pb in sorted(world.placed_buildings.values(), key=lambda pb: pb.instance_id)
+    ]
+    world.plot_buildings = legacy_rows + placed_rows
 
 
 def register_placed_building(world: World, pb: PlacedBuilding) -> None:

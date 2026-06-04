@@ -319,6 +319,22 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
         )
         if labour_bps != 10_000:
             out = {k: max(0, (int(v) * int(labour_bps)) // 10_000) for k, v in out.items()}
+        from realm.population.laborer_lifecycle import (
+            laborer_health_output_multiplier,
+            skill_yield_multiplier_for_laborer,
+            _workplace_laborer_index,
+        )
+
+        worker = _workplace_laborer_index(world).get((str(run.party), str(run.plot_id)))
+        if worker is not None:
+            skill_mult = skill_yield_multiplier_for_laborer(worker, str(recipe.recipe_id))
+            health_mult = laborer_health_output_multiplier(worker)
+            combined = skill_mult * health_mult
+            if combined != 1.0:
+                out = {
+                    k: max(0, int(round(int(v) * float(combined))))
+                    for k, v in out.items()
+                }
     # Phase 8 — Sub-phase 8A: seasonal yield modifier composes multiplicatively
     # on top of all the above. Winter ``grow_grain`` returns 0 (recipe is also
     # blocked at start-time on non-tropical islands). Autumn harvest window
@@ -349,6 +365,16 @@ def effective_outputs_for_completion(world: World, run: ActiveProduction, recipe
         sm = soil_quality_modifier(world, plot.plot_id)
         if sm != 1.0:
             out = {k: max(0, int(round(int(v) * float(sm)))) for k, v in out.items()}
+    from realm.research.bonuses import research_output_multiplier
+
+    research_mult = research_output_multiplier(
+        world, run.party, str(recipe.recipe_id), plot_id=run.plot_id
+    )
+    if research_mult != 1.0:
+        out = {
+            k: max(0, int(round(int(v) * float(research_mult))))
+            for k, v in out.items()
+        }
     input_mult = float(getattr(run, "input_yield_mult", 1.0))
     if input_mult != 1.0:
         out = {k: max(0, int(round(int(v) * input_mult))) for k, v in out.items()}
@@ -982,6 +1008,15 @@ def tick_production(world: World) -> None:
             recipe_id=run.recipe_id,
             run_id=run.run_id,
         )
+        if int(getattr(recipe, "labor_cents", 0)) > 0:
+            pending = world.scenario_state.setdefault("laborer_skill_pending", [])
+            pending.append(
+                {
+                    "party": str(run.party),
+                    "plot_id": str(run.plot_id),
+                    "recipe_id": str(run.recipe_id),
+                }
+            )
         from realm.economy.business_viability import record_business_production_for_completed_run
 
         record_business_production_for_completed_run(

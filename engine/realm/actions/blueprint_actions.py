@@ -183,6 +183,19 @@ def create_blueprint(
         return {"ok": False, "reason": "blueprint footprint exceeds maximum plot area (100 cells)"}
     if not name or len(name) > 60:
         return {"ok": False, "reason": "name must be 1–60 characters"}
+    from realm.research.fabrication import (
+        validate_blueprint_public_license,
+        validate_blueprint_registration,
+    )
+
+    reg_err = validate_blueprint_registration(
+        world, creator, footprint_w, footprint_h, enabled_recipe_ids
+    )
+    if reg_err:
+        return {"ok": False, "reason": reg_err}
+    lic_err = validate_blueprint_public_license(world, creator, is_public)
+    if lic_err:
+        return {"ok": False, "reason": lic_err}
     from realm.production.custom_content import get_recipe
 
     for recipe_id in enabled_recipe_ids:
@@ -440,6 +453,11 @@ def place_blueprint(
         book_value_cents=int(build_cost_cents),
     )
     register_placed_building(world, pb)
+    from realm.production.factory_design import consume_factory_machines_on_build
+
+    mach = consume_factory_machines_on_build(world, party, blueprint_id)
+    if not mach.get("ok"):
+        return mach  # type: ignore[return-value]
     world.building_maintenance[iid] = {
         "due_at_tick": int(due),
         "missed_cycles": 0,

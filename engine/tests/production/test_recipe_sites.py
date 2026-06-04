@@ -103,6 +103,10 @@ def test_custom_blueprint_enabled_recipe_workshop() -> None:
     player = PartyId("player")
     assert claim_plot(w, player, pid)["ok"] is True
     assert survey_plot(w, player, pid)["ok"] is True
+    from realm.research.research_lab import complete_research
+
+    assert complete_research(w, player, "precision_tooling")["ok"] is True
+    assert complete_research(w, player, "workshop_engineering")["ok"] is True
     r = create_blueprint(
         w,
         player,
