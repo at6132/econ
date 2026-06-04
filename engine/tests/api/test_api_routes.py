@@ -5,9 +5,11 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from realm.api import app
+from realm.core.inventory import MatterErr
 from realm.production.decay import BUILDING_CONDITION_FULL_BPS
-from realm.core.ids import PartyId
+from realm.core.ids import MaterialId, PartyId, PlotId
 
+from stage_materials import stage_material
 from turnkey_fixtures import grant_turnkey_self_materials
 
 
@@ -23,6 +25,18 @@ def _first_claimable_plot(c: TestClient) -> str:
 def test_market_cancel_via_http_round_trip() -> None:
     c = TestClient(app)
     assert c.post("/dev/reset", params={"scenario": "frontier", "seed": 55}).status_code == 200
+    import realm.api as api
+
+    pid = _first_claimable_plot(c)
+    assert c.post(f"/plots/{pid}/claim", params={"party": "player"}).status_code == 200
+    staged = stage_material(
+        api._world,
+        PartyId("player"),
+        MaterialId("timber"),
+        5,
+        plot_id=PlotId(pid),
+    )
+    assert not isinstance(staged, MatterErr)
     r = c.post(
         "/market/sell",
         params={"party": "player", "material": "timber", "qty": 2, "price_per_unit_cents": 99},
@@ -39,6 +53,17 @@ def test_market_cancel_via_http_round_trip() -> None:
 def test_market_cancel_400_wrong_party() -> None:
     c = TestClient(app)
     c.post("/dev/reset", params={"scenario": "frontier", "seed": 56})
+    import realm.api as api
+
+    pid = _first_claimable_plot(c)
+    c.post(f"/plots/{pid}/claim", params={"party": "player"})
+    stage_material(
+        api._world,
+        PartyId("player"),
+        MaterialId("timber"),
+        5,
+        plot_id=PlotId(pid),
+    )
     r = c.post(
         "/market/sell",
         params={"party": "player", "material": "timber", "qty": 1, "price_per_unit_cents": 10},
