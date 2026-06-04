@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from realm.agents.genesis import tick_genesis_agents
 from realm.actions.assay_actions import tick_assay_jobs
+from realm.research.research_lab import tick_research_progress
 from realm.actions.deep_survey_actions import tick_deep_survey_jobs
 from realm.genesis.digest import tick_genesis_world_feed
 from realm.genesis.feed_hooks import tick_genesis_feed_tick_scan
@@ -38,6 +39,12 @@ from realm.population.employment import (
     tick_settler_job_postings,
 )
 from realm.population.laborers import tick_laborer_births, tick_laborers
+from realm.population.laborer_lifecycle import (
+    tick_laborer_health,
+    tick_laborer_reproduction,
+    tick_laborer_savings,
+    tick_laborer_skills,
+)
 from realm.events.sprint4_feed import tick_sprint4_feed
 from realm.population.stores import tick_laborer_spending, tick_store_restock
 from realm.actions.construction_actions import tick_construction_firms, tick_construction_orders
@@ -62,6 +69,8 @@ def advance_tick(world: World) -> None:
     tick_road_decay(world)
     tick_production(world)
     tick_production_auto_restart(world)
+    if world.scenario_id == "genesis":
+        tick_laborer_skills(world)
     tick_material_spoilage(world)
     tick_stub_employment(world)
     tick_assay_jobs(world)
@@ -93,6 +102,7 @@ def advance_tick(world: World) -> None:
         tick_monthly_utility_bills(world)
         tick_holding_costs(world)
         tick_trade_balance(world)
+        tick_research_progress(world)
         for route_data in (world.scenario_state.get("route_daily_volume") or {}).values():
             if isinstance(route_data, dict):
                 route_data["units_shipped_today"] = 0
@@ -123,9 +133,12 @@ def advance_tick(world: World) -> None:
         tick_settler_job_postings(world)
         tick_job_market(world)
         tick_laborer_wages(world)
+        tick_laborer_savings(world)
         tick_store_restock(world)
         tick_laborer_spending(world)
+        tick_laborer_health(world)
         tick_laborer_births(world)
+        tick_laborer_reproduction(world)
         # Phase 7F — inter-island demand: NPCs on food-deficit islands
         # post real B2B grain buy orders against surplus islands. Runs
         # after spending so the day's consumption already drained stores.
