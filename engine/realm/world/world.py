@@ -748,6 +748,10 @@ def bootstrap_genesis(
         )
         if isinstance(trs, MoneyErr):
             raise ValueError(trs.reason)
+    from realm.agents.settler_identity import assign_settler_personality
+
+    for sid in sorted((p for p in world.parties if str(p).startswith("settler_")), key=str):
+        assign_settler_personality(world, sid)
     gst = world.scenario_state.setdefault("genesis", {})
     gst["settler_cycle_enabled"] = cycle_enabled
     gst["settler_cap"] = settler_cap

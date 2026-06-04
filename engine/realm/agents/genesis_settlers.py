@@ -22,6 +22,7 @@ from realm.agents.requote_dampener import (
     record_requote,
     should_requote,
 )
+from realm.agents.settler_identity import get_settler_personality, get_settler_world_model
 from realm.infrastructure.plot_logistics import (
     ensure_inventory_from_stash,
     party_material_held,
@@ -274,6 +275,24 @@ def _party_salience_jitter(party: PartyId) -> float:
     return (acc % 7919) / 791_900.0
 
 
+def _settler_identity_bundle(
+    world: World, party: PartyId
+) -> tuple[object | None, object]:
+    from realm.world.runtime_cache import bucket
+
+    cache = bucket(world).get("_settler_identity_tick_cache")
+    if not isinstance(cache, dict) or int(cache.get("tick", -1)) != int(world.tick):
+        cache = {"tick": int(world.tick)}
+        bucket(world)["_settler_identity_tick_cache"] = cache
+    key = str(party)
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    bundle = (get_settler_personality(world, party), get_settler_world_model(world, party))
+    cache[key] = bundle
+    return bundle
+
+
 def _settler_workshop_counts(world: World) -> dict[str, int]:
     out: dict[str, int] = {}
     for b in world.plot_buildings:
@@ -478,6 +497,46 @@ def _settler_can_afford_tier2_build(
     return cash >= need + 5_000 and need <= cap
 
 
+def _material_scarcity_bonus(world_model, recipe_id: str) -> float:
+    rec = RECIPES.get(recipe_id)
+    if rec is None:
+        return 0.0
+    bonus = 0.0
+    for out_mat in rec.outputs:
+        intel = world_model.material_intel.get(str(out_mat), {})
+        if intel.get("trend") == "+":
+            bonus += 0.35
+        elif intel.get("trend") == "-":
+            bonus -= 0.12
+        if len(intel.get("known_producers") or []) <= 2:
+            bonus += 0.18
+    return bonus
+
+
+_SECONDARY_OUTPUT_MATERIALS: dict[str, tuple[str, ...]] = {
+    "gristmill": ("flour",),
+    "wood_shop": ("lumber",),
+    "power_shed": ("coal",),
+    "kiln_shed": ("brick", "pottery"),
+    "stone_works": ("stone",),
+    "foundry": ("iron_ingot", "steel_ingot"),
+}
+
+
+def _secondary_scarcity_bonus(world_model, building_id: str) -> float:
+    mats = _SECONDARY_OUTPUT_MATERIALS.get(building_id, ())
+    if not mats:
+        return 0.0
+    bonus = 0.0
+    for mat in mats:
+        intel = world_model.material_intel.get(mat, {})
+        if intel.get("trend") == "+":
+            bonus += 0.28
+        if len(intel.get("known_producers") or []) <= 2:
+            bonus += 0.16
+    return bonus
+
+
 def _maybe_build_secondary_workshop(
     world: World,
     party: PartyId,
@@ -487,6 +546,7 @@ def _maybe_build_secondary_workshop(
     rng: random.Random,
 ) -> None:
     """One add-on workshop per plot — chosen from regional scarcity + terrain/subsurface."""
+    _, world_model = _settler_identity_bundle(world, party)
     if world.tick < legacy_scaled(12):
         return
     if _has_secondary_on_plot(world, party, plot_id):
@@ -511,26 +571,41 @@ def _maybe_build_secondary_workshop(
     candidates: list[tuple[str, float]] = []
 
     if recipe_allowed_on_terrain(plot.terrain, "coal_generator"):
-        candidates.append(("power_shed", gap("power_shed") + rng.random() * 0.12))
+        candidates.append(
+            ("power_shed", gap("power_shed") + _secondary_scarcity_bonus(world_model, "power_shed") + rng.random() * 0.12)
+        )
 
     if recipe_allowed_on_terrain(plot.terrain, "sawmill"):
-        candidates.append(("wood_shop", gap("wood_shop") + rng.random() * 0.12))
+        candidates.append(
+            ("wood_shop", gap("wood_shop") + _secondary_scarcity_bonus(world_model, "wood_shop") + rng.random() * 0.12)
+        )
 
     if recipe_allowed_on_terrain(plot.terrain, "mill_flour"):
-        candidates.append(("gristmill", gap("gristmill") + rng.random() * 0.12))
+        candidates.append(
+            ("gristmill", gap("gristmill") + _secondary_scarcity_bonus(world_model, "gristmill") + rng.random() * 0.12)
+        )
 
     if recipe_allowed_on_terrain(plot.terrain, "kiln_brick"):
         if float(plot.subsurface.clay_grade) >= 0.22 or _settler_has_strip_mine_on_plot(
             world, party, plot_id
         ):
-            candidates.append(("kiln_shed", gap("kiln_shed") + 0.18 + rng.random() * 0.1))
+            candidates.append(
+                (
+                    "kiln_shed",
+                    gap("kiln_shed") + _secondary_scarcity_bonus(world_model, "kiln_shed") + 0.18 + rng.random() * 0.1,
+                )
+            )
 
     if recipe_allowed_on_terrain(plot.terrain, "mine_stone"):
-        candidates.append(("stone_works", gap("stone_works") + rng.random() * 0.1))
+        candidates.append(
+            ("stone_works", gap("stone_works") + _secondary_scarcity_bonus(world_model, "stone_works") + rng.random() * 0.1)
+        )
 
     if plot.terrain == Terrain.MOUNTAIN and float(plot.subsurface.iron_ore_grade) >= 0.28:
         if recipe_allowed_on_terrain(plot.terrain, "smelt_iron"):
-            candidates.append(("foundry", gap("foundry") + 0.22 + rng.random() * 0.08))
+            candidates.append(
+                ("foundry", gap("foundry") + _secondary_scarcity_bonus(world_model, "foundry") + 0.22 + rng.random() * 0.08)
+            )
 
     if not candidates:
         return
@@ -632,6 +707,8 @@ def _maybe_build_tier2_workshop(
 def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | None:
     """Weighted primary line — ``mine_stone`` uses ``stone_works`` (not strip_mine)."""
     rng = world.rng(f"gen:settler_line2:{party}:{plot.plot_id}")
+    personality, world_model = _settler_identity_bundle(world, party)
+    loyalty = personality.specialization_loyalty if personality is not None else 0.5
     counts = _settler_workshop_counts(world)
     n_strip = int(counts.get("strip_mine", 0))
     n_yard = int(counts.get("timber_yard", 0))
@@ -706,6 +783,17 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
         if recipe_allowed_on_terrain(plot.terrain, "mine_stone"):
             return ("mine_stone", "stone_works")
         return None
+
+    primary_idx = max(range(len(opts)), key=lambda i: opts[i][2])
+    adjusted: list[tuple[str, str, float]] = []
+    for i, (rid, bid, w) in enumerate(opts):
+        if i == primary_idx:
+            w *= 0.55 + loyalty * 1.45
+        else:
+            w *= 1.0 + (1.0 - loyalty) * _material_scarcity_bonus(world_model, rid)
+        adjusted.append((rid, bid, w))
+    opts = adjusted
+
     opts.sort(key=lambda t: -t[2])
     top = opts[: min(6, len(opts))]
     weights = [max(0.02, t[2]) for t in top]
@@ -740,7 +828,19 @@ def _list_price_cents(
             from realm.economy.pricing import exchange_ask_cents
 
             ex = exchange_ask_cents(material, world=world)
-            ceiling = max(4, ex - 2)
+            personality, _ = _settler_identity_bundle(world, party)
+            if personality is not None:
+                rt = personality.risk_tolerance
+                if rt < 0.3:
+                    ceiling = max(4, ex - 2)
+                elif rt > 0.7:
+                    ceiling = max(4, int(ex * 0.85))
+                else:
+                    t = (rt - 0.3) / 0.4
+                    undercut = 2 + t * max(0, int(ex * 0.15) - 2)
+                    ceiling = max(4, int(ex - undercut))
+            else:
+                ceiling = max(4, ex - 2)
             floor = 4
             if bid is not None and int(bid) >= floor:
                 # Lift any real bid above floor; but never above the exchange ceiling.
@@ -851,12 +951,23 @@ def _settler_try_hand_extraction(
     return False
 
 
-def _workshop_cash_buffer(building_id: str) -> int:
+def _workshop_cash_buffer(
+    building_id: str,
+    *,
+    world: World | None = None,
+    party: PartyId | None = None,
+) -> int:
     if building_id == "foundry":
-        return 120_000
-    if building_id in _SECONDARY_WORKSHOPS:
-        return 58_000
-    return 25_000
+        base = 120_000
+    elif building_id in _SECONDARY_WORKSHOPS:
+        base = 58_000
+    else:
+        base = 25_000
+    if world is not None and party is not None:
+        personality, _ = _settler_identity_bundle(world, party)
+        if personality is not None:
+            base = int(base * (1.0 + (1.0 - personality.risk_tolerance) * 0.5))
+    return base
 
 
 _WORKSHOP_BUILDING_IDS = _PRIMARY_WORKSHOPS | _SECONDARY_WORKSHOPS | _TIER2_WORKSHOPS
@@ -880,7 +991,7 @@ def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id:
     need = _TURNKEY_CENTS.get(building_id)
     if need is None:
         return False
-    buf = _workshop_cash_buffer(building_id)
+    buf = _workshop_cash_buffer(building_id, world=world, party=party)
     cash = world.ledger.balance(party_cash_account(party))
     if cash < need + buf:
         return False
