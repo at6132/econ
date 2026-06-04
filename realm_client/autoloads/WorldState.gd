@@ -20,6 +20,9 @@ static func variant_to_int(v: Variant, default_val: int = 0) -> int:
 const PLAYER_STARTING_CASH_CENTS: int = 10_000_000
 ## Portable goods only — must match ``engine/realm/production/storage_caps.CARRIED_MATERIAL_IDS``.
 const CARRIED_MATERIAL_IDS: Array[String] = ["mining_pick"]
+## Plot bulk caps — must match ``engine/realm/production/storage_caps.py``.
+const PLOT_YARD_CAP_UNITS: int = 800
+const PLOT_WAREHOUSE_CAP_UNITS: int = 50_000
 var player_cash_cents: int = 0
 ## Canon starting balance for a fresh human (from ``GET /world/static`` / ``/dev/reset``).
 var player_starting_cash_cents: int = PLAYER_STARTING_CASH_CENTS
@@ -1135,7 +1138,20 @@ func owned_plot_ids_sorted() -> PackedStringArray:
 	return out
 
 
+const LOGISTICS_SITE_GROUP_ORDER: Array = [
+	"infrastructure",
+	"commerce",
+	"extraction",
+	"processing",
+	"population",
+	"research",
+	"custom",
+	"other",
+]
+
+
 func plot_site_tags(plot_id: String) -> PackedStringArray:
+	## Legacy coarse tags (warehouse / store / factory). Prefer ``plot_site_building_labels``.
 	var tags: PackedStringArray = PackedStringArray()
 	var ui := get_plot_ui(plot_id)
 	for b in ui.get("buildings", []):
@@ -1151,14 +1167,170 @@ func plot_site_tags(plot_id: String) -> PackedStringArray:
 	return tags
 
 
-func plot_site_label(plot_id: String) -> String:
-	var tags := plot_site_tags(plot_id)
-	if tags.is_empty():
+func plot_site_building_labels(plot_id: String) -> PackedStringArray:
+	var names: Array = []
+	var seen: Dictionary = {}
+	var ui := get_plot_ui(plot_id)
+	for b in ui.get("buildings", []):
+		if not (b is Dictionary):
+			continue
+		var row: Dictionary = b as Dictionary
+		var bid := str(row.get("building_id", ""))
+		if bid == "road_segment":
+			continue
+		var nm := building_display_name(row)
+		if nm.is_empty() or seen.has(nm):
+			continue
+		seen[nm] = true
+		names.append(nm)
+	names.sort()
+	var out := PackedStringArray()
+	for nm in names:
+		out.append(str(nm))
+	return out
+
+
+func plot_site_summary(plot_id: String) -> String:
+	var labels := plot_site_building_labels(plot_id)
+	if labels.is_empty():
 		return plot_id
-	var tag_list: Array = []
-	for t in tags:
-		tag_list.append(str(t))
-	return "%s · %s" % [plot_id, ", ".join(tag_list)]
+	return "%s — %s" % [plot_id, ", ".join(labels)]
+
+
+func plot_site_primary_group(plot_id: String) -> String:
+	var best := "other"
+	var best_rank := LOGISTICS_SITE_GROUP_ORDER.size()
+	var ui := get_plot_ui(plot_id)
+	for b in ui.get("buildings", []):
+		if not (b is Dictionary):
+			continue
+		var row: Dictionary = b as Dictionary
+		if str(row.get("building_id", "")) == "road_segment":
+			continue
+		var wid := workshop_id_for_building(row)
+		var cat := str(blueprint_dict(wid).get("category", "custom"))
+		if cat.is_empty():
+			cat = "custom"
+		var rank: int = LOGISTICS_SITE_GROUP_ORDER.find(cat)
+		if rank < 0:
+			rank = LOGISTICS_SITE_GROUP_ORDER.find("custom")
+		if rank < best_rank:
+			best_rank = rank
+			best = cat
+	return best
+
+
+func logistics_site_group_label(group: String) -> String:
+	match group:
+		"infrastructure":
+			return "Storage, docks & routes"
+		"commerce":
+			return "Stores & trade"
+		"extraction":
+			return "Extraction & raw sites"
+		"processing":
+			return "Factories & workshops"
+		"population":
+			return "Housing"
+		"research":
+			return "Labs & survey"
+		"custom":
+			return "Custom buildings"
+		_:
+			return "Other owned sites"
+
+
+func plot_site_label(plot_id: String) -> String:
+	return plot_site_summary(plot_id)
+
+
+func plot_stash_units_total(plot_id: String) -> int:
+	var pd: Dictionary = plots.get(plot_id, {})
+	var stock: Variant = pd.get("output_stock", {})
+	if not (stock is Dictionary):
+		return 0
+	var total := 0
+	for v in (stock as Dictionary).values():
+		total += variant_to_int(v, 0)
+	return total
+
+
+func plot_has_operational_warehouse(plot_id: String) -> bool:
+	var ui := get_plot_ui(plot_id)
+	for b in ui.get("buildings", []):
+		if not (b is Dictionary):
+			continue
+		var row: Dictionary = b as Dictionary
+		if workshop_id_for_building(row) != "warehouse":
+			continue
+		if variant_to_int(row.get("completes_at_tick", 0), 0) > current_tick:
+			continue
+		if variant_to_int(row.get("_efficiency_pct", 100), 100) <= 0:
+			continue
+		return true
+	return false
+
+
+func plot_storage_cap_units(plot_id: String) -> int:
+	if plot_has_operational_warehouse(plot_id):
+		return PLOT_WAREHOUSE_CAP_UNITS
+	return PLOT_YARD_CAP_UNITS
+
+
+func plot_stash_capacity_label(plot_id: String) -> String:
+	var used := plot_stash_units_total(plot_id)
+	var cap := plot_storage_cap_units(plot_id)
+	var kind := "warehouse bulk cap" if plot_has_operational_warehouse(plot_id) else "open-yard cap (no active warehouse)"
+	return "%d / %d units · %s" % [used, cap, kind]
+
+
+func plot_world_xy(plot_id: String) -> Vector2i:
+	var pd: Dictionary = plots.get(plot_id, {})
+	return Vector2i(variant_to_int(pd.get("x", 0), 0), variant_to_int(pd.get("y", 0), 0))
+
+
+func logistics_site_entries(exclude_plot_id: String = "") -> Array:
+	## Open-ended owned sites for map/list pickers: buildings on the deed drive labels.
+	var out: Array = []
+	for pid in owned_plot_ids_sorted():
+		if pid == exclude_plot_id:
+			continue
+		var pd: Dictionary = plots[pid] as Dictionary
+		var xy := plot_world_xy(pid)
+		var group := plot_site_primary_group(pid)
+		out.append({
+			"plot_id": pid,
+			"x": xy.x,
+			"y": xy.y,
+			"terrain": str(pd.get("terrain", "unknown")),
+			"summary": plot_site_summary(pid),
+			"buildings": plot_site_building_labels(pid),
+			"stash_units": plot_stash_units_total(pid),
+			"group": group,
+			"group_label": logistics_site_group_label(group),
+		})
+	return out
+
+
+func workflow_route_label(route_id: String) -> String:
+	if route_id.is_empty():
+		return "Not set"
+	match route_id:
+		"stash_this":
+			return "This plot stash"
+		"player_inv":
+			return "Personal carry"
+		"market_buy":
+			return "Buy from market if short"
+		"harvest_player":
+			return "To personal carry"
+		"auto_list":
+			return "Auto-list on market"
+	if route_id.begins_with("stash_plot:"):
+		return "Site stash · %s" % plot_site_summary(route_id.substr(11))
+	if route_id.begins_with("ship_to:"):
+		return "Dispatch shipment · %s" % plot_site_summary(route_id.substr(8))
+	return route_id
 
 
 func is_carried_material(material_id: String) -> bool:
@@ -1298,26 +1470,29 @@ func default_delivery_plot_id() -> String:
 
 
 func ship_destination_options() -> Array:
-	## Each entry: ``{plot_id, label, group}`` where group is warehouse|store|factory|other.
-	var buckets: Dictionary = {
-		"warehouse": [],
-		"store": [],
-		"factory": [],
-		"other": [],
-	}
-	for pid in owned_plot_ids_sorted():
-		var tags := plot_site_tags(pid)
-		var group := "other"
-		if tags.has("warehouse"):
-			group = "warehouse"
-		elif tags.has("store"):
-			group = "store"
-		elif tags.has("factory"):
-			group = "factory"
-		buckets[group].append({"plot_id": pid, "label": plot_site_label(pid), "group": group})
-	var order := ["warehouse", "store", "factory", "other"]
+	## Each entry: ``{plot_id, label, group, group_label}`` — group from blueprint categories.
+	var buckets: Dictionary = {}
+	for entry in logistics_site_entries(""):
+		if not (entry is Dictionary):
+			continue
+		var g := str((entry as Dictionary).get("group", "other"))
+		if not buckets.has(g):
+			buckets[g] = []
+		(buckets[g] as Array).append({
+			"plot_id": str((entry as Dictionary).get("plot_id", "")),
+			"label": str((entry as Dictionary).get("summary", "")),
+			"group": g,
+			"group_label": str((entry as Dictionary).get("group_label", logistics_site_group_label(g))),
+		})
 	var out: Array = []
-	for g in order:
+	for g in LOGISTICS_SITE_GROUP_ORDER:
+		if not buckets.has(g):
+			continue
+		for row in buckets[g]:
+			out.append(row)
+	for g in buckets.keys():
+		if g in LOGISTICS_SITE_GROUP_ORDER:
+			continue
 		for row in buckets[g]:
 			out.append(row)
 	return out

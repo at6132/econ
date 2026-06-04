@@ -395,6 +395,12 @@ func _on_plot_clicked(plot_id: String, _plot_data_unused: Dictionary) -> void:
 
 
 func _open_plot_detail(plot_id: String) -> void:
+	if is_instance_valid(_production_workflow):
+		if _production_workflow.has_method("close"):
+			_production_workflow.call("close")
+		else:
+			_production_workflow.queue_free()
+		_production_workflow = null
 	_build_return_plot_id = ""
 	_resume_plot_id = plot_id
 	var merged: Dictionary = WorldState.get_plot_ui(plot_id)
@@ -448,6 +454,10 @@ func open_blueprint_studio(on_created: Callable = Callable()) -> void:
 		_blueprint_studio.closed.connect(func() -> void: _blueprint_studio = null)
 
 
+func open_building_hub(plot_id: String, building: Dictionary, plot_data: Dictionary) -> void:
+	open_production_workflow(plot_id, building, plot_data)
+
+
 func open_production_workflow(plot_id: String, building: Dictionary, plot_data: Dictionary) -> void:
 	WorldState.ensure_recipes_catalog(
 		func() -> void:
@@ -467,7 +477,10 @@ func _open_production_workflow_window(
 	plot_id: String, building: Dictionary, plot_data: Dictionary
 ) -> void:
 	if is_instance_valid(_production_workflow):
-		_production_workflow.queue_free()
+		if _production_workflow.has_method("close"):
+			_production_workflow.call("close")
+		else:
+			_production_workflow.queue_free()
 		_production_workflow = null
 	var win: CanvasLayer = ProductionWorkflowScene.instantiate() as CanvasLayer
 	_production_workflow = win

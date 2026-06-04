@@ -4,6 +4,7 @@ extends Node
 const FILE_PATH := "user://realm_workflow.cfg"
 const SECTION_BUILDING := "building_routing"
 const SECTION_WAREHOUSE := "warehouse_replenish"
+const SECTION_AUTOMATION := "building_automation"
 
 var _server_loaded: bool = false
 
@@ -171,3 +172,45 @@ func _building_routing_dict(instance_id: String) -> Dictionary:
 func _push_building_routing(instance_id: String) -> void:
 	var routes := _building_routing_dict(instance_id)
 	API.post_workflow_building(instance_id, routes["input"], routes["output"], Callable())
+
+
+func get_auto_maintain(instance_id: String) -> bool:
+	if instance_id.is_empty():
+		return false
+	return bool(_cfg().get_value(SECTION_AUTOMATION, "%s/auto_maintain" % instance_id, false))
+
+
+func set_auto_maintain(instance_id: String, enabled: bool) -> void:
+	if instance_id.is_empty():
+		return
+	var f := _cfg()
+	f.set_value(SECTION_AUTOMATION, "%s/auto_maintain" % instance_id, enabled)
+	f.save(FILE_PATH)
+
+
+func get_auto_buy_inputs(instance_id: String) -> bool:
+	if instance_id.is_empty():
+		return false
+	return bool(_cfg().get_value(SECTION_AUTOMATION, "%s/auto_buy_inputs" % instance_id, false))
+
+
+func set_auto_buy_inputs(instance_id: String, enabled: bool) -> void:
+	if instance_id.is_empty():
+		return
+	var f := _cfg()
+	f.set_value(SECTION_AUTOMATION, "%s/auto_buy_inputs" % instance_id, enabled)
+	f.save(FILE_PATH)
+
+
+func get_auto_replenish_warehouses(instance_id: String) -> bool:
+	if instance_id.is_empty():
+		return true
+	return bool(_cfg().get_value(SECTION_AUTOMATION, "%s/auto_replenish_wh" % instance_id, true))
+
+
+func set_auto_replenish_warehouses(instance_id: String, enabled: bool) -> void:
+	if instance_id.is_empty():
+		return
+	var f := _cfg()
+	f.set_value(SECTION_AUTOMATION, "%s/auto_replenish_wh" % instance_id, enabled)
+	f.save(FILE_PATH)
