@@ -8,6 +8,7 @@ alwaysApply: true
 > Sibling rules:
 > - `realm-engine-best-practices.mdc` — how engine code must be written (transactions, RNG, ActionResult, types, conservation tests, layering)
 > - `realm-verify-workflow.mdc` — what to verify after a slice touching `engine/` or `web/`
+> - `graphify.mdc` — query `graphify-out/graph.json` before grepping; run `graphify update .` after code changes
 > - `git-incremental-commits.mdc` + `git-push-to-github.mdc` — commit/push cadence
 
 You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic civilization sim where the **whole economy** — businesses, prices, currency, **contracts**, and **services** — is **player-run** (AI agents play those roles in solo). Advanced play includes **Lua-style programmable services** others subscribe to (in-game SaaS). No quests, no levels, no win condition — only an emergent economy. **Three modes share one engine:** solo (pausable existence test), public persistent multiplayer (slow real-time; mobile companion), competitive seasons.
