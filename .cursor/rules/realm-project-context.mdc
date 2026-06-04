@@ -7,13 +7,16 @@ alwaysApply: true
 
 > Sibling rules:
 > - `realm-engine-best-practices.mdc` — how engine code must be written (transactions, RNG, ActionResult, types, conservation tests, layering)
-> - `realm-verify-workflow.mdc` — what to verify after a slice touching `engine/` or `web/`
+> - `realm-build-version.mdc` — `realm_build.json` manifest, `/version`, Godot↔engine compatibility
+> - `realm-verify-workflow.mdc` — what to verify after a slice touching `engine/` or `realm_client/`
 > - `graphify.mdc` — query `graphify-out/graph.json` before grepping; run `graphify update .` after code changes
 > - `git-incremental-commits.mdc` + `git-push-to-github.mdc` — commit/push cadence
 
 You are working with Avi (Sheva Studios) on **Realm**, a 2D web-first economic civilization sim where the **whole economy** — businesses, prices, currency, **contracts**, and **services** — is **player-run** (AI agents play those roles in solo). Advanced play includes **Lua-style programmable services** others subscribe to (in-game SaaS). No quests, no levels, no win condition — only an emergent economy. **Three modes share one engine:** solo (pausable existence test), public persistent multiplayer (slow real-time; mobile companion), competitive seasons.
 
-**Solo-mode-first.** Solo (Python sim + Next.js/TS frontend) is the existence test of the design. Multiplayer and mobile companion are **later products on the same engine**, not v1 solo requirements.
+**Solo-mode-first.** Solo (Python sim + **Godot client** in `realm_client/`) is the existence test of the design. Multiplayer and mobile companion are **later products on the same engine**, not v1 solo requirements.
+
+**UI is Godot, not `web/`.** The ship solo client lives in `realm_client/` (GDScript). **`web/` is archived** (legacy Phase 1 Next.js). Do not implement new gameplay UI, map, or panels in `web/` unless Avi explicitly asks to touch the archive.
 
 **Current phase:** **Phase 2 — Solo Polish & Visual Identity**. Checklists: `realm_docs/18_PHASE_2_COMPLETION_CHECKLIST.md` (active), `realm_docs/17_PHASE_1_COMPLETION_CHECKLIST.md` (closed). Vision + status: `realm_docs/16_VISION_ANCHOR_AND_PHASE_STATUS.md`.
 
@@ -49,9 +52,9 @@ Adding a new primitive is a major design event — flag it, do not silently add 
 
 ## v1 stack (solo) — `09_TECH_ARCHITECTURE.md`
 
-- Frontend: Next.js + React + TypeScript (strict mode)
-- 2D map: simple HTML/CSS in Phase 1, Pixi.js from Phase 2
-- Charts: Recharts
+- **Solo client (UI):** Godot 4 in `realm_client/` (GDScript) — solo socket to `realm_solo.py` (:9000)
+- **Archived:** `web/` — Phase 1 Next.js prototype; do not extend for new features
+- Charts / dense panels: in Godot (see `realm_docs/20_REALM_SOLO_CLIENT_VISUAL_STYLE_PROFILE.md`)
 - Simulation engine: Python (with type hints everywhere)
 - API (when needed): FastAPI (keeps stack uniform with sim)
 - Database (solo): SQLite per save file; Postgres later for multi
@@ -75,7 +78,7 @@ High-level only — full rules with examples in `realm-engine-best-practices.mdc
 
 ## How to behave when Avi asks for something
 
-**Default stance: autonomous full-stack engineer.** Treat Avi as the product owner for *gameplay and economy*, not as someone who needs a pitch deck for every task. Implement end-to-end (Python engine, FastAPI when relevant, Next.js/TS UI) unless the work clearly needs a design decision first.
+**Default stance: autonomous full-stack engineer.** Treat Avi as the product owner for *gameplay and economy*, not as someone who needs a pitch deck for every task. Implement end-to-end (Python engine + Godot UI in `realm_client/`; FastAPI when relevant for HTTP dev) unless the work clearly needs a design decision first. **Never default new UI work to `web/`.**
 
 1. **Locate the phase.** If the request is wildly out-of-phase, say so briefly and either scope down or ask. Phase plan: `13_PHASED_TODO.md`.
 2. **Locate the primitive(s) involved** (mental check — no essay unless asked).

@@ -26,7 +26,9 @@ There is no win condition. There are no quests. There is only an emergent econom
 
 ### What's being built first (and why)
 
-We ship **solo mode first**, single-player vs AI agents, in Python (simulation) + Next.js/TypeScript (frontend). Solo mode is the existence test of the design. Multiplayer comes much later. The mobile companion app comes after solo launches.
+We ship **solo mode first**, single-player vs AI agents, in Python (simulation) + **Godot** (`realm_client/`). Solo mode is the existence test of the design. Multiplayer comes much later. The mobile companion app comes after solo launches.
+
+**UI is Godot, not `web/`.** The active solo client is in `realm_client/` (GDScript → solo socket on port 9000). **`web/` is archived** (legacy Next.js Phase 1). Do not implement new gameplay UI in `web/` unless explicitly asked.
 
 **Current phase:** [FILL IN — e.g., "Phase 1 — Solo Engine Prototype"]
 
@@ -79,9 +81,9 @@ See `04_LAWS_OF_THE_UNIVERSE.md`.
 
 ### Technical stack (v1 / solo)
 
-- **Frontend:** Next.js + React + TypeScript
-- **2D map rendering:** Pixi.js (Phase 2+; Phase 1 uses simple HTML/CSS)
-- **Charts:** Recharts
+- **Solo client (UI):** Godot 4 in `realm_client/` (GDScript)
+- **Archived frontend:** `web/` — Next.js Phase 1 prototype; do not extend for new features
+- **2D map / panels:** Godot (see `20_REALM_SOLO_CLIENT_VISUAL_STYLE_PROFILE.md`)
 - **Backend / API (multiplayer):** TBD — Python FastAPI most likely
 - **Simulation engine:** Python (will be split into its own service for v2)
 - **Database (solo):** SQLite per save file

@@ -2,7 +2,7 @@
 
 > A 2D, web-first economic civilization sim where every business, price, currency, and service is invented and run by players — or by AI agents that act like players when you're alone.
 
-**Status:** Phase 1 solo prototype — engine checklist complete (playtest gate in `realm_docs/13_PHASED_TODO.md` still requires external sessions). Spec in `realm_docs/`; runnable shell: Python engine + Next.js map.
+**Status:** Phase 2 solo polish — spec in `realm_docs/`; runnable shell: Python engine + **Godot client** (`realm_client/`). **`web/` is archived** (legacy Next.js); do not build new UI there.
 **Designer / builder:** Avi (Sheva Studios).
 **Doc set version:** v1.0.
 
@@ -59,9 +59,9 @@ The full design lives in `realm_docs/`. Read in order; each builds on the previo
 
 ## v1 stack (solo mode)
 
-- **Frontend:** Next.js + React + TypeScript (strict)
-- **2D map:** plain HTML/CSS in Phase 1, Pixi.js from Phase 2
-- **Charts:** Recharts
+- **Solo client (UI):** Godot 4 in `realm_client/` (GDScript)
+- **Archived:** `web/` — Phase 1 Next.js prototype (reference only)
+- **Charts / HUD:** Godot (see `realm_docs/20_REALM_SOLO_CLIENT_VISUAL_STYLE_PROFILE.md`)
 - **Simulation engine:** Python (with type hints everywhere)
 - **API (when needed):** FastAPI (keeps the stack uniform with the sim)
 - **Database (solo):** SQLite per save file
