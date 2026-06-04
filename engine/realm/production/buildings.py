@@ -325,8 +325,9 @@ BUILDINGS: dict[str, dict[str, Any]] = {
         "kind": "contracted",
         "label": "Warehouse",
         "description": (
-            "Bulk storage facility. Owner can hold unlimited inventory "
-            "without demurrage charges. Also enables storage service contracts."
+            "Bulk storage facility — raises on-plot bulk cap (see storage_caps). "
+            "Still finite space; perishables spoil on site; needs construction "
+            "materials, labor, and ongoing maintenance. Enables storage contracts."
         ),
         "self_shell_cents": 120_000,
         "self_contractor_fee_cents": 60_000,

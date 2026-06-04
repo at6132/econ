@@ -159,6 +159,18 @@ def test_isolated_plot_with_power_shed_has_microgrid_capacity() -> None:
     assert "microgrid" in str(info.get("status_note", "")).lower()
 
 
+def test_world_map_marks_microgrid_plot_powered() -> None:
+    """Map ``powered`` must match ``get_plot_power_info`` (on-plot microgrid counts)."""
+    from realm.world.serialization import world_map_dict
+
+    world, gen, _consumer = _build_world()
+    iso = PlotId("p-15-15")
+    _claim(world, gen, iso)
+    _install_building(world, gen, iso, "power_shed")
+    row = next(p for p in world_map_dict(world)["plots"] if p["id"] == str(iso))
+    assert row["powered"] is True
+
+
 def test_generator_earns_revenue_from_consumers() -> None:
     world, gen, consumer = _build_world()
     gen_plot = PlotId("p-4-4")
