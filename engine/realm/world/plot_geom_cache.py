@@ -15,6 +15,11 @@ _gen: dict[int, int] = {}
 _waterfront: dict[tuple[int, int, PlotId], frozenset[tuple[int, int]]] = {}
 _min_town: dict[tuple[int, int, PlotId], float] = {}
 _plot_value: dict[tuple[int, int, PlotId], int] = {}
+# Whole-world coastal classification, keyed by (id(world.plots), generation).
+# One cheap O(world-cells) batch replaces ~N cold per-plot waterfront scans
+# during a full map/world serialization (the cold path that made the first
+# ``GET /world/map`` after a load take tens of seconds on Genesis).
+_coastal: dict[tuple[int, int], frozenset[PlotId]] = {}
 
 _PRUNE_AT = 12_000
 
@@ -27,6 +32,10 @@ def invalidate_plot_geom_caches() -> None:
         _waterfront.clear()
         _min_town.clear()
         _plot_value.clear()
+    # The coastal map is keyed by generation, so stale entries are never read,
+    # but bound its growth alongside the other caches.
+    if len(_coastal) > 64:
+        _coastal.clear()
 
 
 def _cache_key(world: World, plot_id: PlotId) -> tuple[int, int, PlotId]:
@@ -67,6 +76,77 @@ def cached_compute_plot_value(world: World, plot_id: PlotId) -> int:
     val = _compute_plot_value_uncached(world, plot_id)
     _plot_value[key] = val
     return val
+
+
+def cached_coastal_plot_ids(world: World) -> frozenset[PlotId]:
+    """Set of plot ids that are coastal, computed once per world generation.
+
+    Equivalent to ``bool(waterfront_build_cells(world, plot))`` for every plot,
+    but evaluated in a single O(world-cells) pass instead of a cold per-plot
+    deed-grid scan. A dry plot is coastal iff one of its world tiles has a
+    4-neighbour world tile that is water, unclaimed, or off-map — exactly the
+    condition ``waterfront_build_cells_uncached`` tests (water plots return an
+    empty set there, so they are never coastal).
+    """
+    plots_id = id(world.plots)
+    gen = int(_gen.setdefault(plots_id, 0))
+    key = (plots_id, gen)
+    hit = _coastal.get(key)
+    if hit is not None:
+        return hit
+    val = _compute_coastal_plot_ids(world)
+    _coastal[key] = val
+    return val
+
+
+def _compute_coastal_plot_ids(world: World) -> frozenset[PlotId]:
+    from realm.production.recipe_sites import _WATER
+    from realm.world.plot_parcels import build_world_cell_index
+
+    idx = world.scenario_state.get("world_cell_to_plot")
+    if not isinstance(idx, dict) or not idx:
+        idx = build_world_cell_index(world.plots)
+
+    plots = world.plots
+    # ``dry_tiles`` holds every world tile that is present AND not water. A
+    # neighbour tile counts as "water" exactly when it is NOT in this set
+    # (covers off-map, unclaimed, missing-plot, and water terrain — matching
+    # ``_world_cell_is_water``).
+    dry_tiles: set[tuple[int, int]] = set()
+    cells_by_plot: dict[str, list[tuple[int, int]]] = {}
+    for cell_key, owner in idx.items():
+        owner_s = str(owner)
+        wp = plots.get(PlotId(owner_s))
+        if wp is None:
+            continue
+        sx, _, sy = str(cell_key).partition(",")
+        try:
+            x = int(sx)
+            y = int(sy)
+        except ValueError:
+            continue
+        cells_by_plot.setdefault(owner_s, []).append((x, y))
+        if wp.terrain not in _WATER:
+            dry_tiles.add((x, y))
+
+    coastal: set[PlotId] = set()
+    for owner_s, cells in cells_by_plot.items():
+        wp = plots.get(PlotId(owner_s))
+        if wp is None or wp.terrain in _WATER:
+            continue  # water plots disallow structures → never coastal
+        is_coastal = False
+        for (x, y) in cells:
+            if (
+                (x + 1, y) not in dry_tiles
+                or (x - 1, y) not in dry_tiles
+                or (x, y + 1) not in dry_tiles
+                or (x, y - 1) not in dry_tiles
+            ):
+                is_coastal = True
+                break
+        if is_coastal:
+            coastal.add(PlotId(owner_s))
+    return frozenset(coastal)
 
 
 def _min_town_distance_uncached(world: World, plot: Plot) -> float:

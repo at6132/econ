@@ -99,18 +99,19 @@ def world_public_dict(world: "World") -> dict:
     from realm.economy.markets import market_bids_public, market_book_public
     from realm.infrastructure.power_grid import compute_grid_regions
     from realm.production.buildings import building_catalog_public
-    from realm.production.recipe_sites import plot_is_coastal
     from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
     from realm.core.time_scale import TICKS_PER_GAME_DAY
+    from realm.world.plot_geom_cache import cached_coastal_plot_ids
     from realm.world.world import claim_cost_cents_for_plot
 
     _regions = compute_grid_regions(world)
     powered_set = {
         pid
         for rid, reg in _regions.items()
-        if reg.capacity_per_day > 0 and not rid.startswith("grid_iso_")
+        if reg.capacity_per_day > 0
         for pid in reg.plot_ids
     }
+    coastal_ids = cached_coastal_plot_ids(world)
     density_map = world.scenario_state.get("population_density") or {}
     from realm.world.plot_scale import (
         plot_area_sq_metres,
@@ -131,7 +132,7 @@ def world_public_dict(world: "World") -> dict:
             "x": p.x,
             "y": p.y,
             "terrain": p.terrain.value,
-            "is_coastal": plot_is_coastal(world, p),
+            "is_coastal": p.plot_id in coastal_ids,
             "world_tiles_w": wt,
             "world_tiles_h": ht,
             "grid_cells_w": gcw,
@@ -656,7 +657,7 @@ def world_player_dict(world: "World", party: PartyId) -> dict[str, Any]:
     powered_set = {
         pid
         for rid, reg in _regions.items()
-        if reg.capacity_per_day > 0 and not rid.startswith("grid_iso_")
+        if reg.capacity_per_day > 0
         for pid in reg.plot_ids
     }
     density_map = world.scenario_state.get("population_density") or {}
@@ -838,7 +839,7 @@ def world_map_dict(world: "World") -> dict[str, Any]:
     Drops ``world_cell_to_plot`` and per-plot ``world_cells`` on uniform
     grids — derivable from ``(x, y)`` as ``p-{x}-{y}``."""
     from realm.infrastructure.power_grid import compute_grid_regions
-    from realm.production.recipe_sites import plot_is_coastal
+    from realm.world.plot_geom_cache import cached_coastal_plot_ids
     from realm.world.plot_scale import (
         plot_grid_side,
         plot_world_cells_tuple,
@@ -849,9 +850,10 @@ def world_map_dict(world: "World") -> dict[str, Any]:
     powered_set = {
         pid
         for rid, reg in _regions.items()
-        if reg.capacity_per_day > 0 and not rid.startswith("grid_iso_")
+        if reg.capacity_per_day > 0
         for pid in reg.plot_ids
     }
+    coastal_ids = cached_coastal_plot_ids(world)
     density_map = world.scenario_state.get("population_density") or {}
     uniform = _grid_is_uniform(world)
 
@@ -863,7 +865,7 @@ def world_map_dict(world: "World") -> dict[str, Any]:
             "x": p.x,
             "y": p.y,
             "terrain": p.terrain.value,
-            "is_coastal": plot_is_coastal(world, p),
+            "is_coastal": p.plot_id in coastal_ids,
             "owner": p.owner,
             "surveyed": p.surveyed,
             "powered": str(p.plot_id) in powered_set,

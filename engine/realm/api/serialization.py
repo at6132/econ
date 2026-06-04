@@ -82,16 +82,17 @@ def _max_building_instance_seq_from_rows(rows: list[dict[str, Any]]) -> int:
 
 def dump_world(world: World) -> dict[str, Any]:
     plots_out: dict[str, Any] = {}
-    from realm.production.recipe_sites import plot_is_coastal
+    from realm.world.plot_geom_cache import cached_coastal_plot_ids
     from realm.world.plot_scale import plot_world_cells_tuple
 
+    coastal_ids = cached_coastal_plot_ids(world)
     for pid, p in world.plots.items():
         plots_out[str(pid)] = {
             "x": p.x,
             "y": p.y,
             "world_cells": [{"x": cx, "y": cy} for cx, cy in plot_world_cells_tuple(p)],
             "terrain": p.terrain.value,
-            "is_coastal": plot_is_coastal(world, p),
+            "is_coastal": p.plot_id in coastal_ids,
             "owner": str(p.owner) if p.owner else None,
             "surveyed": p.surveyed,
             "deep_surveyed": getattr(p, "deep_surveyed", False),
