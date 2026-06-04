@@ -7,7 +7,6 @@ from typing import Any
 from realm.actions._shared import ActionResult
 from realm.agents.settler_identity import (
     _party_hash,
-    _weekly_update_slot,
     get_settler_personality,
     get_settler_world_model,
 )

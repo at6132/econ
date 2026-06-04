@@ -36,7 +36,7 @@ def _mutual_reputation(world: World, a: PartyId, b: PartyId) -> None:
 
 
 def _inject_known_settlers(world: World, observer: PartyId, other: PartyId, *, material: str) -> None:
-    from realm.agents.settler_identity import SettlerWorldModel, _store_world_model
+    from realm.agents.settler_identity import _store_world_model
 
     model = get_settler_world_model(world, observer)
     model.known_settlers[str(other)] = {
