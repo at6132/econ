@@ -604,6 +604,11 @@ def tick_laborer_spending(world: World) -> dict[str, int]:
             )
             if units_needed <= 0:
                 continue
+            from realm.population.laborer_lifecycle import laborer_health_output_multiplier
+
+            health_mult = laborer_health_output_multiplier(lab)
+            if health_mult < 1.0:
+                units_needed = max(1, int(units_needed * health_mult))
             # Buy what cash allows (often 1 unit) rather than failing when the
             # ideal refill needs more than the laborer can afford.
             from realm.population.laborers import laborer_cash_account

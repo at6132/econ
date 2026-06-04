@@ -77,7 +77,7 @@ SHELTER_HEALTH_DECAY_PER_DAY: Final[float] = 0.005
 
 # Health bands.
 PRODUCTIVITY_REDUCED_THRESHOLD: Final[float] = 0.30
-"""Below 0.30 health → 30% productivity (sick worker)."""
+"""Below 0.30 health → 50% productivity (sick worker)."""
 
 DEATH_THRESHOLD: Final[float] = 0.10
 """At or below 0.10 health → laborer dies (logged as a world_feed event)."""
@@ -139,7 +139,14 @@ class LaborerNPC:
     employer: PartyId | None = None
     skill_level: float = 0.0
     age_ticks: int = 0
+    birth_tick: int = 0
     health: float = 1.0
+    savings_cents: int = 0
+    """Personal cash buffer (ledger ``cash:lab:sav:*``); not counted in spendable cash."""
+    skill_levels: dict[str, int] = field(default_factory=dict)
+    """Per-recipe skill 0–100; gains on completed production cycles."""
+    partner_id: str | None = None
+    children_born: int = 0
     cash_cents: int = 0
     needs: dict[str, float] = field(
         default_factory=lambda: {"food": 1.0, "fuel": 1.0, "shelter": 1.0}
@@ -287,11 +294,12 @@ def productivity_multiplier(lab: LaborerNPC) -> float:
     """Production-line throughput multiplier for this laborer.
 
     Healthy laborers contribute 1.0; sick laborers (``health < 0.30``)
-    drop to 0.30. Used by 7E employment integration; defined here so
+    drop to 0.50. Used by 7E employment integration; defined here so
     tests can exercise it without dragging in the production module.
     """
-    if lab.health < PRODUCTIVITY_REDUCED_THRESHOLD:
-        return 0.30
+    health = float(getattr(lab, "health", 1.0))
+    if health < PRODUCTIVITY_REDUCED_THRESHOLD:
+        return 0.50
     return 1.0
 
 

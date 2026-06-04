@@ -353,8 +353,15 @@ def dump_world(world: World) -> dict[str, Any]:
                 "home_town": lab.home_town,
                 "employer": str(lab.employer) if lab.employer is not None else None,
                 "skill_level": int(lab.skill_level),
+                "skill_levels": {
+                    str(k): int(v) for k, v in (getattr(lab, "skill_levels", None) or {}).items()
+                },
                 "age_ticks": int(lab.age_ticks),
+                "birth_tick": int(getattr(lab, "birth_tick", 0) or 0),
                 "health": float(lab.health),
+                "savings_cents": int(getattr(lab, "savings_cents", 0) or 0),
+                "partner_id": getattr(lab, "partner_id", None),
+                "children_born": int(getattr(lab, "children_born", 0) or 0),
                 "cash_cents": int(lab.cash_cents),
                 "needs": {k: float(v) for k, v in lab.needs.items()},
                 "employment_contract": lab.employment_contract,
@@ -1050,7 +1057,17 @@ def load_world(d: dict[str, Any]) -> World:
                 employer=PartyId(str(employer_raw)) if employer_raw else None,
                 skill_level=int(payload.get("skill_level", 0)),
                 age_ticks=int(payload.get("age_ticks", 0)),
+                birth_tick=int(payload.get("birth_tick", 0)),
                 health=float(payload.get("health", 1.0)),
+                savings_cents=int(payload.get("savings_cents", 0)),
+                skill_levels={
+                    str(k): int(v)
+                    for k, v in (payload.get("skill_levels") or {}).items()
+                },
+                partner_id=(
+                    str(payload["partner_id"]) if payload.get("partner_id") else None
+                ),
+                children_born=int(payload.get("children_born", 0)),
                 cash_cents=int(payload.get("cash_cents", 0)),
                 needs={
                     str(k): float(v)

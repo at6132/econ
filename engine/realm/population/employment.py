@@ -372,6 +372,11 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
             continue
         emp_acct = party_cash_account(lab.employer)
         if world.ledger.balance(emp_acct) < wage:
+            from realm.population.laborer_lifecycle import try_absorb_unpaid_wage_from_savings
+
+            if try_absorb_unpaid_wage_from_savings(world, lab, int(wage)):
+                stats["paid"] += 1
+                continue
             # Employer insolvent for today's wage. Laborer quits.
             log_event(
                 world,
@@ -399,6 +404,9 @@ def tick_laborer_wages(world: World) -> dict[str, int]:
             # Shouldn't happen after the balance check, but be defensive.
             continue
         lab.cash_cents = world.ledger.balance(lab_acct)
+        from realm.population.laborer_lifecycle import apply_wage_savings_split
+
+        apply_wage_savings_split(world, lab, int(wage))
         stats["paid"] += 1
         stats["cents_moved"] += int(wage)
     if stats["quit_for_nonpayment"] > 0:

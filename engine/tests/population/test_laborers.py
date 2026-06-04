@@ -162,7 +162,7 @@ def test_productivity_drops_when_health_is_low():
         home_plot_id="plot-0-0",  # type: ignore[arg-type]
         health=0.20,
     )
-    assert productivity_multiplier(lab) == pytest.approx(0.30)
+    assert productivity_multiplier(lab) == pytest.approx(0.50)
     lab.health = 0.80
     assert productivity_multiplier(lab) == pytest.approx(1.0)
 
