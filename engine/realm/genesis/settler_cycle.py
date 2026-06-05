@@ -19,7 +19,7 @@ GENESIS_DEFAULT_MAX_SETTLERS = 1000
 
 BANKRUPT_CASH_CENTS = 12_000  # $120 — sustained distress
 BANKRUPT_STREAK_TICKS = legacy_scaled(10)
-SPAWN_PROB_PER_TICK = 0.034  # deterministic per-tick draw; ~one arrival every ~30 ticks at cap
+SPAWN_PROB_PER_TICK = 0.00008  # ~1 arrival per 9 days — fills 42-settler gap over a year
 
 
 def _gst(world: World) -> dict:
