@@ -15,6 +15,12 @@ from realm.deals.bilateral_contracts import (
     tick_contract_proposals,
 )
 from realm.deals.market_tactics import tick_market_cornering, tick_predatory_pricing
+from realm.deals.market_warfare import (
+    tick_cartel_formation,
+    tick_panic_selling,
+    tick_short_positions,
+    tick_speculative_positions,
+)
 
 __all__ = [
     "BankLoan",
@@ -29,4 +35,8 @@ __all__ = [
     "tick_loan_repayment",
     "tick_market_cornering",
     "tick_predatory_pricing",
+    "tick_cartel_formation",
+    "tick_panic_selling",
+    "tick_speculative_positions",
+    "tick_short_positions",
 ]
