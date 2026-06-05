@@ -42,16 +42,17 @@ def _party_eligible_for_bankruptcy(party: PartyId) -> bool:
 
 
 def _liquidate_party_to_exchange(world: World, party: PartyId) -> None:
-    ex = PartyId("genesis_exchange")
-    if ex not in world.parties:
-        return
+    """On bankruptcy, sell all inventory directly to the open market as asks."""
+    from realm.economy.markets import place_sell_order
+    from realm.economy.pricing import exchange_ask_cents
+
+    # Collect all held inventory
+    materials_to_sell: dict[MaterialId, int] = {}
     for mat, qty in list(world.inventory.stock_for_party(party).items()):
-        if qty <= 0:
-            continue
-        rm = world.inventory.remove(party, mat, qty, quality="any")
-        if isinstance(rm, MatterErr):
-            break
-        world.inventory.add(ex, mat, qty)
+        if qty > 0:
+            materials_to_sell[mat] = materials_to_sell.get(mat, 0) + qty
+            world.inventory.remove(party, mat, qty, quality="any")
+
     for pid_str, bucket in list(world.plot_output_stock.items()):
         plot = world.plots.get(PlotId(pid_str))
         if plot is None or plot.owner != party:
@@ -60,12 +61,30 @@ def _liquidate_party_to_exchange(world: World, party: PartyId) -> None:
             qn = int(q)
             if qn <= 0:
                 continue
-            rm = remove_plot_output(world, party, PlotId(pid_str), MaterialId(ms), qn)
-            if isinstance(rm, MatterErr):
-                continue
-            ad = world.inventory.add(ex, MaterialId(ms), qn)
-            if isinstance(ad, MatterErr):
-                world.inventory.add(party, MaterialId(ms), qn)
+            mid = MaterialId(ms)
+            rm = remove_plot_output(world, party, PlotId(pid_str), mid, qn)
+            if not isinstance(rm, MatterErr):
+                materials_to_sell[mid] = materials_to_sell.get(mid, 0) + qn
+
+    # List everything to open market at liquidation price (80% of exchange ask)
+    # Use genesis_exchange as the seller party so it clears through properly
+    ex = PartyId("genesis_exchange")
+    for mid, qty in materials_to_sell.items():
+        if qty <= 0:
+            continue
+        base_price = exchange_ask_cents(mid)
+        liquidation_price = max(1, int(base_price * 0.80))
+        world.inventory.add(ex, mid, qty)
+        place_sell_order(world, ex, mid, qty, liquidation_price)
+
+    if materials_to_sell:
+        total_units = sum(materials_to_sell.values())
+        log_event(
+            world,
+            "world_feed",
+            f"{party} liquidated — {total_units} units hit the market at 80% ask price.",
+            party=str(party),
+        )
 
 
 def _release_party_plots_and_buildings(world: World, party: PartyId) -> None:

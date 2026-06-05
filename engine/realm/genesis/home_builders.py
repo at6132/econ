@@ -8,9 +8,9 @@ businesses -- they only place residences on plots they already own.
 
 Each builder is seeded with:
   - 1 land plot adjacent to its town (claimed at bootstrap).
-  - $500,000 starting cash (enough for ~3 turnkey residences).
-  - 50× lumber + 50× brick + 25× timber so the first build can fire
-    without needing to source materials.
+  - $800,000 starting cash (enough for market-sourced materials + builds).
+  - 5× lumber + 5× brick + 5× timber + 5× stone — one first-build seed;
+    further materials must be bought on the open market.
 
 ``tick_home_builders`` runs every ``HOME_BUILDER_CYCLE_TICKS`` (default
 14 game-days). On each cycle, every builder that has spare cash + space
@@ -31,13 +31,13 @@ from realm.world import World
 
 
 HOME_BUILDER_PARTY_ID_PREFIX: Final[str] = "frontier_homes_co_"
-HOME_BUILDER_STARTING_CASH_CENTS: Final[int] = 500_000  # $5,000
+HOME_BUILDER_STARTING_CASH_CENTS: Final[int] = 800_000  # $8,000
 HOME_BUILDER_CYCLE_TICKS: Final[int] = 14 * 1_440  # 14 game-days
 HOME_BUILDER_STARTING_MATERIALS: Final[dict[MaterialId, int]] = {
-    MaterialId("lumber"): 50,
-    MaterialId("brick"): 50,
-    MaterialId("timber"): 25,
-    MaterialId("stone"): 20,
+    MaterialId("lumber"): 5,
+    MaterialId("brick"): 5,
+    MaterialId("timber"): 5,
+    MaterialId("stone"): 5,
 }
 
 

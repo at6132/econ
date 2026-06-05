@@ -29,7 +29,7 @@ from realm.economy.pricing import exchange_ask_cents
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
-from realm.economy.markets import market_buy, place_sell_order
+from realm.economy.markets import best_resting_ask_cents, market_buy, place_buy_order, place_sell_order
 from realm.production.recipe_sites import terrain_allows_workshop
 from realm.world import World
 
@@ -146,8 +146,8 @@ def seed_npc_energy(world: World, *, starting_cash_cents: int | None = None) -> 
             plot_id,
             f"Power shed ({NPC_ENERGY_DISPLAY_NAMES[str(energy_id)]})",
         )
-        # Seed a small coal buffer so they can run on day 1.
-        ad = world.inventory.add(energy_id, MaterialId("coal"), NPC_ENERGY_COAL_PER_DAY * 2)
+        # Seed one day of coal so they can run on day 1; rest comes from the market.
+        ad = world.inventory.add(energy_id, MaterialId("coal"), NPC_ENERGY_COAL_PER_DAY)
         if isinstance(ad, MatterErr):
             continue
         # Make sure the Tier-1 recipe book is seeded, then ensure the two
@@ -212,6 +212,26 @@ def tick_npc_energy(world: World) -> None:
             need = target - have_coal
             ceiling = max(1, int(exchange_ask_cents(coal_mid)) * 110 // 100)
             market_buy(world, party, coal_mid, need, max_price_per_unit_cents=ceiling)
+            have_coal = int(world.inventory.qty(party, coal_mid))
+        # Visible coal bid when reserve is low — first demand signal for miners.
+        if have_coal < NPC_ENERGY_COAL_PER_DAY * 3:
+            has_bid = any(
+                b.party == party
+                for b in world.market_bids_by_material.get(str(coal_mid), [])
+            )
+            if not has_bid:
+                best_ask = best_resting_ask_cents(world, coal_mid)
+                if best_ask is not None:
+                    coal_bid_price = max(1, int(best_ask * 110 // 100))
+                else:
+                    coal_bid_price = max(1, int(exchange_ask_cents(coal_mid) * 110 // 100))
+                place_buy_order(
+                    world,
+                    party,
+                    coal_mid,
+                    NPC_ENERGY_COAL_PER_DAY * 5,
+                    coal_bid_price,
+                )
         # 2. Fire one production batch (idempotent if already running).
         start_production_on_plot(world, party, plot_id, "coal_generator")
         # 3. Surplus is exported to the regional grid on coal_generator completion (no commodity listing).
