@@ -230,8 +230,8 @@
     "semantic_hash": "86599db011dfdf17ac68dadf47c48ab2"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\api\\serialization.py": {
-    "mtime": 1780606677.0308304,
-    "ast_hash": "6799485ad663004747b6ce0081cb57b7",
+    "mtime": 1780664049.5847218,
+    "ast_hash": "95f6a9d551930953eb64424303b587ab",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\api\\sim_loop.py": {
@@ -480,9 +480,9 @@
     "semantic_hash": "e44463c8fb108d33c64457d9b812fb9a"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\events\\seasons.py": {
-    "mtime": 1779026571.4723587,
-    "ast_hash": "61923a6ef4ddd3b6dbecc938088d9b5f",
-    "semantic_hash": "61923a6ef4ddd3b6dbecc938088d9b5f"
+    "mtime": 1780664043.2958996,
+    "ast_hash": "001f3c07721e4e0f14563519d3fbc7e7",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\events\\sprint4_feed.py": {
     "mtime": 1779322930.8054583,
@@ -705,8 +705,8 @@
     "semantic_hash": "6a940bd1a2c08c1aa2341a006ba39fed"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\laborers.py": {
-    "mtime": 1780662249.0459905,
-    "ast_hash": "bbc3ddb8d769815579980f67baad8406",
+    "mtime": 1780664042.1340978,
+    "ast_hash": "8ccfa4afa671a622e9a3d47c3639a246",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\landmass_density.py": {
@@ -720,8 +720,8 @@
     "semantic_hash": "4bd786b5e5642e155ef2d56cc440c8f7"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\stores.py": {
-    "mtime": 1780661782.7265792,
-    "ast_hash": "050126a52ccc8a16e5bb19e4f67c8356",
+    "mtime": 1780664042.3982842,
+    "ast_hash": "7925e46fc9cdea3b27dacf7a15c07377",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\towns.py": {
@@ -1310,8 +1310,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_genesis.py": {
-    "mtime": 1780661465.3168974,
-    "ast_hash": "dd10526f2ab91644328d0257208e1c6c",
+    "mtime": 1780662538.331135,
+    "ast_hash": "d2f1ecbde711fad08ff3490587a98c31",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_margaux_arc.py": {
@@ -1385,9 +1385,9 @@
     "semantic_hash": "fbf05fa48ae1a3425ff357f7bbd2e659"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\infrastructure\\test_phase9i_polish.py": {
-    "mtime": 1779320022.7346492,
-    "ast_hash": "06dbbf9d6c6a4f01fe265dd2646a340e",
-    "semantic_hash": "06dbbf9d6c6a4f01fe265dd2646a340e"
+    "mtime": 1780664047.3995287,
+    "ast_hash": "5bc931540ce748de14d3ff03d69f0c35",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\infrastructure\\test_plot_logistics.py": {
     "mtime": 1779372612.801278,
@@ -1515,8 +1515,8 @@
     "semantic_hash": "6a153fb0475979af1d502d0c89190175"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_laborers.py": {
-    "mtime": 1780606676.9528372,
-    "ast_hash": "227c388a11a63abba661609c8b2df02a",
+    "mtime": 1780664046.8776536,
+    "ast_hash": "f98146e90988d25e4a7f010509645550",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_labor_markets.py": {
@@ -1535,8 +1535,8 @@
     "semantic_hash": "f6751665637d6b9cfc0023a94015cc17"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_stores.py": {
-    "mtime": 1780661472.185181,
-    "ast_hash": "523de49326cc1c4a5de885aaaf1c2804",
+    "mtime": 1780662706.7793615,
+    "ast_hash": "db51cbfebcde576be5a83aab7a7ceacb",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_towns.py": {
@@ -2285,8 +2285,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\laborer_lifecycle.py": {
-    "mtime": 1780661779.9159873,
-    "ast_hash": "516bfb2b2c62756a6d81e7ee23e6d587",
+    "mtime": 1780664045.283974,
+    "ast_hash": "c3411a132b8fa46264f28b44faac765c",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\research\\patents.py": {

@@ -1,16 +1,16 @@
 # Graph Report - econ  (2026-06-05)
 
 ## Corpus Check
-- 496 files · ~392,235 words
+- 496 files · ~392,393 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 8499 nodes · 24474 edges · 455 communities (394 shown, 61 thin omitted)
-- Extraction: 67% EXTRACTED · 33% INFERRED · 0% AMBIGUOUS · INFERRED: 8149 edges (avg confidence: 0.69)
+- 8526 nodes · 24508 edges · 474 communities (413 shown, 61 thin omitted)
+- Extraction: 67% EXTRACTED · 33% INFERRED · 0% AMBIGUOUS · INFERRED: 8150 edges (avg confidence: 0.69)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c2252b3f`
+- Built from commit: `875657c9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -409,6 +409,7 @@
 - [[_COMMUNITY_Community 397|Community 397]]
 - [[_COMMUNITY_Community 398|Community 398]]
 - [[_COMMUNITY_Community 399|Community 399]]
+- [[_COMMUNITY_Community 400|Community 400]]
 - [[_COMMUNITY_Community 401|Community 401]]
 - [[_COMMUNITY_Community 402|Community 402]]
 - [[_COMMUNITY_Community 403|Community 403]]
@@ -422,6 +423,7 @@
 - [[_COMMUNITY_Community 411|Community 411]]
 - [[_COMMUNITY_Community 412|Community 412]]
 - [[_COMMUNITY_Community 413|Community 413]]
+- [[_COMMUNITY_Community 414|Community 414]]
 - [[_COMMUNITY_Community 415|Community 415]]
 - [[_COMMUNITY_Community 416|Community 416]]
 - [[_COMMUNITY_Community 417|Community 417]]
@@ -434,23 +436,40 @@
 - [[_COMMUNITY_Community 424|Community 424]]
 - [[_COMMUNITY_Community 425|Community 425]]
 - [[_COMMUNITY_Community 426|Community 426]]
+- [[_COMMUNITY_Community 427|Community 427]]
 - [[_COMMUNITY_Community 428|Community 428]]
+- [[_COMMUNITY_Community 429|Community 429]]
 - [[_COMMUNITY_Community 430|Community 430]]
 - [[_COMMUNITY_Community 431|Community 431]]
 - [[_COMMUNITY_Community 432|Community 432]]
+- [[_COMMUNITY_Community 433|Community 433]]
+- [[_COMMUNITY_Community 434|Community 434]]
+- [[_COMMUNITY_Community 435|Community 435]]
 - [[_COMMUNITY_Community 436|Community 436]]
 - [[_COMMUNITY_Community 437|Community 437]]
 - [[_COMMUNITY_Community 438|Community 438]]
 - [[_COMMUNITY_Community 439|Community 439]]
 - [[_COMMUNITY_Community 440|Community 440]]
+- [[_COMMUNITY_Community 441|Community 441]]
+- [[_COMMUNITY_Community 442|Community 442]]
+- [[_COMMUNITY_Community 443|Community 443]]
+- [[_COMMUNITY_Community 444|Community 444]]
 - [[_COMMUNITY_Community 445|Community 445]]
 - [[_COMMUNITY_Community 446|Community 446]]
 - [[_COMMUNITY_Community 447|Community 447]]
 - [[_COMMUNITY_Community 448|Community 448]]
+- [[_COMMUNITY_Community 449|Community 449]]
+- [[_COMMUNITY_Community 450|Community 450]]
 - [[_COMMUNITY_Community 451|Community 451]]
+- [[_COMMUNITY_Community 452|Community 452]]
+- [[_COMMUNITY_Community 453|Community 453]]
+- [[_COMMUNITY_Community 454|Community 454]]
 - [[_COMMUNITY_Community 455|Community 455]]
+- [[_COMMUNITY_Community 456|Community 456]]
 - [[_COMMUNITY_Community 457|Community 457]]
 - [[_COMMUNITY_Community 458|Community 458]]
+- [[_COMMUNITY_Community 459|Community 459]]
+- [[_COMMUNITY_Community 460|Community 460]]
 - [[_COMMUNITY_Community 461|Community 461]]
 - [[_COMMUNITY_Community 464|Community 464]]
 - [[_COMMUNITY_Community 465|Community 465]]
@@ -489,15 +508,15 @@
 - `ActionResult` --uses--> `World`  [INFERRED]
   engine/realm/actions/research_actions.py → engine/realm/world/world.py
 
-## Communities (455 total, 61 thin omitted)
+## Communities (474 total, 61 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.15
 Nodes (14): Pillar 2: Scarcity is real, Primitive 5: Capital / Money, Primitive 3: Labor / Agents, Primitive 7: Markets and Trade, Primitive 2: Matter / Materials, Nine economic primitives (v1), Primitive 7b: Order books / exchanges, Primitive 7a: Direct P2P exchange (+6 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.19
-Nodes (13): ConservationSnapshot, inventory.transfer_to, realm.core, realm.economy, realm.events, realm.genesis, realm.infrastructure, realm.population (+5 more)
+Cohesion: 0.21
+Nodes (12): ConservationSnapshot, inventory.transfer_to, realm.contracts, realm.core, realm.economy, realm.events, realm.infrastructure, realm.production (+4 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.15
@@ -508,8 +527,8 @@ Cohesion: 0.18
 Nodes (13): Building decay + maintain, 18 Phase 2 Completion Checklist, Engine Three Laws, Law 1 Conservation, Law 5 Decay Without Maintenance, Law 9 Determinism, Law 6 Information Has Cost, Paid market intel (+5 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.17
-Nodes (12): 19 Phase 9 Realism Audit, Phase 1 stranger playtest A1, Phase 2 $30 stranger gate A1, Law 3 Distance Has Cost, 9A Geography gates + vessels, 9B Plot trading + speculative survey, 9C Real labor wages, 9D Bank loan correctness (+4 more)
+Cohesion: 0.16
+Nodes (13): 19 Phase 9 Realism Audit, Phase 1 stranger playtest A1, Phase 2 $30 stranger gate A1, Law 3 Distance Has Cost, dispatch_shipment, 9A Geography gates + vessels, 9B Plot trading + speculative survey, 9C Real labor wages (+5 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.29
@@ -524,12 +543,12 @@ Cohesion: 0.20
 Nodes (10): ActionResult, Engine ARCHITECTURE, Engine BEST_PRACTICES, README, ledger.transfer, realm.actions, realm.code, 9 Economic Primitives (+2 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.33
-Nodes (6): battery_bank, 20 Energy Utility Spec, Regional energy Wh grid, Frontier Grid & Power Co., Law 4 Energy Required, WH_PER_LEGACY_ELEC_UNIT
+Cohesion: 0.29
+Nodes (7): battery_bank, Hearthlight Power Co., 20 Energy Utility Spec, Regional energy Wh grid, Frontier Grid & Power Co., Law 4 Energy Required, WH_PER_LEGACY_ELEC_UNIT
 
 ### Community 9 - "Community 9"
-Cohesion: 0.13
-Nodes (27): int, LaborerNPC, PartyId, str, laborer_cash_account(), Ledger account holding this laborer's cash.      Laborers are NOT in ``world.p, Ledger account holding this laborer's cash.      Laborers are NOT in ``world.p, Every laborer gets a real ledger account with the subsistence stake. (+19 more)
+Cohesion: 0.24
+Nodes (17): int, LaborerNPC, PartyId, str, Phase 9C — production wages flow to a real laborer (not system:reserve).  Befo, Frontier path — bootstrap_frontier ships no laborers by design, so the     wage, Two runs with two eligible laborers shouldn't both go to the same person., Frontier world with a player who has a sawmill ready to run. (+9 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.33
@@ -556,56 +575,56 @@ Cohesion: 0.10
 Nodes (20): Law 9: Determinism, 09 — Technical Architecture, Architecture overview, Auth and identity, code:block1 (┌────────────────────────────────────────────────────┐), code:block2 (while world.running:), Data model (sketch), Decisions to revisit (+12 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.17
-Nodes (24): list_plot_for_sale(), Open an active sale listing for one of the party's plots., _empty_subsurface(), _make_world(), Phase 9B — plot trading (transfer/list/buy) + speculative surveying.  Plots ar, Plot owner should use the normal ``survey_plot`` (not the ``_for`` path)., test_authorization_window_is_30_game_days(), test_authorized_survey_consumes_authorization() (+16 more)
+Cohesion: 0.16
+Nodes (49): _blueprint_public_dict(), dump_world(), _json_safe_key(), _json_safe_value(), load_world(), _max_building_instance_seq_from_rows(), _plot_from_snapshot(), Serialize / deserialize full World for SQLite persistence.  Snapshot ``version (+41 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.10
-Nodes (52): _best_ask_price_cents(), compute_cpi(), cpi_multiplier(), Consumer Price Index — weekly basket cost vs a seeded base period., Scale factor current_cpi/100 for indexed cash flows., CPI = 100 × (current basket cost / base basket cost)., Record CPI weekly; emit world_feed on large week-over-week moves., tick_cpi() (+44 more)
+Cohesion: 0.18
+Nodes (36): bool, float, int, LaborerNPC, PartyId, str, World, _execute_poach() (+28 more)
 
 ### Community 26 - "Community 26"
 Cohesion: 0.22
 Nodes (13): displayParty(), formatApproxDurationMs(), formatDeliverBy(), formatRelativeTicksFromNow(), formatUsdFromCents(), formatUsdPerUnitFromCentsPerUnit(), manhattanPlotIds(), parseDollarsToCents() (+5 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.13
-Nodes (29): PartyId, PlotId, int, PartyId, PlotId, str, World, _build_and_finish() (+21 more)
+Cohesion: 0.10
+Nodes (39): PartyId, PlotId, PartyId, PlotId, str, int, PartyId, PlotId (+31 more)
 
 ### Community 28 - "Community 28"
 Cohesion: 0.18
 Nodes (23): get_market_signals(), Aggregated public signals: per-material region activity + trade-flow overlay., all_region_activity(), _concentration_state(), maybe_emit_supply_concentration(), _party_primary_region(), Supply chain visibility signals (Sprint 6 — Phase C).  Three observable signal, Aggregate sellers of ``material`` by their primary region.      Returns ``{"ma (+15 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.06
-Nodes (72): test_cpi_indexed_wage_adjusts_with_inflation(), bool, int, PartyId, PlotId, str, World, int (+64 more)
+Cohesion: 0.07
+Nodes (70): test_wage_paid_daily_after_hire_conserved(), test_cpi_indexed_wage_adjusts_with_inflation(), bool, int, PartyId, PlotId, str, World (+62 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.14
 Nodes (15): Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker., Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker., Buy missing ``self_materials`` from the book before ``turnkey`` build (Genesis s, Buy missing ``self_materials`` from the book before ``turnkey`` build (Genesis s, Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker., Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker., Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker., Wrap ``market_buy`` so every settler purchase feeds the cost-basis tracker. (+7 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.07
-Nodes (89): assert_matter_conserved(), Raise ``AssertionError`` with a descriptive message if matter was created/destro, _break_cartel(), cartel_listing_floor_cents(), _cartels_store(), _cash_decline_bps(), _cash_snapshots_store(), _check_cartel_defections() (+81 more)
+Cohesion: 0.11
+Nodes (62): _break_cartel(), cartel_listing_floor_cents(), _cartels_store(), _cash_decline_bps(), _cash_snapshots_store(), _check_cartel_defections(), _check_cartel_undercuts(), _close_short_position() (+54 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.11
-Nodes (26): int, MaterialId, _baseline_unit_cost_cents(), _cheapest_store_for_material(), _genesis_store_retail_price(), _npc_retail_price(), Pull goods back out of the store into the owner's inventory., Pull goods back out of the store into the owner's inventory. (+18 more)
+Cohesion: 0.05
+Nodes (99): int, MaterialId, PartyId, PlotId, str, World, When a store sells medicine during an active epidemic, a laborer     visits and, test_medicine_purchase_treats_laborer_during_epidemic() (+91 more)
 
 ### Community 33 - "Community 33"
 Cohesion: 0.12
-Nodes (35): accept_supply_contract(), bump_spot_exchange_honored(), fulfill_supply_contract(), honor_contract_stub(), propose_contract_stub(), propose_enforced_contract(), propose_supply_contract(), Contracts + reputation (Primitive 8 / Law 7). (+27 more)
+Nodes (33): accept_supply_contract(), bump_spot_exchange_honored(), fulfill_supply_contract(), honor_contract_stub(), propose_contract_stub(), propose_enforced_contract(), propose_supply_contract(), Contracts + reputation (Primitive 8 / Law 7). (+25 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.07
-Nodes (94): market_escrow_account(), Holds cash locked for open limit bids (released on fill or cancel)., normalize_delivery_terms(), _apply_cross_at_ask_price(), _apply_cross_at_bid_price(), _apply_fill_to_ask(), _apply_fill_to_bid(), _ask_fully_done() (+86 more)
+Cohesion: 0.11
+Nodes (68): market_escrow_account(), Holds cash locked for open limit bids (released on fill or cancel)., normalize_delivery_terms(), _apply_cross_at_ask_price(), _apply_cross_at_bid_price(), _apply_fill_to_ask(), _apply_fill_to_bid(), _ask_fully_done() (+60 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.07
-Nodes (88): Any, bool, float, int, PlotId, str, Run a year (365 game-days) with the player not interacting and assert     that, Conservation holds even when triggers fire. (+80 more)
+Cohesion: 0.09
+Nodes (68): Any, float, int, PlotId, str, Conservation holds even when triggers fire., test_world_event_conservation_under_disasters(), active_event_for_island() (+60 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.17
-Nodes (23): PlotId, apply_bank_loan(), Apply for a loan from ``lender`` (default: ``first_bank``).      Approval is a, Auto-deduct on due-tick; default + claim collateral after 2 misses.      Phase, tick_bank_loans(), test_loan_default_claims_collateral(), gen_world(), _give_cash() (+15 more)
+Cohesion: 0.18
+Nodes (17): gen_world(), _give_cash(), Phase 9D — bank-loan auto-deduct on due-tick + collateral requirement.  Closes, A missed cycle is "recovered" when the next auto-pay succeeds., A borrower with 10+ honored reps may take a bigger loan but only with     colla, Lower tiers don't need collateral so first-time borrowers can still     bootstr, ``rate_bps_override`` shouldn't be a back-door around the collateral gate., _seed_player() (+9 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.13
@@ -613,47 +632,47 @@ Nodes (23): Building book value — straight-line depreciation and construction 
 
 ### Community 38 - "Community 38"
 Cohesion: 0.03
-Nodes (102): Performance budget for genesis settler intelligence., 100 ticks with 20 settlers must complete in < 10ms/tick average., test_smart_npc_tick_budget(), Market microstructure: oracle margins, order expiry, FIFO, laborer spending, ban, Processing-chain outputs must have fair values so margins are not -100%., test_bank_rate_rises_with_inflation(), test_laborer_buys_at_high_need_level(), test_oracle_chemistry_recipes_not_dead_at_day_0() (+94 more)
+Nodes (117): Performance budget for genesis settler intelligence., 100 ticks with 20 settlers must complete in < 10ms/tick average., test_smart_npc_tick_budget(), Market microstructure: oracle margins, order expiry, FIFO, laborer spending, ban, Processing-chain outputs must have fair values so margins are not -100%., test_bank_rate_rises_with_inflation(), test_laborer_buys_at_high_need_level(), test_oracle_chemistry_recipes_not_dead_at_day_0() (+109 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.12
-Nodes (35): survey_plot(), test_claim_and_survey(), test_survey_plot_conserves_ledger_total(), PartyId, PlotId, str, Capital goods: turnkey/self material prereqs, Tier-0 hand recipes, exchange tool, test_prereq_build_deducts_materials() (+27 more)
+Cohesion: 0.08
+Nodes (60): claim_plot(), survey_plot(), test_claim_and_survey(), test_survey_plot_conserves_ledger_total(), Regression: ``dump_world`` must not alias live ``plot_buildings`` rows., test_dump_plot_buildings_decoupled_from_live_mutations(), PartyId, PlotId (+52 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.14
 Nodes (16): FrontierCommandPalette(), Props, FeatureLane, FRONTIER_FEATURES, FrontierFeature, panelHeadline(), getFrontierMenu(), getFrontierPaletteItems() (+8 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.08
-Nodes (61): create_job_opening(), delete_job_opening(), get_account_history(), get_accounts(), get_available_positions(), get_blueprint(), get_blueprints(), get_buildable_recipes() (+53 more)
+Cohesion: 0.07
+Nodes (57): delete_job_opening(), get_account_history(), get_accounts(), get_available_positions(), get_blueprint(), get_blueprints(), get_buildable_recipes(), get_businesses_mine() (+49 more)
 
 ### Community 42 - "Community 42"
 Cohesion: 0.12
 Nodes (43): ActionResult, Any, bool, float, int, PartyId, str, World (+35 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.17
-Nodes (34): BuyFn, bool, int, PartyId, PlotId, World, _adjacent_plot_ids(), _bfs_steps_to_road_network() (+26 more)
+Cohesion: 0.22
+Nodes (29): BuyFn, bool, int, PartyId, PlotId, World, _adjacent_plot_ids(), _bfs_steps_to_road_network() (+21 more)
 
 ### Community 44 - "Community 44"
 Cohesion: 0.17
 Nodes (26): bool, int, MaterialId, object, PartyId, PlotId, str, World (+18 more)
 
 ### Community 45 - "Community 45"
-Cohesion: 0.12
-Nodes (45): _active_plot_listing_for(), authorize_survey(), _bump_owned_plot_count(), buy_plot_listing(), buy_sub_plot(), buy_survey_report(), cancel_plot_listing(), cancel_survey_report_listing() (+37 more)
+Cohesion: 0.06
+Nodes (103): fire_laborer(), hire_worker_stub(), poach_worker(), Employment actions: hire NPC stub workers, recurring wages, poach, transport., Release a hired laborer. Clears any linked job opening slot., Pay recurring stub wages when due (employer must have cash)., Sprint 3 — Phase C.3: offer a skilled worker a higher wage to defect.      The, Player-facing wrapper around the labor-transport scheduler. (+95 more)
 
 ### Community 46 - "Community 46"
-Cohesion: 0.11
-Nodes (45): Any, bool, int, PartyId, str, World, _active_hires_for_employer(), bootstrap_labor_pools() (+37 more)
+Cohesion: 0.09
+Nodes (52): Any, bool, int, PartyId, str, World, _active_hires_for_employer(), bootstrap_labor_pools() (+44 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.05
-Nodes (53): _best_ask_cents(), _best_bid_cents(), Tier 2 optimizing agents — conservation + per-archetype behavioral checks., Wide-spread improver: after seeding the book at tick 24, bid moves up by 1¢., Coal spread agent runs on tick % 23 == 0 (including bootstrap tick 0)., Observable depth: electricity bid from t2_ele_bidstack at tick 0 (cadence % 20)., Sell-side refresh: timber resting ask after first tick (cadence % 21)., Conservative sweep: buy one clay when best ask <= 54 (cadence % 18). (+45 more)
+Cohesion: 0.04
+Nodes (72): _best_ask_cents(), _best_bid_cents(), Tier 2 optimizing agents — conservation + per-archetype behavioral checks., Wide-spread improver: after seeding the book at tick 24, bid moves up by 1¢., Coal spread agent runs on tick % 23 == 0 (including bootstrap tick 0)., Observable depth: electricity bid from t2_ele_bidstack at tick 0 (cadence % 20)., Sell-side refresh: timber resting ask after first tick (cadence % 21)., Conservative sweep: buy one clay when best ask <= 54 (cadence % 18). (+64 more)
 
 ### Community 48 - "Community 48"
-Cohesion: 0.08
-Nodes (60): Random, str, bool, float, int, LaborerNPC, PartyId, PlotId (+52 more)
+Cohesion: 0.09
+Nodes (56): bool, float, int, LaborerNPC, PartyId, PlotId, str, World (+48 more)
 
 ### Community 49 - "Community 49"
 Cohesion: 0.15
@@ -664,8 +683,8 @@ Cohesion: 0.06
 Nodes (49): Image, ensure_asset_dirs(), load_env(), load_fal_key_from_env(), Realm Assets MCP — configuration., Load FAL_KEY from repo .env if not already set., Alias for ``load_env`` (used by generator)., _copy_boat_aliases() (+41 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.05
-Nodes (154): get_grid_operators_registry(), Player grid utility franchises + eligible plots for registration., ActionResult, Any, bool, int, PartyId, PlotId (+146 more)
+Cohesion: 0.23
+Nodes (44): ActionResult, Any, bool, int, PartyId, PlotId, str, World (+36 more)
 
 ### Community 53 - "Community 53"
 Cohesion: 0.24
@@ -684,8 +703,8 @@ Cohesion: 0.21
 Nodes (23): int, PartyId, PlotId, _build_strip_mine(), _force_mountain_plot(), _fresh_frontier_with_player(), _ledger_total(), Sprint 1 / Phase B — building maintenance, efficiency decay, settler auto-mainta (+15 more)
 
 ### Community 57 - "Community 57"
-Cohesion: 0.35
-Nodes (11): _clay_vendor(), _coal_vendor(), _electricity_buyer(), _grain_consumer(), _lumber_buyer(), Tier 1 behavioral agents — six cheap NPC loops (Phase 1 / doc 06).  Archetype, Archetypes: staple consumer, output buyer, timber relister, coal & clay supplier, Restock timber asks when holding inventory (keeps sawmill chain liquid). (+3 more)
+Cohesion: 0.09
+Nodes (38): _clay_vendor(), _coal_vendor(), _electricity_buyer(), _grain_consumer(), _lumber_buyer(), Tier 1 behavioral agents — six cheap NPC loops (Phase 1 / doc 06).  Archetype, Archetypes: staple consumer, output buyer, timber relister, coal & clay supplier, Restock timber asks when holding inventory (keeps sawmill chain liquid). (+30 more)
 
 ### Community 58 - "Community 58"
 Cohesion: 0.11
@@ -696,24 +715,24 @@ Cohesion: 0.10
 Nodes (58): cancel_futures_order_action(), cancel_fx_order_action(), create_currency_action(), mint_currency_action(), post_futures_order_action(), post_fx_order_action(), Thin dispatch for futures, FX, and bank-issued currencies (API → economy)., redeem_currency_action() (+50 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.09
-Nodes (58): accept_equity_stub(), accept_forward_contract(), accept_loan_contract(), accept_service_sub(), deliver_forward_contract(), _forward_deposit_cents(), _next_contract_id(), propose_blueprint_license() (+50 more)
+Cohesion: 0.13
+Nodes (41): accept_equity_stub(), accept_forward_contract(), accept_loan_contract(), accept_service_sub(), deliver_forward_contract(), _forward_deposit_cents(), _next_contract_id(), propose_blueprint_license() (+33 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.09
 Nodes (29): cellRoughRadius(), cellTextureShift(), hash32(), hslToRgbByte(), ownerAccentColor(), ownerAccentPixi(), ownerTint(), ownerTintPixi() (+21 more)
 
 ### Community 62 - "Community 62"
-Cohesion: 0.07
-Nodes (50): _baseline_exchange_ask_cents(), exchange_ask_cents(), fair_value_cents(), hub_max_bid_cents(), markup_factor_bps(), producer_cost_basis_cents(), Genesis price model — fair-value table, exchange markup, settler cost-basis., Pick the markup tier for ``material``; falls back to common (1.25×). (+42 more)
+Cohesion: 0.10
+Nodes (36): _baseline_exchange_ask_cents(), exchange_ask_cents(), fair_value_cents(), hub_max_bid_cents(), markup_factor_bps(), producer_cost_basis_cents(), Genesis price model — fair-value table, exchange markup, settler cost-basis., Pick the markup tier for ``material``; falls back to common (1.25×). (+28 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.16
-Nodes (36): Any, int, PartyId, str, World, _emit_weekly_digest(), _gst(), _label_party() (+28 more)
+Cohesion: 0.12
+Nodes (44): Any, str, World, Any, int, PartyId, str, World (+36 more)
 
 ### Community 64 - "Community 64"
 Cohesion: 0.10
-Nodes (43): float, int, int, PlotId, Enum, _agriculture_modifier(), current_game_day_of_year(), current_game_year() (+35 more)
+Nodes (42): float, int, int, PlotId, Enum, _agriculture_modifier(), current_game_day_of_year(), current_game_year() (+34 more)
 
 ### Community 65 - "Community 65"
 Cohesion: 0.05
@@ -721,23 +740,23 @@ Nodes (42): 13 — Phased TODO, A note on time estimates, Build list, Build list
 
 ### Community 66 - "Community 66"
 Cohesion: 0.14
-Nodes (45): Archetype, bool, float, int, MaterialId, object, PartyId, PlotId (+37 more)
+Nodes (43): bool, int, MaterialId, object, PartyId, PlotId, str, World (+35 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.11
-Nodes (36): get_business_entity_detail(), accept_equity_stake(), _equity_bps_committed(), propose_equity_stake(), Profit-linked equity stakes (Phase 10+)., Each game-day: distribute a share of business cash above reserve to investors., tick_equity_stakes(), Equity stake contracts — ownership % and business cash dividends. (+28 more)
+Cohesion: 0.17
+Nodes (22): accept_equity_stake(), _equity_bps_committed(), propose_equity_stake(), Profit-linked equity stakes (Phase 10+)., Each game-day: distribute a share of business cash above reserve to investors., tick_equity_stakes(), Equity stake contracts — ownership % and business cash dividends., _seed_biz() (+14 more)
 
 ### Community 68 - "Community 68"
-Cohesion: 0.08
-Nodes (39): int, PartyId, str, Sprint 6 — Phase D.6: full solo game integration test.  This is the definitive, Exchange "withdrew" when non-exchange depth on the book is dominant.      For, Day-1 capex (strip_mine self-contract: ~$200) plus the $20 first-time     marke, Distinct materials moved from settler sellers to non-exchange buyers.      Ori, At least one settler owns a coastal plot AND fishing has either     happened or (+31 more)
+Cohesion: 0.07
+Nodes (45): bool, int, PartyId, PlotId, str, _frontier_region_for_plot(), Sprint 6 — Phase D.6: full solo game integration test.  This is the definitive, Exchange "withdrew" when non-exchange depth on the book is dominant.      For (+37 more)
 
 ### Community 69 - "Community 69"
 Cohesion: 0.15
 Nodes (27): _first_claimable_plot(), Smoke FastAPI routes against the module singleton world (dev/reset between tests, Find the first unclaimed non-water plot ID via the API., Find the first unclaimed non-water plot ID via the API., test_code_deploy_and_world_summary(), test_code_eval_without_env_returns_reason(), test_code_status_stub(), test_code_validate_http() (+19 more)
 
 ### Community 70 - "Community 70"
-Cohesion: 0.22
-Nodes (22): After ``world.tick`` advances: active supply past ``deliver_by_tick`` becomes br, tick_supply_contract_breaches(), _inject_active_event(), _make_world(), Phase 9E — generalised force-majeure + lien on breached suppliers.  Closes aud, Build a minimal active supply contract directly on world.contracts., Force an active world event onto the world (bypasses the RNG roll).      Event, _seed_supply_contract() (+14 more)
+Cohesion: 0.20
+Nodes (24): After ``world.tick`` advances: active supply past ``deliver_by_tick`` becomes br, tick_supply_contract_breaches(), _inject_active_event(), _make_world(), Phase 9E — generalised force-majeure + lien on breached suppliers.  Closes aud, Build a minimal active supply contract directly on world.contracts., Force an active world event onto the world (bypasses the RNG roll).      Event, _seed_supply_contract() (+16 more)
 
 ### Community 71 - "Community 71"
 Cohesion: 0.15
@@ -748,56 +767,56 @@ Cohesion: 0.12
 Nodes (40): int, MaterialId, PlotId, str, World, consolidator_market_share_bps(), consolidator_state(), _corner_key_input() (+32 more)
 
 ### Community 73 - "Community 73"
-Cohesion: 0.12
-Nodes (41): _agent_quote_state(), charge_cancel_fee(), _has_resting_order(), Phase 9H — Order-book sanity / agent re-quote dampener.  NPC agents (Tier 1 /, Stamp the dampener state so the next cooldown is measured from now., Charge ``CANCEL_FEE_CENTS`` per cancel to ``party``, draining to     ``system:r, Decide whether an NPC agent should cancel its resting orders and     re-post at, record_requote() (+33 more)
+Cohesion: 0.13
+Nodes (39): _agent_quote_state(), charge_cancel_fee(), _has_resting_order(), Phase 9H — Order-book sanity / agent re-quote dampener.  NPC agents (Tier 1 /, Stamp the dampener state so the next cooldown is measured from now., Charge ``CANCEL_FEE_CENTS`` per cancel to ``party``, draining to     ``system:r, Decide whether an NPC agent should cancel its resting orders and     re-post at, record_requote() (+31 more)
 
 ### Community 74 - "Community 74"
-Cohesion: 0.07
-Nodes (57): _business_name_taken(), _is_valid_business_name(), Business registration — Sprint 5 name registry + Phase 10C business entities., Register a business name (Sprint 5) and optionally a Phase 10C entity., register_business(), _give_cash(), Sprint 5 — Phase A tests: business registration + display names everywhere., After registration, market events show the business name as seller via     ``pa (+49 more)
+Cohesion: 0.13
+Nodes (37): account_id_for(), create_sub_account(), ensure_primary_account(), _history_map(), _is_valid_sub_account_label(), _labels_map(), log_sub_account_tx(), party_accounts_view() (+29 more)
 
 ### Community 75 - "Community 75"
 Cohesion: 0.15
 Nodes (40): bool, int, PartyId, PlotId, str, World, _append_bootstrap_segment(), _build_coord_index() (+32 more)
 
 ### Community 76 - "Community 76"
-Cohesion: 0.07
-Nodes (38): get_recipes(), get_version(), get_world(), get_world_feed(), get_world_player(), get_world_static(), get_world_summary(), health() (+30 more)
+Cohesion: 0.09
+Nodes (33): get_recipes(), get_world(), get_world_feed(), get_world_player(), get_world_summary(), health(), post_code_deploy(), post_code_eval() (+25 more)
 
 ### Community 77 - "Community 77"
-Cohesion: 0.14
-Nodes (38): bool, int, PartyId, PlotId, str, World, _ensure_party(), _financier_state() (+30 more)
+Cohesion: 0.15
+Nodes (37): int, PartyId, PlotId, str, World, _ensure_party(), _financier_state(), _flipper_pick_target_plots() (+29 more)
 
 ### Community 78 - "Community 78"
 Cohesion: 0.15
 Nodes (34): delete_price_alert(), get_analytics_history(), get_bank_loans(), get_bank_rates(), get_intel_listings(), get_market_depth(), get_market_routes(), get_price_alerts() (+26 more)
 
 ### Community 79 - "Community 79"
-Cohesion: 0.28
-Nodes (19): accept_construction_quote(), _building_self_materials(), complete_construction_job(), _labor_days_for(), _next_construction_id(), Phase 10D — construction market (ConstructionOrder contracts)., Default missed-deadline: deposit returns to client., Daily: construction-type businesses try to complete one pending order. (+11 more)
+Cohesion: 0.25
+Nodes (21): accept_construction_quote(), _building_self_materials(), complete_construction_job(), _labor_days_for(), _next_construction_id(), Phase 10D — construction market (ConstructionOrder contracts)., Default missed-deadline: deposit returns to client., Daily: construction-type businesses try to complete one pending order. (+13 more)
 
 ### Community 80 - "Community 80"
-Cohesion: 0.14
-Nodes (43): Any, int, str, World, active_patent_for_node(), _apply_cascade_bonuses(), _ensure_global_era_state(), era_globally_unlocked() (+35 more)
+Cohesion: 0.10
+Nodes (62): Any, bool, int, PartyId, str, World, active_patent_for_node(), _apply_cascade_bonuses() (+54 more)
 
 ### Community 81 - "Community 81"
 Cohesion: 0.40
 Nodes (4): computeEconomyDensity(), DensityInput, EconomyDensity, EconomyDensityTone
 
 ### Community 82 - "Community 82"
-Cohesion: 0.13
-Nodes (24): of(), Conservation invariant — Law 1.  The total cents in the ledger and the total m, Inventory, _normalize_bucket(), Matter inventory — Law 1 (matter conserved on transfers between holders)., Production output / extraction (designed channel — caller must validate recipe)., Consumption for production inputs., Remove ``qty`` units, preferring lowest quality first. Returns per-tier amounts (+16 more)
+Cohesion: 0.17
+Nodes (16): _normalize_bucket(), Matter inventory — Law 1 (matter conserved on transfers between holders)., Production output / extraction (designed channel — caller must validate recipe)., Consumption for production inputs., Remove ``qty`` units, preferring lowest quality first. Returns per-tier amounts, JSON-friendly material keys for persistence., Get quantity. If quality='any', returns sum across all tiers., Ensure ``party`` exists in ``stock`` (empty dict). Used when rehydrating saves. (+8 more)
 
 ### Community 83 - "Community 83"
-Cohesion: 0.17
-Nodes (29): bool, int, PartyId, str, World, active_loans_for_borrower(), _auto_deduct_loan_payment(), bank_rates_view() (+21 more)
+Cohesion: 0.14
+Nodes (38): bool, int, PartyId, PlotId, str, World, active_loans_for_borrower(), apply_bank_loan() (+30 more)
 
 ### Community 84 - "Community 84"
 Cohesion: 0.04
 Nodes (38): ActiveProductionDto, BuildingCatalogDto, BuildingMaintenanceDto, DEV_RESET_SCENARIOS, DevResetScenarioId, EventLogEntryDto, FX_HUE, GameShellMode (+30 more)
 
 ### Community 85 - "Community 85"
-Cohesion: 0.15
-Nodes (34): Any, bool, int, PartyId, PlotId, str, World, Once per game-day, advance the NPC shipping AI.      Runs **before** ``tick_po (+26 more)
+Cohesion: 0.16
+Nodes (32): Any, bool, int, PartyId, PlotId, str, World, _current_game_day() (+24 more)
 
 ### Community 86 - "Community 86"
 Cohesion: 0.19
@@ -808,24 +827,24 @@ Cohesion: 0.40
 Nodes (4): MapSpark, Particle, Props, RealmMapParticlesCanvas()
 
 ### Community 88 - "Community 88"
-Cohesion: 0.11
-Nodes (34): _bank_loan_outstanding_principal(), _current_best_ask(), _current_best_bid(), is_route_blocked(), maybe_close_route_from_storm(), Phase 8 — Sub-phase 8D: market cycles and structural economic events.  The nat, Detect a price spike on any material and trigger NPC panic selling.      Spike, Every NPC holding > threshold units of ``material`` places a sell. (+26 more)
+Cohesion: 0.12
+Nodes (33): _bank_loan_outstanding_principal(), _current_best_ask(), _current_best_bid(), is_route_blocked(), maybe_close_route_from_storm(), Phase 8 — Sub-phase 8D: market cycles and structural economic events.  The nat, Detect a price spike on any material and trigger NPC panic selling.      Spike, Every NPC holding > threshold units of ``material`` places a sell. (+25 more)
 
 ### Community 89 - "Community 89"
 Cohesion: 0.16
 Nodes (39): available_positions(), blueprints_visible_to(), build_on_plot(), compute_turnkey_cost_cents(), create_blueprint(), demolish_building(), find_free_blueprint_position(), _find_free_position() (+31 more)
 
 ### Community 90 - "Community 90"
-Cohesion: 0.07
-Nodes (51): bool, int, Plot, str, Terrain, assert_recipe_site_catalog_complete(), _custom_recipe_plot_gate(), footprint_borders_water() (+43 more)
+Cohesion: 0.08
+Nodes (41): bool, int, Plot, str, Terrain, test_bootstrap_residences_only_on_dry_land(), assert_recipe_site_catalog_complete(), _custom_recipe_plot_gate() (+33 more)
 
 ### Community 91 - "Community 91"
-Cohesion: 0.14
-Nodes (33): apply_exchange_reputation_adjustment(), _consume_reserve_for_listing(), _distinct_non_exchange_sellers_window(), ensure_exchange_state_initialised(), _ex_state(), _exchange_can_list(), exchange_price_for_party(), _maybe_refresh_anchored_price() (+25 more)
+Cohesion: 0.18
+Nodes (28): apply_exchange_reputation_adjustment(), _consume_reserve_for_listing(), _distinct_non_exchange_sellers_window(), ensure_exchange_state_initialised(), _ex_state(), _exchange_can_list(), _maybe_refresh_anchored_price(), _maybe_run_daily_managed_check() (+20 more)
 
 ### Community 92 - "Community 92"
-Cohesion: 0.10
-Nodes (60): bool, int, MaterialId, PartyId, PlotId, str, World, int (+52 more)
+Cohesion: 0.15
+Nodes (33): bool, int, MaterialId, PartyId, PlotId, str, World, _best_route_operator() (+25 more)
 
 ### Community 93 - "Community 93"
 Cohesion: 0.08
@@ -837,7 +856,7 @@ Nodes (23): AccountView, ApiBase, BankLoan, BankRatesView, BankRateTier, btnStyl
 
 ### Community 95 - "Community 95"
 Cohesion: 0.09
-Nodes (22): _credit_real_laborer_or_reserve(), _ensure_money_err(), _find_local_laborer_for_wage(), _pay_recipe_labor(), Phase 9C — pick a deterministic real laborer to receive the recipe wage., Phase 9C — pick a deterministic real laborer to receive the recipe wage., Phase 9C — pick a deterministic real laborer to receive the recipe wage., Phase 9C — pick a deterministic real laborer to receive the recipe wage. (+14 more)
+Nodes (24): PartyId, _credit_real_laborer_or_reserve(), _distinct_employees_for_employer(), _ensure_money_err(), _find_local_laborer_for_wage(), _pay_recipe_labor(), Phase 9C — pick a deterministic real laborer to receive the recipe wage., Phase 9C — pick a deterministic real laborer to receive the recipe wage. (+16 more)
 
 ### Community 96 - "Community 96"
 Cohesion: 0.17
@@ -845,7 +864,7 @@ Nodes (31): get_forward_contracts(), get_insurance_mine(), get_lease_mine(), pos
 
 ### Community 97 - "Community 97"
 Cohesion: 0.18
-Nodes (36): assign_settler_personality(), _build_world_model_from_parsed(), _cash_tier(), _generate_personality(), get_settler_personality(), get_settler_world_model(), _identity_store(), _parse_recent_events() (+28 more)
+Nodes (37): Archetype, assign_settler_personality(), _build_world_model_from_parsed(), _cash_tier(), _generate_personality(), get_settler_personality(), get_settler_world_model(), _identity_store() (+29 more)
 
 ### Community 98 - "Community 98"
 Cohesion: 0.06
@@ -856,16 +875,16 @@ Cohesion: 0.20
 Nodes (25): _classify_volume(), _market_cycle_report(), _party_trade_volume_window(), _party_volume_signal(), _price_history_for_material(), purchase_analytics_product(), Analytics NPC vendor service (Sprint 4 — Phase B).  A single named NPC that se, Spawn the analytics vendor in Genesis worlds. Idempotent. (+17 more)
 
 ### Community 100 - "Community 100"
-Cohesion: 0.17
-Nodes (34): accept_insurance(), accept_land_lease(), buy_loan(), list_loan_for_sale(), propose_insurance(), propose_land_lease(), Insurance, secondary loan market, and land-lease contracts., Match recent feed lines to active policies once per game-day. (+26 more)
+Cohesion: 0.18
+Nodes (32): accept_insurance(), accept_land_lease(), buy_loan(), list_loan_for_sale(), propose_insurance(), propose_land_lease(), Insurance, secondary loan market, and land-lease contracts., Match recent feed lines to active policies once per game-day. (+24 more)
 
 ### Community 101 - "Community 101"
 Cohesion: 0.15
 Nodes (31): _augment_with_island_id(), _can_post_for_island(), _entrepreneurs_on_island(), food_deficit_for_island(), food_demand_for_island(), food_supply_for_island(), _inter_island_state(), island_for_party() (+23 more)
 
 ### Community 102 - "Community 102"
-Cohesion: 0.09
-Nodes (32): Tier-3 roster — scenario → persona mapping., test_archive_intel_tick_boost(), test_cartel_bootstraps_elira_not_margaux(), test_genesis_bootstraps_margaux(), dump_world(), dumps_json(), loads_json(), Genesis full-blob round-trip (Phase 2 pre-UI persistence gate). (+24 more)
+Cohesion: 0.14
+Nodes (13): Tier-3 roster — scenario → persona mapping., test_archive_intel_tick_boost(), test_cartel_bootstraps_elira_not_margaux(), test_genesis_bootstraps_margaux(), Cartel scenario bootstrap., test_cartel_scenario_splits_grain_book(), bootstrap_by_scenario(), Named Phase 2 scenarios — same engine, different starting parameters. (+5 more)
 
 ### Community 118 - "Community 118"
 Cohesion: 0.10
@@ -873,31 +892,31 @@ Nodes (29): assign_world(), autosave_path_for_world(), clear_save_metadata(), __
 
 ### Community 119 - "Community 119"
 Cohesion: 0.13
-Nodes (37): Any, bool, int, str, World, str, _append_margaux(), _beats_fired() (+29 more)
+Nodes (36): Any, bool, int, str, World, str, _append_margaux(), _beats_fired() (+28 more)
 
 ### Community 120 - "Community 120"
 Cohesion: 0.19
 Nodes (40): SettlerPersonality, BilateralContract, _buyer_acceptance_probability(), _consistent_output_days(), _contract_from_dict(), _contract_to_dict(), _contracts_store(), _display_name() (+32 more)
 
 ### Community 121 - "Community 121"
-Cohesion: 0.13
-Nodes (35): fire_laborer(), hire_catalog_public(), hire_worker_stub(), poach_worker(), Employment actions: hire NPC stub workers, recurring wages, poach, transport., Release a hired laborer. Clears any linked job opening slot., Pay recurring stub wages when due (employer must have cash)., Sprint 3 — Phase C.3: offer a skilled worker a higher wage to defect.      The (+27 more)
+Cohesion: 0.14
+Nodes (13): hire_catalog_public(), Suggested signing bonuses for the hire panel (Phase 1 stub employment)., job_openings_catalog(), get_hire_catalog(), get_world_static(), Read-once tables: building/hire/chemistry catalogs, scenario id,     seed, tick, Read-once tables: building/hire/chemistry catalogs, scenario id,     seed, tick, building_catalog_public() (+5 more)
 
 ### Community 122 - "Community 122"
-Cohesion: 0.25
-Nodes (8): Slow Tier-0 income while workshop materials are still being sourced., Slow Tier-0 income while workshop materials are still being sourced., Slow Tier-0 income while workshop materials are still being sourced., Slow Tier-0 income while workshop materials are still being sourced., Slow Tier-0 income while workshop materials are still being sourced., Slow Tier-0 income while workshop materials are still being sourced., Slow Tier-0 income while workshop materials are still being sourced., _settler_try_hand_extraction()
+Cohesion: 0.14
+Nodes (26): _ensure_workshop(), _has_primary_on_plot(), _has_secondary_on_plot(), Any Tier-2 recipe in the party's book counts as a discovery., Cash gate: settler will never spend more than ``max_cash_share_bps`` (60%) of ca, Any Tier-2 recipe in the party's book counts as a discovery., Any Tier-2 recipe in the party's book counts as a discovery., Cash gate: settler will never spend more than ``max_cash_share_bps`` (60%) of ca (+18 more)
 
 ### Community 123 - "Community 123"
-Cohesion: 0.13
-Nodes (25): test_dev_reset_defaults_to_genesis(), bool, int, Plot, PlotId, str, Terrain, test_bootstrap_default_plot_count() (+17 more)
+Cohesion: 0.08
+Nodes (37): make_rng(), Deterministic RNG: Law 9 — same tick + purpose → same stream., Build a stdlib Random isolated for (tick, purpose).      Uses blake2b so we ne, test_different_purpose_splits_stream(), test_rng_deterministic_per_tick_and_purpose(), Counter, int, Random (+29 more)
 
 ### Community 124 - "Community 124"
-Cohesion: 0.09
-Nodes (65): _acquisitions_store(), _display_name(), evaluate_acquisition_targets(), execute_buyout(), liquidation_value_cents(), Hostile and opportunistic acquisitions — buyouts of distressed settlers., Retire without liquidating inventory or releasing plots (already transferred)., Retire without liquidating inventory or releasing plots (already transferred). (+57 more)
+Cohesion: 0.26
+Nodes (24): _acceptance_probability(), _already_partners(), _combined_cash_cents(), _company_name(), _display_name(), _form_company(), _knows_with_reputation(), _lines_complementary() (+16 more)
 
 ### Community 125 - "Community 125"
-Cohesion: 0.21
-Nodes (24): Any, bool, float, int, str, _build_catalog(), carve_l_corners(), _cells_connected() (+16 more)
+Cohesion: 0.17
+Nodes (27): Any, bool, float, int, str, _build_catalog(), carve_l_corners(), _cells_connected() (+19 more)
 
 ### Community 126 - "Community 126"
 Cohesion: 0.07
@@ -908,76 +927,76 @@ Cohesion: 0.22
 Nodes (20): int, PartyId, PlotId, _advance_game_days(), _claim_surveyed(), _finish_industrial_era(), _force_complete_research_lab(), Research lab — tech tree progress, daily ticks, patents. (+12 more)
 
 ### Community 128 - "Community 128"
-Cohesion: 0.09
-Nodes (43): bool, float, int, Plot, PlotId, Terrain, _continental_cell_is_solid_land(), continental_land_boost_cells() (+35 more)
+Cohesion: 0.11
+Nodes (37): bool, float, int, Plot, PlotId, Terrain, _continental_cell_is_solid_land(), continental_land_boost_cells() (+29 more)
 
 ### Community 129 - "Community 129"
 Cohesion: 0.13
 Nodes (26): float, int, bool, int, Random, Terrain, _belt_field(), claim_cost_cents_from_density() (+18 more)
 
 ### Community 130 - "Community 130"
-Cohesion: 0.03
-Nodes (94): float, int, str, World, LaborerNPC, object, Direct unit test: a healthy laborer with full needs still loses     health each, test_apply_health_pressure_with_epidemic_drops_faster() (+86 more)
+Cohesion: 0.06
+Nodes (41): float, LaborerNPC, object, _apply_health_pressure(), _apply_needs_decay(), productivity_multiplier(), Production-line throughput multiplier for this laborer.      Healthy laborers, Production-line throughput multiplier for this laborer.      Healthy laborers (+33 more)
 
 ### Community 131 - "Community 131"
 Cohesion: 0.23
 Nodes (22): Any, bool, int, PartyId, Recipe, str, World, create_custom_recipe() (+14 more)
 
 ### Community 132 - "Community 132"
-Cohesion: 0.10
-Nodes (67): MatterOk, _append_fob_pickup(), apply_ddp_breach_penalty(), fob_pickups_for_party(), fulfill_market_matter(), fulfill_p2p_delivery(), _instant_carry_delivery(), pickup_fob() (+59 more)
+Cohesion: 0.27
+Nodes (24): MatterOk, _append_fob_pickup(), apply_ddp_breach_penalty(), fob_pickups_for_party(), fulfill_market_matter(), fulfill_p2p_delivery(), _instant_carry_delivery(), pickup_fob() (+16 more)
 
 ### Community 133 - "Community 133"
 Cohesion: 0.08
 Nodes (25): 07 — The User Code Layer, Anti-abuse and platform health, Build order, Code as a business, code:block1 (WHEN my inventory of "iron_ore" < 100), code:lua (-- service: optimal_route_v1), code:lua (-- service: market_maker_iron), code:lua (function on_call(args)) (+17 more)
 
 ### Community 134 - "Community 134"
-Cohesion: 0.26
-Nodes (21): bool, int, PlotId, str, World, _footprint_cells_on_plot(), get_road_endpoint_plots(), _get_road_endpoints() (+13 more)
+Cohesion: 0.29
+Nodes (19): bool, int, PlotId, str, World, _footprint_cells_on_plot(), get_road_endpoint_plots(), _get_road_endpoints() (+11 more)
 
 ### Community 135 - "Community 135"
-Cohesion: 0.19
-Nodes (24): Any, int, MaterialId, PartyId, str, World, ensure_cost_basis_state(), _party_blob() (+16 more)
+Cohesion: 0.20
+Nodes (24): Plant a low cost basis for coal and verify settlers submit a tender bid., test_settlers_bid_on_tenders_when_basis_is_low_enough(), Any, int, MaterialId, PartyId, str, World (+16 more)
 
 ### Community 136 - "Community 136"
 Cohesion: 0.21
 Nodes (26): Any, float, int, PartyId, str, World, _competitor_plots(), _identity_store() (+18 more)
 
 ### Community 137 - "Community 137"
-Cohesion: 0.12
-Nodes (24): int, str, World, Register one un-served home-region lane that has enough recent traffic., _try_traffic_route_discovery(), test_shipper_registered_all_routes(), Phase 10B — dynamic shipping routes (no NPC bootstrap lanes, traffic, uncharted), test_no_npc_shipper_routes_at_bootstrap() (+16 more)
+Cohesion: 0.20
+Nodes (21): int, PartyId, PlotId, str, World, _coastal_regions(), _pick_coastal_plot_in_region(), NPC shipping companies — Tier-2 agents that operate inter-region routes.  Spri (+13 more)
 
 ### Community 138 - "Community 138"
 Cohesion: 0.08
 Nodes (24): code:bash (mkdir -p graphify-out), code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -c "), code:bash (# Detect the correct Python interpreter (handles pipx, venv,), code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -c ") (+16 more)
 
 ### Community 139 - "Community 139"
-Cohesion: 0.10
-Nodes (35): int, PartyId, str, Drive one game-day of laborer→store consumption.      Only fires at game-day b, Drive one game-day of laborer→store consumption.      Only fires at game-day b, Drive one game-day of laborer→store consumption.      Only fires at game-day b, tick_laborer_spending(), _build_player_store_in_a_town() (+27 more)
+Cohesion: 0.08
+Nodes (42): int, PartyId, PlotId, str, Drive one game-day of laborer→store consumption.      Only fires at game-day b, Drive one game-day of laborer→store consumption.      Only fires at game-day b, Drive one game-day of laborer→store consumption.      Only fires at game-day b, tick_laborer_spending() (+34 more)
 
 ### Community 140 - "Community 140"
 Cohesion: 0.13
-Nodes (42): _award_tender(), ensure_tender_state(), list_all_tenders(), list_open_tenders(), _next_tender_id(), post_tender(), Open supply tenders — buyers post, suppliers bid, lowest wins (Sprint 2 — Phase, Publish a new open tender; returns ``{"ok": True, "tender_id": ...}``. (+34 more)
+Nodes (40): _award_tender(), ensure_tender_state(), list_all_tenders(), list_open_tenders(), _next_tender_id(), post_tender(), Open supply tenders — buyers post, suppliers bid, lowest wins (Sprint 2 — Phase, Publish a new open tender; returns ``{"ok": True, "tender_id": ...}``. (+32 more)
 
 ### Community 141 - "Community 141"
 Cohesion: 0.09
 Nodes (23): code:bash (mkdir -p graphify-out), code:bash ($(cat graphify-out/.graphify_python) -c "), code:bash (graphify export obsidian), code:bash (graphify export html  # auto-aggregates to community view if), code:bash (graphify export wiki), code:bash (graphify export svg), code:bash (graphify export graphml), code:bash (graphify benchmark) (+15 more)
 
 ### Community 142 - "Community 142"
-Cohesion: 0.19
-Nodes (20): PlotId, str, World, Three residences within 5 tiles of one another form a new town     even when no, test_assign_laborer_residence_restores_shelter(), test_building_a_third_residence_creates_a_new_town(), _active_residences(), assign_laborer_residence() (+12 more)
+Cohesion: 0.07
+Nodes (60): PlotId, str, World, int, PlotId, str, World, _cluster_id() (+52 more)
 
 ### Community 143 - "Community 143"
-Cohesion: 0.10
-Nodes (20): Run mine_iron_ore in a loop and assert iron_ore_grade declines., When grade crosses 0.35 going down, a world_feed entry fires., test_resource_depletion_announces_at_threshold(), test_resource_depletion_reduces_grade_over_time(), _apply_subsurface_depletion(), Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta (+12 more)
+Cohesion: 0.12
+Nodes (16): _apply_subsurface_depletion(), Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta, Reduce the relevant subsurface grade on the run's plot.      Mining recipes ta (+8 more)
 
 ### Community 144 - "Community 144"
-Cohesion: 0.38
-Nodes (16): float, int, object, PartyId, PlotId, str, World, buy_plot_market() (+8 more)
+Cohesion: 0.35
+Nodes (17): float, int, object, PartyId, PlotId, str, World, buy_plot_market() (+9 more)
 
 ### Community 145 - "Community 145"
-Cohesion: 0.18
-Nodes (22): int, PartyId, PlotId, str, _assign_laborers_to_towns(), _complete_all_buildings(), _first_mountain_plot_in_island(), _first_plains_plot_in_island() (+14 more)
+Cohesion: 0.20
+Nodes (20): int, PlotId, str, _assign_laborers_to_towns(), _complete_all_buildings(), _first_mountain_plot_in_island(), _first_plains_plot_in_island(), _first_strip_mine_plot() (+12 more)
 
 ### Community 146 - "Community 146"
 Cohesion: 0.12
@@ -988,28 +1007,28 @@ Cohesion: 0.09
 Nodes (22): 15 — Glossary, A, Adding terms, B, C, D, E, F (+14 more)
 
 ### Community 148 - "Community 148"
-Cohesion: 0.10
-Nodes (22): get_code_status(), User-code / Lua platform layer (Phase 4) — capability advertisement until sandbo, User-code / Lua platform layer (Phase 4) — capability advertisement until sandbo, lua_runtime_available(), lua_runtime_detail(), Optional Lua interpreter via ``lupa`` — install ``realm-engine[lua]``.  Phase, User-code layer helpers (validation + status shape)., test_public_status_shape() (+14 more)
+Cohesion: 0.15
+Nodes (16): get_code_status(), User-code / Lua platform layer (Phase 4) — capability advertisement until sandbo, User-code / Lua platform layer (Phase 4) — capability advertisement until sandbo, User-code layer helpers (validation + status shape)., test_public_status_shape(), test_validate_counts_lines(), test_validate_empty_source_ok(), test_validate_rejects_non_string() (+8 more)
 
 ### Community 149 - "Community 149"
-Cohesion: 0.14
-Nodes (26): _build_oracle(), get_oracle(), _input_cost_cents(), _margin_material_price(), MarketOracle, _material_price(), _output_value_cents(), Market oracle — a lightweight, shared market snapshot for NPC decision-making. (+18 more)
+Cohesion: 0.24
+Nodes (19): _build_oracle(), get_oracle(), _input_cost_cents(), _margin_material_price(), MarketOracle, _material_price(), _output_value_cents(), Market oracle — a lightweight, shared market snapshot for NPC decision-making. (+11 more)
 
 ### Community 150 - "Community 150"
-Cohesion: 0.15
-Nodes (23): int, PartyId, str, World, _give(), _give_cash(), Sprint 2 — Phase B · settler vertical integration & cost-basis pricing.  Cover, Without a recorded basis, ``_list_price_cents`` reverts to the static model. (+15 more)
+Cohesion: 0.16
+Nodes (21): int, PartyId, str, World, _give(), _give_cash(), Sprint 2 — Phase B · settler vertical integration & cost-basis pricing.  Cover, Without a recorded basis, ``_list_price_cents`` reverts to the static model. (+13 more)
 
 ### Community 151 - "Community 151"
-Cohesion: 0.15
-Nodes (29): object, PartyId, PlotId, str, Populate ``world.blueprints`` from seeded catalog (idempotent)., Populate ``world.blueprints`` from seeded catalog (idempotent)., seed_world_blueprints(), _place_at_free() (+21 more)
+Cohesion: 0.12
+Nodes (39): object, bool, PartyId, PlotId, str, PartyId, Populate ``world.blueprints`` from seeded catalog (idempotent)., Populate ``world.blueprints`` from seeded catalog (idempotent). (+31 more)
 
 ### Community 152 - "Community 152"
-Cohesion: 0.22
-Nodes (16): PlotId, str, World, apply_mining_externality(), Mining externalities and agricultural soil quality (phosphate proxy)., _first_land_plot(), _minimal_world(), Mining externalities and soil remediation. (+8 more)
+Cohesion: 0.18
+Nodes (20): float, PlotId, World, PlotId, str, World, apply_mining_externality(), Mining externalities and agricultural soil quality (phosphate proxy). (+12 more)
 
 ### Community 153 - "Community 153"
-Cohesion: 0.17
-Nodes (16): int, PartyId, Sprint 1 / Phase D — first-day economics, fishing gate, hub bid calibration., Headless: build strip_mine, mine coal, sell to a P2P-style buyer.      The suc, Full bootstrap + 50 ticks of genesis agents leaves the ledger total constant., Inland plains plot with no water neighbours: fishing rejected., Plains plot adjacent to water: fishing allowed., End-to-end: player claims coastal plot, holds hand_saw, runs fishing once. (+8 more)
+Cohesion: 0.20
+Nodes (14): int, PartyId, Sprint 1 / Phase D — first-day economics, fishing gate, hub bid calibration., Headless: build strip_mine, mine coal, sell to a P2P-style buyer.      The suc, Inland plains plot with no water neighbours: fishing rejected., Plains plot adjacent to water: fishing allowed., End-to-end: player claims coastal plot, holds hand_saw, runs fishing once., Hubs must be willing to pay at least 1.10× the producer cost basis for staples, (+6 more)
 
 ### Community 154 - "Community 154"
 Cohesion: 0.22
@@ -1020,32 +1039,32 @@ Cohesion: 0.09
 Nodes (21): dependencies, framer-motion, next, pixi.js, react, react-dom, recharts, devDependencies (+13 more)
 
 ### Community 156 - "Community 156"
-Cohesion: 0.21
-Nodes (16): PartyId, PlotId, str, World, ensure_party_can_claim(), first_land_plot_id(), first_water_plot_id(), powered_land_plot_id() (+8 more)
+Cohesion: 0.15
+Nodes (42): Any, bool, float, int, PartyId, PlotId, str, World (+34 more)
 
 ### Community 157 - "Community 157"
 Cohesion: 0.30
 Nodes (19): Any, bool, int, PartyId, PlotId, str, World, get_building_routing() (+11 more)
 
 ### Community 158 - "Community 158"
-Cohesion: 0.16
-Nodes (24): plot_grid_state(), get_world_map(), Lean map-only view (terrain / owner / surveyed / powered /     density / claim_, Lean map-only view (terrain / owner / surveyed / powered /     density / claim_, int, Plot, cells_occupied(), plot_area_sq_metres() (+16 more)
+Cohesion: 0.17
+Nodes (27): plot_grid_state(), int, Plot, PlotId, str, World, grid_cell_world_xy(), World map tile (wx, wy) containing build cell (gx, gy). (+19 more)
 
 ### Community 159 - "Community 159"
 Cohesion: 0.10
 Nodes (20): 03 — Primitives Spec, 7a. Direct P2P exchange, 7b. Order books / exchanges, A bank, A research / surveying firm, A SaaS company (no physical footprint), A shipping company, A speculator / trader (+12 more)
 
 ### Community 160 - "Community 160"
-Cohesion: 0.23
-Nodes (14): named_reserve_account(), Named sub-ledger (e.g. per-currency bank reserves)., _bank_world(), Player bank currencies: mint, redeem, reserves., test_bank_suspended_when_ratio_falls_below_minimum(), test_create_currency_registers_material(), test_currency_material_is_durable(), test_fractional_reserve_multiplier() (+6 more)
+Cohesion: 0.09
+Nodes (38): _give_mats(), Phase 10D — construction order + build_on_plot contractor path., test_construction_order_completes_and_conserves(), assert_money_conserved(), ConservationSnapshot, Conservation invariant — Law 1.  The total cents in the ledger and the total m, A point-in-time view of conserved quantities., Raise ``AssertionError`` with a descriptive message if money was created/destroy (+30 more)
 
 ### Community 161 - "Community 161"
-Cohesion: 0.33
-Nodes (12): Any, bool, int, LabPreset, str, all_lab_presets(), catalog_stats(), get_lab_preset() (+4 more)
+Cohesion: 0.15
+Nodes (21): Any, bool, int, LabPreset, str, str, all_lab_presets(), catalog_stats() (+13 more)
 
 ### Community 162 - "Community 162"
-Cohesion: 0.11
-Nodes (18): Phase 7C — Town detection, residential housing, capacity, naming., Residence count scales with landmass-density labor targets per island., Two residences within 5 tiles do NOT form a town., Same (seed, town_seq) → same name., Re-running detect_towns does not rename existing towns., A four-island world has exactly one starting town per island., Bootstrap residences belong to the synthetic ``genesis_settlement``., Laborers fill residences up to capacity; surplus stays unhoused. (+10 more)
+Cohesion: 0.09
+Nodes (26): Simulation calendar: **1 tick = 1 in-game minute**; **1440 ticks = 1 game-day**., Wall-clock seconds the host should sleep between ticks at ``speed_mult``., Inverse of :func:`real_seconds_per_tick` — useful for UI display., real_seconds_per_tick(), ticks_per_real_second(), float, bool, float (+18 more)
 
 ### Community 163 - "Community 163"
 Cohesion: 0.10
@@ -1056,36 +1075,36 @@ Cohesion: 0.19
 Nodes (19): bool, int, PlotId, str, World, compute_plot_islands(), is_inter_island_shipment(), is_ocean_plot() (+11 more)
 
 ### Community 165 - "Community 165"
-Cohesion: 0.27
-Nodes (10): _autosave_loop(), _autosave_seconds(), __getattr__(), _lifespan(), FastAPI app: middleware, router registration, dev singletons.  NO game logic., Server-side autosave cadence (seconds). 0 disables. Env: ``REALM_AUTOSAVE_SECOND, Background autosave — skips while the lazy WORLD is uninitialized so we     don, int (+2 more)
+Cohesion: 0.13
+Nodes (18): _autosave_loop(), _autosave_seconds(), __getattr__(), _lifespan(), FastAPI app: middleware, router registration, dev singletons.  NO game logic., Server-side autosave cadence (seconds). 0 disables. Env: ``REALM_AUTOSAVE_SECOND, Background autosave — skips while the lazy WORLD is uninitialized so we     don, post_tick() (+10 more)
 
 ### Community 166 - "Community 166"
-Cohesion: 0.27
-Nodes (12): PartyId, _bootstrap(), Sprint 3 — Phase C · regional labor markets.  Covers: - Labor pool initialisa, Daily migration drains a low-wage region into a high-wage one., Drain the player's region of unemployed laborers and observe a wage premium., _setup_player_workshop(), test_hire_premium_in_scarce_region(), test_poach_worker_transfers_skill() (+4 more)
+Cohesion: 0.24
+Nodes (31): get_grid_operators_registry(), Player grid utility franchises + eligible plots for registration., ActionResult, Any, bool, int, PartyId, PlotId (+23 more)
 
 ### Community 167 - "Community 167"
 Cohesion: 0.15
 Nodes (13): active_production_on_plot(), _labor_bps_for_plot(), The active run on ``plot_id``, if any (any party — plot should be singly owned)., Lowest (best for player) labor BPS among buildings on this plot., The active run on ``plot_id``, if any (any party — plot should be singly owned)., The active run on ``plot_id``, if any (any party — plot should be singly owned)., Lowest (best for player) labor BPS among buildings on this plot., Lowest (best for player) labor BPS among buildings on this plot. (+5 more)
 
 ### Community 168 - "Community 168"
-Cohesion: 0.16
-Nodes (21): int, PartyId, PlotId, _agri_plot_on_island(), _claim_mine_plot(), Phase 8 — Sub-phase 8B: natural disasters.  Covers the contract laid out in th, When a drought is active, ``grow_grain`` start-time refuses on the     affected, The kill-switch lets tests construct a quiet world for pure     conservation ch (+13 more)
+Cohesion: 0.18
+Nodes (19): int, PartyId, PlotId, _agri_plot_on_island(), _claim_mine_plot(), Phase 8 — Sub-phase 8B: natural disasters.  Covers the contract laid out in th, When a drought is active, ``grow_grain`` start-time refuses on the     affected, Claim any non-ocean plot for ``party`` and return its id. (+11 more)
 
 ### Community 169 - "Community 169"
-Cohesion: 0.13
-Nodes (24): int, Sprint 2 — Phase D · Kessler Industrial (consolidator).  Covers the consolidat, Sanity: the share function counts Kessler's fills, not other parties'., Run the consolidator for many game-days; assert it accumulates positive share., Sanity: the share function counts Kessler's fills, not other parties'., Run the consolidator for many game-days; assert it accumulates positive share., A player who self-supplies iron_ore is not starved when Kessler buys from the ma, When share crosses 30 %, the feed entry is anonymous — never names Kessler. (+16 more)
+Cohesion: 0.15
+Nodes (21): int, Sprint 2 — Phase D · Kessler Industrial (consolidator).  Covers the consolidat, Sanity: the share function counts Kessler's fills, not other parties'., Sanity: the share function counts Kessler's fills, not other parties'., A player who self-supplies iron_ore is not starved when Kessler buys from the ma, When share crosses 30 %, the feed entry is anonymous — never names Kessler., A player who self-supplies iron_ore is not starved when Kessler buys from the ma, When share crosses 30 %, the feed entry is anonymous — never names Kessler. (+13 more)
 
 ### Community 170 - "Community 170"
-Cohesion: 0.26
-Nodes (17): object, PlotId, str, Plot schematic — linear recipe-chain validation (planning aid, Law 10).  Match, Return ``{ok: true, final_inventory}`` or ``{ok: false, errors: [...]}``., validate_linear_recipe_chain(), _land_plot(), _power_shed_row() (+9 more)
+Cohesion: 0.12
+Nodes (33): PartyId, PlotId, str, World, object, PlotId, str, Plot schematic — linear recipe-chain validation (planning aid, Law 10).  Match (+25 more)
 
 ### Community 171 - "Community 171"
 Cohesion: 0.14
 Nodes (26): distinct_islands(), _first_entrepreneur_on(), _first_land_plot_on(), _force_distinct_islands_for_settlers(), genesis_world(), Phase 7F — inter-island trade as a structural necessity.  The four-island Gene, Every party that owns at least one plot maps to exactly one island id.      Se, ``food_demand_for_island`` is roughly proportional to laborers. (+18 more)
 
 ### Community 172 - "Community 172"
-Cohesion: 0.18
-Nodes (18): dev_reset(), dev_set_world_name(), get_persistence_list(), get_persistence_status(), post_persistence_clear_all(), post_persistence_load(), post_persistence_save(), Realm API routes — dev-only endpoints (reset, save/load).  Routes split out of t (+10 more)
+Cohesion: 0.12
+Nodes (24): dev_reset(), dev_set_world_name(), get_persistence_list(), get_persistence_status(), post_persistence_clear_all(), post_persistence_load(), post_persistence_save(), Realm API routes — dev-only endpoints (reset, save/load).  Routes split out of t (+16 more)
 
 ### Community 173 - "Community 173"
 Cohesion: 0.15
@@ -1100,24 +1119,24 @@ Cohesion: 0.11
 Nodes (18): code:block1 (/graphify                                             # full), code:bash (if [ ! -f graphify-out/.graphify_python ]; then), code:bash (graphify cluster-only .), code:bash (graphify path "NODE_A" "NODE_B"), code:bash ($(cat graphify-out/.graphify_python) -m graphify save-result), For --cluster-only, For git commit hook, For /graphify add (+10 more)
 
 ### Community 176 - "Community 176"
-Cohesion: 0.47
-Nodes (11): subdivide_plot(), PartyId, _claim_land(), Plot subdivision into sub-plots., test_build_on_sub_plot(), test_sub_plot_sale(), test_subdivide_into_2(), test_subdivide_max_9() (+3 more)
+Cohesion: 0.09
+Nodes (30): int, World, bootstrap_island_laborer_populations(), _ensure_laborer_cash_invariant(), Phase 7B — laborer NPCs: the real population economy.  LaborerNPCs are mortal,, Re-sync the dataclass mirror to the ledger balance.      The ledger is the sou, Re-sync the dataclass mirror to the ledger balance.      The ledger is the sou, Deterministic per-laborer lifespan in game-days (inclusive 300–500). (+22 more)
 
 ### Community 177 - "Community 177"
-Cohesion: 0.22
-Nodes (26): ActionResult, Any, bool, float, int, PartyId, str, World (+18 more)
+Cohesion: 0.27
+Nodes (24): ActionResult, Any, bool, float, int, PartyId, str, World (+16 more)
 
 ### Community 178 - "Community 178"
-Cohesion: 0.27
-Nodes (25): _ask_depth(), _campaigns_store(), _clear_corner(), _corners_store(), _display_name(), _end_predatory_campaign(), _estimated_cash_tier_score(), _holder_corner_ask() (+17 more)
+Cohesion: 0.26
+Nodes (26): _ask_depth(), _campaigns_store(), _clear_corner(), _corners_store(), _display_name(), _end_predatory_campaign(), _estimated_cash_tier_score(), _holder_corner_ask() (+18 more)
 
 ### Community 179 - "Community 179"
-Cohesion: 0.19
-Nodes (17): int, str, World, genesis_settler_count_for_world(), laborer_target_count_for_landmass(), landmass_land_plot_count(), _landmass_type(), Landmass-scaled Genesis population targets (labor + entrepreneurs).  Labor and (+9 more)
+Cohesion: 0.22
+Nodes (15): int, str, World, genesis_settler_count_for_world(), laborer_target_count_for_landmass(), landmass_land_plot_count(), _landmass_type(), Landmass-scaled Genesis population targets (labor + entrepreneurs).  Labor and (+7 more)
 
 ### Community 180 - "Community 180"
-Cohesion: 0.22
-Nodes (27): PlotId, int, PartyId, PlotId, str, World, _build_dock(), _build_test_world() (+19 more)
+Cohesion: 0.10
+Nodes (49): int, PlotId, str, World, int, PartyId, PlotId, str (+41 more)
 
 ### Community 181 - "Community 181"
 Cohesion: 0.11
@@ -1128,12 +1147,12 @@ Cohesion: 0.11
 Nodes (18): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+10 more)
 
 ### Community 183 - "Community 183"
-Cohesion: 0.25
-Nodes (17): _ensure_party(), _give_cash(), _player_plot(), Sprint 4 — Phase A tests: survey reports as tradeable assets, intel market, brok, Sanity: the broker's helper recognises grade ≥ 0.5 as high., A settler-owned report with a grade > 0.5 is bought by the broker on its tick., Return (or assign) a plot owned by the human ('player') party., test_high_grade_check_threshold() (+9 more)
+Cohesion: 0.13
+Nodes (30): _ensure_party(), _give_cash(), _player_plot(), Sprint 4 — Phase A tests: survey reports as tradeable assets, intel market, brok, Sanity: the broker's helper recognises grade ≥ 0.5 as high., A settler-owned report with a grade > 0.5 is bought by the broker on its tick., Return (or assign) a plot owned by the human ('player') party., test_high_grade_check_threshold() (+22 more)
 
 ### Community 184 - "Community 184"
-Cohesion: 0.35
-Nodes (14): _cash(), _give_party_cash(), _give_party_inventory(), Sprint 4 — Phase C tests: forward delivery contracts., Run a few game-days; check that at least one settler eventually proposes a forwa, test_forward_default_loses_deposit(), test_forward_delivery_transfers_goods_and_payment(), test_forward_price_locked_regardless_of_spot() (+6 more)
+Cohesion: 0.32
+Nodes (16): propose_forward_contract(), Create a ``proposed`` forward delivery contract (no escrow until accepted)., _cash(), _give_party_cash(), _give_party_inventory(), Sprint 4 — Phase C tests: forward delivery contracts., Run a few game-days; check that at least one settler eventually proposes a forwa, test_forward_default_loses_deposit() (+8 more)
 
 ### Community 185 - "Community 185"
 Cohesion: 0.11
@@ -1148,12 +1167,12 @@ Cohesion: 0.42
 Nodes (9): MaterialId, World, Organic / energy spoilage — 1:1 transform conserves matter (Law 1).  Covers bo, Each tick: for materials with ``spoilage_interval_ticks``, maybe convert one uni, _spoil_chance(), _spoil_party_inventory(), _spoil_plot_staged(), _staged_only() (+1 more)
 
 ### Community 188 - "Community 188"
-Cohesion: 0.12
-Nodes (24): float, int, str, World, classify_landmass(), compute_landmasses(), landmass_pair_modifier(), list_continents() (+16 more)
+Cohesion: 0.18
+Nodes (17): float, int, str, World, classify_landmass(), compute_landmasses(), landmass_pair_modifier(), list_continents() (+9 more)
 
 ### Community 189 - "Community 189"
-Cohesion: 0.05
-Nodes (81): bool, int, PlotId, str, World, PlotId, World, int (+73 more)
+Cohesion: 0.13
+Nodes (35): get_roads(), Any, int, PartyId, PlotId, str, World, all_roads_public() (+27 more)
 
 ### Community 190 - "Community 190"
 Cohesion: 0.21
@@ -1164,28 +1183,28 @@ Cohesion: 0.26
 Nodes (17): int, PartyId, PlotId, str, _find_hand_mine_coal_plot(), _give_cash(), Sprint 6 — Phase B production throughput tests., Continuous production stalls with `production_input_stall` when input     mater (+9 more)
 
 ### Community 192 - "Community 192"
-Cohesion: 0.13
-Nodes (19): _find_lab_plot(), get_archetype(), maybe_create_discovery_blueprint(), _pick_bench_materials(), Settler archetypes — five personality types that shape decision-making.  Arche, RESEARCHER settlers register a licensable blueprint for a discovered recipe., Once per game-week, RESEARCHER settlers with labs run bench reactions., Deterministic archetype from party_id. Same party = same archetype always. (+11 more)
+Cohesion: 0.10
+Nodes (23): _find_lab_plot(), get_archetype(), maybe_create_discovery_blueprint(), _pick_bench_materials(), Settler archetypes — five personality types that shape decision-making.  Arche, RESEARCHER settlers register a licensable blueprint for a discovered recipe., Once per game-week, RESEARCHER settlers with labs run bench reactions., Deterministic archetype from party_id. Same party = same archetype always. (+15 more)
 
 ### Community 193 - "Community 193"
 Cohesion: 0.12
 Nodes (16): code:block1 (/graphify                                             # full), code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -c "), code:bash (python3 -m graphify.watch INPUT_PATH --debounce 3), code:bash (graphify hook install    # install), code:bash (graphify claude install), code:bash (graphify claude uninstall  # remove the section), For --cluster-only (+8 more)
 
 ### Community 194 - "Community 194"
-Cohesion: 0.13
-Nodes (24): fx_escrow_account(), MoneyOk, Money ledger — Primitive 5 / Law 1. All balance changes go through here., One-time bootstrap: system reserve holds all not-yet-allocated currency., cancel_fx_order(), _ensure_fx_party(), _fx_execute_pair(), _fx_expire_orders() (+16 more)
+Cohesion: 0.27
+Nodes (18): fx_escrow_account(), cancel_fx_order(), _ensure_fx_party(), _fx_execute_pair(), _fx_expire_orders(), _fx_release_escrow(), _is_allowed_currency(), post_fx_order() (+10 more)
 
 ### Community 195 - "Community 195"
-Cohesion: 0.16
-Nodes (30): _complete_deep_survey_job(), deep_survey(), party_active_deep_survey_jobs(), _party_has_operational_drill_rig(), Deep survey — drill_rig + drill_bit ($20) reveals Tier-3 mineral grades on a plo, Complete any deep survey jobs whose ``completes_at_tick`` has arrived., Start a deep survey on a player-owned plot with a drill_rig and ≥1 drill_bit., _scen_deep() (+22 more)
+Cohesion: 0.28
+Nodes (16): _finish_building(), Deep survey — drill_rig, Tier-3 mineral reveal, drill_bit consumption, conservat, A successful run preserves total_cents (cost goes to system reserve)., A platinum_grade ≥ 0.1 finding emits a ``deep_survey_find`` world_feed row., Without an installed drill_rig the action is rejected., A successful submission immediately removes 1 drill_bit and 2_000c., After completion the plot exposes Tier-3 grades through ``world_public_dict``., _setup_plot_with_platinum() (+8 more)
 
 ### Community 196 - "Community 196"
 Cohesion: 0.38
 Nodes (16): PlotId, invalidate_road_cache(), _build_world(), _claim(), _give_electricity(), _install_strip_mine(), Road connectivity gates for production after the grace period., test_adjacent_road_counts_as_access() (+8 more)
 
 ### Community 197 - "Community 197"
-Cohesion: 0.18
-Nodes (15): PlotId, World, _execute_purchase(), Idempotent: attach this store's plot to its town's ``store_plots``.      Picks, Idempotent: attach this store's plot to its town's ``store_plots``.      Picks, Idempotent: attach this store's plot to its town's ``store_plots``.      Picks, Move ``units`` of ``material`` from store to a phantom-consumed sink.      Cas, Move ``units`` of ``material`` from store to a phantom-consumed sink.      Cas (+7 more)
+Cohesion: 0.12
+Nodes (22): Register a business name (Sprint 5) and optionally a Phase 10C entity., register_business(), _give_cash(), Sprint 5 — Phase A tests: business registration + display names everywhere., After registration, market events show the business name as seller via     ``pa, test_business_name_in_market_listing(), test_duplicate_name_rejected(), test_idempotent_same_name_same_party() (+14 more)
 
 ### Community 198 - "Community 198"
 Cohesion: 0.26
@@ -1200,16 +1219,16 @@ Cohesion: 0.35
 Nodes (10): Deal-making — bilateral contracts, loans, and market tactics conserve money., _seed_cash(), _settlers(), test_bank_loan_conserves_money(), test_bilateral_contract_fulfillment_conserves_money_and_matter(), test_cornering_buys_thin_book(), test_genesis_bank_seeded_at_bootstrap(), test_propose_bilateral_contract_can_succeed() (+2 more)
 
 ### Community 201 - "Community 201"
-Cohesion: 0.18
-Nodes (10): Sprint 3 — Phase B · geographic clustering / regional identity.  Covers: - B1, Buyer with prefer_origin picks the closer seller when prices are equal., Pure-function smoke test — frontier baseline + hub peak., Iron grade variance between regions should exceed average within-region variance, Phase 7A — pop hubs removed → density is the frontier baseline everywhere., test_claim_cost_scales_with_density(), test_mineral_belts_exist(), test_population_density_for_cell_pure() (+2 more)
+Cohesion: 0.22
+Nodes (8): Sprint 3 — Phase B · geographic clustering / regional identity.  Covers: - B1, Pure-function smoke test — frontier baseline + hub peak., Iron grade variance between regions should exceed average within-region variance, Phase 7A — pop hubs removed → density is the frontier baseline everywhere., test_claim_cost_scales_with_density(), test_mineral_belts_exist(), test_population_density_for_cell_pure(), test_population_density_uniform_baseline_phase_7a()
 
 ### Community 202 - "Community 202"
-Cohesion: 0.19
-Nodes (19): _lab_overrides(), labs_exit(), labs_get_preset(), labs_list_presets(), labs_start(), LabsStartBody, Realm Labs API — preset catalog and lab session start., Leave lab mode — reset to a campaign scenario (default frontier). (+11 more)
+Cohesion: 0.11
+Nodes (25): _lab_overrides(), labs_exit(), labs_get_preset(), labs_list_presets(), labs_start(), LabsStartBody, Realm Labs API — preset catalog and lab session start., Leave lab mode — reset to a campaign scenario (default frontier). (+17 more)
 
 ### Community 203 - "Community 203"
-Cohesion: 0.33
-Nodes (9): PlotId, str, World, cells_free(), plot_grid_side_for_id(), Plot internal grid — cells_occupied and cells_free., test_cells_free_rejects_bbox_corner_outside_polyomino_deed(), test_cells_free_rejects_out_of_bounds() (+1 more)
+Cohesion: 0.10
+Nodes (25): str, _clear_job_openings_for_laborer(), _kill_laborer(), Phase 9G — per-town treasury for sweeping orphan cash.      When a laborer die, Phase 9G — per-town treasury for sweeping orphan cash.      When a laborer die, Phase 9G — per-town treasury for sweeping orphan cash.      When a laborer die, Free slots when a laborer leaves the workforce (death / retirement)., Remove a laborer from the simulation.      Phase 9G — remaining cash is swept (+17 more)
 
 ### Community 204 - "Community 204"
 Cohesion: 0.12
@@ -1232,20 +1251,20 @@ Cohesion: 0.19
 Nodes (13): int, _advance_game_days(), gen_world(), Sprint 5 — Phase D tests: the five Tier-2 archetypes., Kessler upgrade: at least one bank_loan-style forward contract is active., Tick several days; expect at least one transaction between two archetype     pa, Specialist doesn't construct any building outside its workshop type., Prospect Holdings: after a few game-days, has survey reports listed on the (+5 more)
 
 ### Community 209 - "Community 209"
-Cohesion: 0.14
-Nodes (18): int, LabOverrides, LabPreset, str, World, str, _apply_scale(), bootstrap_lab_preset() (+10 more)
+Cohesion: 0.20
+Nodes (15): int, LabOverrides, LabPreset, str, World, Any, str, _apply_scale() (+7 more)
 
 ### Community 210 - "Community 210"
 Cohesion: 0.07
-Nodes (73): _append_settler_voice(), _build_prompt(), _cache_get(), _cache_key(), _cache_put(), _can_schedule_voice(), _display_name(), _game_day() (+65 more)
+Nodes (72): _append_settler_voice(), _build_prompt(), _cache_get(), _cache_key(), _cache_put(), _can_schedule_voice(), _display_name(), _game_day() (+64 more)
 
 ### Community 211 - "Community 211"
 Cohesion: 0.12
 Nodes (16): _maybe_schedule_auto_restart(), After a successful completion, queue the next run if the player asked for one., After a successful completion, queue the next run if the player asked for one., After a successful completion, queue the next run if the player asked for one., After a successful completion, queue the next run if the player asked for one., After a successful completion, queue the next run if the player asked for one., After a successful completion, queue the next run if the player asked for one., After a successful completion, queue the next run if the player asked for one. (+8 more)
 
 ### Community 212 - "Community 212"
-Cohesion: 0.21
-Nodes (20): buildable_recipes_action(), clear_workshop_focus_action(), discovery_digest_action(), fabrication_status_action(), Fabrication & discovery actions for open-ended player industry., Tech tree with per-node eligibility for this party., research_catalog_for_party(), set_workshop_focus_action() (+12 more)
+Cohesion: 0.29
+Nodes (16): buildable_recipes_action(), clear_workshop_focus_action(), discovery_digest_action(), fabrication_status_action(), Fabrication & discovery actions for open-ended player industry., Tech tree with per-node eligibility for this party., research_catalog_for_party(), set_workshop_focus_action() (+8 more)
 
 ### Community 213 - "Community 213"
 Cohesion: 0.13
@@ -1265,15 +1284,15 @@ Nodes (14): 20 — Realm solo client visual style profile (web + Godot), Accessi
 
 ### Community 217 - "Community 217"
 Cohesion: 0.08
-Nodes (27): post_account_create(), post_account_transfer(), post_building_auto_list(), post_business_register(), post_businesses_register(), post_construction_accept(), post_construction_order(), post_construction_quotes() (+19 more)
+Nodes (28): post_account_create(), post_account_transfer(), post_building_auto_list(), post_business_register(), post_businesses_register(), post_construction_accept(), post_construction_order(), post_construction_quotes() (+20 more)
 
 ### Community 218 - "Community 218"
-Cohesion: 0.16
-Nodes (24): Any, bool, int, PartyId, str, World, PartyId, PlotId (+16 more)
+Cohesion: 0.26
+Nodes (16): Any, bool, int, PartyId, str, World, _cap_store(), capabilities_public() (+8 more)
 
 ### Community 219 - "Community 219"
-Cohesion: 0.19
-Nodes (15): int, _chebyshev(), _cluster_residences(), _generate_town_name(), _pick_starting_residence_plots(), Phase 7C — towns: emergent residential clusters.  A *town* is not a placed obj, Deterministic name from (seed, town_seq).      Mixes the cheap "root+suffix" g, Group residences by ``TOWN_PROXIMITY_TILES`` Chebyshev neighbourhood.      Sim (+7 more)
+Cohesion: 0.23
+Nodes (22): _acquisitions_store(), _display_name(), evaluate_acquisition_targets(), execute_buyout(), liquidation_value_cents(), Hostile and opportunistic acquisitions — buyouts of distressed settlers., Retire without liquidating inventory or releasing plots (already transferred)., Retire without liquidating inventory or releasing plots (already transferred). (+14 more)
 
 ### Community 220 - "Community 220"
 Cohesion: 0.14
@@ -1288,36 +1307,36 @@ Cohesion: 0.15
 Nodes (13): code:bash ($(cat graphify-out/.graphify_python) -c "), code:block11 ([Agent tool call 1: files 1-15, subagent_type="general-purpo), code:bash (PROJECT_ROOT=$(cat graphify-out/.graphify_root)), code:block13 (You are a graphify extraction subagent. Read the files liste), code:bash ($(cat graphify-out/.graphify_python) -c "), code:bash ($(cat graphify-out/.graphify_python) -c "), code:bash ($(cat graphify-out/.graphify_python) -c "), code:bash ($(cat graphify-out/.graphify_python) -c ") (+5 more)
 
 ### Community 223 - "Community 223"
-Cohesion: 0.16
-Nodes (15): float, PartyId, PlotId, str, World, PartyId, PlotId, _party_bonus_map() (+7 more)
+Cohesion: 0.12
+Nodes (18): float, PartyId, PlotId, str, World, PartyId, _party_bonus_map(), Research efficiency bonuses applied at production completion. (+10 more)
 
 ### Community 224 - "Community 224"
 Cohesion: 0.15
 Nodes (12): A note on scope, code:powershell (Set-Location c:\Users\avita\econ\engine), code:powershell (Set-Location c:\Users\avita\econ\web), How to navigate this repo, Phase 1 checklist (excerpt), Realm, Run the prototype shell, The 1-pager pitch (+4 more)
 
 ### Community 225 - "Community 225"
-Cohesion: 0.22
-Nodes (8): post_tick(), broadcast_json(), Solo client WebSocket — Godot ``WS.gd`` connects to ``/ws`` for optional live pu, Best-effort push to all open `/ws` clients (ignored failures)., solo_ws(), Any, str, WebSocket
+Cohesion: 0.13
+Nodes (21): int, PlotId, World, maintain_road(), Repair one road segment: pay cash + consume materials, reset condition.      T, Repair one road segment: pay cash + consume materials, reset condition.      T, Phase 9F — once per game-day, drop every segment's condition by the     decay r, Phase 9F — once per game-day, drop every segment's condition by the     decay r (+13 more)
 
 ### Community 226 - "Community 226"
-Cohesion: 0.08
-Nodes (35): str, PartyId, PlotId, World, Settler adaptation to Tier-2 industry — probabilistic discovery, secondary-tier, Without an assay_lab the helper does nothing even if the RNG would otherwise fir, Without an assay_lab the helper does nothing even if the RNG would otherwise fir, A settler with sulfur_grade ≥ 0.3 and the cash buffer chooses an assay_lab as Ti (+27 more)
+Cohesion: 0.14
+Nodes (21): str, Settler adaptation to Tier-2 industry — probabilistic discovery, secondary-tier, Without an assay_lab the helper does nothing even if the RNG would otherwise fir, Without an assay_lab the helper does nothing even if the RNG would otherwise fir, A settler with sulfur_grade ≥ 0.3 and the cash buffer chooses an assay_lab as Ti, A settler with sulfur_grade ≥ 0.3 and the cash buffer chooses an assay_lab as Ti, Give the settler a fully built/operational assay_lab on a plot rich in the targe, Give the settler a fully built/operational assay_lab on a plot rich in the targe (+13 more)
 
 ### Community 227 - "Community 227"
 Cohesion: 0.29
 Nodes (12): int, str, _bucket_for_path(), _emit_router_file(), _emit_state_file(), _emit_thin_app(), main(), One-shot splitter that carves realm/api/app.py into APIRouter route files.  Th (+4 more)
 
 ### Community 228 - "Community 228"
-Cohesion: 0.23
-Nodes (9): BuildManifest, load_build_manifest(), Engine ↔ Godot build identity (shared ``realm_build.json`` at repo root)., version_payload(), Build manifest must stay aligned with Godot (realm_build.json)., test_realm_build_json_matches_player_economy(), test_version_payload_shape(), Any (+1 more)
+Cohesion: 0.19
+Nodes (11): get_version(), Engine build identity. The Godot client uses this to detect a stale     realm_s, BuildManifest, load_build_manifest(), Engine ↔ Godot build identity (shared ``realm_build.json`` at repo root)., version_payload(), Build manifest must stay aligned with Godot (realm_build.json)., test_realm_build_json_matches_player_economy() (+3 more)
 
 ### Community 229 - "Community 229"
 Cohesion: 0.36
 Nodes (14): ActionResult, float, PartyId, PlotId, str, World, clear_workshop_focus(), _focus_root() (+6 more)
 
 ### Community 230 - "Community 230"
-Cohesion: 0.19
-Nodes (18): float, int, PlotId, str, World, generate_regional_advantages(), qualitative_band(), Deterministic regional production efficiency modifiers (comparative advantage). (+10 more)
+Cohesion: 0.18
+Nodes (19): float, int, PlotId, str, World, test_cpi_and_regional_tracking(), generate_regional_advantages(), qualitative_band() (+11 more)
 
 ### Community 231 - "Community 231"
 Cohesion: 0.15
@@ -1344,8 +1363,8 @@ Cohesion: 0.36
 Nodes (10): _clear_exchange_asks(), _ensure_cash(), _first_forest_plot(), Market fills use physical delivery (DDP transit or FOB pickup), not inventory te, test_ddp_fill_spawns_transit_not_buyer_stash(), test_fob_fill_creates_pickup_not_instant_stash(), int, MaterialId (+2 more)
 
 ### Community 237 - "Community 237"
-Cohesion: 0.17
-Nodes (13): _bootstrap_with_towns(), Phase 8 — Sub-phase 8C: epidemic system tests.  Covers the contract laid out i, A severe epidemic in a town with no medicine drops laborer health     until at, Fire an epidemic and tick a week: ledger total invariant., Helper: build a world that already has towns seeded by ``bootstrap_genesis``., Calling trigger twice on the same town returns the same active event., test_epidemic_accelerates_health_decay_multiplier(), test_epidemic_event_can_be_triggered_in_town() (+5 more)
+Cohesion: 0.11
+Nodes (19): _bootstrap_with_towns(), Phase 8 — Sub-phase 8C: epidemic system tests.  Covers the contract laid out i, Direct unit test: a healthy laborer with full needs still loses     health each, A severe epidemic in a town with no medicine drops laborer health     until at, Fire an epidemic and tick a week: ledger total invariant., Helper: build a world that already has towns seeded by ``bootstrap_genesis``., Calling trigger twice on the same town returns the same active event., test_apply_health_pressure_with_epidemic_drops_faster() (+11 more)
 
 ### Community 238 - "Community 238"
 Cohesion: 0.28
@@ -1368,16 +1387,16 @@ Cohesion: 0.25
 Nodes (8): _ensure_settler_boot_tools(), One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while, One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while, One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while, One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while, One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while, One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while, One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while
 
 ### Community 243 - "Community 243"
-Cohesion: 0.25
-Nodes (10): str, era_node_ids(), era_spec(), EraSpec, node_spec(), Static technology tree — eras and research nodes., All tech node ids belonging to ``era_id``., All tech node ids belonging to ``era_id``. (+2 more)
+Cohesion: 0.24
+Nodes (11): str, era_node_ids(), era_spec(), EraSpec, node_spec(), Static technology tree — eras and research nodes., All tech node ids belonging to ``era_id``., All tech node ids belonging to ``era_id``. (+3 more)
 
 ### Community 244 - "Community 244"
 Cohesion: 0.18
 Nodes (24): _inject_known_settlers(), _mutual_reputation(), _pick_two_settlers(), Corporations — partnership formation and acquisition buyouts conserve money., _seed_settler_cash(), test_buyout_conserves_money_and_transfers_matter(), test_liquidation_value_includes_claim_and_buildings(), test_partnership_formation_conserves_money() (+16 more)
 
 ### Community 245 - "Community 245"
-Cohesion: 0.17
-Nodes (32): _ensure_recipe_inputs(), _ensure_workshop(), _first_owned_plot_indexed(), _has_primary_on_plot(), _has_secondary_on_plot(), _maybe_build_secondary_workshop(), _nearby_all_building_counts(), _pick_recipe_to_start() (+24 more)
+Cohesion: 0.16
+Nodes (26): _ensure_recipe_inputs(), _first_owned_plot(), _maybe_build_secondary_workshop(), _nearby_all_building_counts(), _owned_plots_by_party(), _pick_recipe_to_start(), _plot_scan_bundle(), _plots_manhattan_order() (+18 more)
 
 ### Community 246 - "Community 246"
 Cohesion: 0.35
@@ -1388,8 +1407,8 @@ Cohesion: 0.31
 Nodes (10): int, Path, str, Pattern, _build_patterns(), main(), Refactor helper: rewrite ``from realm.X import Y`` and ``import realm.X``.  Us, Return list of (compiled_regex, replacement, description) tuples.      Three p (+2 more)
 
 ### Community 248 - "Community 248"
-Cohesion: 0.09
-Nodes (29): bool, PartyId, era_efficiency_score(), grant_patent(), has_active_patent_exclusivity(), party_has_patent_license(), Record a global-first patent with 30-day exclusivity on unlocked recipes., Back-compat alias for :func:`grant_patent`. (+21 more)
+Cohesion: 0.22
+Nodes (8): Daily: hint when multiple labs race the same tech node., Daily: hint when multiple labs race the same tech node., Daily: hint when multiple labs race the same tech node., Daily: hint when multiple labs race the same tech node., tick_research_competition(), Patents, global era unlock, licensing, and production blocking., test_complete_research_grants_patent_to_first_only(), test_research_competition_feed_when_two_active()
 
 ### Community 249 - "Community 249"
 Cohesion: 0.26
@@ -1412,24 +1431,24 @@ Cohesion: 0.38
 Nodes (9): delete_route_registration(), list_all_routes(), Phase 10B — shipping route registry & voyage history (read-mostly API)., Routes with completed voyages but no registered operator., register_route_endpoint(), uncharted_lanes(), voyage_history(), Any (+1 more)
 
 ### Community 254 - "Community 254"
-Cohesion: 0.31
-Nodes (9): _install_small_genesis_world(), Unified employment — HTTP surface for laborers + stub NPC path., test_claim_and_job_opening_http(), test_fire_laborer_http(), test_hire_laborer_via_stub_route_http(), test_hire_phantom_npc_still_works_http(), test_list_laborers_filters_unemployed_http(), test_wage_paid_daily_after_hire_conserved() (+1 more)
+Cohesion: 0.33
+Nodes (8): _install_small_genesis_world(), Unified employment — HTTP surface for laborers + stub NPC path., test_claim_and_job_opening_http(), test_fire_laborer_http(), test_hire_laborer_via_stub_route_http(), test_hire_phantom_npc_still_works_http(), test_list_laborers_filters_unemployed_http(), int
 
 ### Community 255 - "Community 255"
-Cohesion: 0.21
-Nodes (12): Aegis Mutual, Anvil Recruiting, Driftwood Timber & Lumber, Hearthlight Power Co., Tape & Tick Liquidity, Phase 0 Worked Businesses, 17 Phase 1 Completion Checklist, Order book + P2P (+4 more)
+Cohesion: 0.31
+Nodes (9): Aegis Mutual, Anvil Recruiting, Driftwood Timber & Lumber, Tape & Tick Liquidity, Phase 0 Worked Businesses, 17 Phase 1 Completion Checklist, Order book + P2P, SQLite save/load (+1 more)
 
 ### Community 256 - "Community 256"
-Cohesion: 0.20
-Nodes (9): Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break)., Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break)., Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break)., _scan_from_anchor(), Any, object, str, bucket() (+1 more)
+Cohesion: 0.10
+Nodes (20): invalidate_settler_plot_caches(), Call when plot ownership or the plots map changes (e.g. claim_plot)., Call when plot ownership or the plots map changes (e.g. claim_plot)., Call when plot ownership or the plots map changes (e.g. claim_plot)., Deterministic per-party "preferred starting region" — one of four quadrant ancho, Deterministic per-party "preferred starting region" — one of four quadrant ancho, Deterministic per-party "preferred starting region" — one of four quadrant ancho, Re-sort ``dry_scan`` by Manhattan distance from ``anchor`` (stable tie-break). (+12 more)
 
 ### Community 257 - "Community 257"
-Cohesion: 0.03
-Nodes (167): laboratory_catalog_public(), Phase 10E — laboratory bench reactions (no parallel production recipe)., Consume one unit of each input when a known reaction exists; grant output., Static reference for API., run_laboratory_bench(), _give_mats(), Phase 10D — construction order + build_on_plot contractor path., test_construction_order_completes_and_conserves() (+159 more)
+Cohesion: 0.05
+Nodes (93): laboratory_catalog_public(), Phase 10E — laboratory bench reactions (no parallel production recipe)., Consume one unit of each input when a known reaction exists; grant output., Static reference for API., run_laboratory_bench(), Company, MatterErr, MoneyErr (+85 more)
 
 ### Community 258 - "Community 258"
-Cohesion: 0.08
-Nodes (40): Behavior tests for settler archetypes and market oracle., test_archetypes_assigned_deterministically(), test_market_aware_recipe_prefers_profitable(), test_market_oracle_built_once_per_day(), test_researcher_archetype_creates_blueprint_on_discovery(), system_reserve_account(), ensure_player_starting_cash(), Human player starting balances (solo / dev bootstrap). (+32 more)
+Cohesion: 0.05
+Nodes (64): test_force_accept_bilateral_contract(), test_cancel_fee_drains_to_reserve_per_cancel(), test_cancel_fee_silent_noop_when_no_cash(), test_market_aware_recipe_prefers_profitable(), party_cash_account(), system_reserve_account(), ensure_player_starting_cash(), Human player starting balances (solo / dev bootstrap). (+56 more)
 
 ### Community 259 - "Community 259"
 Cohesion: 0.22
@@ -1440,12 +1459,12 @@ Cohesion: 0.31
 Nodes (13): Any, bool, int, PartyId, str, World, fabrication_status(), Fabrication gates — ties capabilities to custom content and blueprints. (+5 more)
 
 ### Community 261 - "Community 261"
-Cohesion: 0.14
-Nodes (17): int, PartyId, PlotId, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op (+9 more)
+Cohesion: 0.29
+Nodes (9): int, PartyId, PlotId, _ensure_cash(), _find_high_coal_plot(), Auto-listing pulls from plot bulk at the workshop site., test_auto_list_places_order_from_plot_stock(), test_auto_list_price_uses_cost_basis_times_1_30() (+1 more)
 
 ### Community 262 - "Community 262"
-Cohesion: 0.10
-Nodes (39): Any, bool, int, str, World, int, PartyId, str (+31 more)
+Cohesion: 0.14
+Nodes (28): Any, bool, int, str, World, PartyId, str, add_price_alert() (+20 more)
 
 ### Community 263 - "Community 263"
 Cohesion: 0.20
@@ -1464,8 +1483,8 @@ Cohesion: 0.38
 Nodes (14): futures_escrow_account(), cancel_futures_order(), _futures_default(), _maybe_emit_futures_curve_feed(), post_futures_order(), Futures market — public delivery commitments with escrowed deposits., tick_futures_matching(), tick_futures_pipeline() (+6 more)
 
 ### Community 267 - "Community 267"
-Cohesion: 0.21
-Nodes (32): bool, int, MaterialId, MatterResult, PartyId, PlotId, World, add_party_plot_stock() (+24 more)
+Cohesion: 0.28
+Nodes (26): bool, int, MaterialId, MatterResult, PartyId, PlotId, World, add_party_plot_stock() (+18 more)
 
 ### Community 268 - "Community 268"
 Cohesion: 0.31
@@ -1473,27 +1492,27 @@ Nodes (10): get_health(), get_persistence_list(), get_persistence_status(), get_
 
 ### Community 269 - "Community 269"
 Cohesion: 0.24
-Nodes (14): int, _build_test_world(), _give(), Sprint 3 — Phase D · coastal advantages.  Covers: - Fishing fails inland and, Bulk trip fees flag coastal lanes; same distance → same trip cost., A dock-equipped coastal source dispatches 1.5 × faster., Inland tidal_mill construction is rejected., ``tidal_power`` recipe runs on a tidal_mill with no coal inventory. (+6 more)
+Nodes (15): int, str, _build_test_world(), _give(), Sprint 3 — Phase D · coastal advantages.  Covers: - Fishing fails inland and, Bulk trip fees flag coastal lanes; same distance → same trip cost., A dock-equipped coastal source dispatches 1.5 × faster., Inland tidal_mill construction is rejected. (+7 more)
 
 ### Community 270 - "Community 270"
-Cohesion: 0.18
-Nodes (11): rate_tier_for_reputation(), Return the highest-applicable tier for ``honored`` honored contracts., gen_world(), _give_cash(), Sprint 5 — Phase C tests: NPC bank, loan lifecycle, reputation pricing., test_bank_exists_at_bootstrap(), test_bank_rate_tier_by_reputation(), test_bank_rates_view_marks_current_tier() (+3 more)
+Cohesion: 0.20
+Nodes (11): exchange_price_for_party(), Reputation-adjusted exchange price (Sprint 5 — Phase C.5).      The base order, gen_world(), Sprint 5 — Phase C tests: NPC bank, loan lifecycle, reputation pricing., test_bank_exists_at_bootstrap(), test_bank_rate_tier_by_reputation(), test_bank_rates_view_marks_current_tier(), test_bank_rejects_principal_over_tier_cap() (+3 more)
 
 ### Community 271 - "Community 271"
 Cohesion: 0.22
 Nodes (8): 21 — Realm Labs, Adding a featured lab, API, Catalog, code:json ({), Godot client (primary solo UI), Runtime metadata, Web routes (optional browser client)
 
 ### Community 272 - "Community 272"
-Cohesion: 0.16
-Nodes (14): opening_memory(), persona_for_scenario(), Tier-3 named character roster (doc ``06_AI_AGENT_DESIGN.md``) — one Haiku-driven, Fixed party id + voice + economy seed., Scenario-flavored first line for rolling memory., Tier3Persona, str, Seed the scenario's named Tier-3 rival from ``realm.llm_roster``. (+6 more)
+Cohesion: 0.32
+Nodes (7): opening_memory(), persona_for_scenario(), Tier-3 named character roster (doc ``06_AI_AGENT_DESIGN.md``) — one Haiku-driven, Fixed party id + voice + economy seed., Scenario-flavored first line for rolling memory., Tier3Persona, str
 
 ### Community 273 - "Community 273"
 Cohesion: 0.29
 Nodes (9): create_custom_recipe_action(), HTTP-facing actions for player-defined materials and recipes., register_material_action(), ActionResult, bool, int, PartyId, str (+1 more)
 
 ### Community 274 - "Community 274"
-Cohesion: 0.31
-Nodes (10): PlotId, str, World, _cluster_id(), on_residence_built_nascent(), Phase 10F — two-residence clusters before formal town incorporation., Rebuild nascent rows from residence clusters of size exactly two., Daily: refresh geometry then age streaks; feed when crossing day 3. (+2 more)
+Cohesion: 0.10
+Nodes (23): PartyId, _bank_loans_for_player(), _bank_rates_public(), _forward_contracts_public(), _grid_operators_public(), _player_accounts_public(), Public view of the player's accounts (Sprint 5 — Phase B)., Public view of the player's accounts (Sprint 5 — Phase B). (+15 more)
 
 ### Community 275 - "Community 275"
 Cohesion: 0.25
@@ -1512,8 +1531,8 @@ Cohesion: 0.29
 Nodes (7): code:bash ($(cat graphify-out/.graphify_python) -c "), code:block41 (Query expanded to (from graph vocab, N tokens): [token1, tok), code:bash (graphify query "QUESTION"), code:bash ($(cat graphify-out/.graphify_python) -m graphify save-result), For /graphify query, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
 
 ### Community 279 - "Community 279"
-Cohesion: 0.26
-Nodes (16): PartyId, PlotId, str, _advance_until_building_ready(), _complete_recipe(), Commodity quality tiers, input substitution, and industrial cluster bonuses., Recipes gate at 0.30; verify low-tier mapping on direct extraction helper., test_cluster_bonus_requires_4_buildings() (+8 more)
+Cohesion: 0.28
+Nodes (15): PartyId, PlotId, str, _advance_until_building_ready(), _complete_recipe(), Commodity quality tiers, input substitution, and industrial cluster bonuses., Recipes gate at 0.30; verify low-tier mapping on direct extraction helper., test_cluster_bonus_requires_4_buildings() (+7 more)
 
 ### Community 280 - "Community 280"
 Cohesion: 0.17
@@ -1576,8 +1595,8 @@ Cohesion: 0.33
 Nodes (6): User-code layer ships Phase 4+ (not v1), Phase 3: Solo Launch, Phase 4: User-Code Layer (Solo), Phase 5: Multiplayer + Closed Cohort 1, Phase 6: Cohorts 2-N + Public Open Beta, Phase 7: Public Persistent Multiplayer
 
 ### Community 296 - "Community 296"
-Cohesion: 0.29
-Nodes (7): _coast_signature(), Continental worldgen varies by seed., test_all_seeds_have_coastal_plots(), test_all_seeds_produce_at_least_2_landmasses(), test_different_seeds_produce_different_coastlines(), test_lobe_placement_varies_by_seed(), test_same_seed_same_lobes()
+Cohesion: 0.24
+Nodes (9): continental_layout_lobes(), Seed-derived land lobes for the continental layout (for tests / debug).      Eac, _coast_signature(), Continental worldgen varies by seed., test_all_seeds_have_coastal_plots(), test_all_seeds_produce_at_least_2_landmasses(), test_different_seeds_produce_different_coastlines(), test_lobe_placement_varies_by_seed() (+1 more)
 
 ### Community 297 - "Community 297"
 Cohesion: 0.40
@@ -1620,8 +1639,8 @@ Cohesion: 0.50
 Nodes (4): code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -c "), code:bash ($(cat .graphify_python) -m graphify save-result --question "), For /graphify explain
 
 ### Community 307 - "Community 307"
-Cohesion: 0.33
-Nodes (6): bool, PlotId, _frontier_region_for_plot(), Plots in the bottom density quartile mostly lack road-linked grid capacity., Heuristic: a plot is "frontier" if its population density is low (≤ 0.25)., test_05_frontier_plots_are_mostly_unpowered()
+Cohesion: 0.30
+Nodes (22): int, PartyId, PlotId, _add_dock(), _empty_subsurface(), _make_plot(), _make_two_island_world(), Phase 9A — geography gates for inter-island shipping.  These tests prove that (+14 more)
 
 ### Community 308 - "Community 308"
 Cohesion: 0.50
@@ -1700,8 +1719,8 @@ Cohesion: 0.33
 Nodes (6): get_business_registry(), Snapshot of the world's registered businesses., Snapshot of the world's registered businesses., Snapshot of the world's registered businesses., Snapshot of the world's registered businesses., Snapshot of the world's registered businesses.
 
 ### Community 332 - "Community 332"
-Cohesion: 0.40
-Nodes (5): get_routes(), Shipping market: registered operators per route, per-region partitioning,     a, Shipping market: registered operators per route, per-region partitioning,     a, Shipping market: registered operators per route, per-region partitioning,     a, Shipping market: registered operators per route, per-region partitioning,     a
+Cohesion: 0.22
+Nodes (21): bool, int, MaterialId, MatterResult, PartyId, PlotId, str, World (+13 more)
 
 ### Community 333 - "Community 333"
 Cohesion: 0.50
@@ -1712,24 +1731,24 @@ Cohesion: 0.50
 Nodes (3): Build version system (Godot ↔ engine), graphify, Solo UI — Godot, not `web/`
 
 ### Community 341 - "Community 341"
-Cohesion: 0.24
-Nodes (11): Phase 10C — daily business footprint checks + production observation hooks., Rolling 7-game-day output totals per business (for viability / UI)., Once per game-day: suspend businesses that lost their declared plot footprint., record_business_production_for_completed_run(), tick_business_viability(), int, MaterialId, PartyId (+3 more)
+Cohesion: 0.13
+Nodes (23): _business_name_taken(), _is_valid_business_name(), Business registration — Sprint 5 name registry + Phase 10C business entities., Phase 10C — daily business footprint checks + production observation hooks., Rolling 7-game-day output totals per business (for viability / UI)., Once per game-day: suspend businesses that lost their declared plot footprint., record_business_production_for_completed_run(), tick_business_viability() (+15 more)
 
 ### Community 342 - "Community 342"
 Cohesion: 0.39
 Nodes (7): float, str, grade_to_quality(), quality_price_multiplier(), quality_yield_multiplier(), Material quality tiers.  Quality is tracked as a tag on inventory slots. In th, test_grade_to_quality_thresholds()
 
 ### Community 343 - "Community 343"
-Cohesion: 0.12
-Nodes (24): int, PartyId, recipe_allowed_on_terrain(), Rebuild ``world.scenario_state['world_cell_to_plot']`` after plot mutations., refresh_world_cell_index(), _player_owned_plot(), Sprint 1 / Phase C — terrain gates + per-terrain output bonuses., Production on mountain terrain yields ~120% of the base iron-ore output. (+16 more)
+Cohesion: 0.15
+Nodes (22): int, PartyId, Strict plot-level gate. Returns ``(ok, reason)``.      Adds the coastal check, Strict plot-level gate. Returns ``(ok, reason)``.      Adds the coastal check, recipe_allowed_on_plot(), recipe_allowed_on_terrain(), _player_owned_plot(), Sprint 1 / Phase C — terrain gates + per-terrain output bonuses. (+14 more)
 
 ### Community 344 - "Community 344"
 Cohesion: 0.40
 Nodes (5): get_assay_status(), All in-flight assay jobs for ``party``., All in-flight assay jobs for ``party``., All in-flight assay jobs for ``party``., All in-flight assay jobs for ``party``.
 
 ### Community 361 - "Community 361"
-Cohesion: 0.14
-Nodes (43): ActiveProduction, bool, float, int, MaterialId, PartyId, PlotId, str (+35 more)
+Cohesion: 0.17
+Nodes (29): float, int, MaterialId, PlotId, str, _ag_recipe_id(), _building_blueprint_on_plot(), cluster_bonus_for_plot() (+21 more)
 
 ### Community 366 - "Community 366"
 Cohesion: 0.40
@@ -1748,8 +1767,8 @@ Cohesion: 0.40
 Nodes (5): post_schematic_validate(), Authoritative linear-chain validation (engine recipes + party inventory)., Authoritative linear-chain validation (engine recipes + party inventory)., Authoritative linear-chain validation (engine recipes + party inventory)., Authoritative linear-chain validation (engine recipes + party inventory).
 
 ### Community 370 - "Community 370"
-Cohesion: 0.40
-Nodes (4): Genesis exchange emergency restock — last-resort supply after prolonged market a, Last-resort emergency supply — fires once per material after 45 days of total ab, Re-list depleted genesis_exchange staples at escalating prices (price discovery), tick_genesis_exchange_restock()
+Cohesion: 0.30
+Nodes (20): consume_reserve_for_order(), pick_plot_with_available_stock(), plot_available_qty(), plot_fob_committed_qty(), plot_reserved_qty(), Plot stock reserved for resting market asks — goods stay on-site until fill or c, Units sold FOB awaiting buyer pickup (still on the listing plot)., release_reserve_for_order() (+12 more)
 
 ### Community 371 - "Community 371"
 Cohesion: 0.35
@@ -1760,8 +1779,8 @@ Cohesion: 0.33
 Nodes (6): get_construction_orders(), List construction orders involving ``party`` (client, contractor, or any)., List construction orders involving ``party`` (client, contractor, or any)., List construction orders involving ``party`` (client, contractor, or any)., List construction orders involving ``party`` (client, contractor, or any)., List construction orders involving ``party`` (client, contractor, or any).
 
 ### Community 373 - "Community 373"
-Cohesion: 0.33
-Nodes (6): get_deep_survey_status(), All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``.
+Cohesion: 0.18
+Nodes (11): get_deep_survey_status(), get_routes(), All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., All in-flight deep survey jobs for ``party``., Shipping market: registered operators per route, per-region partitioning,     a (+3 more)
 
 ### Community 374 - "Community 374"
 Cohesion: 0.33
@@ -1780,8 +1799,8 @@ Cohesion: 0.17
 Nodes (11): HTTP surface for the host-side sim clock: ``GET /sim/status`` + ``POST /sim/cont, Clients should read pacing from ``/world/static`` instead of hard-coding., test_sim_control_empty_body_is_noop(), test_sim_control_pauses_and_resumes(), test_sim_control_rejects_non_bool_paused(), test_sim_control_rejects_nonsense_speed(), test_sim_control_sets_speed_and_resumes_from_paused(), test_sim_control_speed_snaps_to_preset() (+3 more)
 
 ### Community 379 - "Community 379"
-Cohesion: 0.05
-Nodes (72): Any, bool, int, PartyId, str, building_catalog_public(), Plot buildings — cash + (for workshops) contractor paths: self-supply vs turnkey, _bank_loans_for_player() (+64 more)
+Cohesion: 0.10
+Nodes (36): Any, int, str, _building_maintenance_view(), _business_entities_public(), _business_registry_public(), _chemistry_catalog_public(), _intel_listings_public() (+28 more)
 
 ### Community 380 - "Community 380"
 Cohesion: 0.67
@@ -1792,16 +1811,16 @@ Cohesion: 0.36
 Nodes (9): design_factory_action(), factory_design_for_blueprint(), machines_catalog_action(), Register custom factories (new products + machines + blueprint)., ActionResult, Any, PartyId, str (+1 more)
 
 ### Community 382 - "Community 382"
-Cohesion: 0.50
-Nodes (4): _first_owned_plot(), O(plots) scan. Hot path callers should prefer ``owned_by_party[party][0]``, O(plots) scan. Hot path callers should prefer ``owned_by_party[party][0]``, O(plots) scan. Hot path callers should prefer ``owned_by_party[party][0]``
+Cohesion: 0.29
+Nodes (19): _companies_raw(), Company, company_cash_account(), company_for_party(), company_from_dict(), company_to_dict(), current_era_for_party(), get_companies() (+11 more)
 
 ### Community 383 - "Community 383"
-Cohesion: 0.06
-Nodes (76): _isolate_clock(), _isolate_clock_and_subs(), legacy_scaled(), Simulation calendar: **1 tick = 1 in-game minute**; **1440 ticks = 1 game-day**., Wall-clock seconds the host should sleep between ticks at ``speed_mult``., Inverse of :func:`real_seconds_per_tick` — useful for UI display., Scale a small integer from the abstract-tick prototype to minute-ticks., real_seconds_per_tick() (+68 more)
+Cohesion: 0.16
+Nodes (44): legacy_scaled(), Scale a small integer from the abstract-tick prototype to minute-ticks., Any, bool, int, str, World, Any (+36 more)
 
 ### Community 384 - "Community 384"
-Cohesion: 0.15
-Nodes (21): PartyId, str, _deliver_store_party_inventory_to_shelf(), _ensure_store_party(), _maybe_post_store_reorder_bid(), Phase 7D — stores: the consumer economy.  A store is a plot with a ``store`` b, Party that owns the store on ``plot_id`` (plot owner or building row)., Genesis NPC stores auto-restock once per game-day (training wheels). (+13 more)
+Cohesion: 0.16
+Nodes (19): _plot_on_landmass(), Phase 8 — Sub-phase 8D: market cycles and structural events.  Covers the contr, Blocked routes refuse dispatch_shipment between the two islands., In-transit shipments dispatched before the blockage are unaffected., Run mine_iron_ore in a loop and assert iron_ore_grade declines., When grade crosses 0.35 going down, a world_feed entry fires., Seed three days of moving-average data + a spike in the current snapshot., When best-ask jumps > 40% above the 3-day moving average, an NPC     holding > (+11 more)
 
 ### Community 385 - "Community 385"
 Cohesion: 0.26
@@ -1812,20 +1831,20 @@ Cohesion: 0.18
 Nodes (12): PartyId, _drain_one_island_food(), _make_chronic_unemployed(), phase7_world(), Ensure there's at least some grain on the exchange book that     cross-island N, Empty grain from every store on island 0 so a real food deficit     appears (dr, Empty grain from every store on island 0 so a real food deficit     appears (dr, Pick one bootstrap laborer, drain their cash, mark them unemployed,     and cra (+4 more)
 
 ### Community 387 - "Community 387"
-Cohesion: 0.50
-Nodes (4): invalidate_settler_plot_caches(), Call when plot ownership or the plots map changes (e.g. claim_plot)., Call when plot ownership or the plots map changes (e.g. claim_plot)., Call when plot ownership or the plots map changes (e.g. claim_plot).
+Cohesion: 0.21
+Nodes (19): bool, int, PlotId, str, World, _candidate_edge_for_route(), _has_materials_and_cash(), _ordered_target_routes() (+11 more)
 
 ### Community 388 - "Community 388"
 Cohesion: 0.30
 Nodes (16): BankLoan, _interest_rate_bps_for_party(), _loan_to_dict(), _loans_store(), _next_loan_id(), Genesis bank — reputation-priced loans for settlers., Weekly interest charges; force bankruptcy after consecutive missed payments., Seed the genesis bank party with lending capital from the system reserve. (+8 more)
 
 ### Community 389 - "Community 389"
-Cohesion: 0.28
-Nodes (14): bool, PartyId, Plot, PlotId, str, World, _building_on_plot_enables_recipe(), plot_has_workshop_for_recipe() (+6 more)
+Cohesion: 0.26
+Nodes (15): bool, PartyId, Plot, PlotId, str, World, building_effective_for_bonuses(), _building_on_plot_enables_recipe() (+7 more)
 
 ### Community 390 - "Community 390"
-Cohesion: 0.50
-Nodes (3): Phase 10D — seed a construction NPC with a real business entity + hire., One inland firm so ``request_construction_quotes`` has a baseline bidder., seed_genesis_construction_firm()
+Cohesion: 0.35
+Nodes (19): PlotId, str, _build_world(), _claim(), _give(), _install_building(), Regional power grid — electricity always costs; road-linked market clearing., Map ``powered`` must match ``get_plot_power_info`` (on-plot microgrid counts). (+11 more)
 
 ### Community 391 - "Community 391"
 Cohesion: 0.18
@@ -1836,12 +1855,12 @@ Cohesion: 0.27
 Nodes (10): int, str, World, prune_route_voyage_by_day(), Rolling voyage counts per route (Phase 10B).  ``world.voyage_history`` is cumu, Call from ``deliver_transit`` when a shipment completes on ``route_key``., Sum completed voyages on ``route_key`` over the last ``days`` game-days., Drop day buckets older than ``keep_days`` before the current game-day. (+2 more)
 
 ### Community 393 - "Community 393"
-Cohesion: 0.67
-Nodes (4): advance_tick, realm.agents, Tier 1 Behavioral Agents, Tier 2 Optimizing Agents
+Cohesion: 0.40
+Nodes (6): advance_tick, realm.agents, realm.genesis, realm.population, Tier 1 Behavioral Agents, Tier 2 Optimizing Agents
 
 ### Community 394 - "Community 394"
-Cohesion: 0.20
-Nodes (10): _cheapest_store_for_need(), Active store plots in this town., Active store plots in this town., Active store plots in this town., Find the cheapest available (store, material, unit_price) for a need.      Ret, Find the cheapest available (store, material, unit_price) for a need.      Ret, Find the cheapest available (store, material, unit_price) for a need.      Ret, stores_for_town() (+2 more)
+Cohesion: 0.19
+Nodes (17): get_business_entity_detail(), business_shareholders(), BusinessTemplate, ownership_pct_bps_sold(), Phase 10C — business entities (organizational wrapper, no extra production path), Total basis points of equity sold (proposed + active stakes)., BusinessEntity registry vs live equity_stake contracts., _seed_biz() (+9 more)
 
 ### Community 395 - "Community 395"
 Cohesion: 0.67
@@ -1851,6 +1870,10 @@ Nodes (3): Sprint 3 integration — energy grids, clustering, labor, coastal.  B
 Cohesion: 0.25
 Nodes (8): _maybe_post_settler_job_opening(), Post wage jobs for all active settler workshops (Phase 7E hook)., Post wage jobs for all active settler workshops (Phase 7E hook)., Post wage jobs for all active settler workshops (Phase 7E hook)., Post wage jobs for all active settler workshops (Phase 7E hook)., Post wage jobs for all active settler workshops (Phase 7E hook)., Post wage jobs for all active settler workshops (Phase 7E hook)., Post wage jobs for all active settler workshops (Phase 7E hook).
 
+### Community 397 - "Community 397"
+Cohesion: 0.18
+Nodes (17): _best_ask_price_cents(), compute_cpi(), cpi_multiplier(), Consumer Price Index — weekly basket cost vs a seeded base period., Scale factor current_cpi/100 for indexed cash flows., CPI = 100 × (current basket cost / base basket cost)., Record CPI weekly; emit world_feed on large week-over-week moves., tick_cpi() (+9 more)
+
 ### Community 398 - "Community 398"
 Cohesion: 0.28
 Nodes (8): float, int, _plot_land_fraction(), Continental worldgen: at least half the map is solid land; edges are not forced, Perimeter is no longer rewritten to deep ocean during plot generation., test_continental_layout_meets_min_land_fraction(), test_genesis_bootstrap_meets_min_land_fraction(), test_map_edges_may_be_land()
@@ -1859,77 +1882,85 @@ Nodes (8): float, int, _plot_land_fraction(), Continental worldgen: at least hal
 Cohesion: 0.18
 Nodes (13): main(), Run one Tier-3 LLM planning step from the command line.  Usage (from ``engine/, load_snapshot(), SQLite persistence for solo saves.  Schema: ``realm_save`` keeps the serialize, Persist ``world`` to ``path`` (single-slot SQLite file). Also writes meta., Return ``{tick, scenario_id, seed, saved_at, world_id, world_name}`` from meta., read_meta(), save_snapshot() (+5 more)
 
+### Community 400 - "Community 400"
+Cohesion: 0.35
+Nodes (17): assert_matter_conserved(), Raise ``AssertionError`` with a descriptive message if matter was created/destro, _claim_plot_for(), Market warfare — cartels, panic, speculation, shorts conserve money., _seed_cash(), _set_bullish_intel(), _set_personality(), _settlers() (+9 more)
+
 ### Community 401 - "Community 401"
-Cohesion: 0.33
-Nodes (13): int, PartyId, _ensure_cash(), Phase 8 — Sub-phase 8E: intelligence products on top of the event system.  Cov, A resolved event still has its start/end rows in ``world.event_log``., test_all_intel_purchases_conserve_ledger(), test_event_persists_in_chronicle_after_resolution(), test_market_cycle_report_flags_spiked_material() (+5 more)
+Cohesion: 0.41
+Nodes (11): int, PartyId, _ensure_cash(), Phase 8 — Sub-phase 8E: intelligence products on top of the event system.  Cov, test_all_intel_purchases_conserve_ledger(), test_market_cycle_report_flags_spiked_material(), test_market_cycle_report_lists_active_route_blockages(), test_market_cycle_report_reflects_credit_crunch_status() (+3 more)
 
 ### Community 402 - "Community 402"
 Cohesion: 0.45
 Nodes (10): PartyId, PlotId, str, _advance_until_building_ready(), _complete_recipe(), Extraction recipes: subsurface gates + scaled primary outputs., test_chop_timber_on_forest_plot(), test_mine_iron_completes_with_scaled_iron_ore_qty() (+2 more)
 
 ### Community 403 - "Community 403"
-Cohesion: 0.20
-Nodes (10): LabPreset, str, Any, str, generate_lab_presets(), Combinatorial lab preset generator — stable ids from templates × parameter latti, _slug(), LabOverrideSchema (+2 more)
+Cohesion: 0.40
+Nodes (5): LabPreset, str, generate_lab_presets(), Combinatorial lab preset generator — stable ids from templates × parameter latti, _slug()
 
 ### Community 405 - "Community 405"
-Cohesion: 0.10
-Nodes (29): int, PlotId, str, World, home_builder_party_id_for_island(), _island_for_plot(), _pick_builder_plot(), Phase 9G — Home builder archetype (residential developer).  One NPC per starti (+21 more)
+Cohesion: 0.11
+Nodes (17): gen_world(), Phase 9G — housing fix: more bootstrap residences, home_builder archetype, home, Mid-day calls return 0 -- runs at exact game-day-boundary ticks., Add capacity directly, then verify the assignment pass fills it., Frontier path: a homeless laborer has nowhere to send the money., Tunable check — the bootstrap target is 12 residences per island     (up from 3, Audit finding B4.1: previously only 24 per island had home_town set.     With S, test_bootstrap_houses_more_than_24_laborers_per_island() (+9 more)
 
 ### Community 406 - "Community 406"
-Cohesion: 0.40
-Nodes (4): Polyomino parcel footprints — variety + area truth., test_classify_l_shape(), test_classify_zigzag(), test_index_covers_all_cells()
+Cohesion: 0.14
+Nodes (18): bool, A resolved event still has its start/end rows in ``world.event_log``., test_event_persists_in_chronicle_after_resolution(), Run a year (365 game-days) with the player not interacting and assert     that, The kill-switch lets tests construct a quiet world for pure     conservation ch, test_probabilistic_events_occur_over_a_year_with_seeded_rng(), test_world_events_disabled_when_flag_off(), events_enabled() (+10 more)
 
 ### Community 407 - "Community 407"
 Cohesion: 0.27
 Nodes (6): _best_ask(), _best_bid(), _drain(), float, str, year_run.py — run the Realm economy for one full game-year (365 days) and write
 
 ### Community 408 - "Community 408"
-Cohesion: 0.12
-Nodes (19): When a store sells medicine during an active epidemic, a laborer     visits and, test_medicine_purchase_treats_laborer_during_epidemic(), is_store_plot(), True when this plot has a completed store building or genesis store inventory., True when this plot has a completed store building or genesis store inventory., True when this plot has a completed store building or genesis store inventory., Transfer ``qty`` units of ``material`` from ``party`` into the store on ``plot_i, Transfer ``qty`` units of ``material`` from ``party`` into the store on ``plot_i (+11 more)
+Cohesion: 0.26
+Nodes (17): int, PartyId, PlotId, str, _adjacent_plot_pair(), gen_world(), _give_cash(), Sprint 6 — Phase A road tests. (+9 more)
 
 ### Community 409 - "Community 409"
-Cohesion: 0.22
-Nodes (13): party_research_status(), Player research actions — technology tree (parallel to assay)., research_catalog_public(), start_research_action(), get_research_catalog(), get_research_status(), Technology tree with per-party eligibility., Active research, completed nodes, bonuses, and patents for ``party``. (+5 more)
+Cohesion: 0.36
+Nodes (9): party_research_status(), Player research actions — technology tree (parallel to assay)., research_catalog_public(), start_research_action(), ActionResult, Any, PartyId, str (+1 more)
 
 ### Community 410 - "Community 410"
-Cohesion: 0.22
-Nodes (9): _ensure_settlement_party(), Idempotent: create the synthetic ``genesis_settlement`` party once., Idempotent: create the synthetic ``genesis_settlement`` party once., Place a completed residence on ``plot_id``, owned by ``owner_party_id``., Place a completed residence on ``plot_id``, owned by ``owner_party_id``., Seed one starting town per island and assign laborers to its residences., Seed one starting town per island and assign laborers to its residences., seed_genesis_starting_towns() (+1 more)
+Cohesion: 0.37
+Nodes (15): float, int, Plot, PlotId, World, _cache_key(), cached_coastal_plot_ids(), cached_compute_plot_value() (+7 more)
 
 ### Community 413 - "Community 413"
 Cohesion: 0.25
 Nodes (8): The settler's first plot containing an operational assay_lab they own (or None)., One deterministic 1%/game-day roll: if it hits, advance the party's richest Tier, The settler's first plot containing an operational assay_lab they own (or None)., The settler's first plot containing an operational assay_lab they own (or None)., One deterministic 1%/game-day roll: if it hits, advance the party's richest Tier, One deterministic 1%/game-day roll: if it hits, advance the party's richest Tier, _settler_assay_lab_plot(), _settler_probabilistic_discovery()
 
+### Community 414 - "Community 414"
+Cohesion: 0.34
+Nodes (14): _complete_deep_survey_job(), deep_survey(), party_active_deep_survey_jobs(), _party_has_operational_drill_rig(), Deep survey — drill_rig + drill_bit ($20) reveals Tier-3 mineral grades on a plo, Complete any deep survey jobs whose ``completes_at_tick`` has arrived., Start a deep survey on a player-owned plot with a drill_rig and ≥1 drill_bit., _scen_deep() (+6 more)
+
 ### Community 416 - "Community 416"
-Cohesion: 0.24
-Nodes (8): make_rng(), Deterministic RNG: Law 9 — same tick + purpose → same stream., Build a stdlib Random isolated for (tick, purpose).      Uses blake2b so we ne, test_different_purpose_splits_stream(), test_rng_deterministic_per_tick_and_purpose(), int, Random, str
+Cohesion: 0.20
+Nodes (14): _clear_book(), Genesis price model — clearinghouse spread, settler cost-basis, depth-gated back, Cold-start seed prices match steady-state quotes — no mid-tick price discontinui, ``mine_coal``: 2 electricity (60¢ each) / 2 coal = 60¢ per coal (labor is overhe, If a buyer is bidding above floor, settler lifts that bid (+1¢) capped by ceilin, Test helper — wipe asks for ``mid`` (cancellation would fail on bootstrap invent, Above the watermark of non-exchange asks, the clearinghouse adds no clips this t, Below the watermark the exchange relists from inventory at its spreaded ask. (+6 more)
 
 ### Community 417 - "Community 417"
-Cohesion: 0.25
-Nodes (8): Cannot exceed residence capacity., test_assign_laborer_residence_capacity_blocked(), test_residence_capacity_matches_building_spec(), _assign_initial_laborers_to_towns(), Total capacity of all completed residences on this plot (usually one)., Pin each laborer to a residence on their home island, up to capacity.      Lab, Pin each laborer to a residence on their home island, up to capacity.      Lab, residence_capacity()
+Cohesion: 0.30
+Nodes (14): int, PartyId, PlotId, str, World, home_builder_party_id_for_island(), _island_for_plot(), _pick_builder_plot() (+6 more)
 
 ### Community 418 - "Community 418"
 Cohesion: 0.25
 Nodes (8): Return the multiplicative factors that determine output magnitude.      Useful, Return the multiplicative factors that determine output magnitude.      Useful, Return the multiplicative factors that determine output magnitude.      Useful, Return the multiplicative factors that determine output magnitude.      Useful, Return the multiplicative factors that determine output magnitude.      Useful, Return the multiplicative factors that determine output magnitude.      Useful, Return the multiplicative factors that determine output magnitude.      Useful, throughput_breakdown()
 
 ### Community 420 - "Community 420"
-Cohesion: 0.29
-Nodes (7): plot_has_active_production(), True if any in-flight batch is running on this plot., True if any in-flight batch is running on this plot., True if any in-flight batch is running on this plot., True if any in-flight batch is running on this plot., True if any in-flight batch is running on this plot., True if any in-flight batch is running on this plot.
+Cohesion: 0.13
+Nodes (19): bool, World, _active_on_plot(), plot_has_active_production(), _plot_owned_by(), Toggle ``auto_list_output`` for a building owned by ``party``.      Players op, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op, Toggle ``auto_list_output`` for a building owned by ``party``.      Players op (+11 more)
 
 ### Community 421 - "Community 421"
-Cohesion: 0.29
-Nodes (7): Cartel scenario: cancel the bulk vendor grain clip, split stock between the incu, Cartel scenario: cancel the bulk vendor grain clip, split stock between the incu, Cartel scenario: cancel the bulk vendor grain clip, split stock between the incu, Cartel scenario: cancel the bulk vendor grain clip, split stock between the incu, Cartel scenario: cancel the bulk vendor grain clip, split stock between the incu, Cartel scenario: cancel the bulk vendor grain clip, split stock between the incu, _seed_cartel_grain_overlay()
+Cohesion: 0.26
+Nodes (13): MatterResult, int, MaterialId, PartyId, PlotId, World, first_owned_plot(), Test helpers — stage bulk on plots when plot logistics applies. (+5 more)
 
 ### Community 422 - "Community 422"
 Cohesion: 0.31
 Nodes (12): Settler + consolidator forward-contract behaviour (Sprint 4 — Phase C.4).  Two, Consolidator proposes a forward to *buy* its target_input below spot.      Run, Pick the settler's most-stocked tradeable output (≥ surplus minimum)., One pass per game-day. Run after the settler business loop so output     stock, _settler_active_forward_count(), _settler_surplus_material(), tick_consolidator_forward_proposals(), tick_settler_forward_proposals() (+4 more)
 
 ### Community 423 - "Community 423"
-Cohesion: 0.06
-Nodes (119): _blueprint_public_dict(), _json_safe_key(), _json_safe_value(), load_world(), _max_building_instance_seq_from_rows(), _plot_from_snapshot(), Serialize / deserialize full World for SQLite persistence.  Snapshot ``version, Drop ephemeral ``_`` keys and coerce dict keys to JSON-safe strings. (+111 more)
+Cohesion: 0.05
+Nodes (103): _ContinentalLobe, of(), Inventory, Per-party material quantities (integer units), optionally by quality tier., Ledger, Integer cents in every account; no floats in money paths., int, Inventory (+95 more)
 
 ### Community 424 - "Community 424"
-Cohesion: 0.08
-Nodes (73): Any, bool, float, int, PartyId, Plot, PlotId, str (+65 more)
+Cohesion: 0.16
+Nodes (46): Any, bool, float, int, PartyId, Plot, PlotId, str (+38 more)
 
 ### Community 425 - "Community 425"
 Cohesion: 0.11
@@ -1939,33 +1970,69 @@ Nodes (21): _material_scarcity_bonus(), _maybe_build_tier2_workshop(), _party_sa
 Cohesion: 0.67
 Nodes (3): Thin parity routes for the Phase 11 UI (no duplicate game logic)., Thin parity routes for the Phase 11 UI (no duplicate game logic)., test_pre_ui_api_alias_routes_smoke()
 
+### Community 427 - "Community 427"
+Cohesion: 0.15
+Nodes (13): plot_is_coastal(), True when any world tile in the deed borders water or the map edge.      Uses, True when any world tile in the deed borders water or the map edge.      Uses, invalidate_plot_geom_caches(), Call when plot ownership or coastal adjacency may change (e.g. ``claim_plot``)., Call when plot ownership or coastal adjacency may change (e.g. ``claim_plot``)., Plot geometry / valuation caches invalidate on claim., test_coastal_matches_uncached_after_invalidate() (+5 more)
+
 ### Community 428 - "Community 428"
-Cohesion: 0.40
-Nodes (12): create_currency(), mint_currency(), Player-issued currency materials backed by ledger reserves., redeem_currency(), _reserve_acct(), tick_bank_reserves(), Any, float (+4 more)
+Cohesion: 0.23
+Nodes (13): create_job_opening(), _job_opening_public_dict(), list_laborers(), post_create_blueprint(), post_create_custom_recipe(), post_grid_utility_connect(), post_list_plot_for_sale(), post_place_blueprint() (+5 more)
+
+### Community 429 - "Community 429"
+Cohesion: 0.17
+Nodes (11): Domain-warped FBM → terrain; same seed always yields the same map., terrain_for_cell(), test_terrain_for_cell_deterministic(), test_terrain_for_cell_is_enum(), Phase 10A — continental worldgen (large grids only)., Below 10_000 plots, auto layout stays off continental FBM., Continental procedural layout yields multiple continent-class landmasses., test_at_least_2_continents_on_default_genesis_grid() (+3 more)
 
 ### Community 430 - "Community 430"
 Cohesion: 0.29
 Nodes (10): int, PlotId, _first_free_land_plot_on(), _largest_owner_on_island(), Pick the entrepreneur NPC owning the most plots on ``island_id``., Assertion 25: ledger total cents at end == ledger total cents at     bootstrap., Assertion 25: ledger total cents at end == ledger total cents at     bootstrap., Pick an entrepreneur with a plot on island A, give them a plot on     island B, (+2 more)
 
 ### Community 431 - "Community 431"
-Cohesion: 0.20
-Nodes (11): Genesis scenario agents — algorithmic settlers + entrepreneur NPCs.  Phase 7 r, _settler_llm_inflight(), tick_genesis_agents(), bool, World, Daily: hint when multiple labs race the same tech node., Daily: hint when multiple labs race the same tech node., Daily: hint when multiple labs race the same tech node. (+3 more)
+Cohesion: 0.18
+Nodes (11): Genesis scenario agents — algorithmic settlers + entrepreneur NPCs.  Phase 7 r, _settler_llm_inflight(), tick_genesis_agents(), bool, World, Genesis exchange emergency restock — last-resort supply after prolonged market a, Last-resort emergency supply — fires once per material after 45 days of total ab, Re-list depleted genesis_exchange staples at escalating prices (price discovery) (+3 more)
 
 ### Community 432 - "Community 432"
-Cohesion: 0.16
-Nodes (19): _owned_plots_by_party(), _plot_scan_bundle(), _plots_manhattan_order(), Single pass over the map — cached until a plot is claimed., Single pass over the map — cached until a plot is claimed., Single pass over the map — cached until a plot is claimed., Deterministic per-party "preferred starting region" — one of four quadrant ancho, Deterministic per-party "preferred starting region" — one of four quadrant ancho (+11 more)
+Cohesion: 0.17
+Nodes (12): get_world_map(), Lean map-only view (terrain / owner / surveyed / powered /     density / claim_, Lean map-only view (terrain / owner / surveyed / powered /     density / claim_, bool, _grid_is_uniform(), True when every plot covers exactly one (x, y) cell.      Used to drop ``world, Lean map-only view for the world renderer.      Per-plot fields kept (cheap):, Lean map-only view for the world renderer.      Per-plot fields kept (cheap): (+4 more)
+
+### Community 433 - "Community 433"
+Cohesion: 0.21
+Nodes (5): MoneyOk, Money ledger — Primitive 5 / Law 1. All balance changes go through here., One-time bootstrap: system reserve holds all not-yet-allocated currency., int, MoneyResult
+
+### Community 434 - "Community 434"
+Cohesion: 0.20
+Nodes (11): int, MonkeyPatch, object, _advance_genesis_employment_days(), _disable_llm(), Week-1 employment ramp — settlers hire laborers as the job market runs., Step the job-market pipeline on each game-day boundary.      Full ``advance_ti, With the job market wired, employment should reach at least 10% within 7 game-da (+3 more)
+
+### Community 435 - "Community 435"
+Cohesion: 0.40
+Nodes (10): PartyId, PlotId, _link_plots(), Grid utility operator franchise registration., test_connect_rejects_unregistered_provider(), test_franchise_fee_charged_on_register(), test_human_register_requires_business(), test_list_operators_by_region() (+2 more)
 
 ### Community 440 - "Community 440"
-Cohesion: 0.09
-Nodes (30): claim_plot(), PartyId, PlotId, str, Grid energy service — Wh draws, no commodity electricity on market., test_cannot_list_electricity_on_market(), test_electricity_not_carried_material(), test_production_draws_grid_not_inventory() (+22 more)
+Cohesion: 0.35
+Nodes (10): object, PartyId, PlotId, _first_settler(), Settler job postings, matching, wages, and skill growth., test_fired_when_employer_bankrupt(), test_laborer_fills_job_opening(), test_settler_posts_job_for_active_building() (+2 more)
+
+### Community 441 - "Community 441"
+Cohesion: 0.20
+Nodes (10): laborer_count_for_island(), Live laborer count on ``island_id`` — replaces the static density map., Live laborer count on ``island_id`` — replaces the static density map., Live laborer count on ``island_id`` — replaces the static density map., Live laborer count on ``island_id`` — replaces the static density map., Live laborer count on ``island_id`` — replaces the static density map., Phase 7E seeds a small batch of day-1 hires for NPC entrepreneurs     so the la, Continental worlds seed labor proportional to each landmass's land plots. (+2 more)
+
+### Community 442 - "Community 442"
+Cohesion: 0.28
+Nodes (8): PlotId, _first_unowned_plot(), Tests for geography land market — listings, premiums, dominance., test_claim_cost_scales_with_location_score(), test_island_dominance_toll_conserves_money(), test_list_plot_for_sale_rejects_active_production(), test_tick_island_dominance_flags_majority_holder(), test_tick_location_premium_stores_scores()
+
+### Community 443 - "Community 443"
+Cohesion: 0.53
+Nodes (8): PartyId, PlotId, _link_gen_to_consumer(), Grid utility contracts — NPC grid requires subscription; own gen is free., _register_provider(), test_connect_then_draw_npc_grid(), test_disconnect_blocks_grid_draw(), test_npc_grid_requires_contract_for_consumer()
+
+### Community 444 - "Community 444"
+Cohesion: 0.36
+Nodes (8): int, PartyId, PlotId, World, _give_cash(), _player_plot(), Sprint 4 integration — survey market, analytics, forwards, alerts, feed.  Boot, test_sprint4_integration_end_to_end()
 
 ### Community 445 - "Community 445"
 Cohesion: 0.39
 Nodes (8): int, PartyId, Sprint 1 integration — exchange withdrawal · maintenance · terrain gates · playe, The headless coal strategy is operating-positive in one game-day., One game-day with a bootstrap of settlers + pre-seeded producer listings., _seed_party_cash(), test_sprint1_multi_agent_slice(), test_sprint1_player_coal_loop_cash_positive()
 
 ### Community 446 - "Community 446"
-Cohesion: 0.29
-Nodes (7): new_world_id(), normalize_world_id(), Strongly-typed identifiers (plain strings at runtime, clarity in signatures)., Allocate a stable identity for a new world (bootstrap only, not tick RNG)., Return a validated id or ``None`` if ``raw`` is not a supported world id., str, WorldId
+Cohesion: 0.36
+Nodes (8): PartyId, PlotId, _claim(), Fabrication capabilities, custom build gates, workshop focus., test_blueprint_requires_workshop_engineering(), test_boot_custom_material_only(), test_precision_tooling_unlocks_custom_recipe(), test_workshop_focus_after_electric_motors()
 
 ### Community 447 - "Community 447"
 Cohesion: 0.48
@@ -1973,15 +2040,39 @@ Nodes (6): Blueprint, str, _blueprint_from_building_spec(), _category_for(), Bui
 
 ### Community 448 - "Community 448"
 Cohesion: 0.25
-Nodes (8): float, Seven-day average daily unit sales per material for a store plot., Seven-day average daily unit sales per material for a store plot., Seven-day average daily unit sales per material for a store plot., Consumption- and spoilage-aware restock target for one store material., Consumption- and spoilage-aware restock target for one store material., restock_target_qty(), _store_daily_sales()
+Nodes (7): Realism pass 7B — spoilage intervals, store restock, perishable NPC sales, oracl, Recalibrated grain interval is well beyond a 3-day stockpile window., Restock target scales with sales × spoilage window, not a flat 250., Plot-staged grain is listed for sale the same day., test_grain_does_not_spoil_within_3_days(), test_settler_lists_perishable_before_spoilage(), test_store_restock_respects_spoilage_window()
+
+### Community 449 - "Community 449"
+Cohesion: 0.33
+Nodes (6): test_dev_reset_defaults_to_genesis(), test_bootstrap_default_plot_count(), world_map_tile_count(), Multi-tile plot parcels (Option B)., test_bootstrap_world_cell_index_and_public_dict(), test_uniform_plots_one_deed_per_cell()
+
+### Community 450 - "Community 450"
+Cohesion: 0.33
+Nodes (6): lua_runtime_available(), lua_runtime_detail(), Optional Lua interpreter via ``lupa`` — install ``realm-engine[lua]``.  Phase, Any, bool, str
 
 ### Community 451 - "Community 451"
-Cohesion: 0.33
-Nodes (6): Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, test_genesis_subsurface_correlation_mountains_richer_in_iron()
+Cohesion: 0.29
+Nodes (7): Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, Terrain-correlated rolls bias mountains toward higher iron vs the rest of the gr, test_genesis_subsurface_correlation_mountains_richer_in_iron()
+
+### Community 452 - "Community 452"
+Cohesion: 0.40
+Nodes (5): Random, str, generate_laborer_name(), Phase 7B — procedural laborer name pool.  We combine 40 first names × 40 last, Pick one first + one last name uniformly using the provided RNG.
+
+### Community 453 - "Community 453"
+Cohesion: 0.53
+Nodes (5): _grid_world(), NPC self-build road connectivity., test_npc_builds_road_on_adjacent_edge(), test_npc_extends_chain_toward_existing_segment(), test_plot_needs_road_when_workshop_isolated()
+
+### Community 454 - "Community 454"
+Cohesion: 0.40
+Nodes (4): str, all_material_ids(), Starter material catalog (Primitive 2) — v1 uses named real materials per spec., register_currency_material()
 
 ### Community 455 - "Community 455"
 Cohesion: 0.40
 Nodes (4): Best ask / best bid snapshots per tick for solo market chart (Phase 1 observabil, Append per-material best ask (lowest limit sell) and best bid (highest limit buy, record_market_snapshot(), World
+
+### Community 456 - "Community 456"
+Cohesion: 0.50
+Nodes (4): Sprint 2 integration — shipping, vertical integration, tenders, consolidator., Single bootstrap + multi-tick run that exercises every Sprint-2 phase.      Th, test_sprint2_integration_end_to_end(), _world()
 
 ### Community 457 - "Community 457"
 Cohesion: 0.67
@@ -1991,9 +2082,13 @@ Nodes (3): code:bash (python3 -m graphify.serve graphify-out/graph.json), code:j
 Cohesion: 0.67
 Nodes (3): For native CLAUDE.md integration, code:bash (graphify claude install), code:bash (graphify claude uninstall  # remove the section)
 
-### Community 461 - "Community 461"
-Cohesion: 0.67
-Nodes (3): get_plot_energy(), Regional power market status for a single plot., Regional power + grid utility subscription status for a plot.
+### Community 459 - "Community 459"
+Cohesion: 0.50
+Nodes (4): _first_owned_plot_indexed(), O(1) lookup against the per-tick owned-plots index., O(1) lookup against the per-tick owned-plots index., O(1) lookup against the per-tick owned-plots index.
+
+### Community 460 - "Community 460"
+Cohesion: 0.50
+Nodes (4): Public view of every built road segment (Sprint 6 — Phase A)., Public view of every built road segment (Sprint 6 — Phase A)., Public view of every built road segment (Sprint 6 — Phase A)., _road_segments_public()
 
 ### Community 464 - "Community 464"
 Cohesion: 0.67
@@ -2051,12 +2146,12 @@ Nodes (3): Assertion 23: at least one inter-island trade event was observed., As
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `World` connect `Community 257` to `Community 24`, `Community 25`, `Community 27`, `Community 28`, `Community 29`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 42`, `Community 43`, `Community 44`, `Community 45`, `Community 46`, `Community 47`, `Community 48`, `Community 51`, `Community 54`, `Community 55`, `Community 57`, `Community 59`, `Community 60`, `Community 63`, `Community 64`, `Community 66`, `Community 67`, `Community 70`, `Community 72`, `Community 73`, `Community 74`, `Community 75`, `Community 77`, `Community 79`, `Community 80`, `Community 82`, `Community 83`, `Community 85`, `Community 88`, `Community 89`, `Community 91`, `Community 92`, `Community 97`, `Community 99`, `Community 100`, `Community 101`, `Community 102`, `Community 118`, `Community 119`, `Community 120`, `Community 121`, `Community 123`, `Community 124`, `Community 130`, `Community 131`, `Community 132`, `Community 134`, `Community 135`, `Community 136`, `Community 137`, `Community 140`, `Community 142`, `Community 144`, `Community 146`, `Community 149`, `Community 150`, `Community 151`, `Community 152`, `Community 156`, `Community 157`, `Community 158`, `Community 164`, `Community 166`, `Community 169`, `Community 177`, `Community 178`, `Community 179`, `Community 180`, `Community 183`, `Community 186`, `Community 187`, `Community 188`, `Community 189`, `Community 192`, `Community 194`, `Community 195`, `Community 196`, `Community 197`, `Community 198`, `Community 203`, `Community 209`, `Community 210`, `Community 212`, `Community 218`, `Community 219`, `Community 223`, `Community 226`, `Community 229`, `Community 230`, `Community 233`, `Community 234`, `Community 244`, `Community 245`, `Community 248`, `Community 249`, `Community 251`, `Community 260`, `Community 262`, `Community 266`, `Community 267`, `Community 269`, `Community 272`, `Community 273`, `Community 274`, `Community 280`, `Community 293`, `Community 322`, `Community 341`, `Community 361`, `Community 379`, `Community 381`, `Community 383`, `Community 384`, `Community 388`, `Community 389`, `Community 392`, `Community 399`, `Community 405`, `Community 409`, `Community 421`, `Community 422`, `Community 423`, `Community 424`, `Community 425`, `Community 428`, `Community 431`, `Community 432`, `Community 447`, `Community 448`, `Community 455`?**
-  _High betweenness centrality (0.283) - this node is a cross-community bridge._
-- **Why does `bootstrap_genesis()` connect `Community 38` to `Community 9`, `Community 25`, `Community 29`, `Community 31`, `Community 32`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 39`, `Community 46`, `Community 55`, `Community 56`, `Community 59`, `Community 60`, `Community 62`, `Community 64`, `Community 68`, `Community 72`, `Community 74`, `Community 75`, `Community 77`, `Community 83`, `Community 88`, `Community 90`, `Community 92`, `Community 97`, `Community 99`, `Community 100`, `Community 102`, `Community 119`, `Community 128`, `Community 130`, `Community 135`, `Community 137`, `Community 139`, `Community 140`, `Community 142`, `Community 143`, `Community 145`, `Community 149`, `Community 150`, `Community 151`, `Community 153`, `Community 156`, `Community 160`, `Community 162`, `Community 164`, `Community 166`, `Community 168`, `Community 169`, `Community 171`, `Community 179`, `Community 180`, `Community 183`, `Community 184`, `Community 186`, `Community 188`, `Community 189`, `Community 191`, `Community 200`, `Community 201`, `Community 208`, `Community 209`, `Community 210`, `Community 226`, `Community 230`, `Community 234`, `Community 236`, `Community 237`, `Community 238`, `Community 244`, `Community 246`, `Community 248`, `Community 249`, `Community 254`, `Community 257`, `Community 258`, `Community 261`, `Community 262`, `Community 267`, `Community 270`, `Community 272`, `Community 290`, `Community 343`, `Community 371`, `Community 385`, `Community 386`, `Community 388`, `Community 390`, `Community 394`, `Community 395`, `Community 398`, `Community 401`, `Community 405`, `Community 408`, `Community 410`, `Community 417`, `Community 423`, `Community 424`, `Community 440`, `Community 445`, `Community 455`?**
-  _High betweenness centrality (0.105) - this node is a cross-community bridge._
-- **Why does `bootstrap_frontier()` connect `Community 47` to `Community 257`, `Community 258`, `Community 131`, `Community 262`, `Community 9`, `Community 267`, `Community 397`, `Community 399`, `Community 272`, `Community 402`, `Community 151`, `Community 152`, `Community 25`, `Community 153`, `Community 27`, `Community 279`, `Community 157`, `Community 33`, `Community 34`, `Community 292`, `Community 421`, `Community 423`, `Community 39`, `Community 170`, `Community 431`, `Community 176`, `Community 437`, `Community 54`, `Community 183`, `Community 55`, `Community 184`, `Community 440`, `Community 56`, `Community 60`, `Community 189`, `Community 191`, `Community 64`, `Community 195`, `Community 67`, `Community 455`, `Community 73`, `Community 74`, `Community 203`, `Community 209`, `Community 343`, `Community 218`, `Community 90`, `Community 223`, `Community 226`, `Community 100`, `Community 102`, `Community 234`, `Community 243`, `Community 244`, `Community 379`, `Community 248`, `Community 123`, `Community 127`, `Community 383`?**
-  _High betweenness centrality (0.075) - this node is a cross-community bridge._
+- **Why does `World` connect `Community 257` to `Community 24`, `Community 25`, `Community 27`, `Community 28`, `Community 29`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 37`, `Community 38`, `Community 42`, `Community 43`, `Community 44`, `Community 45`, `Community 46`, `Community 47`, `Community 48`, `Community 51`, `Community 54`, `Community 55`, `Community 57`, `Community 59`, `Community 60`, `Community 63`, `Community 64`, `Community 66`, `Community 67`, `Community 70`, `Community 72`, `Community 73`, `Community 74`, `Community 75`, `Community 77`, `Community 79`, `Community 80`, `Community 83`, `Community 85`, `Community 88`, `Community 89`, `Community 91`, `Community 92`, `Community 95`, `Community 97`, `Community 99`, `Community 100`, `Community 101`, `Community 102`, `Community 118`, `Community 119`, `Community 120`, `Community 122`, `Community 123`, `Community 124`, `Community 130`, `Community 131`, `Community 132`, `Community 134`, `Community 135`, `Community 136`, `Community 137`, `Community 140`, `Community 142`, `Community 144`, `Community 146`, `Community 149`, `Community 150`, `Community 151`, `Community 152`, `Community 156`, `Community 157`, `Community 158`, `Community 160`, `Community 164`, `Community 166`, `Community 169`, `Community 170`, `Community 176`, `Community 177`, `Community 178`, `Community 179`, `Community 180`, `Community 183`, `Community 186`, `Community 187`, `Community 188`, `Community 189`, `Community 192`, `Community 194`, `Community 196`, `Community 197`, `Community 198`, `Community 203`, `Community 209`, `Community 210`, `Community 212`, `Community 218`, `Community 219`, `Community 223`, `Community 225`, `Community 229`, `Community 230`, `Community 233`, `Community 234`, `Community 244`, `Community 245`, `Community 249`, `Community 251`, `Community 256`, `Community 260`, `Community 262`, `Community 266`, `Community 267`, `Community 269`, `Community 273`, `Community 274`, `Community 280`, `Community 293`, `Community 307`, `Community 322`, `Community 332`, `Community 341`, `Community 361`, `Community 370`, `Community 379`, `Community 381`, `Community 382`, `Community 383`, `Community 387`, `Community 388`, `Community 389`, `Community 390`, `Community 392`, `Community 397`, `Community 399`, `Community 406`, `Community 409`, `Community 410`, `Community 414`, `Community 417`, `Community 420`, `Community 421`, `Community 422`, `Community 423`, `Community 424`, `Community 425`, `Community 431`, `Community 432`, `Community 444`, `Community 447`, `Community 455`?**
+  _High betweenness centrality (0.287) - this node is a cross-community bridge._
+- **Why does `bootstrap_genesis()` connect `Community 38` to `Community 25`, `Community 29`, `Community 31`, `Community 32`, `Community 35`, `Community 36`, `Community 37`, `Community 39`, `Community 46`, `Community 47`, `Community 55`, `Community 56`, `Community 57`, `Community 59`, `Community 62`, `Community 63`, `Community 64`, `Community 68`, `Community 72`, `Community 74`, `Community 75`, `Community 77`, `Community 83`, `Community 88`, `Community 90`, `Community 97`, `Community 99`, `Community 100`, `Community 102`, `Community 119`, `Community 123`, `Community 128`, `Community 130`, `Community 135`, `Community 137`, `Community 139`, `Community 140`, `Community 142`, `Community 145`, `Community 149`, `Community 150`, `Community 151`, `Community 153`, `Community 160`, `Community 164`, `Community 168`, `Community 169`, `Community 170`, `Community 171`, `Community 176`, `Community 179`, `Community 180`, `Community 183`, `Community 184`, `Community 186`, `Community 188`, `Community 191`, `Community 192`, `Community 197`, `Community 200`, `Community 201`, `Community 208`, `Community 209`, `Community 210`, `Community 226`, `Community 230`, `Community 234`, `Community 236`, `Community 237`, `Community 238`, `Community 244`, `Community 246`, `Community 249`, `Community 254`, `Community 257`, `Community 258`, `Community 261`, `Community 262`, `Community 270`, `Community 290`, `Community 341`, `Community 371`, `Community 384`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 395`, `Community 398`, `Community 400`, `Community 401`, `Community 405`, `Community 406`, `Community 408`, `Community 416`, `Community 417`, `Community 423`, `Community 424`, `Community 427`, `Community 429`, `Community 431`, `Community 434`, `Community 440`, `Community 441`, `Community 442`, `Community 444`, `Community 445`, `Community 448`, `Community 455`, `Community 456`, `Community 461`?**
+  _High betweenness centrality (0.096) - this node is a cross-community bridge._
+- **Why does `party_cash_account()` connect `Community 258` to `Community 25`, `Community 27`, `Community 29`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 43`, `Community 45`, `Community 46`, `Community 47`, `Community 51`, `Community 54`, `Community 55`, `Community 56`, `Community 57`, `Community 60`, `Community 63`, `Community 66`, `Community 67`, `Community 68`, `Community 70`, `Community 72`, `Community 73`, `Community 74`, `Community 77`, `Community 79`, `Community 80`, `Community 83`, `Community 88`, `Community 89`, `Community 91`, `Community 92`, `Community 95`, `Community 99`, `Community 100`, `Community 101`, `Community 119`, `Community 120`, `Community 122`, `Community 124`, `Community 131`, `Community 132`, `Community 136`, `Community 137`, `Community 139`, `Community 142`, `Community 144`, `Community 150`, `Community 151`, `Community 153`, `Community 156`, `Community 160`, `Community 163`, `Community 166`, `Community 169`, `Community 170`, `Community 171`, `Community 172`, `Community 174`, `Community 178`, `Community 180`, `Community 183`, `Community 184`, `Community 186`, `Community 189`, `Community 191`, `Community 192`, `Community 194`, `Community 195`, `Community 196`, `Community 197`, `Community 200`, `Community 208`, `Community 210`, `Community 219`, `Community 225`, `Community 226`, `Community 236`, `Community 238`, `Community 244`, `Community 245`, `Community 246`, `Community 249`, `Community 257`, `Community 261`, `Community 262`, `Community 266`, `Community 269`, `Community 270`, `Community 274`, `Community 280`, `Community 290`, `Community 307`, `Community 341`, `Community 343`, `Community 371`, `Community 379`, `Community 383`, `Community 385`, `Community 387`, `Community 388`, `Community 390`, `Community 400`, `Community 401`, `Community 405`, `Community 408`, `Community 414`, `Community 417`, `Community 423`, `Community 424`, `Community 430`, `Community 431`, `Community 433`, `Community 435`, `Community 440`, `Community 444`, `Community 445`, `Community 453`, `Community 456`?**
+  _High betweenness centrality (0.085) - this node is a cross-community bridge._
 - **Are the 933 inferred relationships involving `World` (e.g. with `World` and `str`) actually correct?**
   _`World` has 933 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 428 inferred relationships involving `MoneyErr` (e.g. with `World` and `str`) actually correct?**
