@@ -435,9 +435,17 @@ def dispatch_shipment(
     tolls: list[tuple[PartyId, str, int]] = list(road_calc["tolls"])
     fee = max(BASE_TRIP_FEE_CENTS, fee - road_savings)
     total_toll_cents = sum(amt for _, _, amt in tolls)
+    dominance_toll_cents = 0
+    dominance_entity_key: str | None = None
+    if inter_island:
+        from realm.geography.land_market import island_dominance_toll_cents
+
+        dominance_entity_key, dominance_toll_cents = island_dominance_toll_cents(
+            world, from_plot_id, goods_value_cents
+        )
     ocean_mult: float = OCEAN_TILE_MULTIPLIER if inter_island else 1.0
     cash = party_cash_account(party)
-    if world.ledger.balance(cash) < fee + total_toll_cents:
+    if world.ledger.balance(cash) < fee + total_toll_cents + dominance_toll_cents:
         return {"ok": False, "reason": "insufficient cash for shipping"}
     if operator_payee is not None:
         op_cash = party_cash_account(operator_payee)
@@ -487,10 +495,29 @@ def dispatch_shipment(
             qty=qty,
         )
 
+    dominance_toll_paid = 0
+    dominance_credit_key: str | None = None
+    if inter_island and dominance_toll_cents > 0 and dominance_entity_key is not None:
+        from realm.geography.land_market import apply_island_dominance_toll
+
+        dominance_toll_paid, dominance_credit_key = apply_island_dominance_toll(
+            world, party, from_plot_id, goods_value_cents
+        )
+        if dominance_toll_paid <= 0:
+            toll_failed = True
+
     def _refund_tolls() -> None:
         for owner, _sid, amount in tolls_paid:
             world.ledger.transfer(
                 debit=party_cash_account(owner), credit=cash, amount_cents=int(amount)
+            )
+        if dominance_toll_paid > 0 and dominance_credit_key is not None:
+            from realm.geography.land_market import dominant_entity_cash_account
+
+            world.ledger.transfer(
+                debit=dominant_entity_cash_account(world, dominance_credit_key),
+                credit=cash,
+                amount_cents=int(dominance_toll_paid),
             )
 
     def _refund_fee() -> None:

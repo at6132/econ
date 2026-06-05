@@ -426,8 +426,13 @@ def claim_cost_cents_for_plot(world: "World", plot_id: PlotId) -> int:
     # (~0.05). That density curve is only for *settled* land; unclaimed
     # frontier parcels price from terrain, size, and subsurface instead.
     if density <= POPULATION_FRONTIER_DENSITY_BASELINE + 0.01:
-        return market_cost
-    return max(density_cost, market_cost)
+        base = market_cost
+    else:
+        base = max(density_cost, market_cost)
+    location_score = float(
+        (world.scenario_state.get("plot_location_scores") or {}).get(str(plot_id), 0.0)
+    )
+    return int(base * (1.0 + location_score * 0.5))
 
 
 def ensure_party_recipe_book(world: "World", party: PartyId) -> set[str]:
@@ -835,6 +840,9 @@ def bootstrap_genesis(
     from realm.genesis.bank import seed_first_bank
 
     seed_first_bank(world)
+    from realm.deals.bank_loans import seed_genesis_bank
+
+    seed_genesis_bank(world)
     from realm.genesis.archetypes import seed_archetype_agents
 
     seed_archetype_agents(world)
@@ -912,6 +920,9 @@ def bootstrap_genesis(
     from realm.infrastructure.utility_billing import seed_utility_operator
 
     seed_utility_operator(world)
+    from realm.geography.land_market import tick_location_premium
+
+    tick_location_premium(world)
     return world
 
 

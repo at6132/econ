@@ -380,6 +380,10 @@ def on_residence_built(world: World, plot_id: PlotId) -> None:
             town_id=tid,
             island_id=t.island_id,
         )
+    if new_ids:
+        from realm.geography.land_market import tick_location_premium
+
+        tick_location_premium(world)
 
 
 # ───────────────────────── bootstrap ─────────────────────────

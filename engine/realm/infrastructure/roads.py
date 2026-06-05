@@ -148,6 +148,9 @@ def build_road(
         from_plot=str(from_plot_id),
         to_plot=str(to_plot_id),
     )
+    from realm.geography.land_market import tick_location_premium
+
+    tick_location_premium(world)
     return {"ok": True, "segment_id": sid}
 
 
