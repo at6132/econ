@@ -68,23 +68,28 @@ def test_laborers_buy_food_from_genesis_stores_over_two_days():
 
 
 def test_store_restocks_after_depletion():
+    """Low stock triggers an exchange buy bid from the town store party."""
     w = bootstrap_genesis(seed=1, settler_count=10)
-    pid = list(w.store_inventories.keys())[0]
-    w.store_inventories[pid]["grain"] = 0
-    snap = ConservationSnapshot.of(w.ledger, w.inventory)
-    for _ in range(1440):
-        advance_tick(w)
-    assert int(w.store_inventories[pid].get("grain", 0)) > 0
-    assert_money_conserved(w.ledger, snap.ledger_total_cents)
+    town = next(iter(w.towns.values()))
+    pid = town.store_plots[0]
+    w.store_inventories[str(pid)]["grain"] = 10
+    store_party = PartyId(f"store_{town.town_id}")
+    w.tick = 1439
+    advance_tick(w)
+    bids = w.market_bids_by_material.get("grain", [])
+    assert any(b.party == store_party for b in bids), "expected store grain bid after low stock"
 
 
 def test_tick_store_restock_fires_on_day_boundary():
     w = bootstrap_genesis(seed=3, settler_count=4)
-    pid = next(iter(w.towns.values())).store_plots[0]
-    w.store_inventories[str(pid)]["grain"] = 0
+    town = next(iter(w.towns.values()))
+    pid = town.store_plots[0]
+    w.store_inventories[str(pid)]["grain"] = 10
+    store_party = PartyId(f"store_{town.town_id}")
     w.tick = 1439
     advance_tick(w)
-    assert int(w.store_inventories[str(pid)].get("grain", 0)) > 0
+    bids = w.market_bids_by_material.get("grain", [])
+    assert any(b.party == store_party for b in bids)
 
 
 def test_genesis_seeds_one_npc_store_per_town():

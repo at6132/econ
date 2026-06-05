@@ -93,6 +93,21 @@ NPC_STOREKEEPER_STARTING_CASH_CENTS: Final[int] = 20_000 * 100
 """Phase 7F: starting cash for the settlement storekeeper NPC so they can
 restock their stores via real B2B buy orders (including across islands)."""
 
+STORE_PARTY_STARTING_CASH_CENTS: Final[int] = 500_000
+"""Cash seeded to each ``store_{town_id}`` party for exchange buy bids."""
+
+_STORE_REORDER_THRESHOLD: Final[int] = 15
+_STORE_BID_QTY: Final[int] = 30
+_STORE_BID_PREMIUM_BPS: Final[int] = 500
+
+STORE_REORDER_MATERIALS: Final[tuple[str, ...]] = (
+    "grain",
+    "coal",
+    "smoked_fish",
+    "fish",
+    "bread",
+)
+
 STORE_RESTOCK_INTERVAL_TICKS: Final[int] = 1440
 STORE_GRAIN_RESTOCK_QTY: Final[int] = 100
 STORE_COAL_RESTOCK_QTY: Final[int] = 80
@@ -122,6 +137,8 @@ __all__ = [
     "seed_genesis_npc_stores",
     "_store_daily_sales",
     "restock_target_qty",
+    "store_party_for_town",
+    "_maybe_post_store_reorder_bid",
 ]
 
 
@@ -360,6 +377,7 @@ def _execute_purchase(
     whether to apply need restoration based on this).
     """
     from realm.population.laborers import laborer_cash_account
+    from realm.population.towns import town_for_plot
 
     lab = world.laborers.get(laborer_id)
     if lab is None:
@@ -416,6 +434,14 @@ def _execute_purchase(
             plot_id=str(plot_id),
             material=str(material),
             store_owner=str(owner),
+        )
+    town = town_for_plot(world, plot_id)
+    if town is not None and str(material) in STORE_REORDER_MATERIALS:
+        _maybe_post_store_reorder_bid(
+            world,
+            town.town_id,
+            str(material),
+            int(inv.get(str(material), 0)),
         )
     return {"ok": True, "spent": int(total), "units": int(units)}
 
@@ -475,6 +501,80 @@ def restock_target_qty(
     return max(10, int(avg_daily * days_to_stock))
 
 
+def store_party_for_town(town_id: str) -> PartyId:
+    return PartyId(f"store_{town_id}")
+
+
+def _ensure_store_party(world: World, town_id: str) -> PartyId:
+    """Idempotent: create ``store_{town_id}`` with exchange-bid operating cash."""
+    store_party = store_party_for_town(town_id)
+    if store_party in world.parties:
+        return store_party
+    world.parties.add(store_party)
+    world.reputation[str(store_party)] = {"honored": 0, "breached": 0}
+    acct = party_cash_account(store_party)
+    world.ledger.ensure_account(acct)
+    tr = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=acct,
+        amount_cents=STORE_PARTY_STARTING_CASH_CENTS,
+    )
+    if isinstance(tr, MoneyErr):
+        raise ValueError(tr.reason)
+    return store_party
+
+
+def _maybe_post_store_reorder_bid(
+    world: World, town_id: str, material_id: str, current_qty: int
+) -> None:
+    """Post a standing bid when a store's stock runs low — creates visible demand."""
+    if current_qty > _STORE_REORDER_THRESHOLD:
+        return
+    store_party = store_party_for_town(town_id)
+    if store_party not in world.parties:
+        return
+    bids = world.market_bids_by_material.get(material_id, [])
+    existing = [b for b in bids if b.party == store_party]
+    if existing:
+        return
+    asks = world.market_asks_by_material.get(material_id, [])
+    if asks:
+        ref_price = min(a.price_per_unit_cents for a in asks)
+    else:
+        from realm.economy.pricing import exchange_ask_cents
+
+        ref_price = exchange_ask_cents(MaterialId(material_id))
+    bid_price = int(ref_price * (1 + _STORE_BID_PREMIUM_BPS / 10_000))
+    store_acct = party_cash_account(store_party)
+    available = world.ledger.balance(store_acct)
+    max_affordable = available // bid_price if bid_price > 0 else 0
+    qty = min(_STORE_BID_QTY, max_affordable)
+    if qty < 1:
+        return
+    from realm.economy.markets import place_buy_order
+
+    place_buy_order(world, store_party, MaterialId(material_id), qty, bid_price)
+
+
+def _deliver_store_party_inventory_to_shelf(world: World, town_id: str) -> None:
+    """Move filled bid inventory from ``store_{town_id}`` onto store shelves."""
+    store_party = store_party_for_town(town_id)
+    if store_party not in world.parties:
+        return
+    for plot_id in stores_for_town(world, town_id):
+        pid = str(plot_id)
+        inv = world.store_inventories.setdefault(pid, {})
+        for mat_s in STORE_REORDER_MATERIALS:
+            mid = MaterialId(mat_s)
+            on_hand = world.inventory.qty(store_party, mid)
+            if on_hand <= 0:
+                continue
+            rm = world.inventory.remove(store_party, mid, on_hand)
+            if isinstance(rm, MatterErr):
+                continue
+            inv[mat_s] = int(inv.get(mat_s, 0)) + on_hand
+
+
 def _store_party_for_plot(world: World, plot_id: str) -> PartyId:
     """Party that owns the store on ``plot_id`` (plot owner or building row)."""
     for b in world.plot_buildings:
@@ -487,67 +587,23 @@ def _store_party_for_plot(world: World, plot_id: str) -> PartyId:
 
 
 def tick_store_restock(world: World) -> None:
-    """Genesis NPC stores auto-restock once per game-day (training wheels)."""
+    """Daily: post exchange bids for low stock and shelve filled bid inventory."""
     if int(world.tick) % STORE_RESTOCK_INTERVAL_TICKS != 0:
         return
     if not world.towns:
         return
 
-    from realm.economy.markets import market_buy
-
-    genesis_store_plots: set[str] = set()
     for town in world.towns.values():
-        for pid in town.store_plots:
-            genesis_store_plots.add(str(pid))
-
-    restock_plan: dict[str, tuple[int, int]] = {
-        "grain": (STORE_GRAIN_RESTOCK_QTY, STORE_RESTOCK_COST_GRAIN),
-        "coal": (STORE_COAL_RESTOCK_QTY, STORE_RESTOCK_COST_COAL),
-    }
-
-    for pid in sorted(genesis_store_plots):
-        store_party = _store_party_for_plot(world, pid)
-        plot_id = PlotId(pid)
-        inv = world.store_inventories.setdefault(pid, {})
-        for mat_str, (default_restock, cost_per_unit) in restock_plan.items():
-            target_qty = restock_target_qty(
-                world, pid, mat_str, default_restock=default_restock
-            )
-            current = int(inv.get(mat_str, 0))
-            if current >= target_qty:
-                continue
-            need = target_qty - current
-            mat = MaterialId(mat_str)
-            res = market_buy(world, store_party, mat, max_qty=need)
-            bought = int(res.get("filled", 0)) if res.get("ok") else 0
-            if bought > 0:
-                stock_res = stock_store(world, store_party, plot_id, mat, bought)
-                if not stock_res.get("ok"):
-                    rm = world.inventory.remove(store_party, mat, bought)
-                    if not isinstance(rm, MatterErr):
-                        inv[mat_str] = current + bought
-            still_need = need - bought
-            if still_need <= 0:
-                continue
-            subsidy_units = min(still_need, STORE_RESTOCK_SUBSIDY_CAP_UNITS)
-            subsidy_cost = subsidy_units * cost_per_unit
-            tr = world.ledger.transfer(
-                debit=system_reserve_account(),
-                credit=party_cash_account(store_party),
-                amount_cents=subsidy_cost,
-            )
-            if isinstance(tr, MoneyErr):
-                continue
-            inv[mat_str] = int(inv.get(mat_str, 0)) + subsidy_units
-            log_event(
-                world,
-                "store_restock_subsidy",
-                f"Genesis store {pid} subsidized {subsidy_units}×{mat_str}",
-                plot_id=pid,
-                material=mat_str,
-                qty=int(subsidy_units),
-                cost_cents=int(subsidy_cost),
-            )
+        _deliver_store_party_inventory_to_shelf(world, town.town_id)
+        for pid in stores_for_town(world, town.town_id):
+            inv = world.store_inventories.get(str(pid), {})
+            for mat_s in STORE_REORDER_MATERIALS:
+                _maybe_post_store_reorder_bid(
+                    world,
+                    town.town_id,
+                    mat_s,
+                    int(inv.get(mat_s, 0)),
+                )
 
 
 def tick_laborer_spending(world: World) -> dict[str, int]:
@@ -775,6 +831,7 @@ def seed_genesis_npc_stores(world: World) -> list[PlotId]:
             }
         )
         town.store_plots.append(choice)
+        _ensure_store_party(world, town.town_id)
         # Stock grain + coal directly (matter from system reserve mirrors
         # the way exchange inventory was seeded historically).
         for mid, qty in (
