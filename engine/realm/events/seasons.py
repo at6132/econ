@@ -219,12 +219,18 @@ def recipe_blocked_by_season(
 
 
 def fuel_decay_per_day_for_season(season: Season) -> float:
-    """Per Sub-phase 8A.A3: fuel need decays faster as it gets colder."""
+    """Per Sub-phase 8A.A3: fuel need decays faster as it gets colder.
+
+    Season multipliers are applied to :data:`~realm.population.laborers.FUEL_DECAY_PER_DAY`
+    so tuning the base rate in ``laborers.py`` propagates here automatically.
+    """
+    from realm.population.laborers import FUEL_DECAY_PER_DAY
+
     if season is Season.WINTER:
-        return 0.07
+        return FUEL_DECAY_PER_DAY * (7.0 / 3.0)
     if season is Season.AUTUMN:
-        return 0.04
-    return 0.03  # Spring + Summer baseline
+        return FUEL_DECAY_PER_DAY * (4.0 / 3.0)
+    return FUEL_DECAY_PER_DAY  # Spring + Summer baseline
 
 
 # ─────────────────────────────────────────────────────────────────────────

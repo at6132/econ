@@ -358,6 +358,7 @@ def dump_world(world: World) -> dict[str, Any]:
                 },
                 "age_ticks": int(lab.age_ticks),
                 "birth_tick": int(getattr(lab, "birth_tick", 0) or 0),
+                "lifespan_days": int(getattr(lab, "lifespan_days", 0) or 0),
                 "health": float(lab.health),
                 "savings_cents": int(getattr(lab, "savings_cents", 0) or 0),
                 "partner_id": getattr(lab, "partner_id", None),
@@ -1040,7 +1041,7 @@ def load_world(d: dict[str, Any]) -> World:
             )
     raw_laborers = d.get("laborers") or {}
     if isinstance(raw_laborers, dict):
-        from realm.population.laborers import LaborerNPC
+        from realm.population.laborers import LABORER_LIFESPAN_MIN_DAYS, LaborerNPC
 
         for lid, payload in raw_laborers.items():
             if not isinstance(payload, dict):
@@ -1058,6 +1059,9 @@ def load_world(d: dict[str, Any]) -> World:
                 skill_level=int(payload.get("skill_level", 0)),
                 age_ticks=int(payload.get("age_ticks", 0)),
                 birth_tick=int(payload.get("birth_tick", 0)),
+                lifespan_days=int(
+                    payload.get("lifespan_days") or LABORER_LIFESPAN_MIN_DAYS
+                ),
                 health=float(payload.get("health", 1.0)),
                 savings_cents=int(payload.get("savings_cents", 0)),
                 skill_levels={

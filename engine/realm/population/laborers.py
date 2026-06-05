@@ -51,8 +51,8 @@ from realm.world import World
 TICKS_PER_GAME_DAY: Final[int] = 1440
 """One game-day = 1,440 ticks (matches the rest of the simulation)."""
 
-RETIREMENT_AGE_GAME_DAYS: Final[int] = 100
-RETIREMENT_AGE_TICKS: Final[int] = RETIREMENT_AGE_GAME_DAYS * TICKS_PER_GAME_DAY
+LABORER_LIFESPAN_MIN_DAYS: Final[int] = 300
+LABORER_LIFESPAN_MAX_DAYS: Final[int] = 500
 
 LABORER_STARTING_CASH_CENTS: Final[int] = 20_000
 """$200 subsistence stake. The only money injection on the laborer side."""
@@ -62,7 +62,7 @@ SKILL_GROWTH_RATE_PER_DAY: Final[float] = 0.01
 """Skill gain per game-day while employed (+0.01 on a 0–100 scale)."""
 
 FOOD_DECAY_PER_DAY: Final[float] = 0.008
-FUEL_DECAY_PER_DAY: Final[float] = 0.004
+FUEL_DECAY_PER_DAY: Final[float] = 0.002
 SHELTER_DECAY_PER_DAY: Final[float] = 0.002
 
 # Need thresholds: below these, the corresponding health pressure kicks in.
@@ -99,8 +99,8 @@ BIRTH_TOWN_HEALTH_THRESHOLD: Final[float] = 0.60
 __all__ = [
     "LaborerNPC",
     "TICKS_PER_GAME_DAY",
-    "RETIREMENT_AGE_GAME_DAYS",
-    "RETIREMENT_AGE_TICKS",
+    "LABORER_LIFESPAN_MIN_DAYS",
+    "LABORER_LIFESPAN_MAX_DAYS",
     "LABORER_STARTING_CASH_CENTS",
     "FOOD_DECAY_PER_DAY",
     "FUEL_DECAY_PER_DAY",
@@ -140,6 +140,8 @@ class LaborerNPC:
     skill_level: float = 0.0
     age_ticks: int = 0
     birth_tick: int = 0
+    lifespan_days: int = LABORER_LIFESPAN_MIN_DAYS
+    """Randomized at creation (300–500 game-days); retirement fires when age reaches this."""
     health: float = 1.0
     savings_cents: int = 0
     """Personal cash buffer (ledger ``cash:lab:sav:*``); not counted in spendable cash."""
@@ -187,6 +189,13 @@ def town_treasury_account(town_id: str) -> AccountId:
     will spend the treasury on civic maintenance / new residences).
     """
     return AccountId(f"cash:town:{town_id}")
+
+
+def _roll_laborer_lifespan_days(world: World, laborer_id: str) -> int:
+    """Deterministic per-laborer lifespan in game-days (inclusive 300–500)."""
+    rng = world.rng(f"lifespan:{laborer_id}:{world.tick}")
+    span = LABORER_LIFESPAN_MAX_DAYS - LABORER_LIFESPAN_MIN_DAYS + 1
+    return LABORER_LIFESPAN_MIN_DAYS + int(rng.random() * span)
 
 
 def _ensure_laborer_cash_invariant(world: World, lab: LaborerNPC) -> None:
@@ -240,6 +249,7 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
         age_rng = world.rng(f"laborer_age_spread:{laborer_index}:{world.tick}")
         age_days = int(age_rng.random() ** 0.6 * 60)
         age_ticks = age_days * TICKS_PER_GAME_DAY
+        lifespan_days = _roll_laborer_lifespan_days(world, lid)
         lab = LaborerNPC(
             laborer_id=lid,
             display_name=name,
@@ -248,6 +258,7 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
             last_needs_tick=int(world.tick),
             birth_tick=-age_ticks,
             age_ticks=age_ticks,
+            lifespan_days=lifespan_days,
             health=1.0,
         )
         acct = laborer_cash_account(lid)
@@ -473,7 +484,7 @@ def tick_laborers(world: World) -> dict[str, int]:
         stats["ticked"] += 1
         if lab.health <= DEATH_THRESHOLD:
             dead_ids.append(lab.laborer_id)
-        elif lab.age_ticks >= RETIREMENT_AGE_TICKS:
+        elif lab.age_ticks >= lab.lifespan_days * TICKS_PER_GAME_DAY:
             retired_ids.append(lab.laborer_id)
     for lid in dead_ids:
         lab = world.laborers.get(lid)

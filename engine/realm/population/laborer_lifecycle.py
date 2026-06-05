@@ -321,6 +321,8 @@ def _spawn_laborer_child(
     home_plot = town.center_plot
     if town.residential_plots:
         home_plot = town.residential_plots[0]
+    from realm.population.laborers import _roll_laborer_lifespan_days
+
     lab = LaborerNPC(
         laborer_id=lid,
         display_name=name,
@@ -331,6 +333,7 @@ def _spawn_laborer_child(
         savings_cents=0,
         skill_levels={},
         birth_tick=int(world.tick),
+        lifespan_days=_roll_laborer_lifespan_days(world, lid),
         last_needs_tick=int(world.tick),
     )
     world.ledger.ensure_account(laborer_cash_account(lid))
