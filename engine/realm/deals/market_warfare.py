@@ -54,6 +54,8 @@ _SPEC_MIN_RISK = 0.7
 _SPEC_MIN_CASH_CENTS = 100_000
 _SPEC_MIN_TREND_STREAK = 3
 _SPEC_BUY_MULTIPLIER = 2
+_SPEC_MIN_DAYS_OBSERVED = 14
+_SPEC_MIN_PRICE_HISTORY_DAYS = 7
 
 _SHORT_MIN_RISK = 0.8
 _SHORT_MIN_LENDER_STOCK = 10
@@ -432,6 +434,18 @@ def _normal_inventory_target(world: World, party: PartyId, material: MaterialId)
     return max(10, held if held > 0 else 10)
 
 
+def _material_price_history_days(world: World, material: str) -> int:
+    """Distinct game-days with a recorded best ask for ``material``."""
+    days: set[int] = set()
+    for row in world.market_history:
+        asks = row.get("best_asks_cents") or {}
+        if material not in asks:
+            continue
+        tick = int(row.get("tick", 0))
+        days.add(tick // TICKS_PER_GAME_DAY)
+    return len(days)
+
+
 def _close_spec_position(world: World, row: dict[str, Any], party: PartyId) -> None:
     material = MaterialId(str(row["material"]))
     qty = int(row.get("qty", 0))
@@ -503,6 +517,10 @@ def tick_speculative_positions(world: World) -> None:
             continue
         model = get_settler_world_model(world, party)
         for material, intel in sorted(model.material_intel.items()):
+            if int(intel.get("days_observed", 0)) < _SPEC_MIN_DAYS_OBSERVED:
+                continue
+            if _material_price_history_days(world, material) < _SPEC_MIN_PRICE_HISTORY_DAYS:
+                continue
             trend = str(intel.get("trend", "flat"))
             streak = _update_trend_streak(world, party, material, trend)
             if streak < _SPEC_MIN_TREND_STREAK:

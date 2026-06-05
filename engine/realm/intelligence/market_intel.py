@@ -269,6 +269,7 @@ def merge_material_intel_entry(
     if observed:
         row["uncertainty"] = 0.0
         row["last_observed_tick"] = int(tick)
+        row["days_observed"] = int((previous or {}).get("days_observed", 0)) + 7
     else:
         row.setdefault("uncertainty", 0.0)
         row.setdefault("last_observed_tick", int(previous.get("last_observed_tick", 0)) if previous else 0)
