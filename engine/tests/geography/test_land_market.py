@@ -29,14 +29,14 @@ def _first_unowned_plot(world) -> PlotId:
 
 
 def test_tick_location_premium_stores_scores() -> None:
-    world = bootstrap_genesis(seed=7)
+    world = bootstrap_genesis(seed=7, grid_width=48, grid_height=36, settler_count=4)
     scores = world.scenario_state.get("plot_location_scores") or {}
     assert scores
     assert all(0.0 <= float(v) <= 1.0 for v in scores.values())
 
 
 def test_claim_cost_scales_with_location_score() -> None:
-    world = bootstrap_genesis(seed=11)
+    world = bootstrap_genesis(seed=11, grid_width=48, grid_height=36, settler_count=4)
     pid = _first_unowned_plot(world)
     scores = world.scenario_state.setdefault("plot_location_scores", {})
     scores[str(pid)] = 0.0
@@ -48,7 +48,7 @@ def test_claim_cost_scales_with_location_score() -> None:
 
 
 def test_list_plot_for_sale_rejects_active_production() -> None:
-    world = bootstrap_genesis(seed=13)
+    world = bootstrap_genesis(seed=13, grid_width=48, grid_height=36, settler_count=4)
     seed_world_blueprints(world)
     seller = PartyId("settler_001")
     plot = next(
@@ -78,7 +78,7 @@ def test_list_plot_for_sale_rejects_active_production() -> None:
 
 
 def test_tick_plot_purchases_conserves_money() -> None:
-    world = bootstrap_genesis(seed=17)
+    world = bootstrap_genesis(seed=17, grid_width=48, grid_height=36, settler_count=4)
     seed_world_blueprints(world)
     buyer = PartyId("settler_002")
     seller = PartyId("settler_003")
@@ -116,7 +116,7 @@ def test_tick_plot_purchases_conserves_money() -> None:
 
 
 def test_island_dominance_toll_conserves_money() -> None:
-    world = bootstrap_genesis(seed=19)
+    world = bootstrap_genesis(seed=19, grid_width=48, grid_height=36, settler_count=4)
     shipper = PartyId("settler_004")
     world.scenario_state["island_dominance"] = {
         "0": {
@@ -139,7 +139,7 @@ def test_island_dominance_toll_conserves_money() -> None:
 
 
 def test_tick_island_dominance_flags_majority_holder() -> None:
-    world = bootstrap_genesis(seed=23)
+    world = bootstrap_genesis(seed=23, grid_width=48, grid_height=36, settler_count=4)
     seed_world_blueprints(world)
     holder = PartyId("settler_005")
     islands_map = world.scenario_state.get("plot_islands") or {}
