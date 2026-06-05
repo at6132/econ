@@ -12,11 +12,12 @@ from realm.events.event_log import log_event
 from realm.core.ids import MaterialId, PartyId
 from realm.economy.markets import best_resting_ask_cents
 from realm.infrastructure.plot_logistics import party_material_held
-from realm.core.time_scale import legacy_scaled
+from realm.core.time_scale import TICKS_PER_GAME_DAY, legacy_scaled
 from realm.world import World
 
 # One digest per in-game hour at 1440 ticks/day (was incorrectly scaled to ~16 game-hours).
 GENESIS_DIGEST_INTERVAL_TICKS = 60
+_DIGEST_EMIT_COOLDOWN_TICKS = 5 * TICKS_PER_GAME_DAY
 
 _PLAYER = PartyId("player")
 
@@ -27,6 +28,25 @@ def _genesis_st(world: World) -> dict[str, Any]:
         world.scenario_state["genesis"] = {}
         st = world.scenario_state["genesis"]
     return st
+
+
+def digest_emit_allowed(world: World, message_key: str) -> bool:
+    """True when ``message_key`` was not emitted within the last 5 game-days."""
+    gst = _genesis_st(world)
+    last_emit = gst.get("digest_last_emit", {})
+    if not isinstance(last_emit, dict):
+        return True
+    last_tick = int(last_emit.get(message_key, 0))
+    return world.tick - last_tick >= _DIGEST_EMIT_COOLDOWN_TICKS
+
+
+def record_digest_emit(world: World, message_key: str) -> None:
+    gst = _genesis_st(world)
+    last_emit = gst.setdefault("digest_last_emit", {})
+    if not isinstance(last_emit, dict):
+        last_emit = {}
+        gst["digest_last_emit"] = last_emit
+    last_emit[message_key] = int(world.tick)
 
 
 def _settler_party_count(world: World) -> int:
@@ -78,26 +98,35 @@ def tick_genesis_world_feed(world: World) -> None:
     grain_ask = best_resting_ask_cents(world, MaterialId("grain"))
     elec_ask = best_resting_ask_cents(world, MaterialId("electricity"))
 
-    headlines: list[str] = []
+    headlines: list[tuple[str, str]] = []
 
     n_settlers = _settler_party_count(world)
     if not prev:
         headlines.append(
-            f"Genesis digest opened t{world.tick}: {n_settlers} settler parties; "
-            f"{total_mines} strip-mines (settler {sm}, player {pm})."
+            (
+                "digest_open",
+                f"Genesis digest opened t{world.tick}: {n_settlers} settler parties; "
+                f"{total_mines} strip-mines (settler {sm}, player {pm}).",
+            )
         )
     prev_pop = int(prev.get("settler_count", n_settlers))
     if n_settlers != prev_pop:
         headlines.append(
-            f"Frontier headcount: {prev_pop} → {n_settlers} settler parties "
-            f"(spawns and exits net)."
+            (
+                "digest_headcount_delta",
+                f"Frontier headcount: {prev_pop} → {n_settlers} settler parties "
+                f"(spawns and exits net).",
+            )
         )
 
     d_mines = total_mines - int(prev.get("total_mines", 0))
     if d_mines != 0:
         headlines.append(
-            f"Since last digest: strip-mine count {'+' if d_mines > 0 else ''}{d_mines} "
-            f"(now {total_mines}: {sm} settler, {pm} yours; {ty} timber-yards, {gr} grain-rows among settlers)."
+            (
+                "digest_mines_delta",
+                f"Since last digest: strip-mine count {'+' if d_mines > 0 else ''}{d_mines} "
+                f"(now {total_mines}: {sm} settler, {pm} yours; {ty} timber-yards, {gr} grain-rows among settlers).",
+            )
         )
 
     if coal_ask is None and world.tick >= legacy_scaled(40):
@@ -105,7 +134,10 @@ def tick_genesis_world_feed(world: World) -> None:
         gst["coal_ask_empty_streak"] = streak
         if streak >= 2 and streak % 2 == 0:
             headlines.append(
-                f"Coal book still empty for {streak * interval} ticks — check exchange relists and entrepreneur asks."
+                (
+                    "digest_coal_ask_empty",
+                    f"Coal book still empty for {streak * interval} ticks — check exchange relists and entrepreneur asks.",
+                )
             )
     else:
         gst["coal_ask_empty_streak"] = 0
@@ -114,16 +146,22 @@ def tick_genesis_world_feed(world: World) -> None:
     prev_pc = int(prev.get("player_coal", pqcoal))
     if pqcoal != prev_pc and world.tick >= legacy_scaled(20):
         headlines.append(
-            f"Your coal (inventory + staged at your plots) moved {prev_pc} → {pqcoal} u "
-            "(not counting open sell clips)."
+            (
+                "digest_player_coal_move",
+                f"Your coal (inventory + staged at your plots) moved {prev_pc} → {pqcoal} u "
+                "(not counting open sell clips).",
+            )
         )
 
     if not headlines:
         nasks = sum(len(v) for v in world.market_asks_by_material.values())
         nbids = sum(len(v) for v in world.market_bids_by_material.values())
         headlines.append(
-            f"Genesis pulse t{world.tick}: {nasks} ask rows, {nbids} bid rows; "
-            f"coal best ask {coal_ask if coal_ask is not None else '—'}¢."
+            (
+                "digest_genesis_pulse",
+                f"Genesis pulse t{world.tick}: {nasks} ask rows, {nbids} bid rows; "
+                f"coal best ask {coal_ask if coal_ask is not None else '—'}¢.",
+            )
         )
 
     gst["digest_prev"] = {
@@ -136,8 +174,16 @@ def tick_genesis_world_feed(world: World) -> None:
         "tick": world.tick,
     }
 
+    eligible = [(key, text) for key, text in headlines if digest_emit_allowed(world, key)]
+    if not eligible:
+        return
+
     rng = world.rng(f"gen:digest_pick:{world.tick}")
-    k = min(3, len(headlines))
-    picks = rng.sample(range(len(headlines)), k=k) if len(headlines) > 3 else list(range(len(headlines)))
-    parts = [headlines[i] for i in sorted(picks)]
+    k = min(3, len(eligible))
+    picks = rng.sample(range(len(eligible)), k=k) if len(eligible) > 3 else list(range(len(eligible)))
+    parts: list[str] = []
+    for i in sorted(picks):
+        key, text = eligible[i]
+        parts.append(text)
+        record_digest_emit(world, key)
     log_event(world, "world_feed", " ".join(parts))

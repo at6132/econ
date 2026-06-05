@@ -91,8 +91,9 @@ def _total_resting_ask_rows(world: World) -> int:
 
 
 def _aux_settler_coal_microspread(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_coalspread_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_settler_coal_microspread"):
         return None
     rows = sorted(
         (
@@ -106,7 +107,6 @@ def _aux_settler_coal_microspread(world: World, mx: dict[str, Any]) -> str | Non
         return None
     if rows[1][0] - rows[0][0] > 3:
         return None
-    mx[f"aux_coalspread_{d}"] = True
     return (
         f"Settler coal is stacked {rows[0][0]}¢ and {rows[1][0]}¢ — pennies apart. "
         "Whoever blinks first feeds the hubs for free. Don't be the tape under that train."
@@ -114,8 +114,9 @@ def _aux_settler_coal_microspread(world: World, mx: dict[str, Any]) -> str | Non
 
 
 def _aux_settler_coal_crowd(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_coalcrowd_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_settler_coal_crowd"):
         return None
     parties: set[str] = set()
     for o in world.market_asks_by_material.get("coal", []):
@@ -124,7 +125,6 @@ def _aux_settler_coal_crowd(world: World, mx: dict[str, Any]) -> str | None:
             parties.add(ps)
     if len(parties) < 2:
         return None
-    mx[f"aux_coalcrowd_{d}"] = True
     return (
         f"{len(parties)} different settlers are sitting on coal asks at once — that's not depth, that's a knife fight "
         "in one clip. Undercut clean or walk away until the bodies clear."
@@ -132,27 +132,26 @@ def _aux_settler_coal_crowd(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_player_run_margin(world: World, mx: dict[str, Any]) -> str | None:
+    from realm.genesis.digest import digest_emit_allowed
+
     if world.tick % TICKS_PER_GAME_DAY != legacy_scaled(16):
         return None
-    d = _game_day(world)
+    if not digest_emit_allowed(world, "margaux_aux_player_run_margin"):
+        return None
     cash = world.ledger.balance(party_cash_account(_PLAYER))
     prev = mx.get("_cash_margin_snap")
     mx["_cash_margin_snap"] = cash
-    if mx.get(f"aux_margin_note_{d}"):
-        return None
     if prev is None:
         return None
     prev_i = int(prev)
     if prev_i <= 0:
         return None
     if cash > int(prev_i * 1.25) and cash > 1_200_000:
-        mx[f"aux_margin_note_{d}"] = True
         return (
             "Your cash stack grew meaningfully overnight on paper — if that's production, keep flanking the crowded clips; "
             "if it's liquidation, don't confuse runway for tailwind."
         )
     if cash < int(prev_i * 0.72) and cash < 900_000:
-        mx[f"aux_margin_note_{d}"] = True
         return (
             "Cash drew down hard vs yesterday — if that's deliberate inventory buys, pace yourself; "
             "if it's leakage, cancel dead listings before the hubs notice you're thin."
@@ -161,25 +160,24 @@ def _aux_player_run_margin(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_settler_net_pulse(world: World, mx: dict[str, Any]) -> str | None:
+    from realm.genesis.digest import digest_emit_allowed
+
     if world.tick % TICKS_PER_GAME_DAY != legacy_scaled(8):
         return None
-    d = _game_day(world)
+    if not digest_emit_allowed(world, "margaux_aux_settler_net_pulse"):
+        return None
     cur = _settler_party_count(world)
     prev = mx.get("_snap_settlers_for_pulse")
     mx["_snap_settlers_for_pulse"] = cur
-    if mx.get(f"aux_pop_pulse_{d}"):
-        return None
     if prev is None:
         return None
     delta = cur - int(prev)
     if delta >= 18:
-        mx[f"aux_pop_pulse_{d}"] = True
         return (
             f"We netted +{delta} settler filings since yesterday — desks are filling faster than kitchens. "
             "Specialize early or you'll be wage furniture."
         )
     if delta <= -10:
-        mx[f"aux_pop_pulse_{d}"] = True
         return (
             f"Headcount shed {-delta} settlers in a day — that's either discipline or defaults stacking. "
             "Either way, labor queues loosen for whoever still has cash."
@@ -188,15 +186,15 @@ def _aux_settler_net_pulse(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_player_cash_pinch(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_cash_pinch_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_player_cash_pinch"):
         return None
     cash = world.ledger.balance(party_cash_account(_PLAYER))
     if cash >= 380_000:
         return None
     if not any(str(b.get("party")) == str(_PLAYER) for b in world.plot_buildings):
         return None
-    mx[f"aux_cash_pinch_{d}"] = True
     return (
         f"Your wallet just slipped under ${cash / 100:.0f} — if payroll and relists are both screaming, "
         "pause builds and turn inventory into clips before the board ghosts you."
@@ -204,13 +202,13 @@ def _aux_player_cash_pinch(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_player_float_strong(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_float_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_player_float_strong"):
         return None
     cash = world.ledger.balance(party_cash_account(_PLAYER))
     if cash < 2_200_000:
         return None
-    mx[f"aux_float_{d}"] = True
     return (
         "You're carrying more dry powder than most claimants — that can ride a bad streak, "
         "but idle cash is also frozen optionality. Park the rest in listings or inputs, not ego."
@@ -218,13 +216,13 @@ def _aux_player_float_strong(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_grain_rich_pressed(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_grainpx_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_grain_rich_pressed"):
         return None
     ga = best_resting_ask_cents(world, MaterialId("grain"))
     if ga is None or ga < 132:
         return None
-    mx[f"aux_grainpx_{d}"] = True
     return (
         f"Grain best ask just printed {ga}¢ — staple prices wheezing that high means somebody's hoarding or hubs are panic-buying. "
         "Watch the eastern clip first; it's usually the canary."
@@ -232,13 +230,13 @@ def _aux_grain_rich_pressed(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_thin_book(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_thin_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_thin_book"):
         return None
     n = _total_resting_ask_rows(world)
     if n > 32:
         return None
-    mx[f"aux_thin_{d}"] = True
     return (
         f"Whole board only shows {n} live ask rows — thin books shake producers out faster than bankruptcy. "
         "If you're long, list small; if you're flat, keep powder for the first thick relist."
@@ -246,13 +244,13 @@ def _aux_thin_book(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_ele_stress(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_elec_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_ele_stress"):
         return None
     ea = best_resting_ask_cents(world, MaterialId("electricity"))
     if ea is None or ea < 58:
         return None
-    mx[f"aux_elec_{d}"] = True
     return (
         f"Electricity lifting at {ea}¢ tells me someone upstream is taxing your patience. "
         "Lock a clip or bake slower recipes until the clearinghouse reloads."
@@ -260,8 +258,9 @@ def _aux_ele_stress(world: World, mx: dict[str, Any]) -> str | None:
 
 
 def _aux_timber_soft(world: World, mx: dict[str, Any]) -> str | None:
-    d = _game_day(world)
-    if mx.get(f"aux_timber_{d}"):
+    from realm.genesis.digest import digest_emit_allowed
+
+    if not digest_emit_allowed(world, "margaux_aux_timber_soft"):
         return None
     ta = best_resting_ask_cents(world, MaterialId("timber"))
     prev = mx.get("_prev_timber_ask")
@@ -274,7 +273,6 @@ def _aux_timber_soft(world: World, mx: dict[str, Any]) -> str | None:
     drop = (prev_i - ta) / float(prev_i)
     if drop < 0.08:
         return None
-    mx[f"aux_timber_{d}"] = True
     return (
         f"Timber best ask just relaxed {prev_i}¢ → {ta}¢ — ~{int(drop * 100)}% giveback. "
         "Good for mills, rough for stump jockeys who chased the top tick."
@@ -302,6 +300,10 @@ def _run_margaux_aux_beats(world: World, mx: dict[str, Any]) -> None:
     ):
         msg = fn(world, mx)
         if msg:
+            from realm.genesis.digest import record_digest_emit
+
+            key = fn.__name__.removeprefix("_")
+            record_digest_emit(world, f"margaux_{key}")
             _append_margaux(world, msg, main_beat=False)
             return
 
