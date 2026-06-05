@@ -78,10 +78,6 @@ def _player_workshop_ids(world: World) -> set[str]:
     }
 
 
-def _game_day(world: World) -> int:
-    return world.tick // TICKS_PER_GAME_DAY
-
-
 def _settler_party_count(world: World) -> int:
     return sum(1 for p in world.parties if str(p).startswith("settler_"))
 
