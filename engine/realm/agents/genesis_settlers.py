@@ -28,7 +28,7 @@ from realm.infrastructure.plot_logistics import (
     party_material_held,
     party_material_on_plot,
 )
-from realm.production import plot_has_active_production
+from realm.production import plot_has_active_production, start_production
 from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
 from realm.production.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.production.recipes import RECIPES
@@ -93,6 +93,9 @@ _PRIMARY_RECIPES = frozenset(
 
 # Claim → survey → build → … can span many logical steps; chain several per tick until blocked.
 SETTLER_PIPELINE_BURST = 16
+
+_MIN_OPS_BEFORE_WORKSHOP = 4
+"""Hand-extraction runs on the claim before turnkey capital (prove-the-seam gate)."""
 
 
 _plot_scan_cache: dict[int, tuple[list[PlotId], list[PlotId]]] = {}
@@ -871,20 +874,36 @@ def _settler_market_buy(
     return r
 
 
-def _settler_acquire_turnkey_materials(world: World, party: PartyId, building_id: str) -> bool:
+def _settler_acquire_turnkey_materials(
+    world: World,
+    party: PartyId,
+    building_id: str,
+    *,
+    plot_id: PlotId | None = None,
+) -> bool:
     """Buy missing ``self_materials`` from the book before ``turnkey`` build (Genesis settlers)."""
     spec = BUILDINGS.get(building_id)
     if not spec or str(spec.get("kind")) != "contracted":
         return True
+    from realm.infrastructure.plot_logistics import party_material_held
+
+    owned: tuple[PlotId, ...] = ()
+    if plot_id is not None:
+        owned = (plot_id,)
     for mid_s, qty in (spec.get("self_materials") or {}).items():
         mid = MaterialId(mid_s)
-        need = int(qty) - int(world.inventory.qty(party, mid))
+        have = int(world.inventory.qty(party, mid))
+        if owned:
+            have = max(have, int(party_material_held(world, party, mid, owned_plot_ids=owned)))
+        need = int(qty) - have
         if need <= 0:
             continue
         r = _settler_market_buy(world, party, mid, need)
-        filled = int(r.get("filled", 0))
-        if not r.get("ok") or filled < need:
-            return False
+        if r.get("ok"):
+            filled = int(r.get("filled", 0))
+            if filled >= need:
+                continue
+        # Partial or empty book — turnkey build will fair-value the remainder.
     return True
 
 
@@ -901,6 +920,11 @@ def _ensure_settler_boot_tools(world: World, party: PartyId, primary_recipe: str
     if world.inventory.qty(party, MaterialId("mining_pick")) < 1:
         r = _settler_market_buy(world, party, MaterialId("mining_pick"), 1)
         ok = bool(r.get("ok") and int(r.get("filled", 0)) >= 1)
+    if primary_recipe == "chop_timber" or world.inventory.qty(party, MaterialId("pick_axe")) < 1:
+        if world.inventory.qty(party, MaterialId("pick_axe")) < 1:
+            r = _settler_market_buy(world, party, MaterialId("pick_axe"), 1)
+            if primary_recipe == "chop_timber":
+                ok = bool(r.get("ok") and int(r.get("filled", 0)) >= 1)
     if ok and primary_recipe == "dig_clay" and world.inventory.qty(party, MaterialId("spade")) < 1:
         r2 = _settler_market_buy(world, party, MaterialId("spade"), 1)
         ok = bool(r2.get("ok") and int(r2.get("filled", 0)) >= 1)
@@ -950,9 +974,14 @@ def _settler_try_hand_extraction(
             continue
         if not subsurface_allows_recipe(plot, rec):
             continue
+        from realm.events.seasons import recipe_blocked_by_season
+
+        blocked, _ = recipe_blocked_by_season(world, rid, plot)
+        if blocked:
+            continue
         if world.ledger.balance(party_cash_account(party)) < rec.labor_cents:
             continue
-        r = start_production_on_plot(world, party, plot_id, rid)
+        r = _settler_start_production(world, party, plot_id, rid)
         if r.get("ok") and r.get("started", True):
             return True
     return False
@@ -989,11 +1018,26 @@ def _maybe_post_settler_job_opening(world: World, party: PartyId, plot_id: PlotI
     _maybe_post_job_openings(world, party)
 
 
+def _settler_completed_ops(world: World, party: PartyId) -> int:
+    return sum(
+        1
+        for e in world.event_log
+        if str(e.get("kind")) == "production_done"
+        and str(e.get("party")) == str(party)
+    )
+
+
 def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id: str) -> bool:
     for b in world.plot_buildings:
         if b.get("party") != str(party) or b.get("plot_id") != str(plot_id):
             continue
         if b.get("building_id") == building_id:
+            return True
+    if _settler_completed_ops(world, party) < _MIN_OPS_BEFORE_WORKSHOP:
+        return False
+    if _settler_self_build_ready(world, party, plot_id, building_id):
+        r = build_on_plot(world, party, plot_id, building_id, "self")
+        if r.get("ok"):
             return True
     need = _TURNKEY_CENTS.get(building_id)
     if need is None:
@@ -1002,8 +1046,9 @@ def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id:
     cash = world.ledger.balance(party_cash_account(party))
     if cash < need + buf:
         return False
-    if not _settler_acquire_turnkey_materials(world, party, building_id):
-        return False
+    # Best-effort book purchases lower turnkey cash cost; missing depth is OK —
+    # ``place_blueprint`` turnkey settles via market or fair-value reserve pricing.
+    _settler_acquire_turnkey_materials(world, party, building_id, plot_id=plot_id)
     r = build_on_plot(world, party, plot_id, building_id, "turnkey")
     if r.get("ok") and building_id == "foundry":
         from realm.agents.llm_voice import maybe_first_foundry_voice
@@ -1152,6 +1197,14 @@ def _pick_recipe_to_start(
     for rid in ranked[:14]:
         if check_patents and recipe_blocked_by_patent(world, party, rid)[0]:
             continue
+        rec = RECIPES.get(rid)
+        if rec is None:
+            continue
+        from realm.events.seasons import recipe_blocked_by_season
+
+        blocked, _ = recipe_blocked_by_season(world, rid, plot)
+        if blocked:
+            continue
         _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
         if not _recipe_inputs_satisfied(world, party, rid, plot_id):
             continue
@@ -1167,6 +1220,80 @@ def _active_run(world: World, party: PartyId, plot_id: PlotId) -> ActiveProducti
         if run.party == party and run.plot_id == plot_id:
             return run
     return None
+
+
+_STOCKPILE_LIQUIDATE_MIN_QTY = 8
+"""Sell surplus plot/carried stock once this much accumulates (not 20+ — real yards move weekly)."""
+
+
+def _settler_line_viable(
+    world: World, party: PartyId, plot, line: tuple[str, str]
+) -> bool:
+    """True when the settler's chosen line can still run on this plot today."""
+    rid, _building_id = line
+    rec = RECIPES.get(rid)
+    if rec is None:
+        return False
+    if not recipe_allowed_on_terrain(plot.terrain, rid):
+        return False
+    if not subsurface_allows_recipe(plot, rec):
+        return False
+    from realm.events.seasons import recipe_blocked_by_season
+
+    blocked, _ = recipe_blocked_by_season(world, rid, plot)
+    return not blocked
+
+
+def _settler_resolve_line(
+    world: World,
+    party: PartyId,
+    plot,
+    preferred: tuple[str, str] | None,
+) -> tuple[str, str] | None:
+    """Keep a locked line until the seam/season closes it — then re-pick like a real operator."""
+    if preferred is not None and _settler_line_viable(world, party, plot, preferred):
+        rid, _building_id = preferred
+        eligible = recipe_ids_on_plot_for_owner(world, plot)
+        if rid in eligible:
+            return preferred
+    return _pick_settler_line(world, party, plot)
+
+
+def _settler_self_build_ready(
+    world: World, party: PartyId, plot_id: PlotId, building_id: str
+) -> bool:
+    """Pioneer build: use plot-staged + carried stock before waiting on thin exchange depth."""
+    spec = BUILDINGS.get(building_id)
+    if not spec or str(spec.get("kind")) != "contracted":
+        return False
+    from realm.infrastructure.plot_logistics import party_material_on_plot, uses_plot_logistics
+    from realm.production.storage_caps import is_carried_material
+
+    for mid_s, qty in (spec.get("self_materials") or {}).items():
+        mid = MaterialId(mid_s)
+        need = int(qty)
+        if is_carried_material(mid):
+            have = int(world.inventory.qty(party, mid))
+        elif uses_plot_logistics(world, party):
+            have = int(party_material_on_plot(world, party, plot_id, mid))
+        else:
+            have = int(world.inventory.qty(party, mid))
+        if have < need:
+            return False
+    return True
+
+
+def _settler_start_production(
+    world: World, party: PartyId, plot_id: PlotId, recipe_id: str
+) -> dict:
+    """Genesis settlers run continuous batches until inputs, maintenance, or season stop them."""
+    if world.scenario_id == "genesis" and str(party).startswith("settler_"):
+        from realm.production import CONTINUOUS_RUN_COUNT
+
+        return start_production(
+            world, party, plot_id, recipe_id, run_count=CONTINUOUS_RUN_COUNT
+        )
+    return start_production_on_plot(world, party, plot_id, recipe_id)
 
 
 _STOCKPILE_MATS: tuple[str, ...] = (
@@ -1219,9 +1346,9 @@ def _liquidate_settler_stockpiles(
     for mid_s in _STOCKPILE_MATS:
         mid = MaterialId(mid_s)
         q = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
-        if q >= 20:
+        if q >= _STOCKPILE_LIQUIDATE_MIN_QTY:
             _settler_sell_material(
-                world, party, mid, min(q - 3, 40), owned_plot_ids=owned_plot_ids
+                world, party, mid, min(q - 2, 40), owned_plot_ids=owned_plot_ids
             )
 
 
@@ -1377,7 +1504,7 @@ def _settler_pipeline_step(
         return False
 
     if preferred_line is not None:
-        line = preferred_line
+        line = _settler_resolve_line(world, party, plot, preferred_line)
     else:
         line = _pick_settler_line(world, party, plot)
     if line is None:
@@ -1441,7 +1568,7 @@ def _settler_pipeline_step(
     if not chosen_rid:
         return False
     _ensure_recipe_inputs(world, party, chosen_rid, staging_plot_id=owned)
-    r = start_production_on_plot(world, party, owned, chosen_rid)
+    r = _settler_start_production(world, party, owned, chosen_rid)
     if not r.get("ok") or not r.get("started", True):
         return False
 
@@ -1472,8 +1599,8 @@ def _tick_one_settler(
         owned = owned_ids[0] if owned_ids else None
         if owned is not None:
             pl = world.plots[owned]
-            if pl.surveyed and locked_line is None:
-                locked_line = _pick_settler_line(world, party, pl)
+            if pl.surveyed:
+                locked_line = _settler_resolve_line(world, party, pl, locked_line)
         progressed = _settler_pipeline_step(
             world,
             party,
