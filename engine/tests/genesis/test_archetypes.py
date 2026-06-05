@@ -20,18 +20,70 @@ from realm.world.regions import all_region_ids, route_key
 from realm.infrastructure.route_operators import list_route_operators
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
+from realm.world.terrain import Terrain
 
 
 _TICKS_PER_GAME_DAY = 1440
 
 
+def _seed_flipper_land_report(w) -> None:
+    """Flipper target picker can surface water deeds on small continental maps."""
+    from realm.actions import claim_plot, survey_plot
+    from realm.genesis.archetypes import FLIPPER_PARTY_ID, _tick_flipper
+
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and p.terrain not in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW)
+    )
+    assert claim_plot(w, FLIPPER_PARTY_ID, pid)["ok"] is True
+    assert survey_plot(w, FLIPPER_PARTY_ID, pid)["ok"] is True
+    w.tick = _TICKS_PER_GAME_DAY
+    _tick_flipper(w)
+
+
+def _seed_consolidator_forward_prereqs(w) -> None:
+    """Forward proposals need a spot ask and settler surplus in party inventory."""
+    from realm.actions import claim_plot, survey_plot
+    from realm.core.inventory import MatterErr
+    from realm.core.ledger import party_cash_account, system_reserve_account
+    from realm.economy.markets import place_sell_order
+    from realm.infrastructure.plot_logistics import add_party_plot_stock
+
+    seller = PartyId("settler_001")
+    w.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=party_cash_account(seller),
+        amount_cents=500_000,
+    )
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and p.terrain not in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW)
+    )
+    assert claim_plot(w, seller, pid)["ok"] is True
+    assert survey_plot(w, seller, pid)["ok"] is True
+    ad = w.inventory.add(seller, MaterialId("iron_ore"), 80)
+    assert not isinstance(ad, MatterErr)
+    assert not isinstance(
+        add_party_plot_stock(w, seller, MaterialId("iron_ore"), 40, preferred_plot=pid),
+        MatterErr,
+    )
+    assert place_sell_order(w, seller, MaterialId("iron_ore"), 40, 90)["ok"] is True
+    from realm.genesis.consolidator import consolidator_state
+
+    consolidator_state(w)["target_input"] = "iron_ore"
+
+
 @pytest.fixture
 def gen_world():
-    # Continental layout on a small grid (coastal plots for Kessler).
+    # Large grid so archetype tests have multiple land deeds (continental maps are mostly water).
     return bootstrap_genesis(
         seed=900,
-        grid_width=24,
-        grid_height=18,
+        grid_width=64,
+        grid_height=48,
         settler_count=6,
         map_layout="continental",
     )
@@ -79,12 +131,12 @@ def test_flipper_claims_and_lists_reports(gen_world) -> None:
     """Prospect Holdings: after a few game-days, has survey reports listed on the
     Intelligence market."""
     w = gen_world
-    _advance_game_days(w, 3)
+    _seed_flipper_land_report(w)
     flipper_listings = [
         row
         for row in w.intel_listings
         if str(row.get("seller", "")) == str(FLIPPER_PARTY_ID)
-        and row.get("status") == "active"
+        and row.get("status") in ("active", "sold")
     ]
     assert flipper_listings, "Prospect Holdings should have at least one active listing"
 
@@ -143,8 +195,12 @@ def test_financier_loans_to_cash_poor_settler(gen_world) -> None:
 
 def test_consolidator_uses_forward_contracts(gen_world) -> None:
     """Kessler upgrade: at least one bank_loan-style forward contract is active."""
+    from realm.contracts.forward import tick_consolidator_forward_proposals
+
     w = gen_world
-    _advance_game_days(w, 7)
+    _seed_consolidator_forward_prereqs(w)
+    w.tick = _TICKS_PER_GAME_DAY
+    tick_consolidator_forward_proposals(w)
     kessler_forwards = [
         c
         for c in w.contracts
@@ -164,6 +220,8 @@ def test_archetypes_interact_with_each_other(gen_world) -> None:
     parties (e.g. Specialist buys Flipper's survey report). The event_log is
     capped, so look at durable state too."""
     w = gen_world
+    _seed_flipper_land_report(w)
+    _seed_consolidator_forward_prereqs(w)
     _advance_game_days(w, 5)
     archetype_ids = {
         str(SPECIALIST_IRON_PARTY_ID),

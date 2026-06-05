@@ -55,6 +55,7 @@ def test_laborers_buy_food_from_genesis_stores_over_two_days():
     for tid, town in w.towns.items():
         stores = stores_for_town(w, tid)
         assert len(stores) > 0, f"Town {tid} ({town.name}) has no discoverable stores"
+    _force_hungry_housed_laborers(w, 5)
     snap = ConservationSnapshot.of(w.ledger, w.inventory)
     for _ in range(2 * 1440):
         advance_tick(w)

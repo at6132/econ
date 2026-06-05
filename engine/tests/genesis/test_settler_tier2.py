@@ -64,7 +64,7 @@ def _seed_settler_with_assay_lab(w, party: PartyId, pid: PlotId, mineral_field: 
 
 def test_settler_probabilistic_discovery_advances_stage_on_hit() -> None:
     """When the RNG lands inside the 1%/game-day window, the settler's stage advances exactly once."""
-    w = bootstrap_genesis(seed=501, grid_width=10, grid_height=8, settler_count=2)
+    w = bootstrap_genesis(seed=501, grid_width=24, grid_height=18, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
     plot_id = first_unowned_land_plot(w)
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
@@ -79,7 +79,7 @@ def test_settler_probabilistic_discovery_advances_stage_on_hit() -> None:
 
 def test_settler_probabilistic_discovery_no_hit_no_advance() -> None:
     """If the RNG returns ≥ threshold, the stage stays put — deterministic, no luck-creep."""
-    w = bootstrap_genesis(seed=502, grid_width=10, grid_height=8, settler_count=2)
+    w = bootstrap_genesis(seed=502, grid_width=24, grid_height=18, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
     plot_id = first_unowned_land_plot(w)
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
@@ -93,7 +93,7 @@ def test_settler_probabilistic_discovery_no_hit_no_advance() -> None:
 
 def test_settler_probabilistic_discovery_unlocks_recipes_at_stage_three() -> None:
     """Three hits in a row push the settler to stage 3 and unlock the sulfur recipe chain."""
-    w = bootstrap_genesis(seed=503, grid_width=10, grid_height=8, settler_count=2)
+    w = bootstrap_genesis(seed=503, grid_width=24, grid_height=18, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
     plot_id = first_unowned_land_plot(w)
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
@@ -111,7 +111,7 @@ def test_settler_probabilistic_discovery_unlocks_recipes_at_stage_three() -> Non
 
 def test_settler_probabilistic_discovery_requires_lab() -> None:
     """Without an assay_lab the helper does nothing even if the RNG would otherwise fire."""
-    w = bootstrap_genesis(seed=504, grid_width=10, grid_height=8, settler_count=2)
+    w = bootstrap_genesis(seed=504, grid_width=24, grid_height=18, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
     plot_id = first_unowned_land_plot(w)
     plot = w.plots[plot_id]
@@ -139,7 +139,7 @@ def test_settler_assay_lab_build_decision() -> None:
     from realm.core.ledger import system_reserve_account
     from realm.core.time_scale import legacy_scaled
 
-    w = bootstrap_genesis(seed=510, grid_width=10, grid_height=8, settler_count=2)
+    w = bootstrap_genesis(seed=510, grid_width=24, grid_height=18, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
     plot_id = next(
         pid

@@ -146,6 +146,15 @@ def test_consolidator_grows_share_over_multi_day_run() -> None:
     from realm.economy.markets import market_buy
 
     buyer = PartyId("player")
+    from realm.actions import claim_plot
+
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    )
+    claim_plot(w, buyer, pid)
     # Top up the player so they can absorb 5 days of ingot lifts.
     w.ledger.transfer(
         debit=system_reserve_account(),

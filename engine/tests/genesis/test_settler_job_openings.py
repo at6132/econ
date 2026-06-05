@@ -11,7 +11,7 @@ def test_settlers_post_job_openings_after_workshops_built() -> None:
     w = bootstrap_genesis(seed=42, grid_width=48, grid_height=36, settler_count=12)
     seed_settler_workshop_materials(
         w,
-        [("lumber", 25), ("stone", 20), ("brick", 15), ("timber", 10)],
+        [("lumber", 25), ("stone", 20), ("brick", 15), ("timber", 10), ("coal", 10)],
     )
     for _ in range(5000):
         advance_tick(w)
