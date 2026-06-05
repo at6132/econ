@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis.py": {
-    "mtime": 1780614602.6521018,
-    "ast_hash": "d1b591a9c265ecf318a8b30930ee21d9",
+    "mtime": 1780617847.1949704,
+    "ast_hash": "45b79606b757a28d6414d7e1d55c9ee7",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis_settlers.py": {
@@ -610,9 +610,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\movement.py": {
-    "mtime": 1779402197.0053644,
-    "ast_hash": "ed950026ecf486c9d2f240caf9afb2db",
-    "semantic_hash": "ed950026ecf486c9d2f240caf9afb2db"
+    "mtime": 1780615093.351187,
+    "ast_hash": "cd6b6161f68c9c03450b0787a1f6a6bd",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\npc_self_roads.py": {
     "mtime": 1779320936.007383,
@@ -635,9 +635,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\roads.py": {
-    "mtime": 1779315029.219597,
-    "ast_hash": "aac74fbe5491200dff933501b44ef49f",
-    "semantic_hash": "aac74fbe5491200dff933501b44ef49f"
+    "mtime": 1780615071.4869716,
+    "ast_hash": "79ef4c6b769e220ab8270d6dc21b4cc2",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\road_connectivity.py": {
     "mtime": 1780586564.535326,
@@ -725,9 +725,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\towns.py": {
-    "mtime": 1779026571.5025673,
-    "ast_hash": "0ca77d21d9ceff6a0229b5b0b48127e2",
-    "semantic_hash": "0ca77d21d9ceff6a0229b5b0b48127e2"
+    "mtime": 1780615072.1017382,
+    "ast_hash": "1dca72dd0cd568920d50b5b894b5cf04",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\__init__.py": {
     "mtime": 1779026571.4964874,
@@ -910,8 +910,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\world\\world.py": {
-    "mtime": 1780608818.7988758,
-    "ast_hash": "18de4c3018f5694abc1d5d75e19959ee",
+    "mtime": 1780615107.6337929,
+    "ast_hash": "e2fb2d460a77831f4c86bf2057d5a1ff",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\world\\__init__.py": {
@@ -1310,8 +1310,8 @@
     "semantic_hash": "bb0538ced069f9ecd48bdfe806ab1938"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_genesis.py": {
-    "mtime": 1780596681.5900865,
-    "ast_hash": "07a2e47316a34dfad94cba2b8196f2b3",
+    "mtime": 1780618217.607237,
+    "ast_hash": "f292008cace281a71b2585071bddd7ba",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_margaux_arc.py": {
@@ -2025,8 +2025,8 @@
     "semantic_hash": "507639a40edf528a366b29ca8beb05ae"
   },
   "C:\\Users\\avita\\econ\\engine\\pytest-last.txt": {
-    "mtime": 1780610536.5808623,
-    "ast_hash": "68b5b46b7228ddd7860358ca66ba29c8",
+    "mtime": 1780618557.0578647,
+    "ast_hash": "debfdc2541efd253e5c6b19da634e922",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\README.md": {
@@ -2432,6 +2432,46 @@
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_labor_competition.py": {
     "mtime": 1780612022.1863236,
     "ast_hash": "3ca117ac63947c51fa194bc25f13b964",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\deals\\bank_loans.py": {
+    "mtime": 1780615105.3661292,
+    "ast_hash": "db51606b96c6c87c5d554816861f2ead",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\deals\\bilateral_contracts.py": {
+    "mtime": 1780615141.2250896,
+    "ast_hash": "e58e7ee6064ff8b0118903ce6c31aadb",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\deals\\market_tactics.py": {
+    "mtime": 1780615622.2130866,
+    "ast_hash": "25dce6c1fe0906154176547f0e7939aa",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\deals\\__init__.py": {
+    "mtime": 1780615066.4795525,
+    "ast_hash": "dc1b069840c8a02f922ada6af01b8683",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\geography\\land_market.py": {
+    "mtime": 1780615168.284038,
+    "ast_hash": "8361d28aba1a5b2b07c8ecaf325033cd",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\geography\\__init__.py": {
+    "mtime": 1780615053.5897563,
+    "ast_hash": "b3358d08f557b9a283847626126dd8df",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\tests\\deals\\test_deals.py": {
+    "mtime": 1780615755.6142867,
+    "ast_hash": "5beec3813de149cb8e833fad6935fd0b",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\tests\\geography\\test_land_market.py": {
+    "mtime": 1780616893.3736079,
+    "ast_hash": "5476b72b2f975df2aa2a875ef0eeeba3",
     "semantic_hash": ""
   }
 }

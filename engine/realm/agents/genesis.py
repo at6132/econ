@@ -48,6 +48,9 @@ from realm.contracts.tenders import (
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
 )
+from realm.deals.bank_loans import tick_loan_repayment
+from realm.deals.bilateral_contracts import tick_bilateral_contracts, tick_contract_proposals
+from realm.deals.market_tactics import tick_market_cornering, tick_predatory_pricing
 from realm.world import World
 
 
@@ -83,7 +86,17 @@ def tick_genesis_agents(world: World) -> None:
         if now > 0:
             day = TICKS_PER_GAME_DAY
             week = 7 * day
+            month = 30 * day
+            five_day = 5 * day
             poach = 3 * day
+            if now % five_day == 0:
+                tick_contract_proposals(world)
+            if now % week == 0:
+                tick_bilateral_contracts(world)
+                tick_market_cornering(world)
+                tick_loan_repayment(world)
+            if now % month == 0:
+                tick_predatory_pricing(world)
             if now % day == 0 or now % poach == 0 or now % week == 0:
                 from realm.population.labor_competition import (
                     tick_labor_organizing,
@@ -97,4 +110,15 @@ def tick_genesis_agents(world: World) -> None:
                     tick_labor_poaching(world)
                 if now % week == 0:
                     tick_labor_organizing(world)
+                    from realm.geography.land_market import (
+                        tick_island_dominance,
+                        tick_plot_purchases,
+                    )
+
+                    tick_plot_purchases(world)
+                    tick_island_dominance(world)
+                if now % month == 0:
+                    from realm.geography.land_market import tick_plot_abandonment
+
+                    tick_plot_abandonment(world)
     tick_genesis_margaux_scripts(world)

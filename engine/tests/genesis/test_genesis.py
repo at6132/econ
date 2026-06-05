@@ -52,6 +52,10 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         SPECIALIST_IRON_PARTY_ID,
         SPECIALIST_TIMBER_PARTY_ID,
     )
+    from realm.deals.bank_loans import (
+        GENESIS_BANK_PARTY_ID,
+        GENESIS_BANK_STARTING_CASH_CENTS,
+    )
     from realm.genesis.bank import BANK_STARTING_CASH_CENTS, FIRST_BANK_PARTY_ID
     from realm.genesis.energy import NPC_ENERGY_IDS, NPC_ENERGY_STARTING_CASH_CENTS
     from realm.genesis.road_builders import (
@@ -71,6 +75,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_analytics = 1 if ANALYTICS_VENDOR_PARTY_ID in w.parties else 0
     n_energy = sum(1 for k in w.parties if k in NPC_ENERGY_IDS)
     n_banks = 1 if FIRST_BANK_PARTY_ID in w.parties else 0
+    n_genesis_bank = 1 if GENESIS_BANK_PARTY_ID in w.parties else 0
     n_specialists = sum(
         1
         for pid in (SPECIALIST_IRON_PARTY_ID, SPECIALIST_TIMBER_PARTY_ID)
@@ -100,6 +105,7 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
         + n_brokers * SURVEY_BROKER_STARTING_CASH_CENTS  # Sprint 4 survey broker
         + n_analytics * ANALYTICS_VENDOR_STARTING_CASH_CENTS  # Sprint 4 analytics vendor
         + n_banks * BANK_STARTING_CASH_CENTS  # Sprint 5 first_bank
+        + n_genesis_bank * GENESIS_BANK_STARTING_CASH_CENTS  # deal-making genesis bank
         + n_specialists * 1_000_000  # Sprint 5 Specialists ($10K each working cash)
         + n_flippers * FLIPPER_STARTING_CASH_CENTS  # Sprint 5 Flipper
         + n_arch_shippers * SHIPPER_STARTING_CASH_CENTS  # Sprint 5 Cross-Country
