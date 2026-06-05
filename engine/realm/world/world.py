@@ -512,7 +512,7 @@ def generate_plots(
 
 
 def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
-    """Cold-start staple liquidity — genesis allocation (same pattern as Frontier starter inventory)."""
+    """Specialty supplier — tools, vessels, and tier-2 raws with no early production path."""
     from realm.events.event_log import log_event
     from realm.economy.exchange import ensure_exchange_state_initialised
     from realm.economy.pricing import exchange_ask_cents
@@ -527,49 +527,37 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     trx = world.ledger.transfer(
         debit=system_reserve_account(),
         credit=ex_cash,
-        amount_cents=25_000_000,
+        amount_cents=2_000_000,
     )
     if isinstance(trx, MoneyErr):
         raise ValueError(trx.reason)
     ensure_exchange_state_initialised(world)
-    # Seed prices come from the same model used by ``tick_genesis_exchange_quoting``
-    # so the cold-start book is consistent with steady-state quotes (no mid-tick price jump).
     listings: list[tuple[MaterialId, int, int]] = [
-        (MaterialId("grain"), 80_000, 120),
-        (MaterialId("timber"), 500_000, 200),
-        (MaterialId("coal"), 500_000, 140),
-        (MaterialId("lumber"), 400_000, 200),
-        (MaterialId("brick"), 400_000, 200),
-        (MaterialId("stone"), 400_000, 200),
-        (MaterialId("pick_axe"), 50_000, 200),
-        (MaterialId("mining_pick"), 50_000, 200),
-        (MaterialId("spade"), 50_000, 200),
-        (MaterialId("hand_saw"), 25_000, 100),
-        # Tier-2 raws — moderate stock so settlers can bootstrap chains after discovery.
-        (MaterialId("sulfur_ore"), 800, 60),
-        (MaterialId("saltpeter_ore"), 800, 60),
-        (MaterialId("tin_ore"), 700, 50),
-        (MaterialId("lead_ore"), 700, 50),
-        (MaterialId("phosphate_ore"), 900, 80),
-        (MaterialId("raw_silica"), 1_200, 100),
-        # Processed Tier-2 (turnkey buyers can skip the chemical works for a while).
-        (MaterialId("pig_iron"), 300, 30),
-        (MaterialId("cast_iron"), 200, 20),
-        (MaterialId("bronze_ingot"), 150, 15),
-        (MaterialId("tin_ingot"), 200, 20),
-        (MaterialId("lead_ingot"), 200, 20),
-        # Tool components — small clearing-house presence so tool_workshop is usable on day one.
-        (MaterialId("pick_head"), 300, 30),
-        (MaterialId("saw_blade"), 200, 20),
-        (MaterialId("drill_bit"), 100, 10),
-        # Transport capital — durable, no recipe path yet (Sprint 2). Small
-        # finite supply makes coastal route registration achievable on day one.
-        (MaterialId("vessel"), 20, 4),
-        # Phase 10B — islet / short-hop craft (exchange-listed; non-continent lanes).
-        (MaterialId("small_vessel"), 120, 60),
-        # Sprint 3 — Phase D.1: coastal food chain liquidity.
-        (MaterialId("fish"), 600, 30),
-        (MaterialId("smoked_fish"), 200, 12),
+        # Tools — no recipe path in early game; settlers need these to start working
+        (MaterialId("pick_axe"), 50_000, 8),
+        (MaterialId("mining_pick"), 50_000, 8),
+        (MaterialId("spade"), 50_000, 8),
+        (MaterialId("hand_saw"), 25_000, 6),
+        # Vessels — no production recipe yet; needed to register routes
+        (MaterialId("vessel"), 20, 2),
+        (MaterialId("small_vessel"), 120, 8),
+        # Tier-2 raws — no realistic early production chain; small emergency supply only
+        (MaterialId("sulfur_ore"), 800, 10),
+        (MaterialId("saltpeter_ore"), 800, 10),
+        (MaterialId("tin_ore"), 700, 8),
+        (MaterialId("lead_ore"), 700, 8),
+        (MaterialId("phosphate_ore"), 900, 10),
+        (MaterialId("raw_silica"), 1_200, 12),
+        # Processed Tier-2 — tiny amounts, high price, emergency only
+        (MaterialId("pig_iron"), 300, 5),
+        (MaterialId("cast_iron"), 200, 4),
+        (MaterialId("bronze_ingot"), 150, 3),
+        (MaterialId("tin_ingot"), 200, 3),
+        (MaterialId("lead_ingot"), 200, 3),
+        # Tool components
+        (MaterialId("pick_head"), 300, 5),
+        (MaterialId("saw_blade"), 200, 4),
+        (MaterialId("drill_bit"), 100, 2),
     ]
     for mid, total_add, list_qty in listings:
         ad = inv.add(ex, mid, total_add)
@@ -581,7 +569,7 @@ def _seed_genesis_exchange(world: World, inv: Inventory) -> None:
     log_event(
         world,
         "world",
-        "genesis_exchange listed grain/timber/coal/electricity/lumber/brick/stone/tools (cold-start clearing).",
+        "genesis_exchange listed tools, vessels, and tier-2 specialty stock (no settler staples).",
     )
 
 
