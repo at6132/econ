@@ -21,18 +21,20 @@ from realm.population.laborers import (
 from realm.world import World
 
 
-BASELINE_HEALTH_DECAY_PER_DAY: Final[float] = 0.008
+BASELINE_HEALTH_DECAY_PER_DAY: Final[float] = 0.003
 FOOD_HEALTH_BONUS_PER_DAY: Final[float] = 0.012
-STRESS_HEALTH_PENALTY: Final[float] = 0.015
+STRESS_HEALTH_PENALTY: Final[float] = 0.010
 HEALTH_LOW_OUTPUT_THRESHOLD: Final[float] = 0.30
 HEALTH_LOW_OUTPUT_MULTIPLIER: Final[float] = 0.50
 WAGE_SAVINGS_FRACTION_BPS: Final[int] = 2_000  # 20 %
-REPRODUCTION_HEALTH_MIN: Final[float] = 0.70
-REPRODUCTION_SAVINGS_MIN_CENTS: Final[int] = 3_000
-BIRTH_CHANCE_PER_WEEK: Final[float] = 0.15
+REPRODUCTION_HEALTH_MIN: Final[float] = 0.40
+REPRODUCTION_SAVINGS_MIN_CENTS: Final[int] = 500
+BIRTH_CHANCE_PER_WEEK: Final[float] = 0.25
 SKILL_CAP: Final[int] = 100
 SKILL_YIELD_THRESHOLD: Final[int] = 50
-FOOD_HEALTH_MATERIALS: Final[frozenset[str]] = frozenset({"grain", "smoked_fish"})
+FOOD_HEALTH_MATERIALS: Final[frozenset[str]] = frozenset(
+    {"grain", "smoked_fish", "bread", "fish"}
+)
 
 
 __all__ = [
@@ -365,9 +367,9 @@ def tick_laborer_reproduction(world: World) -> dict[str, int]:
                 continue
             health = float(getattr(lab, "health", 1.0))
             savings = int(getattr(lab, "savings_cents", 0) or 0)
-            if health <= REPRODUCTION_HEALTH_MIN:
+            if health < REPRODUCTION_HEALTH_MIN:
                 continue
-            if savings <= REPRODUCTION_SAVINGS_MIN_CENTS:
+            if savings < REPRODUCTION_SAVINGS_MIN_CENTS:
                 continue
             eligible.append(lab)
         if len(eligible) < 2:

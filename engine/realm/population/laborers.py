@@ -229,25 +229,26 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
     rng = world.rng(f"seed_laborers:{island_id}:{count}")
     seeded: list[str] = []
     next_seq = int(world.scenario_state.setdefault("next_laborer_seq", 1))
-    for _ in range(count):
+    for laborer_index in range(count):
         home_plot = PlotId(rng.choice(candidate_plots))
         lid = f"lab_{next_seq:05d}"
         next_seq += 1
         name = generate_laborer_name(rng)
-        # Phase 9I - stagger initial laborer ages across the working
-        # lifetime so retirements spread out instead of all firing on
-        # day RETIREMENT_AGE_GAME_DAYS. Without this, the population
-        # cliff-collapsed at exactly day 100 during long integration
-        # runs. Random offset = 0..(0.7 * RETIREMENT_AGE_TICKS) so the
-        # youngest cohort still has 30% of their working life ahead.
-        starting_age = rng.randint(0, int(RETIREMENT_AGE_TICKS * 0.7))
+        # Stagger bootstrap ages 0–60 game-days (right-skewed toward young)
+        # so lifecycle retirements spread; health always starts at 1.0 and decays
+        # forward from tick 0, not backward from birth.
+        age_rng = world.rng(f"laborer_age_spread:{laborer_index}:{world.tick}")
+        age_days = int(age_rng.random() ** 0.6 * 60)
+        age_ticks = age_days * TICKS_PER_GAME_DAY
         lab = LaborerNPC(
             laborer_id=lid,
             display_name=name,
             island_id=int(island_id),
             home_plot_id=home_plot,
             last_needs_tick=int(world.tick),
-            age_ticks=starting_age,
+            birth_tick=-age_ticks,
+            age_ticks=age_ticks,
+            health=1.0,
         )
         acct = laborer_cash_account(lid)
         world.ledger.ensure_account(acct)

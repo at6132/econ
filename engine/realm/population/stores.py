@@ -84,10 +84,11 @@ GENESIS_STORE_RETAIL_CENTS: Final[dict[str, int]] = {
     "electricity": 120,
 }
 
-NPC_STORE_GRAIN_QTY: Final[int] = 250
+NPC_STORE_GRAIN_QTY: Final[int] = 400
+NPC_STORE_FISH_QTY: Final[int] = 300
 NPC_STORE_COAL_QTY: Final[int] = 200
-"""Initial stock per NPC store. Enough to feed a town for a few days but not
-so much that laborers never need new entrants — designed to compress."""
+"""Initial stock per NPC store. Grain + fish bridge day 0 until settler
+production comes online (~day 50–60); coal keeps miners fueled."""
 
 NPC_STOREKEEPER_STARTING_CASH_CENTS: Final[int] = 20_000 * 100
 """Phase 7F: starting cash for the settlement storekeeper NPC so they can
@@ -754,7 +755,7 @@ def _genesis_store_retail_price(material: MaterialId) -> int:
 def seed_genesis_npc_stores(world: World) -> list[PlotId]:
     """Seat one NPC-owned general store in each starting town.
 
-    The store is stocked with grain + coal at the markup-baseline price.
+    The store is stocked with grain, smoked fish, and coal at subsistence prices.
     These are 'training-wheels' stores: priced ~40% above wholesale so
     players can profitably undercut. Returns the list of store plot ids.
 
@@ -832,10 +833,11 @@ def seed_genesis_npc_stores(world: World) -> list[PlotId]:
         )
         town.store_plots.append(choice)
         _ensure_store_party(world, town.town_id)
-        # Stock grain + coal directly (matter from system reserve mirrors
+        # Stock grain, fish, and coal directly (matter from system reserve mirrors
         # the way exchange inventory was seeded historically).
         for mid, qty in (
             (MaterialId("grain"), NPC_STORE_GRAIN_QTY),
+            (MaterialId("smoked_fish"), NPC_STORE_FISH_QTY),
             (MaterialId("coal"), NPC_STORE_COAL_QTY),
         ):
             ad = world.inventory.add(storekeeper, mid, qty)
