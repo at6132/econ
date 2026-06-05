@@ -1190,6 +1190,24 @@ _STOCKPILE_MATS: tuple[str, ...] = (
 )
 
 
+def _settler_flush_plot_outputs(
+    world: World,
+    party: PartyId,
+    owned_plot_ids: tuple[PlotId, ...],
+    *,
+    max_units: int = 30,
+    materials: tuple[MaterialId, ...] | None = None,
+) -> None:
+    """List plot-staged outputs; used before the workshop gate (hand-extraction path)."""
+    mids = materials or tuple(MaterialId(m) for m in _STOCKPILE_MATS)
+    for mid in mids:
+        hq = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
+        if hq >= 1:
+            _settler_sell_material(
+                world, party, mid, min(hq, max_units), owned_plot_ids=owned_plot_ids
+            )
+
+
 def _liquidate_settler_stockpiles(
     world: World,
     party: PartyId,
@@ -1371,6 +1389,17 @@ def _settler_pipeline_step(
     _liquidate_settler_stockpiles(world, party, owned_plot_ids)
 
     if not _ensure_workshop(world, party, owned, building_id):
+        run = _active_run(world, party, owned)
+        recipe = RECIPES.get(run.recipe_id) if run else None
+        if recipe is not None:
+            _settler_flush_plot_outputs(
+                world,
+                party,
+                owned_plot_ids,
+                materials=tuple(recipe.outputs),
+            )
+        else:
+            _settler_flush_plot_outputs(world, party, owned_plot_ids)
         _settler_try_hand_extraction(world, party, owned, plot, prefer_recipe=_recipe_id)
         return False
 
@@ -1397,17 +1426,13 @@ def _settler_pipeline_step(
     if plot_has_active_production(world, owned):
         run = _active_run(world, party, owned)
         recipe = RECIPES.get(run.recipe_id) if run else None
-        if recipe:
-            for out_m in recipe.outputs:
-                hq = party_material_held(world, party, out_m, owned_plot_ids=owned_plot_ids)
-                if hq >= 1:
-                    _settler_sell_material(
-                        world,
-                        party,
-                        out_m,
-                        min(hq, 30),
-                        owned_plot_ids=owned_plot_ids,
-                    )
+        if recipe is not None:
+            _settler_flush_plot_outputs(
+                world,
+                party,
+                owned_plot_ids,
+                materials=tuple(recipe.outputs),
+            )
         return False
 
     chosen_rid = _pick_recipe_to_start(
@@ -1421,13 +1446,14 @@ def _settler_pipeline_step(
         return False
 
     recipe = RECIPES.get(chosen_rid)
-    if recipe:
-        for out_m in recipe.outputs:
-            hq = party_material_held(world, party, out_m, owned_plot_ids=owned_plot_ids)
-            if hq >= 1:
-                _settler_sell_material(
-                    world, party, out_m, min(hq, 24), owned_plot_ids=owned_plot_ids
-                )
+    if recipe is not None:
+        _settler_flush_plot_outputs(
+            world,
+            party,
+            owned_plot_ids,
+            max_units=24,
+            materials=tuple(recipe.outputs),
+        )
     return True
 
 
