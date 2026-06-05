@@ -147,13 +147,20 @@ def _build_player_store_in_a_town(
         if town_id is not None
         else next(iter(w.towns.values()))
     )
-    # Find an unowned plot adjacent to the town center.
+    from realm.population.towns import TOWN_PROXIMITY_TILES
+
+    # Find an unowned plot within town catchment (store registration uses residential proximity).
     center = w.plots[town.center_plot]
     target: PlotId | None = None
+    residential = [w.plots[PlotId(rp)] for rp in town.residential_plots if PlotId(rp) in w.plots]
     for p in w.plots.values():
         if p.owner is not None:
             continue
         if p.terrain in (Terrain.WATER_DEEP, Terrain.WATER_SHALLOW):
+            continue
+        if not any(
+            max(abs(p.x - r.x), abs(p.y - r.y)) <= TOWN_PROXIMITY_TILES for r in residential
+        ):
             continue
         if max(abs(p.x - center.x), abs(p.y - center.y)) > 8:
             continue
@@ -327,7 +334,7 @@ def test_cheapest_store_wins_when_two_stores_present_in_same_town():
     pre_npc = (
         w.ledger.balance(party_cash_account(npc_owner)) if npc_owner else 0
     )
-    w.tick += TICKS_PER_GAME_DAY
+    w.tick = ((int(w.tick) // TICKS_PER_GAME_DAY) + 1) * TICKS_PER_GAME_DAY
     tick_laborer_spending(w)
     post_player = w.ledger.balance(party_cash_account(player))
     post_npc = (

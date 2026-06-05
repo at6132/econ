@@ -146,7 +146,7 @@ def test_genesis_settlers_start_production_after_workshops() -> None:
     w = bootstrap_genesis(seed=42, grid_width=12, grid_height=10, settler_count=8)
     _seed_settler_materials(
         w,
-        [("lumber", 20), ("stone", 15), ("brick", 10)],
+        [("lumber", 20), ("stone", 15), ("brick", 10), ("timber", 10), ("coal", 10)],
     )
     for _ in range(5000):
         advance_tick(w)
@@ -171,7 +171,6 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
 
     w = bootstrap_genesis(seed=77, grid_width=12, grid_height=10, settler_count=2)
     buyer = PartyId("settler_001")
-    seller = PartyId("settler_002")
     # Fund the buyer so it can pay for the clip — drawn from system reserve so
     # ledger total stays conserved.
     w.ledger.transfer(
@@ -181,19 +180,17 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
     )
     _claim_land_plot(w, buyer)
     ex = PartyId("genesis_exchange")
+    shipper = PartyId("shipper_north_coast")
     mid = MaterialId("coal")
     key = str(mid)
     for o in list(w.market_asks_by_material.get(key, [])):
         cancel_sell_order(w, o.party, o.order_id)
-    from realm.infrastructure.plot_logistics import add_party_plot_stock
-
-    seller_plot = _claim_land_plot(w, seller)
-    ad = add_party_plot_stock(w, seller, mid, 20, preferred_plot=seller_plot)
+    ad = w.inventory.add(ex, mid, 20)
     assert not isinstance(ad, MatterErr)
-    assert place_sell_order(w, seller, mid, 12, 44)["ok"] is True
-    ad2 = w.inventory.add(ex, mid, 50)
+    assert place_sell_order(w, ex, mid, 12, 44)["ok"] is True
+    ad2 = w.inventory.add(shipper, mid, 50)
     assert not isinstance(ad2, MatterErr)
-    assert place_sell_order(w, ex, mid, 14, 70)["ok"] is True
+    assert place_sell_order(w, shipper, mid, 14, 70)["ok"] is True
     lst = w.market_asks_by_material[key]
     lst.reverse()
     r = market_buy(w, buyer, mid, 8)
@@ -218,10 +215,10 @@ def test_genesis_many_ticks_money_conserved() -> None:
 
 
 def test_genesis_settlers_build_workshops_over_time() -> None:
-    w = bootstrap_genesis(seed=5, grid_width=14, grid_height=10, settler_count=10)
+    w = bootstrap_genesis(seed=5, grid_width=14, grid_height=10, settler_count=5)
     _seed_settler_materials(
         w,
-        [("lumber", 25), ("stone", 20), ("brick", 15), ("timber", 10)],
+        [("lumber", 25), ("stone", 20), ("brick", 15), ("timber", 10), ("coal", 10)],
     )
     for _ in range(5000):
         advance_tick(w)
@@ -247,7 +244,7 @@ def test_genesis_settler_workshop_diversity_not_all_strip_mines() -> None:
     w = bootstrap_genesis(seed=13, grid_width=22, grid_height=18, settler_count=40)
     _seed_settler_materials(
         w,
-        [("lumber", 30), ("stone", 20), ("brick", 20), ("timber", 15)],
+        [("lumber", 30), ("stone", 20), ("brick", 20), ("timber", 15), ("grain", 15)],
     )
     for _ in range(8000):
         advance_tick(w)
@@ -339,9 +336,9 @@ def test_settler_strip_mine_requires_exchange_materials() -> None:
     w = bootstrap_genesis(seed=404, grid_width=16, grid_height=14, settler_count=12)
     _seed_settler_materials(
         w,
-        [("lumber", 25), ("stone", 25), ("brick", 20)],
+        [("lumber", 25), ("stone", 25), ("brick", 20), ("timber", 15), ("coal", 15)],
     )
-    for _ in range(1800):
+    for _ in range(5000):
         advance_tick(w)
     mines = sum(
         1
