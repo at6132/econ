@@ -672,10 +672,10 @@ def _maybe_build_power_shed(world: World, party: PartyId) -> bool:
 
 
 def _maybe_sell_perishables(world: World, party: PartyId) -> int:
-    """List plot-staged perishables before spoilage; price at best ask − 5%."""
+    """Lift resting store bids first, then list plot-staged perishables before spoilage."""
     from realm.agents.market_oracle import _GENESIS_FAIR_VALUE, get_oracle
     from realm.economy.market_delivery import DELIVERY_FOB
-    from realm.economy.markets import place_sell_order
+    from realm.economy.markets import place_sell_order, sell_into_bids
 
     oracle = get_oracle(world)
     posted = 0
@@ -698,6 +698,19 @@ def _maybe_sell_perishables(world: World, party: PartyId) -> int:
             if already_listed >= int(qty):
                 continue
             list_qty = int(qty) - already_listed
+            sell_into_bids(
+                world,
+                party,
+                MaterialId(mat_str),
+                list_qty,
+                from_plot_id=PlotId(plot_id_s),
+            )
+            avail = int(
+                world.plot_output_stock.get(plot_id_s, {}).get(mat_str, 0)
+            )
+            if avail <= 0:
+                continue
+            list_qty = min(avail, list_qty)
             ask_price = int(oracle.best_ask.get(mat_str) or _GENESIS_FAIR_VALUE.get(mat_str, 100))
             price = max(1, int(ask_price * 0.95))
             r = place_sell_order(

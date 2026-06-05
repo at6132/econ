@@ -1349,6 +1349,20 @@ def _maybe_schedule_auto_restart(world: World, run: ActiveProduction) -> None:
                 "retry_at_tick": int(world.tick) + AUTO_RESTART_INPUT_STALL_RETRY_TICKS,
             }
         )
+    elif reason and (
+        "subsurface" in reason
+        or "season" in reason
+        or "road access" in reason
+    ):
+        log_event(
+            world,
+            "production_auto_restart_stopped",
+            f"{run.party} stopped auto-restart for {run.recipe_id}: {reason}",
+            party=str(run.party),
+            plot_id=str(run.plot_id),
+            recipe_id=run.recipe_id,
+            reason=reason,
+        )
 
 
 def _workshop_below_auto_restart_threshold(world: World, run: ActiveProduction) -> bool:

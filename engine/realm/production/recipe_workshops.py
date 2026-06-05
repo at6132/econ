@@ -69,6 +69,11 @@ def _recipe_eligible_on_plot(
         return False
     if not subsurface_allows_recipe(plot, recipe):
         return False
+    from realm.events.seasons import recipe_blocked_by_season
+
+    blocked, _ = recipe_blocked_by_season(world, recipe_id, plot)
+    if blocked:
+        return False
     if not world.can_party_run_recipe(party, recipe_id):
         return False
     if recipe.requires_tool is not None:
