@@ -216,13 +216,14 @@ def test_births_are_inert_until_towns_exist():
 
 
 def test_laborer_retires_at_lifespan_and_cash_returns_to_reserve():
-    """A laborer who hits the retirement age cleanly leaves the workforce."""
+    """A laborer who hits their personal lifespan cleanly leaves the workforce."""
     w, lab = _make_world_with_one_laborer()
     lid = lab.laborer_id
     total_before = w.ledger.total_cents()
+    lab.lifespan_days = 100
     lab.age_ticks = 99 * TICKS_PER_GAME_DAY + 1000
     lab.last_needs_tick = int(w.tick)
-    # Advance just past 100 game-days.
+    # Advance just past the laborer's lifespan.
     w.tick += TICKS_PER_GAME_DAY
     stats = tick_laborers(w)
     assert stats["retired"] >= 1

@@ -16,7 +16,7 @@ from realm.actions import claim_plot
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.ledger import party_cash_account, system_reserve_account
 from realm.infrastructure.movement import compute_shipping_fee, dispatch_shipment
-from realm.population.laborers import RETIREMENT_AGE_TICKS, TICKS_PER_GAME_DAY
+from realm.population.laborers import TICKS_PER_GAME_DAY
 from realm.world import bootstrap_genesis
 from realm.world.geo import manhattan
 from realm.world.world import bootstrap_frontier
@@ -104,7 +104,7 @@ def test_bootstrap_laborer_ages_are_staggered() -> None:
     distinct = len(set(ages))
     assert distinct > 10, f"only {distinct} distinct ages"
     assert max(ages) <= 59 * TICKS_PER_GAME_DAY
-    assert max(ages) - min(ages) > int(RETIREMENT_AGE_TICKS * 0.3)
+    assert max(ages) - min(ages) > 30 * TICKS_PER_GAME_DAY
     for lab in w.laborers.values():
         assert lab.health == 1.0
 
