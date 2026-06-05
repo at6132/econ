@@ -19,6 +19,7 @@ from realm.world.terrain import Terrain
 from realm.world.tick import advance_tick
 from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.world import SubsurfaceRoll, bootstrap_genesis
+from stage_materials import first_unowned_land_plot
 from turnkey_fixtures import grant_turnkey_self_materials
 
 
@@ -65,7 +66,7 @@ def test_settler_probabilistic_discovery_advances_stage_on_hit() -> None:
     """When the RNG lands inside the 1%/game-day window, the settler's stage advances exactly once."""
     w = bootstrap_genesis(seed=501, grid_width=10, grid_height=8, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
-    plot_id = next(pid for pid, pl in w.plots.items() if pl.owner is None and pl.terrain != Terrain.WATER_DEEP and pl.terrain != Terrain.WATER_SHALLOW)
+    plot_id = first_unowned_land_plot(w)
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
     w.tick = TICKS_PER_GAME_DAY  # align with the game-day boundary the helper checks
     assert get_assay_stage(w, settler, MaterialId("sulfur_ore")) == 0
@@ -80,7 +81,7 @@ def test_settler_probabilistic_discovery_no_hit_no_advance() -> None:
     """If the RNG returns ≥ threshold, the stage stays put — deterministic, no luck-creep."""
     w = bootstrap_genesis(seed=502, grid_width=10, grid_height=8, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
-    plot_id = next(pid for pid, pl in w.plots.items() if pl.owner is None and pl.terrain != Terrain.WATER_DEEP and pl.terrain != Terrain.WATER_SHALLOW)
+    plot_id = first_unowned_land_plot(w)
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
     w.tick = TICKS_PER_GAME_DAY
     with patch.object(w, "rng") as rng_mock:
@@ -94,7 +95,7 @@ def test_settler_probabilistic_discovery_unlocks_recipes_at_stage_three() -> Non
     """Three hits in a row push the settler to stage 3 and unlock the sulfur recipe chain."""
     w = bootstrap_genesis(seed=503, grid_width=10, grid_height=8, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
-    plot_id = next(pid for pid, pl in w.plots.items() if pl.owner is None and pl.terrain != Terrain.WATER_DEEP and pl.terrain != Terrain.WATER_SHALLOW)
+    plot_id = first_unowned_land_plot(w)
     _seed_settler_with_assay_lab(w, settler, plot_id, "sulfur_grade")
     for i in range(1, 4):
         w.tick = i * TICKS_PER_GAME_DAY
@@ -112,7 +113,7 @@ def test_settler_probabilistic_discovery_requires_lab() -> None:
     """Without an assay_lab the helper does nothing even if the RNG would otherwise fire."""
     w = bootstrap_genesis(seed=504, grid_width=10, grid_height=8, settler_count=2)
     settler = next(iter(p for p in w.parties if str(p).startswith("settler_")))
-    plot_id = next(pid for pid, pl in w.plots.items() if pl.owner is None and pl.terrain != Terrain.WATER_DEEP and pl.terrain != Terrain.WATER_SHALLOW)
+    plot_id = first_unowned_land_plot(w)
     plot = w.plots[plot_id]
     plot.terrain = Terrain.SWAMP
     plot.subsurface = SubsurfaceRoll(

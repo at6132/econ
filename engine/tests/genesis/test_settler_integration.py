@@ -226,18 +226,36 @@ def test_vertical_upgrade_fires_when_math_justifies() -> None:
 
 def test_buffer_buy_executes_when_price_rises() -> None:
     """When a settler's input price for coal climbs >20% in 7 days, they prebuy stock."""
+    from realm.actions import claim_plot, survey_plot
+    from realm.core.inventory import MatterErr
+    from realm.economy.markets import place_sell_order
+    from realm.infrastructure.plot_logistics import add_party_plot_stock, party_material_held
+
     w = bootstrap_genesis(seed=17, settler_count=4, grid_width=12, grid_height=10)
     party = PartyId("settler_001")
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    )
+    claim_plot(w, party, pid)
+    survey_plot(w, party, pid)
+    ex = PartyId("genesis_exchange")
+    coal = MaterialId("coal")
+    ad = w.inventory.add(ex, coal, 200)
+    assert not isinstance(ad, MatterErr)
+    assert place_sell_order(w, ex, coal, 200, 80)["ok"] is True
     # Plant price history: cheap @t=0, expensive @t=now-1.
-    record_settler_buy(w, party, MaterialId("coal"), 10, 500)  # 50c
+    record_settler_buy(w, party, coal, 10, 500)  # 50c
     w.tick += 1440 * 3
-    record_settler_buy(w, party, MaterialId("coal"), 10, 800)  # 80c → +60%
+    record_settler_buy(w, party, coal, 10, 800)  # 80c → +60%
     # Plant cash to fund the buffer buy.
     _give_cash(w, party, 1_000_000)
-    pre_qty = int(w.inventory.qty(party, MaterialId("coal")))
+    pre_qty = party_material_held(w, party, coal)
     w.tick = 7 * 1440  # week boundary
     tick_settler_margin_review(w)
-    post_qty = int(w.inventory.qty(party, MaterialId("coal")))
+    post_qty = party_material_held(w, party, coal)
     assert post_qty > pre_qty, (pre_qty, post_qty)
 
 

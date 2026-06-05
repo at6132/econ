@@ -141,7 +141,6 @@ def _build_player_store_in_a_town(
         credit=party_cash_account(player),
         amount_cents=1_000_000,
     )
-    grant_turnkey_self_materials(w, player, "store")
     # Pick a town to plant in.
     town = (
         w.towns[town_id]
@@ -162,6 +161,7 @@ def _build_player_store_in_a_town(
         break
     assert target is not None, "no candidate plot near town center"
     assert claim_plot(w, player, target)["ok"]
+    grant_turnkey_self_materials(w, player, "store", plot_id=target)
     res = build_on_plot(w, player, target, "store", build_mode="turnkey")
     assert res["ok"], res
     w.tick = max(int(w.tick), int(res["completes_at_tick"]) + 1)

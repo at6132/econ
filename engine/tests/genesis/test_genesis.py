@@ -11,17 +11,23 @@ from realm.core.player_economy import (
 )
 from realm.world.tick import advance_tick
 from realm.world import bootstrap_genesis
+from realm.world.terrain import Terrain
+from stage_materials import first_unowned_land_plot, seed_settler_workshop_materials
 
 
 def _seed_settler_materials(
     w,
     materials: list[tuple[str, int]],
 ) -> None:
-    """Seed bulk construction inputs into settler inventories (exchange no longer lists staples)."""
-    for _pid, plot in w.plots.items():
-        if plot.owner is not None and str(plot.owner).startswith("settler_"):
-            for mid_s, qty in materials:
-                w.inventory.add(plot.owner, MaterialId(mid_s), qty)
+    seed_settler_workshop_materials(w, materials)
+
+
+def _claim_land_plot(w, party: PartyId) -> PlotId:
+    from realm.actions import claim_plot
+
+    pid = first_unowned_land_plot(w)
+    assert claim_plot(w, party, pid)["ok"] is True
+    return pid
 
 
 def test_genesis_bootstrap_ledger_conserved() -> None:
@@ -163,8 +169,9 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
     from realm.core.ledger import party_cash_account, system_reserve_account
     from realm.economy.markets import cancel_sell_order, market_buy, place_sell_order
 
-    w = bootstrap_genesis(seed=77, grid_width=4, grid_height=4, settler_count=2)
+    w = bootstrap_genesis(seed=77, grid_width=12, grid_height=10, settler_count=2)
     buyer = PartyId("settler_001")
+    seller = PartyId("settler_002")
     # Fund the buyer so it can pay for the clip — drawn from system reserve so
     # ledger total stays conserved.
     w.ledger.transfer(
@@ -172,7 +179,7 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
         credit=party_cash_account(buyer),
         amount_cents=10_000,
     )
-    seller = PartyId("settler_001")
+    _claim_land_plot(w, buyer)
     ex = PartyId("genesis_exchange")
     mid = MaterialId("coal")
     key = str(mid)
@@ -180,15 +187,10 @@ def test_genesis_market_buy_prefers_lowest_price_ask_if_book_unsorted() -> None:
         cancel_sell_order(w, o.party, o.order_id)
     from realm.infrastructure.plot_logistics import add_party_plot_stock
 
-    owned_plots = [pid for pid, plot in w.plots.items() if plot.owner == seller]
-    if owned_plots:
-        ad = add_party_plot_stock(w, seller, mid, 20, preferred_plot=owned_plots[0])
-        assert not isinstance(ad, MatterErr)
-        assert place_sell_order(w, seller, mid, 12, 44)["ok"] is True
-    else:
-        ad = w.inventory.add(seller, mid, 20)
-        assert not isinstance(ad, MatterErr)
-        assert place_sell_order(w, seller, mid, 12, 44)["ok"] is True
+    seller_plot = _claim_land_plot(w, seller)
+    ad = add_party_plot_stock(w, seller, mid, 20, preferred_plot=seller_plot)
+    assert not isinstance(ad, MatterErr)
+    assert place_sell_order(w, seller, mid, 12, 44)["ok"] is True
     ad2 = w.inventory.add(ex, mid, 50)
     assert not isinstance(ad2, MatterErr)
     assert place_sell_order(w, ex, mid, 14, 70)["ok"] is True

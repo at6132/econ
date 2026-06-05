@@ -60,8 +60,19 @@ def test_consolidator_seed_is_idempotent() -> None:
 
 def _seed_some_iron_ore_asks(world: World) -> None:
     """Plant several iron_ore asks so the consolidator has something to buy."""
+    from realm.actions import claim_plot, survey_plot
+    from realm.infrastructure.plot_logistics import add_party_plot_stock
+
     seller = PartyId("settler_001")
-    world.inventory.add(seller, MaterialId("iron_ore"), 100)
+    pid = next(
+        p.plot_id
+        for p in world.plots.values()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    )
+    claim_plot(world, seller, pid)
+    survey_plot(world, seller, pid)
+    add_party_plot_stock(world, seller, MaterialId("iron_ore"), 100, preferred_plot=pid)
     place_sell_order(world, seller, MaterialId("iron_ore"), 100, 90)
 
 
@@ -111,7 +122,18 @@ def test_consolidator_grows_share_over_multi_day_run() -> None:
     w = _world()
     # Plant ongoing iron_ore supply so the foundry has feed.
     seller = PartyId("settler_001")
-    w.inventory.add(seller, MaterialId("iron_ore"), 500)
+    from realm.actions import claim_plot, survey_plot
+    from realm.infrastructure.plot_logistics import add_party_plot_stock
+
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    )
+    claim_plot(w, seller, pid)
+    survey_plot(w, seller, pid)
+    add_party_plot_stock(w, seller, MaterialId("iron_ore"), 500, preferred_plot=pid)
     place_sell_order(w, seller, MaterialId("iron_ore"), 500, 90)
     w.inventory.add(CONSOLIDATOR_PARTY_ID, MaterialId("coal"), 200)
     w.inventory.add(CONSOLIDATOR_PARTY_ID, MaterialId("electricity"), 200)
@@ -143,7 +165,18 @@ def test_own_supply_insulates_from_consolidator() -> None:
     w = _world()
     # Plant a single, *limited* iron_ore listing — the market that Kessler will drain.
     seller = PartyId("settler_001")
-    w.inventory.add(seller, MaterialId("iron_ore"), 30)
+    from realm.actions import claim_plot, survey_plot
+    from realm.infrastructure.plot_logistics import add_party_plot_stock
+
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    )
+    claim_plot(w, seller, pid)
+    survey_plot(w, seller, pid)
+    add_party_plot_stock(w, seller, MaterialId("iron_ore"), 30, preferred_plot=pid)
     place_sell_order(w, seller, MaterialId("iron_ore"), 30, 90)
     # The player stockpiles their own iron_ore (e.g. from a personal strip_mine).
     player_own = 50

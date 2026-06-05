@@ -150,19 +150,17 @@ def test_beats_fire_only_once(gen_world) -> None:
 
 def test_margaux_observes_flipper_adjacent_listing(gen_world) -> None:
     w = gen_world
-    # Pick an unowned plot and place the player adjacent.
-    player_plot = None
-    for pid, p in w.plots.items():
-        if p.owner is None and p.x >= 5 and p.y >= 5:
-            p.owner = PartyId("player")
-            player_plot = pid
-            break
-    assert player_plot is not None
-    # Pick the neighbor (right).
-    px = w.plots[player_plot].x
-    py = w.plots[player_plot].y
-    neighbor_id = PlotId(f"p-{px + 1}-{py}")
-    assert neighbor_id in w.plots
+    # Variable parcel layout: pick two land deeds (legacy p-{x+1}-{y} ids are not reliable).
+    land = [
+        pid
+        for pid, p in w.plots.items()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    ]
+    assert len(land) >= 2, "need two land plots for player + neighbor"
+    player_plot = land[0]
+    neighbor_id = land[1]
+    w.plots[player_plot].owner = PartyId("player")
     # Fire the observation directly with the neighbor plot.
     msgs_before = len(w.npc_messages_to_player)
     fire_archetype_observation_beat(
