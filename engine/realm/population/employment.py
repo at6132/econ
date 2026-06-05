@@ -67,6 +67,9 @@ JOB_OPENING_TTL_TICKS: Final[int] = 43_200
 JOB_POSTING_CASH_THRESHOLD: Final[int] = 100_000
 """Settlers need $1,000 cash before posting wage jobs."""
 
+PAYROLL_RESERVE_DAYS: Final[int] = 14
+"""Employers must keep this many game-days of payroll in cash before opening a slot."""
+
 JOB_WAGE_CENTS_PER_DAY: Final[int] = DEFAULT_WAGE_PER_GAME_DAY_CENTS
 
 
@@ -74,6 +77,7 @@ __all__ = [
     "JobOpening",
     "JOB_SEARCH_RADIUS_TILES",
     "DEFAULT_WAGE_PER_GAME_DAY_CENTS",
+    "PAYROLL_RESERVE_DAYS",
     "post_job_opening",
     "cancel_job_opening",
     "tick_job_market",
@@ -109,6 +113,36 @@ class JobOpening:
 # ───────────────────────────── owner actions ─────────────────────────────
 
 
+def _employer_payroll_headcount(world: World, employer: PartyId) -> int:
+    """Filled jobs + unfilled openings — the payroll the employer has committed to."""
+    filled = sum(1 for lab in world.laborers.values() if lab.employer == employer)
+    open_slots = sum(
+        1
+        for op in world.job_openings
+        if op.employer == employer and op.filled_by is None
+    )
+    return filled + open_slots
+
+
+def _employer_payroll_reserve_cents(
+    world: World, employer: PartyId, *, extra_openings: int = 0
+) -> int:
+    """Cash buffer required to honor wages for ``PAYROLL_RESERVE_DAYS``."""
+    headcount = _employer_payroll_headcount(world, employer) + int(extra_openings)
+    return headcount * JOB_WAGE_CENTS_PER_DAY * PAYROLL_RESERVE_DAYS
+
+
+def _employer_can_post_job(
+    world: World, employer: PartyId, wage_per_day_cents: int
+) -> bool:
+    cash = world.ledger.balance(party_cash_account(employer))
+    if cash < JOB_POSTING_CASH_THRESHOLD:
+        return False
+    reserve = _employer_payroll_reserve_cents(world, employer, extra_openings=1)
+    reserve = max(reserve, wage_per_day_cents * PAYROLL_RESERVE_DAYS)
+    return cash >= reserve
+
+
 def post_job_opening(
     world: World,
     employer: PartyId,
@@ -125,6 +159,8 @@ def post_job_opening(
         return {"ok": False, "reason": "skill_min and wage must be non-negative"}
     if wage_per_day_cents < MIN_WAGE_PER_GAME_DAY_CENTS:
         return {"ok": False, "reason": "minimum wage is $1.00/day"}
+    if not _employer_can_post_job(world, employer, wage_per_day_cents):
+        return {"ok": False, "reason": "insufficient cash for payroll reserve"}
     plot = world.plots.get(plot_id)
     if plot is None:
         return {"ok": False, "reason": "unknown plot"}
@@ -488,7 +524,7 @@ def _laborer_working_plot(world: World, employer: PartyId, plot_id: PlotId) -> b
 
 def maybe_post_job_openings_for_party(world: World, party: PartyId) -> int:
     """Post openings for each active production building without a filled slot."""
-    if world.ledger.balance(party_cash_account(party)) < JOB_POSTING_CASH_THRESHOLD:
+    if not _employer_can_post_job(world, party, JOB_WAGE_CENTS_PER_DAY):
         return 0
 
     posted = 0
