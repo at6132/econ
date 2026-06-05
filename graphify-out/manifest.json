@@ -525,9 +525,9 @@
     "semantic_hash": "6c77e1ec2b605836d2eb657f551c8a87"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\digest.py": {
-    "mtime": 1779026571.4789622,
-    "ast_hash": "8da9f2c6a6aa855bfd31450cbeac8b2e",
-    "semantic_hash": "8da9f2c6a6aa855bfd31450cbeac8b2e"
+    "mtime": 1780659566.0765343,
+    "ast_hash": "9ff9d7ab30fe2b4de984b08db2debddd",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\energy.py": {
     "mtime": 1780633316.776261,
@@ -550,9 +550,9 @@
     "semantic_hash": "d2cf87e782c77975888778b13558fa2b"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\margaux.py": {
-    "mtime": 1779026571.4829683,
-    "ast_hash": "173f55a59543fc32a5014869d1c4adf6",
-    "semantic_hash": "173f55a59543fc32a5014869d1c4adf6"
+    "mtime": 1780659579.7321918,
+    "ast_hash": "b3dc1d367e2aea34813e9ba52a8728d0",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\margaux_sprint5.py": {
     "mtime": 1779026571.4829683,
@@ -570,8 +570,8 @@
     "semantic_hash": "9f4ba9e186276c9594f34959f1a31be9"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\settler_cycle.py": {
-    "mtime": 1780633318.2653193,
-    "ast_hash": "dbbbe964004a0759beebc240e00735bf",
+    "mtime": 1780659554.3568354,
+    "ast_hash": "c3d3fbd1107a113ffeb0c3f31762e7db",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\settler_names.py": {
@@ -720,8 +720,8 @@
     "semantic_hash": "4bd786b5e5642e155ef2d56cc440c8f7"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\stores.py": {
-    "mtime": 1780633168.3915207,
-    "ast_hash": "d514b03cfb5202250ee7fa5744e9a2fe",
+    "mtime": 1780634429.0852942,
+    "ast_hash": "af6b246c26eb60db9f9a6dc4b85a9647",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\towns.py": {
@@ -910,8 +910,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\world\\world.py": {
-    "mtime": 1780633150.155578,
-    "ast_hash": "cc10ca7854b328aadc2adb263079ff61",
+    "mtime": 1780634434.2965422,
+    "ast_hash": "b5cc4ce36fc0d3f4adc01abe9d7514db",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\world\\__init__.py": {
@@ -2405,8 +2405,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\intelligence\\market_intel.py": {
-    "mtime": 1780609900.2575464,
-    "ast_hash": "3b27e3f87c68628be689c603115d4a1e",
+    "mtime": 1780659559.734445,
+    "ast_hash": "27c88165a84cedee9f24dbec060c6050",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\intelligence\\__init__.py": {
@@ -2485,8 +2485,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\deals\\market_warfare.py": {
-    "mtime": 1780621702.2931318,
-    "ast_hash": "94f7c7e315d73dfd75436350b8e40a9b",
+    "mtime": 1780659585.1020699,
+    "ast_hash": "eae57a5eb1b7f4133b754c7dad1863d1",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\agents\\test_llm_voice.py": {
