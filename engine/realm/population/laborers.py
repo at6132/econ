@@ -243,13 +243,14 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
         lid = f"lab_{next_seq:05d}"
         next_seq += 1
         name = generate_laborer_name(rng)
-        # Stagger bootstrap ages 0–60 game-days (right-skewed toward young)
-        # so lifecycle retirements spread; health always starts at 1.0 and decays
-        # forward from tick 0, not backward from birth.
+        # Stagger bootstrap ages 0–200 game-days (right-skewed toward young)
+        # so lifecycle retirements spread instead of syncing on one cliff.
         age_rng = world.rng(f"laborer_age_spread:{laborer_index}:{world.tick}")
-        age_days = int(age_rng.random() ** 0.6 * 60)
+        age_days = int(age_rng.random() ** 0.6 * 200)
         age_ticks = age_days * TICKS_PER_GAME_DAY
         lifespan_days = _roll_laborer_lifespan_days(world, lid)
+        # Mirror baseline decay already accrued (see laborer_lifecycle constants).
+        starting_health = max(0.05, 1.0 - age_days * 0.003)
         lab = LaborerNPC(
             laborer_id=lid,
             display_name=name,
@@ -259,7 +260,7 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
             birth_tick=-age_ticks,
             age_ticks=age_ticks,
             lifespan_days=lifespan_days,
-            health=1.0,
+            health=starting_health,
         )
         acct = laborer_cash_account(lid)
         world.ledger.ensure_account(acct)
