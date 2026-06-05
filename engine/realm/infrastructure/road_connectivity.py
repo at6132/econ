@@ -39,6 +39,9 @@ ROAD_EXEMPT_BLUEPRINTS: frozenset[str] = frozenset({
 
 ROAD_REQUIREMENT_GRACE_TICKS: int = 43_200
 
+ROAD_PREP_LEAD_TICKS: int = 14 * 1440
+"""NPCs begin connecting isolated workshops this many ticks before grace ends."""
+
 _endpoint_cache: dict[int, set[str]] = {}
 
 

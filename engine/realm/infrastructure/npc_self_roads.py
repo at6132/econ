@@ -14,6 +14,7 @@ from realm.core.ledger import party_cash_account
 from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.events.event_log import log_event
 from realm.infrastructure.road_connectivity import (
+    ROAD_PREP_LEAD_TICKS,
     ROAD_REQUIREMENT_GRACE_TICKS,
     is_road_accessible,
 )
@@ -133,13 +134,16 @@ def plot_has_road_required_workshop(world: World, party: PartyId, plot_id: PlotI
 
 
 def plot_needs_road_access(world: World, party: PartyId, plot_id: PlotId) -> bool:
-    if int(world.tick) < ROAD_REQUIREMENT_GRACE_TICKS:
-        return False
     if _party_skipped(party):
         return False
     if not plot_has_road_required_workshop(world, party, plot_id):
         return False
-    return not is_road_accessible(world, plot_id)
+    if is_road_accessible(world, plot_id):
+        return False
+    prep_start = ROAD_REQUIREMENT_GRACE_TICKS - ROAD_PREP_LEAD_TICKS
+    if int(world.tick) < prep_start:
+        return False
+    return True
 
 
 def _can_afford_road_build(world: World, party: PartyId) -> bool:
@@ -262,19 +266,23 @@ def _record_daily_build(world: World, party: PartyId) -> None:
 
 
 def tick_npc_self_roads(world: World) -> None:
-    """Once per game-day: NPCs with isolated workshops build toward the network."""
+    """Daily: NPCs connect workshops before (and after) the road-access grace deadline."""
     if world.scenario_id != "genesis":
         return
-    if int(world.tick) < ROAD_REQUIREMENT_GRACE_TICKS:
+    prep_start = ROAD_REQUIREMENT_GRACE_TICKS - ROAD_PREP_LEAD_TICKS
+    if int(world.tick) < prep_start:
         return
     if int(world.tick) % int(TICKS_PER_GAME_DAY) != 0:
         return
     from realm.economy.markets import market_buy
 
+    urgent = int(world.tick) >= ROAD_REQUIREMENT_GRACE_TICKS
     for party in sorted(world.parties, key=str):
         if _party_skipped(party):
             continue
         budget = _daily_build_budget(world, party)
+        if urgent:
+            budget = max(budget, _MAX_BUILDS_PER_PARTY_PER_DAY)
         if budget <= 0:
             continue
         for plot_id in _plots_needing_roads(world, party):
