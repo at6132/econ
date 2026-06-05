@@ -115,8 +115,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis_settlers.py": {
-    "mtime": 1780660496.6777236,
-    "ast_hash": "312b829fdbae800b8c9209fba1a19ad2",
+    "mtime": 1780664267.1591299,
+    "ast_hash": "8b60970371a2ad942b3ce5b76ab31251",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\llm_cli.py": {
@@ -705,8 +705,8 @@
     "semantic_hash": "6a940bd1a2c08c1aa2341a006ba39fed"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\laborers.py": {
-    "mtime": 1780664042.1340978,
-    "ast_hash": "8ccfa4afa671a622e9a3d47c3639a246",
+    "mtime": 1780665871.6734924,
+    "ast_hash": "549b38c4ec9ea801fcf302268802cd37",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\landmass_density.py": {
@@ -720,8 +720,8 @@
     "semantic_hash": "4bd786b5e5642e155ef2d56cc440c8f7"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\stores.py": {
-    "mtime": 1780664042.3982842,
-    "ast_hash": "7925e46fc9cdea3b27dacf7a15c07377",
+    "mtime": 1780665763.935051,
+    "ast_hash": "0747570f430844a9b46e6ac63271bad2",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\towns.py": {
@@ -1295,9 +1295,9 @@
     "semantic_hash": "1bda56f4f1c7269dd937d7567294cf35"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_archetypes.py": {
-    "mtime": 1779064212.361623,
-    "ast_hash": "eb191abe5589de9779270ce7758f445c",
-    "semantic_hash": "eb191abe5589de9779270ce7758f445c"
+    "mtime": 1780665129.6781442,
+    "ast_hash": "1bc0920c67d07d87ab747799776befa8",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_bank_loans.py": {
     "mtime": 1779026571.566359,
@@ -1305,8 +1305,8 @@
     "semantic_hash": "4dc5c1970ef8422365bc40700d26aabf"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_consolidator.py": {
-    "mtime": 1780661476.43563,
-    "ast_hash": "903bb995793f214db10be695406e0a00",
+    "mtime": 1780664508.131516,
+    "ast_hash": "40d2b55b5e04d12e3bca97b9985641f2",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_genesis.py": {
@@ -1315,8 +1315,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_margaux_arc.py": {
-    "mtime": 1780661486.4637852,
-    "ast_hash": "1503ecc618a5dff8d9126899d02a6eb5",
+    "mtime": 1780664723.0183332,
+    "ast_hash": "9ae633283ee8f107923709443c13971d",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_phase9d_bank_autopay_collateral.py": {
@@ -1330,13 +1330,13 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_settler_job_openings.py": {
-    "mtime": 1780661477.1737523,
-    "ast_hash": "a4487d15181d4d3705a21f0776957283",
+    "mtime": 1780664509.4139574,
+    "ast_hash": "a3b90b3569e7f38a515cdc1d3a38b993",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_settler_tier2.py": {
-    "mtime": 1780661477.9180076,
-    "ast_hash": "b763bfdb25f88e0f58f9bf5a04992b8b",
+    "mtime": 1780664512.8065507,
+    "ast_hash": "e9479f4f2befba76f81853b221e711f8",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\infrastructure\\test_building_workflow.py": {
