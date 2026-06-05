@@ -10,4 +10,6 @@ Submodules:
   * ``realm.agents.llm_haiku``       — Haiku LLM agent helper
   * ``realm.agents.llm_cli``         — LLM CLI / debugging helper
   * ``realm.agents.llm_roster``      — Roster of available LLM agents
+  * ``realm.agents.llm_voice``       — Settler voice lines on major events
+  * ``realm.agents.llm_negotiation`` — LLM bilateral contract negotiation
 """

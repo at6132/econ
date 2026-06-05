@@ -295,6 +295,8 @@ def propose_bilateral_contract(
     price_cents_per_unit: int,
     duration_weeks: int,
     exclusive: bool,
+    *,
+    force_accept: bool = False,
 ) -> ActionResult:
     if seller == buyer:
         return {"ok": False, "reason": "seller and buyer must differ"}
@@ -310,9 +312,10 @@ def propose_bilateral_contract(
     accept_prob = _buyer_acceptance_probability(
         world, buyer, material, price_cents_per_unit, personality
     )
-    rng = world.rng(f"bilateral_accept:{seller}:{buyer}:{material}:{world.tick}")
-    if rng.random() >= accept_prob:
-        return {"ok": False, "reason": "buyer declined"}
+    if not force_accept:
+        rng = world.rng(f"bilateral_accept:{seller}:{buyer}:{material}:{world.tick}")
+        if rng.random() >= accept_prob:
+            return {"ok": False, "reason": "buyer declined"}
 
     contract = BilateralContract(
         contract_id=_next_contract_id(world),
@@ -497,6 +500,23 @@ def tick_contract_proposals(world: World) -> None:
         for buyer in buyers[:3]:
             if buyer not in world.parties:
                 continue
+            terms = {
+                "material_id": str(material),
+                "qty_per_week": qty_per_week,
+                "price_cents_per_unit": price,
+                "duration_weeks": 8,
+                "exclusive": exclusive,
+            }
+            from realm.agents.llm_negotiation import negotiate_bilateral_contract
+
+            seller_cash = world.ledger.balance(party_cash_account(party))
+            buyer_cash = world.ledger.balance(party_cash_account(buyer))
+            if seller_cash + buyer_cash > 10_000:
+                nego = negotiate_bilateral_contract(world, party, buyer, terms)
+                if nego.get("ok"):
+                    break
+                if nego.get("reason") == "negotiation cooldown":
+                    continue
             result = propose_bilateral_contract(
                 world,
                 party,

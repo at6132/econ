@@ -847,7 +847,13 @@ def _list_price_cents(
                 # Lift any real bid above floor; but never above the exchange ceiling.
                 return max(floor, min(ceiling, max(basis_px, int(bid) + 1)))
             # No supportive bid: list at basis_px but never *above* exchange ceiling.
-            return max(floor, min(ceiling, basis_px))
+            price = max(floor, min(ceiling, basis_px))
+            from realm.deals.market_warfare import cartel_listing_floor_cents
+
+            cartel_floor = cartel_listing_floor_cents(world, party, material)
+            if cartel_floor is not None:
+                price = max(price, cartel_floor)
+            return price
     return settler_ask_cents(world, material, best_resting_bid=bid)
 
 
@@ -999,6 +1005,10 @@ def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id:
     if not _settler_acquire_turnkey_materials(world, party, building_id):
         return False
     r = build_on_plot(world, party, plot_id, building_id, "turnkey")
+    if r.get("ok") and building_id == "foundry":
+        from realm.agents.llm_voice import maybe_first_foundry_voice
+
+        maybe_first_foundry_voice(world, party)
     return bool(r.get("ok"))
 
 

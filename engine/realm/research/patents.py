@@ -208,6 +208,16 @@ def grant_patent(world: World, party: PartyId, node_id: str) -> bool:
         node_id=node_id,
         expires_tick=expires_tick,
     )
+    if str(party).startswith("settler_"):
+        from realm.agents.llm_voice import generate_settler_voice
+
+        label = world.party_display_names.get(str(party), str(party))
+        generate_settler_voice(
+            world,
+            party,
+            "patent_granted",
+            {"party_display_name": label, "node_id": node_id},
+        )
     return True
 
 

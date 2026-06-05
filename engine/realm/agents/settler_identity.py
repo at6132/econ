@@ -126,6 +126,9 @@ def assign_settler_personality(world: World, party: PartyId) -> SettlerPersonali
 
     if get_archetype(party) == Archetype.RESEARCHER:
         grant_capabilities(world, party, ["custom_recipe", "custom_blueprint", "blueprint_public_license"])
+    from realm.agents.llm_voice import record_settler_join_tick
+
+    record_settler_join_tick(world, party)
     return personality
 
 

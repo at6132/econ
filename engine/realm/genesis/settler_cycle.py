@@ -87,6 +87,18 @@ def _release_party_plots_and_buildings(world: World, party: PartyId) -> None:
 
 
 def _retire_party(world: World, party: PartyId, *, reason: str) -> None:
+    if reason == "bankruptcy" and str(party).startswith("settler_"):
+        from realm.agents.llm_voice import generate_settler_voice, settler_days_active
+
+        generate_settler_voice(
+            world,
+            party,
+            "bankruptcy",
+            {
+                "party_display_name": world.party_display_names.get(str(party), str(party)),
+                "days_active": settler_days_active(world, party),
+            },
+        )
     cancel_all_party_resting_orders(world, party)
     _liquidate_party_to_exchange(world, party)
     _release_party_plots_and_buildings(world, party)
@@ -191,6 +203,9 @@ def _tick_spawns(world: World) -> None:
     from realm.world import ensure_party_recipe_book
 
     assign_settler_personality(world, sid)
+    from realm.agents.llm_voice import record_settler_join_tick
+
+    record_settler_join_tick(world, sid)
     ensure_party_recipe_book(world, sid)
     st["next_settler_seq"] = seq_try + 1
     log_event(

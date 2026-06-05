@@ -51,7 +51,23 @@ from realm.contracts.tenders import (
 from realm.deals.bank_loans import tick_loan_repayment
 from realm.deals.bilateral_contracts import tick_bilateral_contracts, tick_contract_proposals
 from realm.deals.market_tactics import tick_market_cornering, tick_predatory_pricing
+from realm.deals.market_warfare import (
+    tick_cartel_formation,
+    tick_panic_selling,
+    tick_short_positions,
+    tick_speculative_positions,
+)
+from realm.agents.llm_negotiation import tick_llm_negotiation
+from realm.agents.llm_voice import tick_settler_voice
 from realm.world import World
+
+
+def _settler_llm_inflight(world: World) -> bool:
+    for key in ("settler_voice", "llm_negotiation"):
+        blob = world.scenario_state.get(key)
+        if isinstance(blob, dict) and blob.get("inflight"):
+            return True
+    return False
 
 
 def tick_genesis_agents(world: World) -> None:
@@ -91,10 +107,19 @@ def tick_genesis_agents(world: World) -> None:
             poach = 3 * day
             if now % five_day == 0:
                 tick_contract_proposals(world)
+            if _settler_llm_inflight(world):
+                tick_settler_voice(world)
+                tick_llm_negotiation(world)
+            if now % day == 0:
+                tick_cartel_formation(world)
+                tick_panic_selling(world)
+            if now % (3 * day) == 0:
+                tick_speculative_positions(world)
             if now % week == 0:
                 tick_bilateral_contracts(world)
                 tick_market_cornering(world)
                 tick_loan_repayment(world)
+                tick_short_positions(world)
             if now % month == 0:
                 tick_predatory_pricing(world)
             if now % day == 0 or now % poach == 0 or now % week == 0:

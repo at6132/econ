@@ -248,6 +248,14 @@ def tick_market_cornering(world: World) -> None:
                 material=str(material),
                 corner_price_cents=new_price,
             )
+            from realm.agents.llm_voice import generate_settler_voice
+
+            generate_settler_voice(
+                world,
+                party,
+                "market_corner",
+                {"party_display_name": label, "material": str(material)},
+            )
             break
 
 

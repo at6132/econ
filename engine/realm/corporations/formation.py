@@ -180,6 +180,20 @@ def _form_company(world: World, party_a: PartyId, party_b: PartyId) -> Company:
         party_a=str(party_a),
         party_b=str(party_b),
     )
+    from realm.agents.llm_voice import generate_settler_voice
+
+    def _dn(p: PartyId) -> str:
+        return world.party_display_names.get(str(p), str(p))
+
+    generate_settler_voice(
+        world,
+        party_a,
+        "company_formed",
+        {
+            "party_display_name": _dn(party_a),
+            "partner_display_name": _dn(party_b),
+        },
+    )
     return company
 
 

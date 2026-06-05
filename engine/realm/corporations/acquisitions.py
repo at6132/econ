@@ -218,6 +218,17 @@ def execute_buyout(world: World, acquirer: PartyId, target: PartyId) -> ActionRe
         target=str(target),
         liquidation_value_cents=liq,
     )
+    from realm.agents.llm_voice import generate_settler_voice
+
+    generate_settler_voice(
+        world,
+        acquirer,
+        "acquisition_complete",
+        {
+            "party_display_name": _display_name(world, acquirer),
+            "target_display_name": _display_name(world, target),
+        },
+    )
     return {"ok": True, "liquidation_value_cents": liq, "price_cents": price}
 
 
