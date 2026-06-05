@@ -84,9 +84,9 @@ GENESIS_STORE_RETAIL_CENTS: Final[dict[str, int]] = {
     "electricity": 120,
 }
 
-NPC_STORE_GRAIN_QTY: Final[int] = 400
-NPC_STORE_FISH_QTY: Final[int] = 300
-NPC_STORE_COAL_QTY: Final[int] = 200
+NPC_STORE_GRAIN_QTY: Final[int] = 800
+NPC_STORE_FISH_QTY: Final[int] = 500
+NPC_STORE_COAL_QTY: Final[int] = 300
 """Initial stock per NPC store. Grain + fish bridge day 0 until settler
 production comes online (~day 50–60); coal keeps miners fueled."""
 

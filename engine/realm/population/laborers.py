@@ -61,9 +61,9 @@ LABORER_STARTING_CASH_CENTS: Final[int] = 20_000
 SKILL_GROWTH_RATE_PER_DAY: Final[float] = 0.01
 """Skill gain per game-day while employed (+0.01 on a 0–100 scale)."""
 
-FOOD_DECAY_PER_DAY: Final[float] = 0.05
-FUEL_DECAY_PER_DAY: Final[float] = 0.03
-SHELTER_DECAY_PER_DAY: Final[float] = 0.01
+FOOD_DECAY_PER_DAY: Final[float] = 0.008
+FUEL_DECAY_PER_DAY: Final[float] = 0.004
+SHELTER_DECAY_PER_DAY: Final[float] = 0.002
 
 # Need thresholds: below these, the corresponding health pressure kicks in.
 FOOD_LOW_THRESHOLD: Final[float] = 0.30
@@ -71,9 +71,9 @@ FUEL_LOW_THRESHOLD: Final[float] = 0.20
 SHELTER_LOW_THRESHOLD: Final[float] = 0.50
 
 # Per-day health decay when needs are critical.
-FOOD_HEALTH_DECAY_PER_DAY: Final[float] = 0.02
-FUEL_HEALTH_DECAY_PER_DAY: Final[float] = 0.01
-SHELTER_HEALTH_DECAY_PER_DAY: Final[float] = 0.005
+FOOD_HEALTH_DECAY_PER_DAY: Final[float] = 0.004
+FUEL_HEALTH_DECAY_PER_DAY: Final[float] = 0.002
+SHELTER_HEALTH_DECAY_PER_DAY: Final[float] = 0.001
 
 # Health bands.
 PRODUCTIVITY_REDUCED_THRESHOLD: Final[float] = 0.30
