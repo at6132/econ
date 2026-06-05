@@ -1217,22 +1217,64 @@ def _settler_sell_material(
 ) -> None:
     if max_units <= 0:
         return
-    total = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
-    if total <= 0:
-        return
-    ensure_inventory_from_stash(world, party, mid, min(max_units, total))
-    sell_into_bids(world, party, mid, max_units)
-    q = world.inventory.qty(party, mid)
-    if q <= 0:
-        return
-    px = _list_price_cents(world, mid, party=party)
-    if not should_requote(world, party, mid, "ask", px):
-        return
-    cancels = cancel_party_asks_for_material(world, party, mid)
-    charge_cancel_fee(world, party, cancels)
-    res = place_sell_order(world, party, mid, min(q, max_units), px)
-    if res.get("ok"):
-        record_requote(world, party, mid, "ask", px)
+
+    from realm.production.storage_caps import is_carried_material
+
+    if is_carried_material(mid):
+        # Carried path: move from stash to personal inventory, then list
+        total = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
+        if total <= 0:
+            return
+        ensure_inventory_from_stash(world, party, mid, min(max_units, total))
+        sell_into_bids(world, party, mid, max_units)
+        q = world.inventory.qty(party, mid)
+        if q <= 0:
+            return
+        px = _list_price_cents(world, mid, party=party)
+        if not should_requote(world, party, mid, "ask", px):
+            return
+        cancels = cancel_party_asks_for_material(world, party, mid)
+        charge_cancel_fee(world, party, cancels)
+        res = place_sell_order(world, party, mid, min(q, max_units), px)
+        if res.get("ok"):
+            record_requote(world, party, mid, "ask", px)
+    else:
+        # Bulk path: sell from plot_output_stock (reserved on-site for asks)
+        from realm.economy.market_reserves import plot_available_qty
+
+        best_plot: PlotId | None = None
+        best_qty = 0
+        for pid in owned_plot_ids:
+            plot_id = PlotId(str(pid))
+            q = plot_available_qty(world, plot_id, mid)
+            if q > best_qty:
+                best_qty = q
+                best_plot = plot_id
+        if best_plot is None or best_qty <= 0:
+            return
+
+        px = _list_price_cents(world, mid, party=party)
+        if px <= 0:
+            return
+        if not should_requote(world, party, mid, "ask", px):
+            return
+
+        list_qty = min(best_qty, max_units)
+
+        sell_into_bids(world, party, mid, list_qty, from_plot_id=best_plot)
+
+        avail = plot_available_qty(world, best_plot, mid)
+        if avail <= 0:
+            record_requote(world, party, mid, "ask", px)
+            return
+
+        cancels = cancel_party_asks_for_material(world, party, mid)
+        charge_cancel_fee(world, party, cancels)
+        res = place_sell_order(
+            world, party, mid, min(avail, list_qty), px, from_plot_id=best_plot
+        )
+        if res.get("ok"):
+            record_requote(world, party, mid, "ask", px)
 
 
 _TICKS_PER_GAME_DAY = 1440
