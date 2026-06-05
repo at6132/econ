@@ -93,12 +93,16 @@ def test_genesis_bootstrap_ledger_conserved() -> None:
     n_laborers = len(w.laborers)
     n_home_builders = sum(1 for p in w.parties if str(p).startswith("frontier_homes_co_"))
     n_storekeeper = 1 if PartyId("genesis_storekeeper") in w.parties else 0
+    n_store_parties = sum(1 for p in w.parties if str(p).startswith("store_town_"))
+    from realm.population.stores import STORE_PARTY_STARTING_CASH_CENTS
+
     reserved_out = (
         PLAYER_STARTING_CASH_CENTS  # player
         + 4 * GENESIS_SETTLER_STARTING_CASH_CENTS  # settlers
         # Phase 7A: pop_hub_e/w are removed — no more $50k × 2 cash injections.
         + 88_000  # Tier-3 Margaux (Genesis)
-        + 25_000_000  # genesis_exchange operating cash (from reserve)
+        + 2_000_000  # genesis_exchange operating cash (from reserve)
+        + n_store_parties * STORE_PARTY_STARTING_CASH_CENTS  # store bid accounts
         + n_shippers * NPC_SHIPPER_STARTING_CASH_CENTS  # Sprint 2 NPC shippers
         + n_consolidators * CONSOLIDATOR_STARTING_CASH_CENTS  # Sprint 2 consolidator
         + n_energy * NPC_ENERGY_STARTING_CASH_CENTS  # Sprint 3 NPC energy
@@ -233,14 +237,29 @@ def test_genesis_settler_workshop_diversity_not_all_strip_mines() -> None:
     assert ty + gr >= 10, f"expected timber yards + grain rows, ty={ty} gr={gr}"
 
 
-def test_genesis_coal_asks_return_after_heavy_ticks() -> None:
-    from realm.economy.markets import best_resting_ask_cents
-
+def test_genesis_exchange_no_staple_listings_at_bootstrap() -> None:
+    """Staples are settler-produced; exchange only lists tools and specialty stock."""
     w = bootstrap_genesis(seed=9, grid_width=12, grid_height=10, settler_count=12)
-    for _ in range(2500):
-        advance_tick(w)
-    px = best_resting_ask_cents(w, MaterialId("coal"))
-    assert px is not None
+    ex = PartyId("genesis_exchange")
+    staples = (
+        "grain",
+        "timber",
+        "coal",
+        "lumber",
+        "brick",
+        "stone",
+        "fish",
+        "smoked_fish",
+    )
+    for mat in staples:
+        ex_asks = [
+            o
+            for o in w.market_asks_by_material.get(mat, [])
+            if o.party == ex
+        ]
+        assert not ex_asks, f"exchange should not list {mat} at bootstrap"
+    tool_asks = w.market_asks_by_material.get("mining_pick", [])
+    assert any(o.party == ex for o in tool_asks)
 
 
 def test_genesis_world_feed_emits_on_digest_cadence() -> None:

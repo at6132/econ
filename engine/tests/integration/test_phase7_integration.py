@@ -147,10 +147,8 @@ def _seed_cross_island_shipment(world) -> dict:
 
 def _seed_grain_supply_to_buy_orders(world) -> int:
     """Ensure there's at least some grain on the exchange book that
-    cross-island NPC bids can fill from. The bootstrap exchange already
-    lists 120×grain @ 80¢, so this is normally a no-op — but if the
-    book has drifted (other tests may have consumed it earlier in the
-    file's import chain), top it up.
+    cross-island NPC bids can fill from. Bootstrap no longer lists grain;
+    top up from genesis_exchange when the book is thin.
 
     Returns the number of grain units listed by this helper.
     """

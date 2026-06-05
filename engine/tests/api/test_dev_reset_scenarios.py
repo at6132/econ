@@ -57,7 +57,9 @@ def test_dev_reset_applies_scenario_params(
     grain_parties = {str(o.party) for o in grain_orders}
     assert ("cartel_grain_cell" in grain_parties) == expect_cartel_cell
     if scenario == "genesis":
-        assert "genesis_exchange" in grain_parties
+        ex_tool_asks = world.market_asks_by_material.get(MaterialId("mining_pick"), [])
+        assert any(str(o.party) == "genesis_exchange" for o in ex_tool_asks)
+        assert "genesis_exchange" not in grain_parties
 
 
 def test_dev_reset_unknown_scenario_returns_400() -> None:
