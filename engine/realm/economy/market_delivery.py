@@ -9,7 +9,11 @@ from realm.core.inventory import MatterErr, MatterOk, MatterResult
 from realm.events.event_log import log_event
 from realm.core.ledger import MoneyErr, party_cash_account
 from realm.economy.market_reserves import consume_reserve_for_order
-from realm.infrastructure.plot_logistics import add_party_plot_stock, owned_plot_ids_sorted
+from realm.infrastructure.plot_logistics import (
+    add_party_plot_stock,
+    owned_plot_ids_sorted,
+    remove_plot_output,
+)
 from realm.production.storage_caps import (
     is_carried_material,
     party_uses_plot_storage,
@@ -25,6 +29,9 @@ VALID_DELIVERY_TERMS: frozenset[str] = frozenset({DELIVERY_DDP, DELIVERY_FOB})
 # Seller breach when DDP dispatch fails after a match — paid to buyer (trade rolls back).
 DDP_BREACH_PENALTY_BPS: int = 2_000  # 20% of line value
 DDP_BREACH_MIN_CENTS: int = 500
+# Uncollected FOB rows are capped so per-tick scans stay bounded on long runs.
+FOB_PICKUP_MAX_ROWS: int = 4_000
+FOB_PICKUP_MAX_AGE_TICKS: int = 14 * 1_440  # 14 game-days
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +129,95 @@ def _instant_carry_delivery(
     return try_add_inventory(world, buyer, material, qty, quality=quality)
 
 
+def _fob_by_id(world: World) -> dict[str, MarketFobPickup]:
+    cached = world.scenario_state.get("_fob_pickup_by_id")
+    if isinstance(cached, dict) and len(cached) == len(world.market_fob_pickups):
+        return cached
+    rebuilt: dict[str, MarketFobPickup] = {
+        str(p.pickup_id): p for p in world.market_fob_pickups
+    }
+    world.scenario_state["_fob_pickup_by_id"] = rebuilt
+    by_buyer: dict[str, list[str]] = {}
+    for p in world.market_fob_pickups:
+        by_buyer.setdefault(str(p.buyer), []).append(str(p.pickup_id))
+    world.scenario_state["_fob_pickup_ids_by_buyer"] = by_buyer
+    return rebuilt
+
+
+def _fob_ids_for_buyer(world: World, buyer: PartyId) -> list[str]:
+    _fob_by_id(world)
+    raw = world.scenario_state.get("_fob_pickup_ids_by_buyer") or {}
+    return list(raw.get(str(buyer), ()))
+
+
+def _register_fob_pickup(world: World, row: MarketFobPickup) -> None:
+    world.market_fob_pickups.append(row)
+    by_id = _fob_by_id(world)
+    by_id[str(row.pickup_id)] = row
+    by_buyer = world.scenario_state.setdefault("_fob_pickup_ids_by_buyer", {})
+    by_buyer.setdefault(str(row.buyer), []).append(str(row.pickup_id))
+
+
+def _unregister_fob_pickup(world: World, pickup_id: str) -> MarketFobPickup | None:
+    by_id = _fob_by_id(world)
+    row = by_id.pop(str(pickup_id), None)
+    if row is None:
+        return None
+    buyer_ids = world.scenario_state.get("_fob_pickup_ids_by_buyer") or {}
+    ids = buyer_ids.get(str(row.buyer))
+    if ids is not None and pickup_id in ids:
+        ids.remove(pickup_id)
+    world.market_fob_pickups = [
+        p for p in world.market_fob_pickups if str(p.pickup_id) != str(pickup_id)
+    ]
+    return row
+
+
+def _trim_fob_pickup_backlog(world: World) -> None:
+    """Drop oldest uncollected pickups so settler/NPC collection stays O(k) not O(n)."""
+    if not world.market_fob_pickups:
+        return
+    cutoff = max(0, int(world.tick) - FOB_PICKUP_MAX_AGE_TICKS)
+    stale = sorted(
+        world.market_fob_pickups,
+        key=lambda p: int(getattr(p, "match_tick", 0)),
+    )
+    to_drop: list[str] = []
+    for row in stale:
+        if int(getattr(row, "match_tick", 0)) < cutoff:
+            to_drop.append(str(row.pickup_id))
+    overflow = len(world.market_fob_pickups) - FOB_PICKUP_MAX_ROWS
+    if overflow > 0:
+        for row in stale:
+            if len(to_drop) >= overflow:
+                break
+            pid = str(row.pickup_id)
+            if pid not in to_drop:
+                to_drop.append(pid)
+    for pid in to_drop:
+        row = _unregister_fob_pickup(world, pid)
+        if row is None:
+            continue
+        log_event(
+            world,
+            "market_fob_expired",
+            f"FOB pickup {pid} expired ({row.qty}×{row.material} at {row.from_plot_id})",
+            pickup_id=pid,
+            buyer=str(row.buyer),
+            seller=str(row.seller),
+            material=str(row.material),
+            qty=int(row.qty),
+        )
+
+
+def tick_fob_pickup_hygiene(world: World) -> None:
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
+
+    if int(world.tick) <= 0 or int(world.tick) % int(TICKS_PER_GAME_DAY) != 0:
+        return
+    _trim_fob_pickup_backlog(world)
+
+
 def _append_fob_pickup(
     world: World,
     *,
@@ -146,7 +242,9 @@ def _append_fob_pickup(
         match_tick=int(world.tick),
         order_id=str(order_id),
     )
-    world.market_fob_pickups.append(row)
+    _register_fob_pickup(world, row)
+    if len(world.market_fob_pickups) > FOB_PICKUP_MAX_ROWS:
+        _trim_fob_pickup_backlog(world)
     log_event(
         world,
         "market_fob_pickup",
@@ -160,6 +258,70 @@ def _append_fob_pickup(
         order_id=str(order_id),
     )
     return MatterOk()
+
+
+def _ddp_failure_allows_fob_fallback(reason: str) -> bool:
+    """Seller-paid DDP paths that inland miners / cash-poor sellers cannot satisfy."""
+    r = reason.lower()
+    return any(
+        frag in r
+        for frag in (
+            "dock at the origin",
+            "dock at the destination",
+            "insufficient cash for shipping",
+            "cargo vessel",
+            "inter-island voyage requires coal",
+            "same plot",
+        )
+    )
+
+
+def _instant_same_plot_delivery(
+    world: World,
+    *,
+    buyer: PartyId,
+    seller: PartyId,
+    plot_id: PlotId,
+    material: MaterialId,
+    qty: int,
+    order_id: str,
+    escrowed: bool,
+) -> MatterResult:
+    """Zero-distance DDP: listing yard equals buyer delivery plot (no shipment row)."""
+    if escrowed and order_id:
+        cr = consume_reserve_for_order(world, order_id, int(qty))
+        if isinstance(cr, MatterErr):
+            return cr
+    rm = remove_plot_output(world, seller, plot_id, material, qty)
+    if isinstance(rm, MatterErr):
+        return rm
+    return add_party_plot_stock(world, buyer, material, qty)
+
+
+def _finalize_fob_pickup(
+    world: World,
+    *,
+    buyer: PartyId,
+    seller: PartyId,
+    from_plot: PlotId,
+    material: MaterialId,
+    qty: int,
+    quality: str,
+    order_id: str,
+) -> MatterResult:
+    fob = _append_fob_pickup(
+        world,
+        buyer=buyer,
+        seller=seller,
+        from_plot_id=from_plot,
+        material=material,
+        qty=qty,
+        quality=quality,
+        order_id=order_id,
+    )
+    if not isinstance(fob, MatterErr) and order_id:
+        consume_reserve_for_order(world, order_id, int(qty))
+    return fob
 
 
 def fulfill_market_matter(
@@ -189,19 +351,16 @@ def fulfill_market_matter(
     order_id = str(getattr(ask, "order_id", "") or "")
 
     if terms == DELIVERY_FOB:
-        fob = _append_fob_pickup(
+        return _finalize_fob_pickup(
             world,
             buyer=buyer,
             seller=seller,
-            from_plot_id=from_plot,
+            from_plot=from_plot,
             material=material,
-            qty=qty,
+            qty=int(qty),
             quality=quality,
             order_id=order_id,
         )
-        if not isinstance(fob, MatterErr) and order_id:
-            consume_reserve_for_order(world, order_id, int(qty))
-        return fob
 
     dest_raw = str(getattr(bid, "delivery_plot_id", "") or "") if bid is not None else ""
     dest_explicit = PlotId(dest_raw) if dest_raw else None
@@ -210,6 +369,45 @@ def fulfill_market_matter(
         return MatterErr(reason="buyer has no plot to receive delivery")
 
     from realm.infrastructure.movement import dispatch_shipment
+    from realm.economy.market_reserves import uses_plot_market_reserve
+
+    escrowed = bool(order_id and uses_plot_market_reserve(world, seller, material))
+
+    if from_plot == dest:
+        plot = world.plots.get(from_plot)
+        if plot is not None and plot.owner == buyer and seller == buyer:
+            ad = _instant_same_plot_delivery(
+                world,
+                buyer=buyer,
+                seller=seller,
+                plot_id=from_plot,
+                material=material,
+                qty=int(qty),
+                order_id=order_id,
+                escrowed=escrowed,
+            )
+            if not isinstance(ad, MatterErr):
+                log_event(
+                    world,
+                    "market_ddp_same_plot",
+                    f"{buyer} received {qty}×{material} on {from_plot} (zero-distance DDP)",
+                    buyer=str(buyer),
+                    seller=str(seller),
+                    material=str(material),
+                    qty=int(qty),
+                    plot_id=str(from_plot),
+                )
+            return ad
+        return _finalize_fob_pickup(
+            world,
+            buyer=buyer,
+            seller=seller,
+            from_plot=from_plot,
+            material=material,
+            qty=int(qty),
+            quality=quality,
+            order_id=order_id,
+        )
 
     ship = dispatch_shipment(
         world,
@@ -219,6 +417,7 @@ def fulfill_market_matter(
         from_plot,
         dest,
         consignee=buyer,
+        escrowed_market=escrowed,
     )
     if ship.get("ok"):
         log_event(
@@ -237,17 +436,40 @@ def fulfill_market_matter(
             consume_reserve_for_order(world, order_id, int(qty))
         return MatterOk()
 
+    reason = str(ship.get("reason", ""))
+    if _ddp_failure_allows_fob_fallback(reason):
+        log_event(
+            world,
+            "market_ddp_fob_fallback",
+            f"DDP unavailable ({reason}) — FOB pickup at {from_plot} for {buyer}",
+            seller=str(seller),
+            buyer=str(buyer),
+            material=str(material),
+            qty=int(qty),
+            reason=reason,
+        )
+        return _finalize_fob_pickup(
+            world,
+            buyer=buyer,
+            seller=seller,
+            from_plot=from_plot,
+            material=material,
+            qty=int(qty),
+            quality=quality,
+            order_id=order_id,
+        )
+
     log_event(
         world,
         "market_ddp_failed",
-        f"DDP failed ({ship.get('reason', '?')}) — match void, breach penalty due",
+        f"DDP failed ({reason}) — match void, breach penalty due",
         seller=str(seller),
         buyer=str(buyer),
         material=str(material),
         qty=int(qty),
-        reason=str(ship.get("reason", "")),
+        reason=reason,
     )
-    return MatterErr(reason=f"DDP delivery failed: {ship.get('reason', 'unknown')}")
+    return MatterErr(reason=f"DDP delivery failed: {reason}")
 
 
 def pickup_fob(
@@ -258,11 +480,7 @@ def pickup_fob(
     to_plot_id: PlotId | None = None,
 ) -> dict:
     """Buyer arranges freight from the seller's listing plot (FOB)."""
-    row: MarketFobPickup | None = None
-    for p in world.market_fob_pickups:
-        if p.pickup_id == pickup_id:
-            row = p
-            break
+    row = _fob_by_id(world).get(str(pickup_id))
     if row is None:
         return {"ok": False, "reason": "pickup not found"}
     if row.buyer != buyer:
@@ -270,6 +488,23 @@ def pickup_fob(
     dest = resolve_buyer_delivery_plot(world, buyer, explicit=to_plot_id)
     if dest is None:
         return {"ok": False, "reason": "no destination plot"}
+    if row.from_plot_id == dest:
+        rm = remove_plot_output(world, row.seller, row.from_plot_id, row.material, int(row.qty))
+        if isinstance(rm, MatterErr):
+            return {"ok": False, "reason": rm.reason}
+        ad = add_party_plot_stock(world, buyer, row.material, int(row.qty))
+        if isinstance(ad, MatterErr):
+            return {"ok": False, "reason": ad.reason}
+        _unregister_fob_pickup(world, pickup_id)
+        log_event(
+            world,
+            "market_fob_collected",
+            f"{buyer} collected {row.qty}×{row.material} on {dest} (same-plot pickup)",
+            buyer=str(buyer),
+            seller=str(row.seller),
+            pickup_id=pickup_id,
+        )
+        return {"ok": True, "dest_plot_id": str(dest)}
     from realm.infrastructure.movement import dispatch_shipment
 
     ship = dispatch_shipment(
@@ -283,7 +518,7 @@ def pickup_fob(
     )
     if not ship.get("ok"):
         return dict(ship)
-    world.market_fob_pickups = [p for p in world.market_fob_pickups if p.pickup_id != pickup_id]
+    _unregister_fob_pickup(world, pickup_id)
     log_event(
         world,
         "market_fob_collected",
@@ -351,8 +586,29 @@ def fulfill_p2p_delivery(
 
 def fob_pickups_for_party(world: World, party: PartyId) -> list[dict]:
     out: list[dict] = []
+    by_id = _fob_by_id(world)
+    seen: set[str] = set()
+    for pid in _fob_ids_for_buyer(world, party):
+        p = by_id.get(pid)
+        if p is None:
+            continue
+        seen.add(pid)
+        out.append(
+            {
+                "pickup_id": p.pickup_id,
+                "buyer": str(p.buyer),
+                "seller": str(p.seller),
+                "from_plot_id": str(p.from_plot_id),
+                "material": str(p.material),
+                "qty": int(p.qty),
+                "quality": p.quality,
+                "match_tick": int(p.match_tick),
+                "order_id": p.order_id,
+                "role": "buyer",
+            }
+        )
     for p in world.market_fob_pickups:
-        if p.buyer != party and p.seller != party:
+        if str(p.pickup_id) in seen or p.seller != party:
             continue
         out.append(
             {
