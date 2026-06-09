@@ -177,9 +177,13 @@ def seed_consolidator(world: World, *, starting_cash_cents: int | None = None) -
         return False
     plot = world.plots[plot_id]
     plot.owner = pid
-    # Pre-built foundry + strip_mine on the home plot.
+    # Pre-built foundry + strip_mine on the home plot; dock + vessel for inter-island trade.
     _instance_complete(world, "foundry", pid, plot_id)
     _instance_complete(world, "strip_mine", pid, plot_id)
+    _instance_complete(world, "dock", pid, plot_id)
+    ad_v = world.inventory.add(pid, MaterialId("coal"), 120)
+    if not isinstance(ad_v, MatterErr):
+        world.inventory.add(pid, MaterialId("vessel"), 1)
     # Teach every Tier-1 recipe so it can pivot freely.
     book = world.party_recipe_books.setdefault(str(pid), set())
     for rid in RECIPES.keys():
@@ -355,21 +359,26 @@ def _pick_target_material(world: World) -> MaterialId | None:
 
 
 def _corner_key_input(world: World, key_input: MaterialId) -> None:
-    """Aggressively walk asks for ``key_input`` and stockpile it."""
+    """Walk asks for ``key_input`` when inventory reasoning says it is worth buying."""
+    from realm.agents.economic_reasoning import evaluate_staple_purchase
+
     want = _KEY_INPUT_BUFFER_DAYS * _KEY_INPUT_BUFFER_PER_DAY
     have = int(world.inventory.qty(CONSOLIDATOR_PARTY_ID, key_input))
-    deficit = max(0, want - have)
-    if deficit <= 0:
+    decision = evaluate_staple_purchase(
+        world,
+        CONSOLIDATOR_PARTY_ID,
+        key_input,
+        target_stock=want,
+        current_stock=have,
+    )
+    if decision is None:
         return
-    cash = world.ledger.balance(party_cash_account(CONSOLIDATOR_PARTY_ID))
-    if cash <= 0:
-        return
-    ceiling = max(1, int(exchange_ask_cents(key_input) * 110 // 100))
+    ceiling, qty = decision
     market_buy(
         world,
         CONSOLIDATOR_PARTY_ID,
         key_input,
-        deficit,
+        qty,
         max_price_per_unit_cents=ceiling,
     )
 

@@ -320,14 +320,7 @@ def _settler_implied_tender_price(world: World, material: MaterialId) -> int:
 
 
 def tick_settler_tender_bidding(world: World) -> None:
-    """Daily: each settler considers each open tender for a material they produce.
-
-    The settler bids when ``implied_price > own_cost_basis × 1.35`` and submits
-    a quote at ``own_cost_basis × 1.25``. Settlers without a recorded basis
-    skip (they can't size a confident bid).
-    """
-    if world.scenario_id != "genesis":
-        return
+    """Daily: producers bid on open tenders when implied margin beats personality-adjusted basis."""
     if int(world.tick) <= 0:
         return
     if int(world.tick) % 1440 != 0:
@@ -335,20 +328,28 @@ def tick_settler_tender_bidding(world: World) -> None:
     open_tenders = list_open_tenders(world)
     if not open_tenders:
         return
-    settlers = sorted(
+    from realm.agents.economic_reasoning import (
+        implied_basis_for_material,
+        tender_bid_margin_bps,
+        tender_bid_threshold_bps,
+    )
+
+    producers = sorted(
         (p for p in world.parties if str(p).startswith("settler_")), key=str
     )
     for record in open_tenders:
         mid = MaterialId(str(record.get("material")))
         implied = _settler_implied_tender_price(world, mid)
-        for party in settlers:
-            basis = settler_output_basis_cents(world, party, mid)
+        for party in producers:
+            basis = implied_basis_for_material(world, party, mid)
             if basis is None or basis <= 0:
                 continue
-            threshold = (basis * SETTLER_TENDER_BID_THRESHOLD_BPS + 9_999) // 10_000
+            threshold = (basis * tender_bid_threshold_bps(world, party) + 9_999) // 10_000
             if implied <= threshold:
                 continue
-            bid_px = max(1, (basis * SETTLER_TENDER_BID_MARGIN_BPS + 9_999) // 10_000)
+            bid_px = max(
+                1, (basis * tender_bid_margin_bps(world, party) + 9_999) // 10_000
+            )
             # Skip if this settler is already bidding at this price (no-op revision).
             already = next(
                 (
