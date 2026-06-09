@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from realm.actions._shared import ActionResult
+from realm.agents.economic_reasoning import (
+    materials_complementary,
+    normalize_output_material,
+    partnership_combined_cash_floor,
+    partnership_proposer_min_cash,
+)
 from realm.agents.settler_identity import (
     SettlerPersonality,
     _party_hash,
@@ -32,18 +38,6 @@ PROPOSER_MIN_CASH_CENTS = 400_000
 GREED_THRESHOLD = 0.6
 REPUTATION_THRESHOLD = 0.6
 FOUNDER_SHARES_EACH = 500
-
-# Primary output material → materials/buildings that benefit from upstream supply.
-_MATERIAL_COMPLEMENTS: dict[str, frozenset[str]] = {
-    "coal": frozenset({"iron_ingot", "steel_ingot", "iron_ore", "charcoal"}),
-    "iron_ore": frozenset({"coal", "iron_ingot", "steel_ingot"}),
-    "iron_ingot": frozenset({"coal", "lumber", "iron_ore"}),
-    "steel_ingot": frozenset({"coal", "iron_ingot"}),
-    "lumber": frozenset({"iron_ingot", "brick", "flour", "coal"}),
-    "flour": frozenset({"coal", "lumber"}),
-    "brick": frozenset({"lumber", "coal"}),
-    "charcoal": frozenset({"iron_ingot", "steel_ingot"}),
-}
 
 
 def _normalized_reputation(world: World, party: PartyId) -> float:
@@ -130,11 +124,7 @@ def _production_line(world: World, party: PartyId) -> str:
 
 
 def _lines_complementary(line_a: str, line_b: str) -> bool:
-    if not line_a or not line_b or line_a == line_b:
-        return False
-    comp_a = _MATERIAL_COMPLEMENTS.get(line_a, frozenset())
-    comp_b = _MATERIAL_COMPLEMENTS.get(line_b, frozenset())
-    return line_b in comp_a or line_a in comp_b or bool(comp_a & {line_b}) or bool(comp_b & {line_a})
+    return materials_complementary(line_a, line_b)
 
 
 def _acceptance_probability(personality: SettlerPersonality) -> float:
@@ -212,8 +202,14 @@ def propose_partnership(world: World, party_a: PartyId, party_b: PartyId) -> Act
         return {"ok": False, "reason": "insufficient mutual reputation intel"}
     if not _knows_with_reputation(world, party_b, party_a):
         return {"ok": False, "reason": "insufficient mutual reputation intel"}
-    if _combined_cash_cents(world, party_a, party_b) < PARTNERSHIP_MIN_COMBINED_CASH_CENTS:
+    if _combined_cash_cents(world, party_a, party_b) < partnership_combined_cash_floor(
+        world, party_a, party_b
+    ):
         return {"ok": False, "reason": "combined cash below threshold"}
+    if world.ledger.balance(party_cash_account(party_a)) < partnership_proposer_min_cash(
+        world, party_a
+    ):
+        return {"ok": False, "reason": "proposer cash below threshold"}
 
     personality_b = get_settler_personality(world, party_b)
     if personality_b is None:
@@ -232,8 +228,6 @@ def propose_partnership(world: World, party_a: PartyId, party_b: PartyId) -> Act
 
 def tick_partnership_proposals(world: World) -> None:
     """Weekly per-settler scan for complementary partnership opportunities."""
-    if world.scenario_id != "genesis":
-        return
     slot = int(world.tick) % _TICKS_PER_GAME_WEEK
     for party in world.parties:
         ps = str(party)
@@ -247,11 +241,11 @@ def tick_partnership_proposals(world: World) -> None:
         if personality is None or personality.greed_index <= GREED_THRESHOLD:
             continue
         cash = world.ledger.balance(party_cash_account(party))
-        if cash <= PROPOSER_MIN_CASH_CENTS:
+        if cash <= partnership_proposer_min_cash(world, party):
             continue
 
         world_model = get_settler_world_model(world, party)
-        my_line = _production_line(world, party)
+        my_line = normalize_output_material(_production_line(world, party))
         candidates: list[PartyId] = []
         for other_s, intel in world_model.known_settlers.items():
             if other_s == ps:
@@ -267,7 +261,9 @@ def tick_partnership_proposals(world: World) -> None:
                 continue
             if not _knows_with_reputation(world, party, other):
                 continue
-            other_line = str(intel.get("primary_material", "")) or _production_line(world, other)
+            other_line = normalize_output_material(
+                str(intel.get("primary_material", "")) or _production_line(world, other)
+            )
             if not _lines_complementary(my_line, other_line):
                 continue
             candidates.append(other)

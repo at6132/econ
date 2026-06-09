@@ -31,6 +31,15 @@ from realm.world import World
 _TICKS_PER_GAME_WEEK = 7 * TICKS_PER_GAME_DAY
 _PROPOSAL_INTERVAL_TICKS = 5 * TICKS_PER_GAME_DAY
 _CONSISTENT_OUTPUT_DAYS = 14
+_GENESIS_CONSISTENT_OUTPUT_DAYS = 7
+_INSTITUTIONAL_BUYERS: frozenset[str] = frozenset(
+    {
+        "kessler_industrial",
+        "genesis_storekeeper",
+        "genesis_exchange",
+        "genesis_settlement",
+    }
+)
 _BREACH_PENALTY_BPS = 1_000  # 10%
 _PROPOSAL_DISCOUNT_BPS = 500  # 5% below current ask
 _EXCLUSIVITY_LOYALTY_THRESHOLD = 0.7
@@ -411,8 +420,18 @@ def _recipe_outputs_material(recipe_id: str, material: str) -> bool:
 
 def _consistent_output_days(world: World, party: PartyId, material: str) -> int:
     """Count distinct game-days with production_done for ``material`` in the lookback window."""
-    cutoff = int(world.tick) - _CONSISTENT_OUTPUT_DAYS * TICKS_PER_GAME_DAY
+    lookback_days = (
+        _GENESIS_CONSISTENT_OUTPUT_DAYS
+        if world.scenario_id == "genesis"
+        else _CONSISTENT_OUTPUT_DAYS
+    )
     party_s = str(party)
+    tracked = (world.scenario_state.get("settler_production_days") or {}).get(party_s) or {}
+    day_list = tracked.get(material)
+    if isinstance(day_list, list) and day_list:
+        cutoff_day = int(world.tick) // TICKS_PER_GAME_DAY - lookback_days
+        return sum(1 for d in day_list if int(d) >= cutoff_day)
+    cutoff = int(world.tick) - lookback_days * TICKS_PER_GAME_DAY
     days: set[int] = set()
     for ev in world.event_log:
         tick = int(ev.get("tick", 0))
@@ -429,22 +448,40 @@ def _consistent_output_days(world: World, party: PartyId, material: str) -> int:
 
 
 def _repeat_buyers(world: World, seller: PartyId, material: str) -> list[PartyId]:
-    cutoff = int(world.tick) - _CONSISTENT_OUTPUT_DAYS * TICKS_PER_GAME_DAY
+    lookback_days = (
+        _GENESIS_CONSISTENT_OUTPUT_DAYS
+        if world.scenario_id == "genesis"
+        else _CONSISTENT_OUTPUT_DAYS
+    )
+    cutoff = int(world.tick) - lookback_days * TICKS_PER_GAME_DAY
     seller_s = str(seller)
     buyers: dict[str, int] = {}
+    trade_kinds = ("market_buy", "market_match")
     for ev in world.event_log:
         tick = int(ev.get("tick", 0))
         if tick < cutoff:
             continue
-        if str(ev.get("kind", "")) != "market_buy":
+        if str(ev.get("kind", "")) not in trade_kinds:
             continue
         if str(ev.get("material", "")) != material:
             continue
-        sellers_raw = str(ev.get("sellers", "") or ev.get("seller", ""))
-        if seller_s not in {s.strip() for s in sellers_raw.split(",") if s.strip()}:
+        if str(ev.get("kind", "")) == "market_match":
+            seller_hit = str(ev.get("seller") or "")
+            if seller_hit != seller_s:
+                continue
+            buyer_s = str(ev.get("buyer") or ev.get("party") or "")
+        else:
+            sellers_raw = str(ev.get("sellers", "") or ev.get("seller", ""))
+            if seller_s not in {s.strip() for s in sellers_raw.split(",") if s.strip()}:
+                continue
+            buyer_s = str(ev.get("buyer", "") or ev.get("party", ""))
+        if not buyer_s or buyer_s == seller_s:
             continue
-        buyer_s = str(ev.get("buyer", "") or ev.get("party", ""))
-        if buyer_s and buyer_s != seller_s and buyer_s.startswith("settler_"):
+        if (
+            buyer_s.startswith("settler_")
+            or buyer_s in _INSTITUTIONAL_BUYERS
+            or buyer_s.startswith("pop_hub")
+        ):
             buyers[buyer_s] = buyers.get(buyer_s, 0) + 1
     ranked = sorted(buyers.items(), key=lambda x: (-x[1], x[0]))
     return [PartyId(b) for b, _ in ranked]
@@ -478,7 +515,12 @@ def tick_contract_proposals(world: World) -> None:
             continue
 
         material_s = max(output_qty, key=lambda m: int(output_qty[m]))
-        if _consistent_output_days(world, party, material_s) < _CONSISTENT_OUTPUT_DAYS:
+        min_out_days = (
+            _GENESIS_CONSISTENT_OUTPUT_DAYS
+            if world.scenario_id == "genesis"
+            else _CONSISTENT_OUTPUT_DAYS
+        )
+        if _consistent_output_days(world, party, material_s) < min_out_days:
             continue
 
         buyers = _repeat_buyers(world, party, material_s)
@@ -495,7 +537,10 @@ def tick_contract_proposals(world: World) -> None:
 
         exclusive = personality.specialization_loyalty > _EXCLUSIVITY_LOYALTY_THRESHOLD
         qty_map = output_qty
-        qty_per_week = max(1, min(20, int(qty_map.get(material_s, 1)) // max(1, _CONSISTENT_OUTPUT_DAYS)))
+        qty_per_week = max(
+            1,
+            min(20, int(qty_map.get(material_s, 1)) // max(1, min_out_days)),
+        )
 
         for buyer in buyers[:3]:
             if buyer not in world.parties:

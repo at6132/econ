@@ -738,7 +738,12 @@ def start_production(
         # purpose key bakes in tick + plot so two simultaneous recipes don't
         # share an RNG draw.
         wear_rng = world.rng(f"tool_wear|{world.tick}|{recipe_id}|{plot_id}")
-        if wear_rng.randint(0, 9_999) < TOOL_WEAR_BREAK_BPS:
+        wear_bps = TOOL_WEAR_BREAK_BPS
+        if world.scenario_id == "genesis" and str(party).startswith("settler_"):
+            wear_bps = 80
+            if world.inventory.qty(party, tool) <= 1:
+                wear_bps = 0
+        if wear_rng.randint(0, 9_999) < wear_bps:
             rm_tool = world.inventory.remove(party, tool, 1)
             if not isinstance(rm_tool, MatterErr):
                 log_event(
@@ -953,18 +958,26 @@ def tick_production(world: World) -> None:
                 world, run.plot_id
             )
             if out_total > cap_left:
-                run.ticks_remaining = 1
-                still.append(run)
-                log_event(
-                    world,
-                    "production_stalled_storage",
-                    f"{run.party} plot storage full for {recipe.recipe_id} — retry next tick",
-                    party=str(run.party),
-                    plot_id=str(run.plot_id),
-                    recipe_id=run.recipe_id,
-                    run_id=run.run_id,
-                )
-                continue
+                if world.scenario_id == "genesis" and str(run.party).startswith("settler_"):
+                    from realm.agents.genesis_settlers import settler_relieve_plot_storage
+
+                    if settler_relieve_plot_storage(world, run.party, run.plot_id):
+                        cap_left = plot_storage_cap_units(world, run.plot_id) - plot_output_total(
+                            world, run.plot_id
+                        )
+                if out_total > cap_left:
+                    run.ticks_remaining = 1
+                    still.append(run)
+                    log_event(
+                        world,
+                        "production_stalled_storage",
+                        f"{run.party} plot storage full for {recipe.recipe_id} — retry next tick",
+                        party=str(run.party),
+                        plot_id=str(run.plot_id),
+                        recipe_id=run.recipe_id,
+                        run_id=run.run_id,
+                    )
+                    continue
         elif party_inventory_unit_total(world, run.party) + out_total > party_storage_cap_units(
             world, run.party
         ):
@@ -1074,8 +1087,12 @@ def tick_production(world: World) -> None:
         # Sprint 2 / Phase B: feed the settler cost-basis tracker so future asks
         # reflect this party's actual input costs rather than the exchange's quote.
         if str(run.party).startswith("settler_") and world.scenario_id == "genesis":
-            from realm.genesis.settler_cost_basis import record_settler_production
+            from realm.genesis.settler_cost_basis import (
+                record_settler_plot_activity,
+                record_settler_production,
+            )
 
+            record_settler_plot_activity(world, run.party, run.plot_id)
             for out_mid, out_qty in eff_out.items():
                 record_settler_production(
                     world, run.party, run.recipe_id, out_mid, int(out_qty)

@@ -478,6 +478,12 @@ def tick_plot_abandonment(world: World) -> None:
             continue
         if plot_has_active_production(world, pid) or _plot_has_buildings(world, pid):
             continue
+        if world.scenario_id == "genesis":
+            if any(
+                pl.owner == owner and _plot_has_buildings(world, pl.plot_id)
+                for pl in world.plots.values()
+            ):
+                continue
         cash = int(world.ledger.balance(party_cash_account(owner)))
         if cash >= ABANDONMENT_MAX_OWNER_CASH_CENTS:
             continue

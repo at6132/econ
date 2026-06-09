@@ -32,7 +32,8 @@ from __future__ import annotations
 from typing import Any
 
 from realm.events.event_log import log_event
-from realm.core.ids import MaterialId, PartyId
+from realm.core.ids import MaterialId, PartyId, PlotId
+from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.production.recipes import RECIPES
 from realm.world import World
 
@@ -41,6 +42,7 @@ __all__ = [
     "ensure_cost_basis_state",
     "record_settler_buy",
     "record_settler_production",
+    "record_settler_plot_activity",
     "settler_input_avg_paid_cents",
     "settler_output_basis_cents",
     "settler_input_price_change_bps_7d",
@@ -225,6 +227,29 @@ def record_settler_production(
         new_basis = max(1, (cycle_basis * ema + prior_basis * (10_000 - ema) + 9_999) // 10_000)
     basis_map[key] = new_basis
     qty_map[key] = int(qty_map.get(key, 0)) + int(output_qty)
+    ops = world.scenario_state.setdefault("settler_ops_completed", {})
+    ops[str(party)] = int(ops.get(str(party), 0)) + 1
+
+    game_day = int(world.tick) // int(TICKS_PER_GAME_DAY)
+    day_root = world.scenario_state.setdefault("settler_production_days", {})
+    party_days = day_root.setdefault(str(party), {})
+    mat_days = party_days.setdefault(key, [])
+    if game_day not in mat_days:
+        mat_days.append(game_day)
+        mat_days.sort()
+        if len(mat_days) > 120:
+            party_days[key] = mat_days[-120:]
+
+
+def record_settler_plot_activity(
+    world: World, party: PartyId, plot_id: PlotId
+) -> None:
+    """Track last production tick per plot — used for employment gating."""
+    if not str(party).startswith("settler_"):
+        return
+    root = world.scenario_state.setdefault("settler_plot_last_production_tick", {})
+    party_blob = root.setdefault(str(party), {})
+    party_blob[str(plot_id)] = int(world.tick)
 
 
 def settler_output_basis_cents(

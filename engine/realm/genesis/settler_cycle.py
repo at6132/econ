@@ -7,6 +7,7 @@ from realm.genesis.settler_names import assign_display_name_for_new_settler
 from realm.core.ids import MaterialId, PartyId, PlotId
 from realm.core.inventory import MatterErr
 from realm.core.ledger import MoneyErr, party_cash_account, system_reserve_account
+from realm.core.player_economy import GENESIS_SETTLER_STARTING_CASH_CENTS
 from realm.economy.markets import cancel_all_party_resting_orders
 from realm.infrastructure.plot_logistics import remove_plot_output
 from realm.core.time_scale import legacy_scaled
@@ -154,6 +155,10 @@ def _retire_party(world: World, party: PartyId, *, reason: str) -> None:
         note_genesis_bankruptcy_feed(world, party)
 
 
+def _owns_any_plot(world: World, party: PartyId) -> bool:
+    return any(pl.owner == party for pl in world.plots.values())
+
+
 def _tick_bankruptcies(world: World) -> None:
     st = _gst(world)
     bt = st.setdefault("broke_ticks", {})
@@ -162,6 +167,13 @@ def _tick_bankruptcies(world: World) -> None:
         bt = st["broke_ticks"]
     for party in list(world.parties):
         if not _party_eligible_for_bankruptcy(party):
+            continue
+        if (
+            world.scenario_id == "genesis"
+            and str(party).startswith("settler_")
+            and _owns_any_plot(world, party)
+        ):
+            bt[str(party)] = 0
             continue
         cash = party_cash_account(party)
         bal = world.ledger.balance(cash)
@@ -186,7 +198,7 @@ def _tick_spawns(world: World) -> None:
     if cap <= 0:
         return
     next_seq = int(st.get("next_settler_seq", 1))
-    starting_cash_cents = int(st.get("starting_settler_cents", 1_000_000))
+    starting_cash_cents = int(st.get("starting_settler_cents", GENESIS_SETTLER_STARTING_CASH_CENTS))
     if _count_settlers(world) >= cap:
         return
     rng = world.rng(f"genesis_settler_spawn:{world.tick}")

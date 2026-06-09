@@ -50,7 +50,8 @@ _SKIP_PARTIES: frozenset[str] = frozenset(
 )
 
 _BFS_MAX_DEPTH: int = 32
-_MAX_BUILDS_PER_PARTY_PER_DAY: int = 2
+_MAX_BUILDS_PER_PARTY_PER_DAY: int = 5
+_GENESIS_MAX_BUILDS_PER_PARTY_PER_DAY: int = 8
 
 BuyFn = Callable[[World, PartyId, MaterialId, int], dict[str, Any]]
 
@@ -170,9 +171,7 @@ def ensure_road_build_supplies(
         short = int(need) - int(world.inventory.qty(party, mat))
         if short <= 0:
             continue
-        r = buy_material(world, party, mat, short)
-        if not r.get("ok") or int(r.get("filled", 0)) < short:
-            return False
+        buy_material(world, party, mat, short)
     return _can_afford_road_build(world, party)
 
 
@@ -240,18 +239,31 @@ def _plots_needing_roads(world: World, party: PartyId) -> list[PlotId]:
         pid = PlotId(pid_s)
         if plot_needs_road_access(world, party, pid):
             out.append(pid)
+    out.sort(
+        key=lambda p: (
+            _bfs_steps_to_road_network(world, p) if _bfs_steps_to_road_network(world, p) >= 0 else 999,
+            str(p),
+        )
+    )
     return out
+
+
+def _max_builds_per_party_per_day(world: World) -> int:
+    if world.scenario_id == "genesis":
+        return _GENESIS_MAX_BUILDS_PER_PARTY_PER_DAY
+    return _MAX_BUILDS_PER_PARTY_PER_DAY
 
 
 def _daily_build_budget(world: World, party: PartyId) -> int:
     gst = world.scenario_state.setdefault("npc_self_roads", {})
     day = _game_day(world)
     key = str(party)
+    cap = _max_builds_per_party_per_day(world)
     row = gst.get(key)
     if isinstance(row, dict) and int(row.get("day", -1)) == day:
         used = int(row.get("built", 0))
-        return max(0, _MAX_BUILDS_PER_PARTY_PER_DAY - used)
-    return _MAX_BUILDS_PER_PARTY_PER_DAY
+        return max(0, cap - used)
+    return cap
 
 
 def _record_daily_build(world: World, party: PartyId) -> None:
@@ -277,12 +289,13 @@ def tick_npc_self_roads(world: World) -> None:
     from realm.economy.markets import market_buy
 
     urgent = int(world.tick) >= ROAD_REQUIREMENT_GRACE_TICKS
+    cap = _max_builds_per_party_per_day(world)
     for party in sorted(world.parties, key=str):
         if _party_skipped(party):
             continue
         budget = _daily_build_budget(world, party)
         if urgent:
-            budget = max(budget, _MAX_BUILDS_PER_PARTY_PER_DAY)
+            budget = max(budget, cap)
         if budget <= 0:
             continue
         for plot_id in _plots_needing_roads(world, party):
@@ -296,6 +309,8 @@ def tick_npc_self_roads(world: World) -> None:
             ):
                 _record_daily_build(world, party)
                 budget -= 1
+                if not is_road_accessible(world, plot_id):
+                    continue
 
 
 def try_party_self_roads(
@@ -304,16 +319,17 @@ def try_party_self_roads(
     plot_ids: tuple[PlotId, ...] | list[PlotId],
     *,
     buy_material: BuyFn | None = None,
-    max_attempts: int = 1,
+    max_attempts: int = 3,
 ) -> bool:
     """Per-tick hook (settler burst): try up to ``max_attempts`` segments."""
     if _party_skipped(party):
         return False
-    attempts = 0
-    for plot_id in plot_ids:
-        if attempts >= max_attempts:
+    built = 0
+    needing = _plots_needing_roads(world, party)
+    scan = [p for p in needing if str(p) in {str(x) for x in plot_ids}] or needing
+    for plot_id in scan:
+        if built >= max_attempts:
             break
         if try_connect_plot_with_road(world, party, plot_id, buy_material=buy_material):
-            attempts += 1
-            return True
-    return False
+            built += 1
+    return built > 0
