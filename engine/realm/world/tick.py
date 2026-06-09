@@ -43,7 +43,7 @@ from realm.population.employment import (
     tick_laborer_wages,
     tick_settler_job_postings,
 )
-from realm.population.laborers import tick_laborer_births, tick_laborers
+from realm.population.laborers import tick_laborer_births, tick_labor_pool_replenishment, tick_laborers
 from realm.population.laborer_lifecycle import (
     tick_laborer_health,
     tick_laborer_reproduction,
@@ -147,6 +147,7 @@ def advance_tick(world: World) -> None:
         tick_laborer_health(world)
         tick_laborer_births(world)
         tick_laborer_reproduction(world)
+        tick_labor_pool_replenishment(world)
         # Phase 7F — inter-island demand: NPCs on food-deficit islands
         # post real B2B grain buy orders against surplus islands. Runs
         # after spending so the day's consumption already drained stores.
@@ -173,6 +174,9 @@ def advance_tick(world: World) -> None:
     tick_market_events(world)
     tick_price_alerts(world)
     if world.scenario_id == "genesis":
+        from realm.economy.market_delivery import tick_fob_pickup_hygiene
+
+        tick_fob_pickup_hygiene(world)
         tick_sprint4_feed(world)
         update_margaux_player_profile(world)
         tick_margaux_sprint5_beats(world)
