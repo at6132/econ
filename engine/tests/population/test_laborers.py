@@ -92,6 +92,7 @@ def _make_world_with_one_laborer() -> tuple[object, LaborerNPC]:
 def test_need_decay_proceeds_at_documented_rate_per_game_day():
     w, lab = _make_world_with_one_laborer()
     lab.needs = {"food": 1.0, "fuel": 1.0, "shelter": 1.0}
+    lab.health = 1.0
     lab.last_needs_tick = int(w.tick)
     # Advance one full game-day.
     w.tick += TICKS_PER_GAME_DAY
@@ -230,3 +231,37 @@ def test_laborer_retires_at_lifespan_and_cash_returns_to_reserve():
     assert lid not in w.laborers
     # Conservation.
     assert w.ledger.total_cents() == total_before
+
+
+def test_labor_pool_replenishment_when_below_target() -> None:
+    from realm.population.laborers import (
+        laborer_count_for_island,
+        tick_labor_pool_replenishment,
+    )
+    from realm.population.landmass_density import laborer_target_count_for_landmass
+
+    w = bootstrap_genesis(seed=77, grid_width=48, grid_height=36, settler_count=4)
+    plot_islands = w.scenario_state.get("plot_islands") or {}
+    if not plot_islands:
+        return
+    isl = int(next(iter({int(v) for v in plot_islands.values()})))
+    target = laborer_target_count_for_landmass(w, isl)
+    if target < 4:
+        return
+    # Simulate a retirement cliff.
+    for lab in list(w.laborers.values()):
+        if int(lab.island_id) != isl:
+            continue
+        w.laborers.pop(lab.laborer_id, None)
+    assert laborer_count_for_island(w, isl) == 0
+    w.tick = 7 * TICKS_PER_GAME_DAY
+    added = tick_labor_pool_replenishment(w)
+    assert added > 0
+    assert laborer_count_for_island(w, isl) >= min(6, target)
+
+
+def test_bootstrap_laborers_are_young_enough_for_year_run() -> None:
+    w = bootstrap_genesis(seed=42, grid_width=48, grid_height=36, settler_count=4)
+    ages = [lab.age_ticks // TICKS_PER_GAME_DAY for lab in w.laborers.values()]
+    assert ages
+    assert max(ages) <= 45

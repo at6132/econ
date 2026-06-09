@@ -122,3 +122,49 @@ def test_fob_fill_creates_pickup_not_instant_stash() -> None:
     assert len(w.market_fob_pickups) == 1
     assert w.market_fob_pickups[0].buyer == buyer
     assert plot_output_qty(w, buyer_pid, MaterialId("timber")) == 0
+
+
+def test_same_plot_ddp_falls_back_to_fob_not_void() -> None:
+    """When listing plot equals buyer delivery plot, settlement must not void the match."""
+    from realm.economy.market_delivery import fulfill_market_matter
+    from realm.economy.markets import AskOrder, BidOrder
+
+    w = bootstrap_genesis(seed=91, grid_width=14, grid_height=12, settler_count=2)
+    party = PartyId("settler_001")
+    _ensure_cash(w, party, 5_000_000)
+    pid = _first_forest_plot(w)
+    assert pid is not None
+    assert claim_plot(w, party, pid)["ok"]
+    timber = MaterialId("timber")
+    w.plot_output_stock.setdefault(str(pid), {})["timber"] = 8
+    before_fail = sum(1 for e in w.event_log if e.get("kind") == "market_ddp_failed")
+    ad = fulfill_market_matter(
+        w,
+        buyer=party,
+        seller=party,
+        material=timber,
+        qty=2,
+        ask=AskOrder(
+            order_id="",
+            party=party,
+            material=timber,
+            qty=0,
+            price_per_unit_cents=50_000,
+            from_plot_id=str(pid),
+            delivery_terms=DELIVERY_DDP,
+        ),
+        bid=BidOrder(
+            order_id="",
+            party=party,
+            material=timber,
+            qty=0,
+            max_price_per_unit_cents=50_001,
+            escrow_cents=0,
+            delivery_plot_id=str(pid),
+        ),
+    )
+    from realm.core.inventory import MatterErr
+
+    assert not isinstance(ad, MatterErr), getattr(ad, "reason", ad)
+    after_fail = sum(1 for e in w.event_log if e.get("kind") == "market_ddp_failed")
+    assert after_fail == before_fail

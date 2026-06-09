@@ -41,6 +41,7 @@ def test_consolidator_spawns_with_capital_buildings_and_recipes() -> None:
     ids = {b.get("building_id") for b in bldgs}
     assert "foundry" in ids
     assert "strip_mine" in ids
+    assert "dock" in ids
     # Tier-1 recipes are accessible.
     book = w.party_recipe_books.get(str(CONSOLIDATOR_PARTY_ID), set())
     assert "smelt_iron" in book
