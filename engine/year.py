@@ -53,7 +53,7 @@ INTERESTING = {
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 print("=== Realm Year Run ===")
-print(f"Seed {SEED} | {GRID_W}x{GRID_H} grid | {SETTLER_COUNT} settlers → cap {SETTLER_CAP}")
+print(f"Seed {SEED} | {GRID_W}x{GRID_H} grid | {SETTLER_COUNT} settlers -> cap {SETTLER_CAP}")
 print(f"Running {GAME_DAYS} game-days... (ETA ~10 min)\n")
 
 from realm.core.time_scale import TICKS_PER_GAME_DAY
@@ -73,25 +73,25 @@ print(f"Boot {boot_t:.1f}s | laborers={len(w.laborers)} towns={len(w.towns)} par
 print(f"{'Day':>4} {'Season':>6} {'Pop':>4} {'Towns':>5} {'Settlers':>8} "
       f"{'Asks':>5} {'Bids':>4} {'Matches':>7} "
       f"{'Coal':>7} {'Grain':>7} {'Timber':>7} | Notes")
-print("─" * 95)
+print("-" * 95)
 
 # ── State ─────────────────────────────────────────────────────────────────────
-seen_ids: set[int] = set()
+_drain_cursor: int = 0
 ec: Counter[str] = Counter()
 narrative: list[dict] = []
 price_hist: dict[str, list[float | None]] = {m: [] for m in MATS}
 bid_hist:   dict[str, list[float | None]] = {m: [] for m in MATS}
 daily_rows: list[dict] = []
 match_total = 0
+prod_total = 0
 prev_season = ""
 
 def _drain() -> None:
-    global match_total
-    for e in w.event_log:
-        eid = id(e)
-        if eid in seen_ids:
-            continue
-        seen_ids.add(eid)
+    global match_total, prod_total, _drain_cursor
+    log = w.event_log
+    while _drain_cursor < len(log):
+        e = log[_drain_cursor]
+        _drain_cursor += 1
         k = str(e.get("kind") or "")
         ec[k] += 1
         if k == "market_match":
@@ -103,9 +103,12 @@ def _drain() -> None:
                 "party": str(e.get("party") or ""),
                 "msg":  str(e.get("message") or "")[:150],
             })
-    if len(seen_ids) > 100_000:
-        seen_ids.clear()
-        seen_ids.update(id(e) for e in w.event_log)
+    _refresh_production_total()
+
+def _refresh_production_total() -> None:
+    global prod_total
+    ops = w.scenario_state.get("settler_ops_completed") or {}
+    prod_total = sum(int(v) for v in ops.values())
 
 def _best_ask(m: str) -> float | None:
     orders = w.market_asks_by_material.get(m, [])
@@ -180,6 +183,7 @@ for day in range(1, GAME_DAYS + 1):
         "settlers": settlers,
         "asks": asks_n, "bids": bids_n,
         "matches_total": match_total,
+        "production_total": prod_total,
         "ledger_delta": int(w.ledger.total_cents()) - starting_cents,
         "prices": {m: _best_ask(m) for m in MATS},
         "bids_best": {m: _best_bid(m) for m in MATS},
@@ -192,7 +196,7 @@ for day in range(1, GAME_DAYS + 1):
         eta = (elapsed / day) * (GAME_DAYS - day)
         notes = []
         if season != prev_season and prev_season:
-            notes.append(f"→{season}")
+            notes.append(f"->{season}")
         prev_season = season
 
         # notable events since last print
@@ -225,6 +229,7 @@ report = {
         "final_parties": len(w.parties),
         "conservation_delta": int(w.ledger.total_cents()) - starting_cents,
         "total_market_matches": match_total,
+        "total_settler_production": prod_total,
     },
     "event_counts": dict(ec.most_common()),
     "narrative": narrative,
