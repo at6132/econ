@@ -23,6 +23,27 @@ from realm.agents.requote_dampener import (
     should_requote,
 )
 from realm.agents.settler_identity import get_settler_personality, get_settler_world_model
+from realm.agents.economic_reasoning import (
+    can_afford_recipe_labor,
+    cash_urgency,
+    expansion_for_export_dock,
+    expansion_worthwhile,
+    fire_sale_price_cents,
+    listing_price_cents,
+    liquid_working_capital_cents,
+    needs_export_dock,
+    needs_float_recovery,
+    operating_float_target_cents,
+    output_bid_depth,
+    party_has_completed_dock,
+    recommended_sell_delivery_terms,
+    score_owned_plot,
+    score_plot_for_export_hub,
+    score_production_line,
+    score_unclaimed_plot,
+    should_abandon_current_line,
+    stockpile_liquidate_threshold,
+)
 from realm.infrastructure.plot_logistics import (
     ensure_inventory_from_stash,
     party_material_held,
@@ -30,7 +51,7 @@ from realm.infrastructure.plot_logistics import (
 )
 from realm.production import plot_has_active_production, start_production
 from realm.production.recipe_workshops import recipe_ids_on_plot_for_owner
-from realm.production.recipe_sites import recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
+from realm.production.recipe_sites import plot_is_coastal, recipe_allowed_on_terrain, subsurface_allows_recipe, terrain_allows_workshop
 from realm.production.recipes import RECIPES
 from realm.research.patents import has_active_patent_exclusivity, recipe_blocked_by_patent
 from realm.production.storage_caps import party_inventory_unit_total, party_storage_cap_units
@@ -333,6 +354,130 @@ def _has_primary_on_plot(world: World, party: PartyId, plot_id: PlotId) -> bool:
     )
 
 
+def _settler_best_owned_plot(
+    world: World, party: PartyId, owned_plot_ids: tuple[PlotId, ...]
+) -> PlotId:
+    if not owned_plot_ids:
+        raise ValueError("no owned plots")
+    if len(owned_plot_ids) == 1:
+        return owned_plot_ids[0]
+    best_id = owned_plot_ids[0]
+    best_score = -1e18
+    for pid in owned_plot_ids:
+        sc = score_owned_plot(
+            world, party, pid, recipe_startable=_settler_recipe_startable
+        )
+        if sc > best_score:
+            best_score = sc
+            best_id = pid
+    return best_id
+
+
+def _settler_try_claim_expansion_plot(
+    world: World,
+    party: PartyId,
+    scan: list[PlotId],
+    owned_by_party: dict[PartyId, tuple[PlotId, ...]],
+) -> bool:
+    owned = owned_by_party.get(party, ())
+    if len(owned) >= 2:
+        return False
+    home_id = owned[0]
+    from realm.world import claim_cost_cents_for_plot
+
+    cash = world.ledger.balance(party_cash_account(party))
+    export_mode = needs_export_dock(world, party)
+    best_pid: PlotId | None = None
+    best_score = -1e18
+    for pid in scan:
+        plot = world.plots[pid]
+        if plot.owner is not None:
+            continue
+        cost = int(claim_cost_cents_for_plot(world, pid))
+        if export_mode:
+            if not expansion_for_export_dock(world, party, pid, cost) and not expansion_worthwhile(
+                world, party, home_id, pid, cost
+            ):
+                continue
+            sc = score_plot_for_export_hub(world, plot)
+        else:
+            if not expansion_worthwhile(world, party, home_id, pid, cost):
+                continue
+            sc = score_unclaimed_plot(world, plot)
+        if sc <= best_score:
+            continue
+        cash_floor = cost + SURVEY_COST_CENTS + (215_000 if export_mode else 30_000)
+        if cash < cash_floor:
+            continue
+        best_score = sc
+        best_pid = pid
+    if best_pid is None:
+        return False
+    result = claim_plot(world, party, best_pid)
+    if result.get("ok"):
+        owned_by_party[party] = owned + (best_pid,)
+        return True
+    return False
+
+
+def _party_has_dock_building(world: World, party: PartyId) -> bool:
+    return any(
+        str(b.get("party")) == str(party) and str(b.get("building_id")) == "dock"
+        for b in world.plot_buildings
+    )
+
+
+def _settler_coastal_owned_plot(
+    world: World,
+    party: PartyId,
+    owned_plot_ids: tuple[PlotId, ...],
+) -> PlotId | None:
+    best: PlotId | None = None
+    best_score = -1e18
+    for pid in owned_plot_ids:
+        plot = world.plots.get(pid)
+        if plot is None or plot.owner != party:
+            continue
+        if not plot_is_coastal(world, plot):
+            continue
+        sc = score_owned_plot(
+            world, party, pid, recipe_startable=_settler_recipe_startable
+        )
+        if sc > best_score:
+            best_score = sc
+            best = pid
+    return best
+
+
+def _maybe_build_export_dock(
+    world: World,
+    party: PartyId,
+    owned_plot_ids: tuple[PlotId, ...],
+) -> bool:
+    if not needs_export_dock(world, party) or _party_has_dock_building(world, party):
+        return False
+    coastal = _settler_coastal_owned_plot(world, party, owned_plot_ids)
+    if coastal is None:
+        return False
+    plot = world.plots[coastal]
+    if not plot.surveyed:
+        cash = world.ledger.balance(party_cash_account(party))
+        if cash >= SURVEY_COST_CENTS:
+            survey_plot(world, party, coastal)
+            return True
+        return False
+    return _ensure_workshop(world, party, coastal, "dock")
+
+
+def _settler_collect_fob_pickups(world: World, party: PartyId) -> bool:
+    from realm.economy.market_delivery import _fob_ids_for_buyer, pickup_fob
+
+    for pid in _fob_ids_for_buyer(world, party):
+        if pickup_fob(world, party, pid).get("ok"):
+            return True
+    return False
+
+
 def _has_secondary_on_plot(world: World, party: PartyId, plot_id: PlotId) -> bool:
     return any(
         b.get("party") == str(party)
@@ -541,6 +686,24 @@ def _secondary_scarcity_bonus(world_model, building_id: str) -> float:
     return bonus
 
 
+def _primary_building_on_plot(world: World, party: PartyId, plot_id: PlotId) -> str | None:
+    for b in world.plot_buildings:
+        if (
+            b.get("party") == str(party)
+            and b.get("plot_id") == str(plot_id)
+            and str(b.get("building_id", "")) in _PRIMARY_WORKSHOPS
+        ):
+            return str(b.get("building_id"))
+    return None
+
+
+_PRIMARY_TO_SECONDARY: dict[str, tuple[str, float]] = {
+    "strip_mine": ("power_shed", 0.55),
+    "timber_yard": ("wood_shop", 0.58),
+    "grain_row": ("gristmill", 0.58),
+}
+
+
 def _maybe_build_secondary_workshop(
     world: World,
     party: PartyId,
@@ -573,20 +736,43 @@ def _maybe_build_secondary_workshop(
         return float(targets[bid]) - float(near.get(bid, 0))
 
     candidates: list[tuple[str, float]] = []
+    primary_bid = _primary_building_on_plot(world, party, plot_id)
+    line_bonus = _PRIMARY_TO_SECONDARY.get(primary_bid or "", ("", 0.0))
 
     if recipe_allowed_on_terrain(plot.terrain, "coal_generator"):
+        bonus = line_bonus[1] if line_bonus[0] == "power_shed" else 0.0
         candidates.append(
-            ("power_shed", gap("power_shed") + _secondary_scarcity_bonus(world_model, "power_shed") + rng.random() * 0.12)
+            (
+                "power_shed",
+                gap("power_shed")
+                + _secondary_scarcity_bonus(world_model, "power_shed")
+                + bonus
+                + rng.random() * 0.12,
+            )
         )
 
     if recipe_allowed_on_terrain(plot.terrain, "sawmill"):
+        bonus = line_bonus[1] if line_bonus[0] == "wood_shop" else 0.0
         candidates.append(
-            ("wood_shop", gap("wood_shop") + _secondary_scarcity_bonus(world_model, "wood_shop") + rng.random() * 0.12)
+            (
+                "wood_shop",
+                gap("wood_shop")
+                + _secondary_scarcity_bonus(world_model, "wood_shop")
+                + bonus
+                + rng.random() * 0.12,
+            )
         )
 
     if recipe_allowed_on_terrain(plot.terrain, "mill_flour"):
+        bonus = line_bonus[1] if line_bonus[0] == "gristmill" else 0.0
         candidates.append(
-            ("gristmill", gap("gristmill") + _secondary_scarcity_bonus(world_model, "gristmill") + rng.random() * 0.12)
+            (
+                "gristmill",
+                gap("gristmill")
+                + _secondary_scarcity_bonus(world_model, "gristmill")
+                + bonus
+                + rng.random() * 0.12,
+            )
         )
 
     if recipe_allowed_on_terrain(plot.terrain, "kiln_brick"):
@@ -605,11 +791,19 @@ def _maybe_build_secondary_workshop(
             ("stone_works", gap("stone_works") + _secondary_scarcity_bonus(world_model, "stone_works") + rng.random() * 0.1)
         )
 
-    if plot.terrain == Terrain.MOUNTAIN and float(plot.subsurface.iron_ore_grade) >= 0.28:
-        if recipe_allowed_on_terrain(plot.terrain, "smelt_iron"):
-            candidates.append(
-                ("foundry", gap("foundry") + _secondary_scarcity_bonus(world_model, "foundry") + 0.22 + rng.random() * 0.08)
+    if float(plot.subsurface.iron_ore_grade) >= 0.28 and recipe_allowed_on_terrain(
+        plot.terrain, "smelt_iron"
+    ):
+        iron_bonus = 0.22 if primary_bid == "strip_mine" else 0.12
+        candidates.append(
+            (
+                "foundry",
+                gap("foundry")
+                + _secondary_scarcity_bonus(world_model, "foundry")
+                + iron_bonus
+                + rng.random() * 0.08,
             )
+        )
 
     if not candidates:
         return
@@ -619,12 +813,11 @@ def _maybe_build_secondary_workshop(
     need = _TURNKEY_CENTS.get(chosen, 0)
     if need <= 0:
         return
-    extra = 120_000 if chosen == "foundry" else 58_000
+    extra = 80_000 if chosen == "foundry" else 36_000
     cash = world.ledger.balance(party_cash_account(party))
     if cash < need + extra:
-        return False
-    if not _settler_acquire_turnkey_materials(world, party, chosen):
         return
+    _settler_acquire_turnkey_materials(world, party, chosen, plot_id=plot_id)
     build_on_plot(world, party, plot_id, chosen, "turnkey")
 
 
@@ -719,17 +912,17 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
     n_row = int(counts.get("grain_row", 0))
     sal = _party_salience_jitter(party)
 
-    if plot.terrain == Terrain.PLAINS and n_strip >= 9:
-        p_gr = min(0.86, 0.26 + (n_strip - 9) * 0.03)
+    if plot.terrain == Terrain.PLAINS and n_strip >= 8:
+        p_gr = min(0.86, 0.26 + (n_strip - 8) * 0.03)
         if recipe_allowed_on_terrain(plot.terrain, "grow_grain") and rng.random() < p_gr:
             return ("grow_grain", "grain_row")
-    if plot.terrain == Terrain.FOREST and n_strip >= 8:
-        p_ch = min(0.86, 0.24 + (n_strip - 8) * 0.03)
+    if plot.terrain == Terrain.FOREST and n_strip >= 7:
+        p_ch = min(0.86, 0.24 + (n_strip - 7) * 0.03)
         if recipe_allowed_on_terrain(plot.terrain, "chop_timber") and rng.random() < p_ch:
             return ("chop_timber", "timber_yard")
 
-    if n_strip >= 8:
-        p_divert = min(0.92, 0.14 + (n_strip - 8) * 0.026)
+    if n_strip >= 7:
+        p_divert = min(0.92, 0.14 + (n_strip - 7) * 0.026)
         early: list[tuple[str, str, float]] = []
         if recipe_allowed_on_terrain(plot.terrain, "chop_timber"):
             early.append(("chop_timber", "timber_yard", 0.62 + sal))
@@ -756,22 +949,25 @@ def _pick_settler_line(world: World, party: PartyId, plot) -> tuple[str, str] | 
         if not subsurface_allows_recipe(plot, recipe):
             continue
         g = float(getattr(plot.subsurface, fld, 0.0))
-        w = g + sal
+        w = score_production_line(world, party, plot, rid) + g * 0.15 + sal
         if rid == "mine_coal":
             w -= min(1.05, n_strip * 0.024)
         if w > 0.035:
             opts.append((rid, "strip_mine", w))
 
     if recipe_allowed_on_terrain(plot.terrain, "mine_stone"):
-        w = 0.34 + sal - min(0.28, n_strip * 0.005)
+        w = score_production_line(world, party, plot, "mine_stone") + sal * 0.1
+        w -= min(0.28, n_strip * 0.005)
         opts.append(("mine_stone", "stone_works", max(0.06, w)))
 
     if recipe_allowed_on_terrain(plot.terrain, "chop_timber"):
-        w = 0.42 + sal + 0.08 * max(0.0, (n_yard + 6) - n_strip * 0.22)
+        w = score_production_line(world, party, plot, "chop_timber") + sal * 0.1
+        w += 0.08 * max(0.0, (n_yard + 6) - n_strip * 0.22)
         opts.append(("chop_timber", "timber_yard", w))
 
     if recipe_allowed_on_terrain(plot.terrain, "grow_grain"):
-        w = 0.38 + sal + 0.07 * max(0.0, (n_row + 4) - n_strip * 0.2)
+        w = score_production_line(world, party, plot, "grow_grain") + sal * 0.1
+        w += 0.07 * max(0.0, (n_row + 4) - n_strip * 0.2)
         opts.append(("grow_grain", "grain_row", w))
 
     strip_non_coal = [(a, b, c) for a, b, c in opts if b == "strip_mine" and a != "mine_coal"]
@@ -824,39 +1020,25 @@ def _list_price_cents(
     priority still routes hub demand to settlers when they exist.
     """
     bid = best_resting_bid_cents(world, material)
+    basis_px: int | None = None
     if party is not None:
         from realm.genesis.settler_cost_basis import settler_listing_price_cents
 
         basis_px = settler_listing_price_cents(world, party, material)
-        if basis_px is not None:
-            from realm.economy.pricing import exchange_ask_cents
+    if party is not None:
+        price = listing_price_cents(
+            world,
+            party,
+            material,
+            basis_price=basis_px,
+            best_bid=bid,
+        )
+        from realm.deals.market_warfare import cartel_listing_floor_cents
 
-            ex = exchange_ask_cents(material, world=world)
-            personality, _ = _settler_identity_bundle(world, party)
-            if personality is not None:
-                rt = personality.risk_tolerance
-                if rt < 0.3:
-                    ceiling = max(4, ex - 2)
-                elif rt > 0.7:
-                    ceiling = max(4, int(ex * 0.85))
-                else:
-                    t = (rt - 0.3) / 0.4
-                    undercut = 2 + t * max(0, int(ex * 0.15) - 2)
-                    ceiling = max(4, int(ex - undercut))
-            else:
-                ceiling = max(4, ex - 2)
-            floor = 4
-            if bid is not None and int(bid) >= floor:
-                # Lift any real bid above floor; but never above the exchange ceiling.
-                return max(floor, min(ceiling, max(basis_px, int(bid) + 1)))
-            # No supportive bid: list at basis_px but never *above* exchange ceiling.
-            price = max(floor, min(ceiling, basis_px))
-            from realm.deals.market_warfare import cartel_listing_floor_cents
-
-            cartel_floor = cartel_listing_floor_cents(world, party, material)
-            if cartel_floor is not None:
-                price = max(price, cartel_floor)
-            return price
+        cartel_floor = cartel_listing_floor_cents(world, party, material)
+        if cartel_floor is not None:
+            price = max(price, cartel_floor)
+        return price
     return settler_ask_cents(world, material, best_resting_bid=bid)
 
 
@@ -908,29 +1090,13 @@ def _settler_acquire_turnkey_materials(
 
 
 def _ensure_settler_boot_tools(world: World, party: PartyId, primary_recipe: str | None) -> None:
-    """One-time mining pick (+ spade for clay line) so Tier-0 extraction can run while saving for builds."""
+    """Keep hand tools stocked — wear breaks picks; without them Tier-0 stalls after road grace."""
     if not str(party).startswith("settler_"):
         return
-    gst = world.scenario_state.setdefault("genesis", {})
-    key = "settler_tool_init"
-    done: set[str] = {str(x) for x in gst.setdefault(key, [])}
-    if str(party) in done:
-        return
-    ok = True
-    if world.inventory.qty(party, MaterialId("mining_pick")) < 1:
-        r = _settler_market_buy(world, party, MaterialId("mining_pick"), 1)
-        ok = bool(r.get("ok") and int(r.get("filled", 0)) >= 1)
-    if primary_recipe == "chop_timber" or world.inventory.qty(party, MaterialId("pick_axe")) < 1:
-        if world.inventory.qty(party, MaterialId("pick_axe")) < 1:
-            r = _settler_market_buy(world, party, MaterialId("pick_axe"), 1)
-            if primary_recipe == "chop_timber":
-                ok = bool(r.get("ok") and int(r.get("filled", 0)) >= 1)
-    if ok and primary_recipe == "dig_clay" and world.inventory.qty(party, MaterialId("spade")) < 1:
-        r2 = _settler_market_buy(world, party, MaterialId("spade"), 1)
-        ok = bool(r2.get("ok") and int(r2.get("filled", 0)) >= 1)
-    if ok:
-        done.add(str(party))
-        gst[key] = sorted(done)
+    for tool_s in ("mining_pick", "pick_axe", "spade"):
+        tool = MaterialId(tool_s)
+        if world.inventory.qty(party, tool) < 1:
+            _settler_market_buy(world, party, tool, 1)
 
 
 def _settler_try_hand_extraction(
@@ -944,8 +1110,17 @@ def _settler_try_hand_extraction(
     """Slow Tier-0 income while workshop materials are still being sourced."""
     if plot_has_active_production(world, plot_id):
         return False
+    eligible = set(recipe_ids_on_plot_for_owner(world, plot))
     if _has_primary_on_plot(world, party, plot_id):
-        return False
+        # Idled capital on a dead seam — crew goes back to hand work (realistic).
+        workshop_rids = {
+            rid
+            for rid in eligible
+            if (RECIPES.get(rid) or {}).requires_building_id in _PRIMARY_WORKSHOPS
+            and _settler_recipe_startable(world, party, plot, plot_id, rid)
+        }
+        if workshop_rids:
+            return False
     candidates: list[str] = []
     if prefer_recipe == "mine_coal" and world.inventory.qty(party, MaterialId("mining_pick")) >= 1:
         candidates.append("hand_mine_coal")
@@ -970,6 +1145,11 @@ def _settler_try_hand_extraction(
         rec = RECIPES.get(rid)
         if rec is None:
             continue
+        tool = rec.requires_tool
+        if tool is not None and world.inventory.qty(party, tool) < 1:
+            _settler_market_buy(world, party, tool, 1)
+            if world.inventory.qty(party, tool) < 1:
+                continue
         if not recipe_allowed_on_terrain(plot.terrain, rid):
             continue
         if not subsurface_allows_recipe(plot, rec):
@@ -1019,12 +1199,17 @@ def _maybe_post_settler_job_opening(world: World, party: PartyId, plot_id: PlotI
 
 
 def _settler_completed_ops(world: World, party: PartyId) -> int:
-    return sum(
-        1
-        for e in world.event_log
-        if str(e.get("kind")) == "production_done"
-        and str(e.get("party")) == str(party)
-    )
+    ops = world.scenario_state.setdefault("settler_ops_completed", {})
+    key = str(party)
+    if key not in ops:
+        legacy = sum(
+            1
+            for e in world.event_log
+            if str(e.get("kind")) == "production_done"
+            and str(e.get("party")) == key
+        )
+        ops[key] = int(legacy)
+    return int(ops[key])
 
 
 def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id: str) -> bool:
@@ -1085,6 +1270,49 @@ def _recipe_inputs_satisfied(world: World, party: PartyId, recipe_id: str, plot_
     return all(party_material_on_plot(world, party, plot_id, m) >= q for m, q in rec.inputs.items())
 
 
+def _settler_recipe_startable(
+    world: World, party: PartyId, plot, plot_id: PlotId, recipe_id: str
+) -> bool:
+    """Pre-flight gate mirroring ``start_production`` rejections settlers can predict."""
+    rec = RECIPES.get(recipe_id)
+    if rec is None:
+        return False
+    if rec.requires_tool is not None:
+        if world.inventory.qty(party, rec.requires_tool) < 1:
+            return False
+    elif rec.requires_building_id:
+        from realm.production.decay import EFFICIENCY_STOPPED, building_efficiency_pct
+
+        req = rec.requires_building_id
+        has_ws = False
+        for b in world.plot_buildings:
+            if (
+                b.get("party") == str(party)
+                and b.get("plot_id") == str(plot_id)
+                and b.get("building_id") == req
+            ):
+                has_ws = True
+                iid = str(b.get("instance_id") or "")
+                if iid and building_efficiency_pct(world, iid) == EFFICIENCY_STOPPED:
+                    return False
+        if not has_ws:
+            return False
+    from realm.infrastructure.road_connectivity import require_road_access
+
+    if require_road_access(world, plot_id, recipe_id) is not None:
+        return False
+    from realm.events.seasons import recipe_blocked_by_season
+
+    blocked, _ = recipe_blocked_by_season(world, recipe_id, plot)
+    if blocked:
+        return False
+    if not _recipe_inputs_satisfied(world, party, recipe_id, plot_id):
+        return False
+    if world.ledger.balance(party_cash_account(party)) < rec.labor_cents:
+        return False
+    return True
+
+
 def _recipe_rank_score(
     world: World,
     party: PartyId,
@@ -1112,7 +1340,11 @@ def _recipe_rank_score(
         short = party_material_on_plot(world, party, plot_id, m) - q
         if short < 0:
             miss -= short
-    labor_ok = 1.0 if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents else -50.0
+    labor_ok = (
+        1.0
+        if liquid_working_capital_cents(world, party) >= rec.labor_cents
+        else -50.0
+    )
     bonus = 3.8 if (nw >= 2 and not prim) else (1.6 if prim else 2.4)
 
     margin = oracle.recipe_margins.get(recipe_id, 0.0)
@@ -1154,6 +1386,10 @@ def _recipe_rank_score(
             if eff_mult > 1.0:
                 era_bonus = (eff_mult - 1.0) * 4.0
 
+    from realm.infrastructure.road_connectivity import require_road_access
+
+    road_bonus = 1.6 if require_road_access(world, plot_id, recipe_id) is None else -0.9
+
     return (
         bonus
         + labor_ok
@@ -1161,6 +1397,7 @@ def _recipe_rank_score(
         + margin_bonus
         + arch_bonus
         + era_bonus
+        + road_bonus
         + rng.random() * 0.06
     )
 
@@ -1185,9 +1422,8 @@ def _pick_recipe_to_start(
         rid = prefer_recipe_id
         if not check_patents or not recipe_blocked_by_patent(world, party, rid)[0]:
             _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
-            if _recipe_inputs_satisfied(world, party, rid, plot_id):
-                rec = RECIPES[rid]
-                if world.ledger.balance(party_cash_account(party)) >= rec.labor_cents:
+            if _settler_recipe_startable(world, party, plot, plot_id, rid):
+                if can_afford_recipe_labor(world, party, rid):
                     return rid
     rng = world.rng(f"gen:recipe_pick:{party}:{plot.plot_id}:{world.tick}")
     ranked = sorted(
@@ -1200,16 +1436,10 @@ def _pick_recipe_to_start(
         rec = RECIPES.get(rid)
         if rec is None:
             continue
-        from realm.events.seasons import recipe_blocked_by_season
-
-        blocked, _ = recipe_blocked_by_season(world, rid, plot)
-        if blocked:
-            continue
         _ensure_recipe_inputs(world, party, rid, staging_plot_id=plot_id)
-        if not _recipe_inputs_satisfied(world, party, rid, plot_id):
+        if not _settler_recipe_startable(world, party, plot, plot_id, rid):
             continue
-        rec = RECIPES[rid]
-        if world.ledger.balance(party_cash_account(party)) < rec.labor_cents:
+        if not can_afford_recipe_labor(world, party, rid):
             continue
         return rid
     return None
@@ -1222,7 +1452,7 @@ def _active_run(world: World, party: PartyId, plot_id: PlotId) -> ActiveProducti
     return None
 
 
-_STOCKPILE_LIQUIDATE_MIN_QTY = 8
+_STOCKPILE_LIQUIDATE_MIN_QTY = 4
 """Sell surplus plot/carried stock once this much accumulates (not 20+ — real yards move weekly)."""
 
 
@@ -1250,12 +1480,22 @@ def _settler_resolve_line(
     plot,
     preferred: tuple[str, str] | None,
 ) -> tuple[str, str] | None:
-    """Keep a locked line until the seam/season closes it — then re-pick like a real operator."""
+    """Keep a locked line until dominated — then re-pick from oracle-weighted options."""
     if preferred is not None and _settler_line_viable(world, party, plot, preferred):
-        rid, _building_id = preferred
+        rid, building_id = preferred
         eligible = recipe_ids_on_plot_for_owner(world, plot)
-        if rid in eligible:
-            return preferred
+        if rid in eligible and _settler_recipe_startable(
+            world, party, plot, plot.plot_id, rid
+        ):
+            if not should_abandon_current_line(
+                world,
+                party,
+                plot,
+                plot.plot_id,
+                rid,
+                recipe_startable=_settler_recipe_startable,
+            ):
+                return preferred
     return _pick_settler_line(world, party, plot)
 
 
@@ -1317,6 +1557,27 @@ _STOCKPILE_MATS: tuple[str, ...] = (
 )
 
 
+def _ensure_operating_float(
+    world: World, party: PartyId, owned_plot_ids: tuple[PlotId, ...]
+) -> bool:
+    """Raise cash toward the operating-float target before starting paid labor."""
+    target = operating_float_target_cents(world, party)
+    acct = party_cash_account(party)
+    if world.ledger.balance(acct) >= target:
+        return True
+    for _ in range(4):
+        if world.ledger.balance(acct) >= target:
+            return True
+        before = world.ledger.balance(acct)
+        _settler_flush_plot_outputs(world, party, owned_plot_ids, max_units=96)
+        _liquidate_settler_stockpiles(world, party, owned_plot_ids)
+        if world.ledger.balance(acct) > before:
+            continue
+        break
+    floor = min(target // 2, 25_00)
+    return world.ledger.balance(acct) >= floor
+
+
 def _settler_flush_plot_outputs(
     world: World,
     party: PartyId,
@@ -1346,7 +1607,8 @@ def _liquidate_settler_stockpiles(
     for mid_s in _STOCKPILE_MATS:
         mid = MaterialId(mid_s)
         q = party_material_held(world, party, mid, owned_plot_ids=owned_plot_ids)
-        if q >= _STOCKPILE_LIQUIDATE_MIN_QTY:
+        min_qty = stockpile_liquidate_threshold(world, party, default=_STOCKPILE_LIQUIDATE_MIN_QTY)
+        if q >= min_qty:
             _settler_sell_material(
                 world, party, mid, min(q - 2, 40), owned_plot_ids=owned_plot_ids
             )
@@ -1363,6 +1625,10 @@ def _settler_sell_material(
     if max_units <= 0:
         return
 
+    urgency = cash_urgency(world, party)
+    urgent = urgency >= 0.75
+    illiquid = output_bid_depth(world, mid) <= 0
+
     from realm.production.storage_caps import is_carried_material
 
     if is_carried_material(mid):
@@ -1375,10 +1641,16 @@ def _settler_sell_material(
         q = world.inventory.qty(party, mid)
         if q <= 0:
             return
-        px = _list_price_cents(world, mid, party=party)
-        if not should_requote(world, party, mid, "ask", px):
+        if urgent or illiquid:
+            cancel_party_asks_for_material(world, party, mid)
+        px = (
+            fire_sale_price_cents(world, party, mid)
+            if illiquid
+            else _list_price_cents(world, mid, party=party)
+        )
+        if not urgent and not illiquid and not should_requote(world, party, mid, "ask", px):
             return
-        cancels = cancel_party_asks_for_material(world, party, mid)
+        cancels = cancel_party_asks_for_material(world, party, mid) if not (urgent or illiquid) else 0
         charge_cancel_fee(world, party, cancels)
         res = place_sell_order(world, party, mid, min(q, max_units), px)
         if res.get("ok"):
@@ -1398,25 +1670,46 @@ def _settler_sell_material(
         if best_plot is None or best_qty <= 0:
             return
 
-        px = _list_price_cents(world, mid, party=party)
-        if px <= 0:
-            return
-        if not should_requote(world, party, mid, "ask", px):
-            return
-
-        list_qty = min(best_qty, max_units)
-
-        sell_into_bids(world, party, mid, list_qty, from_plot_id=best_plot)
-
+        sell_into_bids(
+            world,
+            party,
+            mid,
+            min(best_qty, max_units),
+            from_plot_id=best_plot,
+            delivery_terms=recommended_sell_delivery_terms(world, party, best_plot),
+        )
         avail = plot_available_qty(world, best_plot, mid)
         if avail <= 0:
-            record_requote(world, party, mid, "ask", px)
             return
 
-        cancels = cancel_party_asks_for_material(world, party, mid)
+        if urgent or illiquid:
+            cancel_party_asks_for_material(world, party, mid)
+            avail = plot_available_qty(world, best_plot, mid)
+        if avail <= 0:
+            return
+
+        px = (
+            fire_sale_price_cents(world, party, mid)
+            if illiquid
+            else _list_price_cents(world, mid, party=party)
+        )
+        if px <= 0:
+            return
+        if not urgent and not illiquid and not should_requote(world, party, mid, "ask", px):
+            return
+
+        list_qty = min(avail, max_units)
+
+        cancels = 0 if (urgent or illiquid) else cancel_party_asks_for_material(world, party, mid)
         charge_cancel_fee(world, party, cancels)
         res = place_sell_order(
-            world, party, mid, min(avail, list_qty), px, from_plot_id=best_plot
+            world,
+            party,
+            mid,
+            list_qty,
+            px,
+            from_plot_id=best_plot,
+            delivery_terms=recommended_sell_delivery_terms(world, party, best_plot),
         )
         if res.get("ok"):
             record_requote(world, party, mid, "ask", px)
@@ -1495,6 +1788,12 @@ def _settler_pipeline_step(
                 return True
         return False
 
+    party_scan = _scan_from_anchor(world, scan, _settler_home_anchor(world, party))
+    if _settler_try_claim_expansion_plot(world, party, party_scan, owned_by_party):
+        return True
+
+    owned_plot_ids = owned_by_party.get(party, ())
+    owned = _settler_best_owned_plot(world, party, owned_plot_ids)
     plot = world.plots[owned]
     if not plot.surveyed:
         cash = world.ledger.balance(party_cash_account(party))
@@ -1512,8 +1811,18 @@ def _settler_pipeline_step(
     _recipe_id, building_id = line
     _ensure_settler_boot_tools(world, party, _recipe_id)
 
+    if _settler_collect_fob_pickups(world, party):
+        return True
+
     # Always flush accumulated stash to market, regardless of workshop status.
     _liquidate_settler_stockpiles(world, party, owned_plot_ids)
+    if needs_float_recovery(world, party):
+        _ensure_operating_float(world, party, owned_plot_ids)
+    elif cash_urgency(world, party) >= 0.35:
+        _settler_flush_plot_outputs(world, party, owned_plot_ids)
+
+    if _maybe_build_export_dock(world, party, owned_plot_ids):
+        return True
 
     if not _ensure_workshop(world, party, owned, building_id):
         run = _active_run(world, party, owned)
@@ -1566,10 +1875,31 @@ def _settler_pipeline_step(
         world, party, plot, owned, prefer_recipe_id=_recipe_id
     )
     if not chosen_rid:
+        if _settler_try_hand_extraction(
+            world, party, owned, plot, prefer_recipe=_recipe_id
+        ):
+            return True
         return False
+    if not can_afford_recipe_labor(world, party, chosen_rid):
+        if not _ensure_operating_float(world, party, owned_plot_ids):
+            if _settler_try_hand_extraction(
+                world, party, owned, plot, prefer_recipe=_recipe_id
+            ):
+                return True
+            return False
+        if not can_afford_recipe_labor(world, party, chosen_rid):
+            if _settler_try_hand_extraction(
+                world, party, owned, plot, prefer_recipe=_recipe_id
+            ):
+                return True
+            return False
     _ensure_recipe_inputs(world, party, chosen_rid, staging_plot_id=owned)
     r = _settler_start_production(world, party, owned, chosen_rid)
     if not r.get("ok") or not r.get("started", True):
+        if _settler_try_hand_extraction(
+            world, party, owned, plot, prefer_recipe=_recipe_id
+        ):
+            return True
         return False
 
     recipe = RECIPES.get(chosen_rid)
@@ -1596,9 +1926,11 @@ def _tick_one_settler(
         # owned_by_party is authoritative for this tick — _settler_pipeline_step
         # mutates it in place when a claim lands, so no rescan is needed here.
         owned_ids = owned_by_party.get(party, ())
-        owned = owned_ids[0] if owned_ids else None
-        if owned is not None:
-            pl = world.plots[owned]
+        work_plot = (
+            _settler_best_owned_plot(world, party, owned_ids) if owned_ids else None
+        )
+        if work_plot is not None:
+            pl = world.plots[work_plot]
             if pl.surveyed:
                 locked_line = _settler_resolve_line(world, party, pl, locked_line)
         progressed = _settler_pipeline_step(
@@ -1614,6 +1946,111 @@ def _tick_one_settler(
     owned_ids = owned_by_party.get(party, ())
     if owned_ids:
         _maybe_post_settler_job_opening(world, party, owned_ids[0])
+
+
+def settler_relieve_plot_storage(
+    world: World, party: PartyId, plot_id: PlotId
+) -> bool:
+    """Sell plot-staged stock so a blocked production batch can finish. Returns True if anything moved."""
+    if not str(party).startswith("settler_"):
+        return False
+    owned = tuple(pl.plot_id for pl in world.plots.values() if pl.owner == party)
+    if not owned:
+        owned = (plot_id,)
+    before = sum(
+        party_material_held(world, party, MaterialId(m), owned_plot_ids=owned)
+        for m in _STOCKPILE_MATS
+    )
+    _settler_flush_plot_outputs(
+        world, party, owned, max_units=80, materials=tuple(MaterialId(m) for m in _STOCKPILE_MATS)
+    )
+    for mid_s in _STOCKPILE_MATS:
+        mid = MaterialId(mid_s)
+        hq = party_material_held(world, party, mid, owned_plot_ids=owned)
+        if hq >= 2:
+            _settler_sell_material(world, party, mid, hq - 1, owned_plot_ids=owned)
+    after = sum(
+        party_material_held(world, party, MaterialId(m), owned_plot_ids=owned)
+        for m in _STOCKPILE_MATS
+    )
+    return after < before
+
+
+def tick_settler_storage_relief(world: World) -> None:
+    """Daily: clear plot yards so production completions are not blocked indefinitely."""
+    if world.scenario_id != "genesis":
+        return
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
+
+    if int(world.tick) <= 0 or int(world.tick) % int(TICKS_PER_GAME_DAY) != 0:
+        return
+    owned_by_party = _owned_plots_by_party(world)
+    for party in sorted(
+        (p for p in world.parties if str(p).startswith("settler_")), key=str
+    ):
+        owned_ids = owned_by_party.get(party, ())
+        if not owned_ids:
+            continue
+        for pid in owned_ids:
+            settler_relieve_plot_storage(world, party, pid)
+        if needs_float_recovery(world, party):
+            _ensure_operating_float(world, party, owned_ids)
+        else:
+            _liquidate_settler_stockpiles(world, party, owned_ids)
+
+
+def tick_settler_idle_recovery(world: World) -> None:
+    """Daily safety net: restart any settler with no active run (stride scheduling gaps)."""
+    if world.scenario_id != "genesis":
+        return
+    from realm.core.time_scale import TICKS_PER_GAME_DAY
+    from realm.production.production import plot_has_active_production
+
+    if int(world.tick) <= 0 or int(world.tick) % int(TICKS_PER_GAME_DAY) != 0:
+        return
+
+    owned_by_party = _owned_plots_by_party(world)
+    for party in sorted(
+        (p for p in world.parties if str(p).startswith("settler_")), key=str
+    ):
+        stalled = next(
+            (
+                r
+                for r in world.active_production
+                if r.party == party and int(r.ticks_remaining) <= 1
+            ),
+            None,
+        )
+        if stalled is not None:
+            settler_relieve_plot_storage(world, party, stalled.plot_id)
+            continue
+        if any(r.party == party for r in world.active_production):
+            continue
+        owned_ids = owned_by_party.get(party, ())
+        if not owned_ids:
+            continue
+        owned = _settler_best_owned_plot(world, party, owned_ids)
+        plot = world.plots.get(owned)
+        if plot is None or not plot.surveyed:
+            continue
+        if cash_urgency(world, party) >= 0.45:
+            _ensure_operating_float(world, party, owned_ids)
+        _ensure_settler_boot_tools(world, party, None)
+        line = _settler_resolve_line(world, party, plot, None)
+        if line is None:
+            _settler_try_hand_extraction(world, party, owned, plot, prefer_recipe=None)
+            continue
+        rid, building_id = line
+        _ensure_settler_boot_tools(world, party, rid)
+        if not _ensure_workshop(world, party, owned, building_id):
+            _settler_try_hand_extraction(world, party, owned, plot, prefer_recipe=rid)
+            continue
+        chosen = _pick_recipe_to_start(world, party, plot, owned, prefer_recipe_id=rid)
+        if chosen is None:
+            _settler_try_hand_extraction(world, party, owned, plot, prefer_recipe=rid)
+            continue
+        _ensure_recipe_inputs(world, party, chosen, staging_plot_id=owned)
+        _settler_start_production(world, party, owned, chosen)
 
 
 def tick_settler_business(world: World) -> None:

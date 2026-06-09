@@ -16,7 +16,11 @@ No Tier-1 timer NPCs: ``advance_tick`` skips ``tick_tier1/tier2`` when
 
 from __future__ import annotations
 
-from realm.agents.genesis_settlers import tick_settler_business
+from realm.agents.genesis_settlers import (
+    tick_settler_business,
+    tick_settler_idle_recovery,
+    tick_settler_storage_relief,
+)
 from realm.agents.settler_identity import tick_settler_world_models
 from realm.corporations.acquisitions import tick_acquisition_offers
 from realm.corporations.formation import tick_partnership_proposals
@@ -48,6 +52,7 @@ from realm.contracts.tenders import (
     tick_settler_tender_bidding,
     tick_tender_lifecycle,
 )
+from realm.genesis.procurement import tick_genesis_standing_demand, tick_npc_tender_posting
 from realm.deals.bank_loans import tick_loan_repayment
 from realm.deals.bilateral_contracts import tick_bilateral_contracts, tick_contract_proposals
 from realm.deals.market_tactics import tick_market_cornering, tick_predatory_pricing
@@ -82,10 +87,14 @@ def tick_genesis_agents(world: World) -> None:
     tick_scout_actions(world)
     tick_market_rumors(world)
     tick_settler_business(world)
+    tick_settler_storage_relief(world)
+    tick_settler_idle_recovery(world)
     tick_npc_self_roads(world)
+    tick_genesis_standing_demand(world)
     tick_settler_perishable_sales(world)
     tick_settler_margin_review(world)
     tick_researcher_experiments(world)
+    tick_npc_tender_posting(world)
     tick_settler_tender_bidding(world)
     tick_tender_lifecycle(world)
     tick_consolidator(world)
