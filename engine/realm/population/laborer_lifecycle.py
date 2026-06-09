@@ -17,6 +17,7 @@ from realm.population.laborers import (
     LaborerNPC,
     _retire_laborer,
     laborer_cash_account,
+    LABORER_STARTING_CASH_CENTS,
 )
 from realm.world import World
 
@@ -28,8 +29,8 @@ HEALTH_LOW_OUTPUT_THRESHOLD: Final[float] = 0.30
 HEALTH_LOW_OUTPUT_MULTIPLIER: Final[float] = 0.50
 WAGE_SAVINGS_FRACTION_BPS: Final[int] = 2_000  # 20 %
 REPRODUCTION_HEALTH_MIN: Final[float] = 0.40
-REPRODUCTION_SAVINGS_MIN_CENTS: Final[int] = 500
-BIRTH_CHANCE_PER_WEEK: Final[float] = 0.25
+REPRODUCTION_SAVINGS_MIN_CENTS: Final[int] = 150
+BIRTH_CHANCE_PER_WEEK: Final[float] = 0.35
 SKILL_CAP: Final[int] = 100
 SKILL_YIELD_THRESHOLD: Final[int] = 50
 FOOD_HEALTH_MATERIALS: Final[frozenset[str]] = frozenset(
@@ -337,6 +338,13 @@ def _spawn_laborer_child(
         last_needs_tick=int(world.tick),
     )
     world.ledger.ensure_account(laborer_cash_account(lid))
+    tr = world.ledger.transfer(
+        debit=system_reserve_account(),
+        credit=laborer_cash_account(lid),
+        amount_cents=LABORER_STARTING_CASH_CENTS,
+    )
+    if not isinstance(tr, MoneyErr):
+        lab.cash_cents = LABORER_STARTING_CASH_CENTS
     world.laborers[lid] = lab
     parent_a.children_born = int(getattr(parent_a, "children_born", 0)) + 1
     parent_b.children_born = int(getattr(parent_b, "children_born", 0)) + 1

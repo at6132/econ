@@ -522,6 +522,26 @@ def _laborer_working_plot(world: World, employer: PartyId, plot_id: PlotId) -> b
     return False
 
 
+def _plot_qualifies_for_genesis_jobs(
+    world: World, party: PartyId, plot_id: PlotId
+) -> bool:
+    """Genesis settlers only hire when a workshop on this plot is producing or just did."""
+    if world.scenario_id != "genesis" or not str(party).startswith("settler_"):
+        return True
+    from realm.production.production import plot_has_active_production
+
+    if plot_has_active_production(world, plot_id):
+        return True
+    last = (
+        (world.scenario_state.get("settler_plot_last_production_tick") or {})
+        .get(str(party), {})
+        .get(str(plot_id))
+    )
+    if last is not None and int(world.tick) - int(last) <= 4 * TICKS_PER_GAME_DAY:
+        return True
+    return False
+
+
 def maybe_post_job_openings_for_party(world: World, party: PartyId) -> int:
     """Post openings for each active production building without a filled slot."""
     if not _employer_can_post_job(world, party, JOB_WAGE_CENTS_PER_DAY):
@@ -534,6 +554,8 @@ def maybe_post_job_openings_for_party(world: World, party: PartyId) -> int:
     def _try_post(plot_key: str, blueprint_id: str) -> None:
         nonlocal posted
         if plot_key in seen_plots:
+            return
+        if not _plot_qualifies_for_genesis_jobs(world, party, PlotId(plot_key)):
             return
         seen_plots.add(plot_key)
         if _opening_exists_for_plot(world, party, PlotId(plot_key)):

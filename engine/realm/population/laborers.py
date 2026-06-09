@@ -51,8 +51,17 @@ from realm.world import World
 TICKS_PER_GAME_DAY: Final[int] = 1440
 """One game-day = 1,440 ticks (matches the rest of the simulation)."""
 
-LABORER_LIFESPAN_MIN_DAYS: Final[int] = 300
-LABORER_LIFESPAN_MAX_DAYS: Final[int] = 500
+LABORER_LIFESPAN_MIN_DAYS: Final[int] = 400
+LABORER_LIFESPAN_MAX_DAYS: Final[int] = 650
+
+# Bootstrap age spread — keep day-1 workers young so a 365-day solo run is not
+# one synchronized retirement cliff (was 0–200 game-days at boot).
+LABORER_BOOT_MAX_AGE_DAYS: Final[int] = 45
+
+# Steady-state: when an island drops below this fraction of its landmass target,
+# deterministic immigration tops up (weekly cap per island).
+LABOR_POOL_REPLENISH_FLOOR_BPS: Final[int] = 7_500  # 75 %
+LABOR_POOL_REPLENISH_WEEKLY_CAP: Final[int] = 6
 
 LABORER_STARTING_CASH_CENTS: Final[int] = 20_000
 """$200 subsistence stake. The only money injection on the laborer side."""
@@ -118,6 +127,7 @@ __all__ = [
     "seed_island_laborers",
     "tick_laborers",
     "tick_laborer_births",
+    "tick_labor_pool_replenishment",
     "laborer_count_for_island",
     "unemployed_laborer_count_for_island",
     "productivity_multiplier",
@@ -192,7 +202,7 @@ def town_treasury_account(town_id: str) -> AccountId:
 
 
 def _roll_laborer_lifespan_days(world: World, laborer_id: str) -> int:
-    """Deterministic per-laborer lifespan in game-days (inclusive 300–500)."""
+    """Deterministic per-laborer lifespan in game-days (inclusive 400–650)."""
     rng = world.rng(f"lifespan:{laborer_id}:{world.tick}")
     span = LABORER_LIFESPAN_MAX_DAYS - LABORER_LIFESPAN_MIN_DAYS + 1
     return LABORER_LIFESPAN_MIN_DAYS + int(rng.random() * span)
@@ -243,10 +253,9 @@ def seed_island_laborers(world: World, island_id: int, count: int) -> list[str]:
         lid = f"lab_{next_seq:05d}"
         next_seq += 1
         name = generate_laborer_name(rng)
-        # Stagger bootstrap ages 0–200 game-days (right-skewed toward young)
-        # so lifecycle retirements spread instead of syncing on one cliff.
+        # Young boot cohort — retirements spread across years 2–3, not month 2.
         age_rng = world.rng(f"laborer_age_spread:{laborer_index}:{world.tick}")
-        age_days = int(age_rng.random() ** 0.6 * 200)
+        age_days = int(age_rng.random() ** 0.85 * LABORER_BOOT_MAX_AGE_DAYS)
         age_ticks = age_days * TICKS_PER_GAME_DAY
         lifespan_days = _roll_laborer_lifespan_days(world, lid)
         # Mirror baseline decay already accrued (see laborer_lifecycle constants).
@@ -526,6 +535,70 @@ def tick_laborer_births(world: World) -> int:
     this tick (always 0 for now).
     """
     return 0
+
+
+def tick_labor_pool_replenishment(world: World) -> int:
+    """Weekly immigration when an island's workforce falls below its design target."""
+    if int(world.tick) <= 0 or int(world.tick) % (7 * TICKS_PER_GAME_DAY) != 0:
+        return 0
+    plot_islands = world.scenario_state.get("plot_islands") or {}
+    if not plot_islands:
+        return 0
+    from realm.population.landmass_density import laborer_target_count_for_landmass
+
+    distinct_islands = sorted({int(isl) for isl in plot_islands.values()})
+    added = 0
+    for isl in distinct_islands:
+        target = laborer_target_count_for_landmass(world, isl)
+        if target <= 0:
+            continue
+        have = laborer_count_for_island(world, isl)
+        floor = target * LABOR_POOL_REPLENISH_FLOOR_BPS // 10_000
+        if have >= floor:
+            continue
+        need = min(target - have, LABOR_POOL_REPLENISH_WEEKLY_CAP)
+        if need <= 0:
+            continue
+        reserve = world.ledger.balance(system_reserve_account())
+        if reserve < need * (LABORER_STARTING_CASH_CENTS + 5_000):
+            continue
+        ids = seed_island_laborers(world, isl, need)
+        if not ids:
+            continue
+        added += len(ids)
+        town = next(
+            (t for t in world.towns.values() if int(t.island_id) == isl),
+            None,
+        )
+        if town is not None:
+            from realm.population.towns import residence_capacity
+
+            free_slots: list[PlotId] = []
+            for pid in town.residential_plots:
+                cap = residence_capacity(world, pid)
+                occ = sum(
+                    1
+                    for lb in world.laborers.values()
+                    if lb.home_plot_id == pid and lb.home_town is not None
+                )
+                for _ in range(max(0, cap - occ)):
+                    free_slots.append(pid)
+            for lid, slot_pid in zip(ids, free_slots):
+                lab = world.laborers.get(lid)
+                if lab is None:
+                    continue
+                lab.home_plot_id = slot_pid
+                lab.home_town = town.town_id
+                lab.needs["shelter"] = 1.0
+        log_event(
+            world,
+            "laborer_immigration",
+            f"{len(ids)} laborers immigrated to island {isl} (pool {have}→{have + len(ids)} vs target {target})",
+            island_id=int(isl),
+            count=len(ids),
+            target=target,
+        )
+    return added
 
 
 # ───────────────────────────── analytics ─────────────────────────────
