@@ -110,13 +110,13 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis.py": {
-    "mtime": 1780621682.9697013,
-    "ast_hash": "ec301c2b30cb7e76307f235b2a1ebf25",
+    "mtime": 1780797078.576432,
+    "ast_hash": "cdaecfa9ded38015565bf4df71cabe52",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis_settlers.py": {
-    "mtime": 1780664267.1591299,
-    "ast_hash": "8b60970371a2ad942b3ce5b76ab31251",
+    "mtime": 1780862854.9504373,
+    "ast_hash": "6fb729041ca279848a1849c6899cb232",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\llm_cli.py": {
@@ -305,9 +305,9 @@
     "semantic_hash": "f334cbbb04b64b1851d51cb9da30441f"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\contracts\\tenders.py": {
-    "mtime": 1779026571.4555883,
-    "ast_hash": "282944ef60526cc6b90f6ccb8072b4e4",
-    "semantic_hash": "282944ef60526cc6b90f6ccb8072b4e4"
+    "mtime": 1780797162.8121254,
+    "ast_hash": "d843259bb395103aeb1028404ed89a6c",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\contracts\\__init__.py": {
     "mtime": 1779026571.4515862,
@@ -335,9 +335,9 @@
     "semantic_hash": "c367a706bbaba90840bcbba78b30322c"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\core\\player_economy.py": {
-    "mtime": 1779325203.9553227,
-    "ast_hash": "de6b40c217988f860dec0bfe7bb885e4",
-    "semantic_hash": "de6b40c217988f860dec0bfe7bb885e4"
+    "mtime": 1780851514.0602393,
+    "ast_hash": "88e3016dad81511686be6099e01e88b0",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\core\\rng.py": {
     "mtime": 1779026571.4598503,
@@ -430,9 +430,9 @@
     "semantic_hash": "dfd736e7913d31fa9abfb094a18eaf21"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\economy\\market_delivery.py": {
-    "mtime": 1779375700.099243,
-    "ast_hash": "a1052f4314d68b268e3cd1d152956f77",
-    "semantic_hash": "a1052f4314d68b268e3cd1d152956f77"
+    "mtime": 1780862835.758371,
+    "ast_hash": "68537bd1d7e697d2f625154f8e7f5137",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\economy\\market_events.py": {
     "mtime": 1779026571.4688463,
@@ -515,9 +515,9 @@
     "semantic_hash": "d35bdf65a539722c8c5b4f1f0306f287"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\consolidator.py": {
-    "mtime": 1779026571.477453,
-    "ast_hash": "490a8803654fa3434e8c845190cbc923",
-    "semantic_hash": "490a8803654fa3434e8c845190cbc923"
+    "mtime": 1780861697.8288949,
+    "ast_hash": "e57c2c57278030ed4b7c267eeaf8d1e7",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\construction_firms.py": {
     "mtime": 1779026571.4789622,
@@ -565,13 +565,13 @@
     "semantic_hash": "d8af120bbe9a089dc46607d1f30faa19"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\settler_cost_basis.py": {
-    "mtime": 1779026571.4849694,
-    "ast_hash": "9f4ba9e186276c9594f34959f1a31be9",
-    "semantic_hash": "9f4ba9e186276c9594f34959f1a31be9"
+    "mtime": 1780797078.5151887,
+    "ast_hash": "a00da75b8bb7f201e1eef9dffa480bcb",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\settler_cycle.py": {
-    "mtime": 1780659554.3568354,
-    "ast_hash": "c3d3fbd1107a113ffeb0c3f31762e7db",
+    "mtime": 1780851518.7928333,
+    "ast_hash": "628b31fc7b7024b094a0c99d84527daa",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\settler_names.py": {
@@ -580,8 +580,8 @@
     "semantic_hash": "151df30bfe2b7956acbe7f1147233c95"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\settler_upgrades.py": {
-    "mtime": 1780594612.7600796,
-    "ast_hash": "6e4502c51ef94ee3885707dd3715f734",
+    "mtime": 1780669069.1374416,
+    "ast_hash": "0aef5539c92db4c4f402cf8d95f08151",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\shippers.py": {
@@ -615,9 +615,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\npc_self_roads.py": {
-    "mtime": 1779320936.007383,
-    "ast_hash": "3979c2722a6362eeea30518730738dd4",
-    "semantic_hash": "3979c2722a6362eeea30518730738dd4"
+    "mtime": 1780797078.4138827,
+    "ast_hash": "6acdc3586e9b7a45e5b330433d007485",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\plot_access.py": {
     "mtime": 1779026571.490487,
@@ -640,9 +640,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\road_connectivity.py": {
-    "mtime": 1780586564.535326,
-    "ast_hash": "2a3d02a3d9a5944a4a05c7bd2fb019f5",
-    "semantic_hash": "2a3d02a3d9a5944a4a05c7bd2fb019f5"
+    "mtime": 1780669077.5965202,
+    "ast_hash": "0b2e1b5f4ccbdbb0013363882db2048f",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\infrastructure\\route_operators.py": {
     "mtime": 1779319799.6338034,
@@ -695,8 +695,8 @@
     "semantic_hash": "9c7174d8c4b979f39a781d99737a43a5"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\employment.py": {
-    "mtime": 1780606672.32625,
-    "ast_hash": "ded7a7d504179fad339127ba535e3a80",
+    "mtime": 1780797078.3818815,
+    "ast_hash": "69169a3f5eea5848599f5bb75452debe",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\population\\labor.py": {
@@ -760,8 +760,8 @@
     "semantic_hash": "5ce0a02f3fcc9fae2dcadfde29bb2354"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\production\\production.py": {
-    "mtime": 1780610860.0699842,
-    "ast_hash": "7cc7edf151bdefbd986f037d63fc8fda",
+    "mtime": 1780797078.4625154,
+    "ast_hash": "37d09478abf1b2defe12516b8fc9ccad",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\production\\quality.py": {
@@ -780,9 +780,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\production\\recipe_workshops.py": {
-    "mtime": 1779368412.733322,
-    "ast_hash": "d3432d5dcfeea8cb4bb6b73c6ca0bc71",
-    "semantic_hash": "d3432d5dcfeea8cb4bb6b73c6ca0bc71"
+    "mtime": 1780669710.791199,
+    "ast_hash": "30e80603caafdd7115be759c597f8bc2",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\production\\schematic.py": {
     "mtime": 1779402197.0558398,
@@ -1250,9 +1250,9 @@
     "semantic_hash": "5d8ab515433430c2835b7c1a32941da3"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\economy\\test_market_physical_delivery.py": {
-    "mtime": 1779375784.2647514,
-    "ast_hash": "db90c595804e0b9e004eb881eab64e06",
-    "semantic_hash": "db90c595804e0b9e004eb881eab64e06"
+    "mtime": 1780862896.383874,
+    "ast_hash": "3f28a2ebcc7f586e64ff4b327126e1df",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\economy\\test_market_reserves_and_breach.py": {
     "mtime": 1779375852.7755485,
@@ -1305,13 +1305,13 @@
     "semantic_hash": "4dc5c1970ef8422365bc40700d26aabf"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_consolidator.py": {
-    "mtime": 1780664508.131516,
-    "ast_hash": "40d2b55b5e04d12e3bca97b9985641f2",
+    "mtime": 1780861726.7735467,
+    "ast_hash": "86991064ec0e33a868e9e340ba92bde9",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_genesis.py": {
-    "mtime": 1780662538.331135,
-    "ast_hash": "d2f1ecbde711fad08ff3490587a98c31",
+    "mtime": 1780854244.753861,
+    "ast_hash": "178ee28aeb1a194a8d4955c0248b1aac",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_margaux_arc.py": {
@@ -1535,8 +1535,8 @@
     "semantic_hash": "f6751665637d6b9cfc0023a94015cc17"
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_stores.py": {
-    "mtime": 1780662706.7793615,
-    "ast_hash": "db51cbfebcde576be5a83aab7a7ceacb",
+    "mtime": 1780666435.41178,
+    "ast_hash": "21ee7b0b3699b85fce58434455a28173",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\population\\test_towns.py": {
@@ -2250,8 +2250,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\exchange_restock.py": {
-    "mtime": 1780633151.978727,
-    "ast_hash": "f7c0702278c2e28a785fa01443ef1a0d",
+    "mtime": 1780797078.7424645,
+    "ast_hash": "90e67d3fb2eeef6e81d4d3f0cd4bb234",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\tests\\core\\test_build_info.py": {
@@ -2395,8 +2395,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\formation.py": {
-    "mtime": 1780620224.8254504,
-    "ast_hash": "25cf8b65af25d9bf0e8bcbb2da9720ef",
+    "mtime": 1780797157.9871829,
+    "ast_hash": "2d7814b3ccc90f1a8b18490edd7cf965",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\__init__.py": {
@@ -2440,8 +2440,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\deals\\bilateral_contracts.py": {
-    "mtime": 1780620222.102387,
-    "ast_hash": "4df562245bf24e3fe58e569411644ea9",
+    "mtime": 1780797078.6365938,
+    "ast_hash": "ec6ca3a86ba2b041be0a1e23404e5b8e",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\deals\\market_tactics.py": {
@@ -2455,8 +2455,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\geography\\land_market.py": {
-    "mtime": 1780615168.284038,
-    "ast_hash": "8361d28aba1a5b2b07c8ecaf325033cd",
+    "mtime": 1780797078.7894614,
+    "ast_hash": "84c194d160babfd05efb917a2fc8148d",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\geography\\__init__.py": {
@@ -2500,8 +2500,73 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\year.py": {
-    "mtime": 1780661050.3333182,
-    "ast_hash": "e2b6cf4e8e271190969640877aea4780",
+    "mtime": 1780813591.2209392,
+    "ast_hash": "a74e7ddaf6ef4352c821b1251da4c624",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\year_report.json": {
+    "mtime": 1780845989.000152,
+    "ast_hash": "259800866aa3132c739ac8095dcd587f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\tests\\genesis\\test_economy_sustain.py": {
+    "mtime": 1780797078.4400892,
+    "ast_hash": "c44aebb482f404a78a62375b969d7d49",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\pytest-sustain.txt": {
+    "mtime": 1780676652.5080862,
+    "ast_hash": "325393217e218ae2a086adabd5d5b367",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\_diag_day60_out.txt": {
+    "mtime": 1780676126.3546762,
+    "ast_hash": "a59c971d2b76d064f1c79fb7c2268383",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\_quick_sustain_out.txt": {
+    "mtime": 1780675996.4186578,
+    "ast_hash": "56fce4990e61fcf2a102b59a9bbffcc4",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\procurement.py": {
+    "mtime": 1780859245.9256117,
+    "ast_hash": "201b1ba0a214ed09ee2994efe2357a82",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\pytest-sustain-90.txt": {
+    "mtime": 1780677953.819427,
+    "ast_hash": "854fac861abe000346e433e22abad3bd",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\pytest-sustain-final.txt": {
+    "mtime": 1780687373.6137087,
+    "ast_hash": "d95b78ed635388ba279544f89655b0e6",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\agents\\economic_reasoning.py": {
+    "mtime": 1780862851.0541961,
+    "ast_hash": "5f31527067f947e299f3fc274c542af8",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\tests\\agents\\test_economic_reasoning.py": {
+    "mtime": 1780862860.6791613,
+    "ast_hash": "01ab7c7da9bf1116027ef70985fe6d53",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\scripts\\diagnose_day50.py": {
+    "mtime": 1780862861.573702,
+    "ast_hash": "4b6d32512d899219dc0a91f774bbddce",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\pytest-sustain-last.txt": {
+    "mtime": 1780841479.3580344,
+    "ast_hash": "8c2d5ab5e7de385763f52eaeb0693162",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\sustain-test-out.txt": {
+    "mtime": 1780862909.2390628,
+    "ast_hash": "c42eca3d1a522bd2ac8c80f1d5c72eb3",
     "semantic_hash": ""
   }
 }
