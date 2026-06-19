@@ -13,6 +13,7 @@ Runtime: ~10 minutes. Grab a coffee.
 from __future__ import annotations
 
 import json
+import os
 import time
 import sys
 from collections import Counter, defaultdict
@@ -23,8 +24,8 @@ SEED            = 42
 GRID_W, GRID_H  = 48, 36
 SETTLER_COUNT   = 8
 SETTLER_CAP     = 50
-GAME_DAYS       = 365
-OUT             = Path("year_report.json")
+GAME_DAYS       = int(os.environ.get("GAME_DAYS", "365"))
+OUT             = Path(os.environ.get("YEAR_REPORT", "year_report.json"))
 
 MATS = [
     "grain","coal","timber","lumber","iron_ore","iron_ingot",
