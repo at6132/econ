@@ -470,12 +470,9 @@ def _maybe_build_export_dock(
 
 
 def _settler_collect_fob_pickups(world: World, party: PartyId) -> bool:
-    from realm.economy.market_delivery import _fob_ids_for_buyer, pickup_fob
+    from realm.economy.market_delivery import collect_fob_pickups_for_buyer
 
-    for pid in _fob_ids_for_buyer(world, party):
-        if pickup_fob(world, party, pid).get("ok"):
-            return True
-    return False
+    return collect_fob_pickups_for_buyer(world, party)
 
 
 def _has_secondary_on_plot(world: World, party: PartyId, plot_id: PlotId) -> bool:
@@ -1223,6 +1220,7 @@ def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id:
     if _settler_self_build_ready(world, party, plot_id, building_id):
         r = build_on_plot(world, party, plot_id, building_id, "self")
         if r.get("ok"):
+            _maybe_announce_supply_capacity(world, party, building_id)
             return True
     need = _TURNKEY_CENTS.get(building_id)
     if need is None:
@@ -1239,7 +1237,29 @@ def _ensure_workshop(world: World, party: PartyId, plot_id: PlotId, building_id:
         from realm.agents.llm_voice import maybe_first_foundry_voice
 
         maybe_first_foundry_voice(world, party)
+    if r.get("ok"):
+        _maybe_announce_supply_capacity(world, party, building_id)
     return bool(r.get("ok"))
+
+
+def _maybe_announce_supply_capacity(world: World, party: PartyId, building_id: str) -> None:
+    from realm.core.ids import MaterialId
+    from realm.economy.market_signals import note_supply_capacity_feed
+
+    output_by_building: dict[str, MaterialId] = {
+        "strip_mine": MaterialId("coal"),
+        "wood_shop": MaterialId("lumber"),
+        "foundry": MaterialId("iron_ingot"),
+        "dock": MaterialId("coal"),
+    }
+    out = output_by_building.get(building_id)
+    if out is not None:
+        note_supply_capacity_feed(
+            world,
+            str(party),
+            building_id=building_id,
+            output_material=out,
+        )
 
 
 def _stock_room(world: World, party: PartyId) -> int:
@@ -1628,6 +1648,9 @@ def _settler_sell_material(
     urgency = cash_urgency(world, party)
     urgent = urgency >= 0.75
     illiquid = output_bid_depth(world, mid) <= 0
+    from realm.economy.market_signals import equilibrium_ask_cents, should_list_ask_before_bids
+
+    ask_first = should_list_ask_before_bids(world, mid) and not urgent
 
     from realm.production.storage_caps import is_carried_material
 
@@ -1637,6 +1660,16 @@ def _settler_sell_material(
         if total <= 0:
             return
         ensure_inventory_from_stash(world, party, mid, min(max_units, total))
+        if ask_first and not illiquid:
+            q = world.inventory.qty(party, mid)
+            if q > 0:
+                px = _list_price_cents(world, mid, party=party)
+                if px > 0 and (urgent or illiquid or should_requote(world, party, mid, "ask", px)):
+                    cancels = 0 if (urgent or illiquid) else cancel_party_asks_for_material(world, party, mid)
+                    charge_cancel_fee(world, party, cancels)
+                    res = place_sell_order(world, party, mid, min(q, max_units // 2), px)
+                    if res.get("ok"):
+                        record_requote(world, party, mid, "ask", px)
         sell_into_bids(world, party, mid, max_units)
         q = world.inventory.qty(party, mid)
         if q <= 0:
@@ -1646,7 +1679,11 @@ def _settler_sell_material(
         px = (
             fire_sale_price_cents(world, party, mid)
             if illiquid
-            else _list_price_cents(world, mid, party=party)
+            else (
+                equilibrium_ask_cents(world, mid)
+                if not ask_first
+                else _list_price_cents(world, mid, party=party)
+            )
         )
         if not urgent and not illiquid and not should_requote(world, party, mid, "ask", px):
             return
@@ -1670,13 +1707,35 @@ def _settler_sell_material(
         if best_plot is None or best_qty <= 0:
             return
 
+        terms = recommended_sell_delivery_terms(world, party, best_plot)
+        sell_qty = min(best_qty, max_units)
+
+        if ask_first and not illiquid:
+            px = _list_price_cents(world, mid, party=party)
+            if px > 0 and (urgent or illiquid or should_requote(world, party, mid, "ask", px)):
+                list_qty = min(avail := plot_available_qty(world, best_plot, mid), max(sell_qty // 2, 4))
+                if list_qty > 0:
+                    cancels = cancel_party_asks_for_material(world, party, mid)
+                    charge_cancel_fee(world, party, cancels)
+                    res = place_sell_order(
+                        world,
+                        party,
+                        mid,
+                        list_qty,
+                        px,
+                        from_plot_id=best_plot,
+                        delivery_terms=terms,
+                    )
+                    if res.get("ok"):
+                        record_requote(world, party, mid, "ask", px)
+
         sell_into_bids(
             world,
             party,
             mid,
-            min(best_qty, max_units),
+            sell_qty,
             from_plot_id=best_plot,
-            delivery_terms=recommended_sell_delivery_terms(world, party, best_plot),
+            delivery_terms=terms,
         )
         avail = plot_available_qty(world, best_plot, mid)
         if avail <= 0:
@@ -1691,7 +1750,11 @@ def _settler_sell_material(
         px = (
             fire_sale_price_cents(world, party, mid)
             if illiquid
-            else _list_price_cents(world, mid, party=party)
+            else (
+                equilibrium_ask_cents(world, mid)
+                if not ask_first
+                else _list_price_cents(world, mid, party=party)
+            )
         )
         if px <= 0:
             return
@@ -1709,7 +1772,7 @@ def _settler_sell_material(
             list_qty,
             px,
             from_plot_id=best_plot,
-            delivery_terms=recommended_sell_delivery_terms(world, party, best_plot),
+            delivery_terms=terms,
         )
         if res.get("ok"):
             record_requote(world, party, mid, "ask", px)
