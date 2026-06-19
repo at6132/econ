@@ -54,12 +54,25 @@ def test_liquidity_and_tender_bps_use_personality() -> None:
 
 def test_opportunistic_buy_when_asks_below_fair_value() -> None:
     w = bootstrap_genesis(seed=3, grid_width=12, grid_height=12, settler_count=2)
+    from realm.actions import claim_plot, survey_plot
     from realm.genesis.consolidator import CONSOLIDATOR_PARTY_ID
     from realm.economy.markets import place_sell_order
+    from realm.infrastructure.plot_logistics import add_party_plot_stock
 
     seller = PartyId("settler_001")
     coal = MaterialId("coal")
-    place_sell_order(w, seller, coal, 5, 50)
+    pid = next(
+        p.plot_id
+        for p in w.plots.values()
+        if p.owner is None
+        and str(p.terrain.value) not in ("water_deep", "water_shallow")
+    )
+    claim_plot(w, seller, pid)
+    survey_plot(w, seller, pid)
+    add_party_plot_stock(w, seller, coal, 20, preferred_plot=pid)
+    listed = place_sell_order(w, seller, coal, 5, 50)
+    assert listed.get("ok"), listed
+    w.tick = 1440  # refresh daily market oracle after listing
     have = int(w.inventory.qty(CONSOLIDATOR_PARTY_ID, coal))
     decision = evaluate_staple_purchase(
         w, CONSOLIDATOR_PARTY_ID, coal, target_stock=12, current_stock=have

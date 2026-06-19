@@ -81,9 +81,10 @@ def test_consolidator_buys_key_input_aggressively() -> None:
     w = _world()
     _seed_some_iron_ore_asks(w)
     pre = int(w.inventory.qty(CONSOLIDATOR_PARTY_ID, MaterialId("iron_ore")))
-    # Force a day-boundary tick of the consolidator strategy.
-    w.tick = 1440
-    tick_consolidator(w)
+    # Staple purchase caps one tranche per day (~target/3); run three days.
+    for day in (1, 2, 3):
+        w.tick = day * 1440
+        tick_consolidator(w)
     post = int(w.inventory.qty(CONSOLIDATOR_PARTY_ID, MaterialId("iron_ore")))
     assert post > pre, f"expected Kessler to buy iron_ore; before={pre}, after={post}"
     # Spec: 5 days × ~6/day = 30 units target buffer.
