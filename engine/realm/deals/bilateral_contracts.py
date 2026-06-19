@@ -456,16 +456,17 @@ def _repeat_buyers(world: World, seller: PartyId, material: str) -> list[PartyId
     cutoff = int(world.tick) - lookback_days * TICKS_PER_GAME_DAY
     seller_s = str(seller)
     buyers: dict[str, int] = {}
-    trade_kinds = ("market_buy", "market_match")
+    trade_kinds = ("market_buy", "market_match", "market_sell_fill")
     for ev in world.event_log:
         tick = int(ev.get("tick", 0))
         if tick < cutoff:
             continue
-        if str(ev.get("kind", "")) not in trade_kinds:
+        kind = str(ev.get("kind", ""))
+        if kind not in trade_kinds:
             continue
         if str(ev.get("material", "")) != material:
             continue
-        if str(ev.get("kind", "")) == "market_match":
+        if kind in ("market_match", "market_sell_fill"):
             seller_hit = str(ev.get("seller") or "")
             if seller_hit != seller_s:
                 continue

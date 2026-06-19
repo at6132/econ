@@ -386,6 +386,17 @@ def _apply_cross_at_ask_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         price_per_unit_cents=unit_px,
         quality=ask_quality,
     )
+    from realm.economy.market_feed import maybe_feed_market_fill
+
+    maybe_feed_market_fill(
+        world,
+        buyer=bid.party,
+        seller=ask.party,
+        material=ask.material,
+        qty=fill,
+        unit_price_cents=unit_px,
+        fill_kind="match",
+    )
     _record_genesis_fill(world, ask.material, fill, unit_px, ask.party)
     bump_spot_exchange_honored(world, bid.party, ask.party)
     _maybe_apply_exchange_rep_adjustment(world, bid.party, ask.party, fill, unit_px)
@@ -451,6 +462,17 @@ def _apply_cross_at_bid_price(world: World, bid: BidOrder, ask: AskOrder, fill: 
         material=str(ask.material),
         qty=fill,
         price_per_unit_cents=unit_px,
+    )
+    from realm.economy.market_feed import maybe_feed_market_fill
+
+    maybe_feed_market_fill(
+        world,
+        buyer=bid.party,
+        seller=ask.party,
+        material=ask.material,
+        qty=fill,
+        unit_price_cents=unit_px,
+        fill_kind="match",
     )
     _record_genesis_fill(world, ask.material, fill, unit_px, ask.party)
     bump_spot_exchange_honored(world, bid.party, ask.party)
@@ -626,6 +648,9 @@ def place_sell_order(
     from realm.economy.supply_signals import maybe_emit_supply_concentration
 
     maybe_emit_supply_concentration(world, material)
+    from realm.economy.market_feed import maybe_feed_resting_ask
+
+    maybe_feed_resting_ask(world, party, material, qty, price_per_unit_cents)
     _cross_incoming_ask(world, new_ask)
     return {"ok": True, "order_id": oid}
 
@@ -757,6 +782,10 @@ def place_buy_order(
             material=str(material),
             qty=int(qty),
         )
+    from realm.economy.market_feed import maybe_feed_named_large_buy, maybe_feed_resting_bid
+
+    maybe_feed_resting_bid(world, party, material, qty, max_price_per_unit_cents)
+    maybe_feed_named_large_buy(world, party, material, qty, max_price_per_unit_cents)
     _cross_incoming_bid(world, bid)
     return {"ok": True, "order_id": oid}
 
@@ -979,6 +1008,19 @@ def market_buy(
         seller=first_seller_str or "",
         sellers=",".join(sorted(seller_parties)) if seller_parties else "",
     )
+    if filled > 0 and first_seller_str:
+        from realm.economy.market_feed import maybe_feed_market_fill
+
+        unit_px = spent // filled if filled > 0 else 0
+        maybe_feed_market_fill(
+            world,
+            buyer=buyer,
+            seller=PartyId(first_seller_str),
+            material=material,
+            qty=filled,
+            unit_price_cents=max(1, unit_px),
+            fill_kind="buy",
+        )
     return {"ok": True, "filled": filled, "spent_cents": spent}
 
 
@@ -1088,6 +1130,17 @@ def sell_into_bids(
             material=str(material),
             qty=fill,
             received_cents=payment,
+        )
+        from realm.economy.market_feed import maybe_feed_market_fill
+
+        maybe_feed_market_fill(
+            world,
+            buyer=bid.party,
+            seller=seller,
+            material=material,
+            qty=fill,
+            unit_price_cents=int(unit_px),
+            fill_kind="sell_fill",
         )
         if _bid_fully_done(bid):
             bids.pop(idx)

@@ -158,6 +158,16 @@ def post_tender(
         duration_cycles=int(duration_cycles),
         bid_deadline_tick=int(record["bid_deadline_tick"]),
     )
+    from realm.economy.market_feed import feed_tender_posted
+
+    feed_tender_posted(
+        world,
+        posted_by=posted_by,
+        material=material,
+        qty_per_cycle=int(qty_per_cycle),
+        tender_id=tid,
+        duration_cycles=int(duration_cycles),
+    )
     return {"ok": True, "tender_id": tid, "bid_deadline_tick": int(record["bid_deadline_tick"])}
 
 
@@ -291,6 +301,17 @@ def _award_tender(world: World, record: dict[str, Any]) -> None:
         tender_id=str(record.get("id")),
         winner=str(winner_party),
         price_per_unit_cents=price,
+        contract_id=cid,
+    )
+    from realm.economy.market_feed import feed_tender_awarded
+
+    feed_tender_awarded(
+        world,
+        tender_id=str(record.get("id")),
+        posted_by=PartyId(str(record["posted_by"])),
+        winner=winner_party,
+        material=MaterialId(str(record["material"])),
+        price_cents=price,
         contract_id=cid,
     )
 

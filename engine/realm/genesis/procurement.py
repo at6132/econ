@@ -103,7 +103,7 @@ def _maintain_standing_procurement_bids(world: World) -> None:
     day = int(world.tick) // TICKS_PER_GAME_DAY
     for i, (material, _qty_per_cycle, _dur) in enumerate(_PROCUREMENT_BASKET):
         imb = demand_supply_imbalance_bps(world, material)
-        if imb <= 500:
+        if imb <= 200:
             continue
         buyer = buyers[(day + i) % len(buyers)]
         if world.ledger.balance(party_cash_account(buyer)) < 5_000:
@@ -131,7 +131,7 @@ def _maintain_standing_procurement_bids(world: World) -> None:
 
 def tick_npc_tender_posting(world: World) -> None:
     """Periodic: anchor buyers post supply tenders when they can fund them."""
-    if int(world.tick) <= 0 or int(world.tick) % (5 * TICKS_PER_GAME_DAY) != 0:
+    if int(world.tick) <= 0 or int(world.tick) % (3 * TICKS_PER_GAME_DAY) != 0:
         return
 
     buyers = _procurement_buyers(world)
