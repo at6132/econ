@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis.py": {
-    "mtime": 1781797758.7661078,
-    "ast_hash": "cdaecfa9ded38015565bf4df71cabe52",
+    "mtime": 1781896366.2830167,
+    "ast_hash": "f77926fcf3a95e64eb06d93b48870640",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\agents\\genesis_settlers.py": {
@@ -185,9 +185,9 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\api\\routes_analytics.py": {
-    "mtime": 1779374385.8696003,
-    "ast_hash": "2602ffe6da0efc7d0059d7e669986d08",
-    "semantic_hash": "2602ffe6da0efc7d0059d7e669986d08"
+    "mtime": 1781896370.7883353,
+    "ast_hash": "c2ce70eb08f37ea05b604679ee293a88",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\api\\routes_contracts.py": {
     "mtime": 1779026571.4445298,
@@ -305,8 +305,8 @@
     "semantic_hash": "f334cbbb04b64b1851d51cb9da30441f"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\contracts\\tenders.py": {
-    "mtime": 1780797162.8121254,
-    "ast_hash": "d843259bb395103aeb1028404ed89a6c",
+    "mtime": 1781896358.8979151,
+    "ast_hash": "d4c672ad2ea507da494d548d7583a544",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\contracts\\__init__.py": {
@@ -425,9 +425,9 @@
     "semantic_hash": "b1da624cea261e770360a13f94e857f7"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\economy\\markets.py": {
-    "mtime": 1779402197.0053644,
-    "ast_hash": "dfd736e7913d31fa9abfb094a18eaf21",
-    "semantic_hash": "dfd736e7913d31fa9abfb094a18eaf21"
+    "mtime": 1781896355.2855234,
+    "ast_hash": "f77f4bfff666692547bf5dbc081e5074",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\economy\\market_delivery.py": {
     "mtime": 1781885841.8627162,
@@ -440,9 +440,9 @@
     "semantic_hash": "ebd6edf1aad3187f0ffa9ad97257e9d1"
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\economy\\market_history.py": {
-    "mtime": 1779026571.4693546,
-    "ast_hash": "201830888a6a537bc638819c9e829524",
-    "semantic_hash": "201830888a6a537bc638819c9e829524"
+    "mtime": 1781896363.8297873,
+    "ast_hash": "71552304356a362f815982103bd11bd4",
+    "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\economy\\market_reserves.py": {
     "mtime": 1779375610.1699195,
@@ -2395,8 +2395,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\formation.py": {
-    "mtime": 1780797157.9871829,
-    "ast_hash": "2d7814b3ccc90f1a8b18490edd7cf965",
+    "mtime": 1781896359.730081,
+    "ast_hash": "a158b8fc9d117d4c67932d7c9f97f977",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\__init__.py": {
@@ -2440,8 +2440,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\deals\\bilateral_contracts.py": {
-    "mtime": 1780797078.6365938,
-    "ast_hash": "ec6ca3a86ba2b041be0a1e23404e5b8e",
+    "mtime": 1781896360.6931365,
+    "ast_hash": "16d2da126fffad491505289b40ce131c",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\deals\\market_tactics.py": {
@@ -2530,8 +2530,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\realm\\genesis\\procurement.py": {
-    "mtime": 1781889418.9988499,
-    "ast_hash": "d91a601152a65c88441f007d2a9b25df",
+    "mtime": 1781896364.466104,
+    "ast_hash": "5fdd6b6a672e5d68a18e0200eb6355b1",
     "semantic_hash": ""
   },
   "C:\\Users\\avita\\econ\\engine\\pytest-sustain-90.txt": {
@@ -2642,6 +2642,31 @@
   "C:\\Users\\avita\\econ\\engine\\year-150-postopt.txt": {
     "mtime": 1781888339.644696,
     "ast_hash": "ecdfd2b23585738c32e37dc1ffc73b08",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\year_report_150_market_loops.json": {
+    "mtime": 1781894542.9508877,
+    "ast_hash": "637ea70f27c34801d5314278d503cca1",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\corporations\\equity_offering.py": {
+    "mtime": 1781896339.7268317,
+    "ast_hash": "95b7d014f7f186e0554c01981632b6d2",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\realm\\economy\\market_feed.py": {
+    "mtime": 1781896327.314744,
+    "ast_hash": "3c56960d2f30baac28b2c856305b5ace",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\tests\\economy\\test_market_feed_and_ipo.py": {
+    "mtime": 1781896545.7386675,
+    "ast_hash": "57b3a986544de0e566ee97b8d358b9d1",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\avita\\econ\\engine\\year-150-market-loops.txt": {
+    "mtime": 1781894542.9538858,
+    "ast_hash": "4990fb8d88c70517b4baa3b80db4a290",
     "semantic_hash": ""
   }
 }
