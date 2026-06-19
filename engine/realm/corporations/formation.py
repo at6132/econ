@@ -170,6 +170,16 @@ def _form_company(world: World, party_a: PartyId, party_b: PartyId) -> Company:
         party_a=str(party_a),
         party_b=str(party_b),
     )
+    log_event(
+        world,
+        "world_feed",
+        f"New company formed: {company.name} ({party_a} + {party_b}).",
+        feed_source="company_formed",
+        company_id=company_id,
+    )
+    from realm.corporations.equity_offering import schedule_company_ipo
+
+    schedule_company_ipo(world, company, party_a)
     from realm.agents.llm_voice import generate_settler_voice
 
     def _dn(p: PartyId) -> str:

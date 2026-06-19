@@ -86,7 +86,12 @@ func _make_row(d: Dictionary, kind: String, alt: bool) -> PanelContainer:
 	icon.custom_minimum_size.x = 28
 	row.add_child(icon)
 	var msg := Label.new()
-	msg.text = str(d.get("message", ""))
+	var base_msg: String = str(d.get("message", ""))
+	var party_s: String = str(d.get("party", d.get("buyer", d.get("seller", ""))))
+	var mat_s: String = str(d.get("material", ""))
+	if party_s != "" and mat_s != "" and party_s not in base_msg:
+		base_msg += "  [%s · %s]" % [WorldState.party_label(party_s), mat_s.replace("_", " ")]
+	msg.text = base_msg
 	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	msg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	msg.add_theme_color_override("font_color", RealmColors.TEXT)

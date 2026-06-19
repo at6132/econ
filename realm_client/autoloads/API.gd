@@ -1078,6 +1078,19 @@ func post_tender_bid(tender_id: String, price_cents: int, cb: Callable, party: S
 	)
 
 
+func get_equity_offerings(cb: Callable) -> void:
+	get_request("/equity/offerings", cb)
+
+
+func post_equity_accept(offering_id: String, shares: int, cb: Callable, party: String = "player") -> void:
+	post_request(
+		"/equity/accept?offering_id=%s&party=%s&shares=%d"
+		% [offering_id.uri_encode(), party.uri_encode(), int(shares)],
+		{},
+		cb,
+	)
+
+
 # ── Contracts ───────────────────────────────────────────────────────────────
 
 func propose_supply_contract(params: Dictionary, cb: Callable) -> void:

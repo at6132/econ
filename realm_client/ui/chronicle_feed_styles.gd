@@ -21,12 +21,23 @@ const KIND_STYLE: Dictionary = {
 	"price_spike": {"icon": "📈", "color": Color(1.0, 0.7, 0.3), "cat": "Market"},
 	"shortage": {"icon": "⚠", "color": Color(1.0, 0.6, 0.2), "cat": "Market"},
 	"price_alert": {"icon": "🔔", "color": Color(0.85, 0.72, 0.2), "cat": "Market"},
+	"market_bid": {"icon": "📥", "color": Color(0.55, 0.85, 1.0), "cat": "Market"},
+	"market_ask": {"icon": "📤", "color": Color(0.65, 1.0, 0.75), "cat": "Market"},
+	"market_fill": {"icon": "🤝", "color": Color(0.85, 0.72, 0.2), "cat": "Market"},
+	"large_buy": {"icon": "🐋", "color": Color(1.0, 0.55, 0.35), "cat": "Market"},
+	"tender_posted": {"icon": "📋", "color": Color(0.7, 0.85, 1.0), "cat": "Contracts"},
+	"tender_awarded": {"icon": "✅", "color": Color(0.55, 1.0, 0.65), "cat": "Contracts"},
+	"bilateral_contract": {"icon": "📝", "color": Color(0.75, 0.85, 1.0), "cat": "Contracts"},
+	"equity_ipo": {"icon": "🏛", "color": Color(0.85, 0.72, 0.2), "cat": "Banking"},
+	"equity_fill": {"icon": "💹", "color": Color(0.55, 1.0, 0.65), "cat": "Banking"},
+	"company_formed": {"icon": "🏢", "color": Color(0.75, 0.85, 1.0), "cat": "World"},
+	"supply_capacity": {"icon": "🏭", "color": Color(0.65, 0.9, 0.75), "cat": "Market"},
 	"weekly_digest": {"icon": "📊", "color": Color(0.7, 0.85, 1.0), "cat": "World"},
 	"world_feed": {"icon": "🌍", "color": Color(0.75, 0.75, 0.8), "cat": "World"},
 }
 
 const FILTER_CATEGORIES: PackedStringArray = [
-	"All", "World", "Market", "Population", "Banking", "Discovery",
+	"All", "World", "Market", "Population", "Banking", "Discovery", "Contracts",
 ]
 
 const MY_EVENT_FILTERS: PackedStringArray = [

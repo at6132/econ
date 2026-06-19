@@ -286,13 +286,23 @@ func _refresh_order_book() -> void:
 	if sorted_asks.is_empty():
 		best_ask_label.text = "Best ask: —"
 	else:
-		best_ask_label.text = "Best ask: %s" % WorldState.format_money(
-			int((sorted_asks[0] as Dictionary).get("price_per_unit_cents", 0))
-		)
+		var ask_depth := 0
+		for a in sorted_asks:
+			ask_depth += int((a as Dictionary).get("qty", 0))
+		best_ask_label.text = "Best ask: %s  ·  depth %d" % [
+			WorldState.format_money(int((sorted_asks[0] as Dictionary).get("price_per_unit_cents", 0))),
+			ask_depth,
+		]
 	if sorted_bids.is_empty():
 		best_bid_label.text = "Best bid: —"
 	else:
-		best_bid_label.text = "Best bid: %s" % WorldState.format_money(_bid_price(sorted_bids[0] as Dictionary))
+		var bid_depth := 0
+		for b in sorted_bids:
+			bid_depth += int((b as Dictionary).get("qty", 0))
+		best_bid_label.text = "Best bid: %s  ·  depth %d" % [
+			WorldState.format_money(_bid_price(sorted_bids[0] as Dictionary)),
+			bid_depth,
+		]
 
 	_refresh_sell_from_plot_options()
 	_refresh_buy_deliver_options()

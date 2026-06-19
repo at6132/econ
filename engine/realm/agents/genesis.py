@@ -23,6 +23,7 @@ from realm.agents.genesis_settlers import (
 )
 from realm.agents.settler_identity import tick_settler_world_models
 from realm.corporations.acquisitions import tick_acquisition_offers
+from realm.corporations.equity_offering import tick_equity_offerings
 from realm.corporations.formation import tick_partnership_proposals
 from realm.infrastructure.npc_self_roads import tick_npc_self_roads
 from realm.intelligence.market_intel import (
@@ -82,6 +83,7 @@ def tick_genesis_agents(world: World) -> None:
     tick_genesis_settler_lifecycle(world)
     tick_settler_world_models(world)
     tick_partnership_proposals(world)
+    tick_equity_offerings(world)
     tick_acquisition_offers(world)
     tick_knowledge_decay(world)
     tick_scout_actions(world)
@@ -91,6 +93,9 @@ def tick_genesis_agents(world: World) -> None:
     tick_settler_idle_recovery(world)
     tick_npc_self_roads(world)
     tick_genesis_standing_demand(world)
+    from realm.economy.market_feed import tick_market_book_refresh
+
+    tick_market_book_refresh(world)
     tick_settler_perishable_sales(world)
     tick_settler_margin_review(world)
     tick_researcher_experiments(world)

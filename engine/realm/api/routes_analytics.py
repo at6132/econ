@@ -161,6 +161,28 @@ def post_tender_bid(
     return dict(r)
 
 
+@router.get("/equity/offerings")
+def get_equity_offerings() -> dict:
+    from realm.corporations.equity_offering import list_open_equity_offerings
+
+    rows = list_open_equity_offerings(_state.WORLD)
+    return {"ok": True, "tick": _state.WORLD.tick, "offerings": rows}
+
+
+@router.post("/equity/accept")
+def post_equity_accept(
+    party: Annotated[str, Query()],
+    offering_id: Annotated[str, Query()],
+    shares: Annotated[int, Query()],
+) -> dict:
+    from realm.corporations.equity_offering import accept_equity_offering
+
+    r = accept_equity_offering(_state.WORLD, PartyId(party), offering_id, shares)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=str(r.get("reason", "error")))
+    return dict(r)
+
+
 @router.post("/market/sell")
 def post_market_sell(
     party: Annotated[str, Query()],

@@ -42,7 +42,46 @@ func _populate_material_select() -> void:
 
 func _refresh() -> void:
 	_load_signals()
+	_load_open_tenders()
 	_load_alerts()
+
+
+func _load_open_tenders() -> void:
+	API.get_tenders(_on_tenders_loaded)
+
+
+func _on_tenders_loaded(data: Dictionary) -> void:
+	var tenders: Variant = data.get("tenders", [])
+	if not (tenders is Array):
+		return
+	var open_count := 0
+	for t in tenders as Array:
+		if t is Dictionary and str((t as Dictionary).get("status", "")) == "open":
+			open_count += 1
+	if open_count <= 0:
+		return
+	var hdr := Label.new()
+	hdr.text = "Open procurement tenders: %d (see Tenders panel to bid)" % open_count
+	hdr.add_theme_font_size_override("font_size", 12)
+	hdr.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	signals_list.add_child(hdr)
+	for t in tenders as Array:
+		if not (t is Dictionary):
+			continue
+		var td: Dictionary = t as Dictionary
+		if str(td.get("status", "")) != "open":
+			continue
+		var row := Label.new()
+		row.text = "%s wants %s × %d/cycle — deadline tick %d" % [
+			WorldState.party_label(str(td.get("posted_by", "?"))),
+			str(td.get("material", "?")).replace("_", " "),
+			int(td.get("qty_per_cycle", 0)),
+			int(td.get("bid_deadline_tick", 0)),
+		]
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_theme_font_size_override("font_size", 10)
+		row.add_theme_color_override("font_color", Color(0.82, 0.88, 0.95))
+		signals_list.add_child(row)
 
 
 func _load_signals() -> void:
