@@ -16,6 +16,7 @@ from realm.core.ids import MaterialId, PartyId
 from realm.core.ledger import party_cash_account
 from realm.core.time_scale import TICKS_PER_GAME_DAY
 from realm.economy.markets import market_buy, place_buy_order
+from realm.population.stores import store_party_for_town
 from realm.world import World
 
 _TICKS_PER_GAME_WEEK: Final[int] = 7 * TICKS_PER_GAME_DAY
@@ -35,6 +36,8 @@ _STOREKEEPER_PARTY: Final[PartyId] = PartyId("genesis_storekeeper")
 _TARGET_STOCK_BY_MATERIAL: Final[dict[str, int]] = {
     str(m): qty for m, qty, _ in _PROCUREMENT_BASKET
 }
+_STANDING_BID_MIN_DEPTH: Final[int] = 12
+_STANDING_BID_QTY: Final[int] = 20
 
 
 def _procurement_buyers(world: World) -> list[PartyId]:
@@ -48,6 +51,10 @@ def _procurement_buyers(world: World) -> list[PartyId]:
         pass
     if _STOREKEEPER_PARTY in world.parties:
         out.append(_STOREKEEPER_PARTY)
+    for town in world.towns.values():
+        sp = store_party_for_town(town.town_id)
+        if sp in world.parties and sp not in out:
+            out.append(sp)
     for p in sorted(world.parties, key=str):
         s = str(p)
         if s.startswith("pop_hub") and p not in out:
@@ -79,6 +86,47 @@ def _restock_party_material(world: World, buyer: PartyId, material: MaterialId) 
     ceiling, qty = decision
     place_buy_order(world, buyer, material, qty, max(4, ceiling - 2))
     market_buy(world, buyer, material, qty, max_price_per_unit_cents=ceiling)
+
+
+def _maintain_standing_procurement_bids(world: World) -> None:
+    """Keep visible bid depth on staples when the book shows demand pressure."""
+    from realm.economy.market_signals import (
+        bid_depth_units,
+        demand_supply_imbalance_bps,
+        scarcity_premium_bps,
+    )
+    from realm.economy.pricing import exchange_ask_cents
+
+    buyers = _procurement_buyers(world)
+    if not buyers:
+        return
+    day = int(world.tick) // TICKS_PER_GAME_DAY
+    for i, (material, _qty_per_cycle, _dur) in enumerate(_PROCUREMENT_BASKET):
+        imb = demand_supply_imbalance_bps(world, material)
+        if imb <= 500:
+            continue
+        buyer = buyers[(day + i) % len(buyers)]
+        if world.ledger.balance(party_cash_account(buyer)) < 5_000:
+            continue
+        party_depth = sum(
+            int(b.qty)
+            for b in world.market_bids_by_material.get(str(material), [])
+            if b.party == buyer
+        )
+        if party_depth >= _STANDING_BID_MIN_DEPTH:
+            continue
+        asks = world.market_asks_by_material.get(str(material), [])
+        ref = (
+            min(a.price_per_unit_cents for a in asks)
+            if asks
+            else exchange_ask_cents(material, world=world)
+        )
+        premium = 800 + max(0, imb // 4) + scarcity_premium_bps(world, material)
+        px = max(4, int(ref * (10_000 + premium) // 10_000))
+        qty = min(_STANDING_BID_QTY, _STANDING_BID_MIN_DEPTH - party_depth + 8)
+        if bid_depth_units(world, material) < _STANDING_BID_MIN_DEPTH:
+            qty = max(qty, _STANDING_BID_MIN_DEPTH)
+        place_buy_order(world, buyer, material, qty, px)
 
 
 def tick_npc_tender_posting(world: World) -> None:
@@ -142,7 +190,7 @@ def _ensure_tool_asks_on_exchange(world: World) -> None:
 
 def _collect_npc_fob_pickups(world: World, buyers: list[PartyId]) -> None:
     """Anchor buyers collect FOB lots they paid for (cross-island coal from inland miners)."""
-    from realm.economy.market_delivery import _fob_ids_for_buyer, pickup_fob
+    from realm.economy.market_delivery import collect_fob_pickups_for_buyer
 
     buyer_set = set(buyers)
     try:
@@ -152,8 +200,7 @@ def _collect_npc_fob_pickups(world: World, buyers: list[PartyId]) -> None:
     except ImportError:
         pass
     for buyer in buyer_set:
-        for pid in list(_fob_ids_for_buyer(world, buyer)):
-            pickup_fob(world, buyer, pid)
+        collect_fob_pickups_for_buyer(world, buyer)
 
 
 def tick_genesis_standing_demand(world: World) -> None:
@@ -166,6 +213,7 @@ def tick_genesis_standing_demand(world: World) -> None:
         return
 
     _ensure_tool_asks_on_exchange(world)
+    _maintain_standing_procurement_bids(world)
 
     day = int(world.tick) // TICKS_PER_GAME_DAY
     for i, (material, _qty_per_cycle, _dur) in enumerate(_PROCUREMENT_BASKET):
