@@ -32,6 +32,7 @@ DDP_BREACH_MIN_CENTS: int = 500
 # Uncollected FOB rows are capped so per-tick scans stay bounded on long runs.
 FOB_PICKUP_MAX_ROWS: int = 4_000
 FOB_PICKUP_MAX_AGE_TICKS: int = 14 * 1_440  # 14 game-days
+FOB_PICKUP_ATTEMPTS_PER_TICK: int = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,9 +139,12 @@ def _fob_by_id(world: World) -> dict[str, MarketFobPickup]:
     }
     world.scenario_state["_fob_pickup_by_id"] = rebuilt
     by_buyer: dict[str, list[str]] = {}
+    by_seller: dict[str, list[str]] = {}
     for p in world.market_fob_pickups:
         by_buyer.setdefault(str(p.buyer), []).append(str(p.pickup_id))
+        by_seller.setdefault(str(p.seller), []).append(str(p.pickup_id))
     world.scenario_state["_fob_pickup_ids_by_buyer"] = by_buyer
+    world.scenario_state["_fob_pickup_ids_by_seller"] = by_seller
     return rebuilt
 
 
@@ -150,12 +154,42 @@ def _fob_ids_for_buyer(world: World, buyer: PartyId) -> list[str]:
     return list(raw.get(str(buyer), ()))
 
 
+def _fob_ids_for_seller(world: World, seller: PartyId) -> list[str]:
+    _fob_by_id(world)
+    raw = world.scenario_state.get("_fob_pickup_ids_by_seller") or {}
+    return list(raw.get(str(seller), ()))
+
+
+def collect_fob_pickups_for_buyer(
+    world: World,
+    buyer: PartyId,
+    *,
+    max_attempts: int = FOB_PICKUP_ATTEMPTS_PER_TICK,
+) -> bool:
+    """Try up to ``max_attempts`` pending pickups (oldest first). Returns True if any succeeded."""
+    ids = _fob_ids_for_buyer(world, buyer)
+    if not ids:
+        return False
+    by_id = _fob_by_id(world)
+    ordered = sorted(
+        ids,
+        key=lambda pid: int(getattr(by_id.get(pid), "match_tick", 0)),
+    )
+    limit = max(1, int(max_attempts))
+    for pid in ordered[:limit]:
+        if pickup_fob(world, buyer, pid).get("ok"):
+            return True
+    return False
+
+
 def _register_fob_pickup(world: World, row: MarketFobPickup) -> None:
     world.market_fob_pickups.append(row)
     by_id = _fob_by_id(world)
     by_id[str(row.pickup_id)] = row
     by_buyer = world.scenario_state.setdefault("_fob_pickup_ids_by_buyer", {})
     by_buyer.setdefault(str(row.buyer), []).append(str(row.pickup_id))
+    by_seller = world.scenario_state.setdefault("_fob_pickup_ids_by_seller", {})
+    by_seller.setdefault(str(row.seller), []).append(str(row.pickup_id))
 
 
 def _unregister_fob_pickup(world: World, pickup_id: str) -> MarketFobPickup | None:
@@ -167,6 +201,10 @@ def _unregister_fob_pickup(world: World, pickup_id: str) -> MarketFobPickup | No
     ids = buyer_ids.get(str(row.buyer))
     if ids is not None and pickup_id in ids:
         ids.remove(pickup_id)
+    seller_ids = world.scenario_state.get("_fob_pickup_ids_by_seller") or {}
+    sids = seller_ids.get(str(row.seller))
+    if sids is not None and pickup_id in sids:
+        sids.remove(pickup_id)
     world.market_fob_pickups = [
         p for p in world.market_fob_pickups if str(p.pickup_id) != str(pickup_id)
     ]
@@ -607,8 +645,11 @@ def fob_pickups_for_party(world: World, party: PartyId) -> list[dict]:
                 "role": "buyer",
             }
         )
-    for p in world.market_fob_pickups:
-        if str(p.pickup_id) in seen or p.seller != party:
+    for pid in _fob_ids_for_seller(world, party):
+        if pid in seen:
+            continue
+        p = by_id.get(pid)
+        if p is None:
             continue
         out.append(
             {
@@ -621,7 +662,7 @@ def fob_pickups_for_party(world: World, party: PartyId) -> list[dict]:
                 "quality": p.quality,
                 "match_tick": int(p.match_tick),
                 "order_id": p.order_id,
-                "role": "buyer" if p.buyer == party else "seller",
+                "role": "seller",
             }
         )
     return out
