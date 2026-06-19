@@ -100,6 +100,7 @@ STORE_PARTY_STARTING_CASH_CENTS: Final[int] = 500_000
 _STORE_REORDER_THRESHOLD: Final[int] = 15
 _STORE_BID_QTY: Final[int] = 30
 _STORE_BID_PREMIUM_BPS: Final[int] = 500
+_STORE_REVENUE_REINVEST_BPS: Final[int] = 6_500  # 65 % of yesterday shelf revenue → bids
 
 STORE_REORDER_MATERIALS: Final[tuple[str, ...]] = (
     "grain",
@@ -131,6 +132,7 @@ __all__ = [
     "withdraw_store_stock",
     "tick_laborer_spending",
     "tick_store_restock",
+    "tick_store_revenue_reinvest",
     "stores_for_town",
     "store_inventory_qty",
     "store_price_cents",
@@ -537,7 +539,9 @@ def _maybe_post_store_reorder_bid(
     bids = world.market_bids_by_material.get(material_id, [])
     existing = [b for b in bids if b.party == store_party]
     if existing:
-        return
+        depth = sum(int(b.qty) for b in existing)
+        if depth >= _STORE_BID_QTY:
+            return
     asks = world.market_asks_by_material.get(material_id, [])
     if asks:
         ref_price = min(a.price_per_unit_cents for a in asks)
@@ -545,7 +549,15 @@ def _maybe_post_store_reorder_bid(
         from realm.economy.pricing import exchange_ask_cents
 
         ref_price = exchange_ask_cents(MaterialId(material_id))
-    bid_price = int(ref_price * (1 + _STORE_BID_PREMIUM_BPS / 10_000))
+    from realm.economy.market_signals import demand_supply_imbalance_bps, scarcity_premium_bps
+
+    mid = MaterialId(material_id)
+    premium = (
+        _STORE_BID_PREMIUM_BPS
+        + max(0, demand_supply_imbalance_bps(world, mid) // 3)
+        + scarcity_premium_bps(world, mid)
+    )
+    bid_price = int(ref_price * (10_000 + premium) // 10_000)
     store_acct = party_cash_account(store_party)
     available = world.ledger.balance(store_acct)
     max_affordable = available // bid_price if bid_price > 0 else 0
@@ -555,6 +567,86 @@ def _maybe_post_store_reorder_bid(
     from realm.economy.markets import place_buy_order
 
     place_buy_order(world, store_party, MaterialId(material_id), qty, bid_price)
+
+
+def tick_store_revenue_reinvest(world: World) -> None:
+    """Reinvest prior-day shelf revenue into wholesale buy bids (closes labor→store loop)."""
+    from realm.population.laborers import TICKS_PER_GAME_DAY
+
+    if int(world.tick) % TICKS_PER_GAME_DAY != 0 or not world.towns:
+        return
+    if not world.store_revenue_today:
+        return
+    from realm.economy.markets import place_buy_order
+    from realm.economy.market_signals import demand_supply_imbalance_bps, scarcity_premium_bps
+    from realm.economy.pricing import exchange_ask_cents
+
+    for town in world.towns.values():
+        store_party = store_party_for_town(town.town_id)
+        if store_party not in world.parties:
+            continue
+        sales_by_mat: dict[str, int] = {}
+        for pid in stores_for_town(world, town.town_id):
+            if int(world.store_revenue_today.get(str(pid), 0)) <= 0:
+                continue
+            for mat_s, units in _store_traffic_sales(world, str(pid)).items():
+                if units <= 0:
+                    continue
+                sales_by_mat[mat_s] = sales_by_mat.get(mat_s, 0) + int(units)
+        if not sales_by_mat:
+            continue
+        acct = party_cash_account(store_party)
+        cash = world.ledger.balance(acct)
+        town_rev = sum(
+            int(world.store_revenue_today.get(str(pid), 0))
+            for pid in stores_for_town(world, town.town_id)
+        )
+        budget_pool = max(500, town_rev * _STORE_REVENUE_REINVEST_BPS // 10_000)
+        for mat_s in sorted(sales_by_mat.keys()):
+            if mat_s not in STORE_REORDER_MATERIALS:
+                continue
+            mid = MaterialId(mat_s)
+            imb = demand_supply_imbalance_bps(world, mid)
+            if imb <= 0:
+                continue
+            asks = world.market_asks_by_material.get(mat_s, [])
+            ref_price = (
+                min(a.price_per_unit_cents for a in asks)
+                if asks
+                else exchange_ask_cents(mid, world=world)
+            )
+            premium = (
+                _STORE_BID_PREMIUM_BPS
+                + max(0, imb // 2)
+                + scarcity_premium_bps(world, mid)
+            )
+            bid_price = max(4, int(ref_price * (10_000 + premium) // 10_000))
+            budget = min(cash, budget_pool)
+            qty = min(_STORE_BID_QTY, budget // bid_price if bid_price > 0 else 0)
+            if qty < 1:
+                continue
+            place_buy_order(world, store_party, mid, qty, bid_price)
+            spent = qty * bid_price
+            cash -= spent
+            budget_pool = max(0, budget_pool - spent)
+
+
+def _store_traffic_sales(world: World, plot_id: str) -> dict[str, int]:
+    """Units sold yesterday (rolling history tail) for reinvest targeting."""
+    history = world.scenario_state.get("store_sales_history", {})
+    plot_history: list = history.get(plot_id, [])
+    if not plot_history:
+        return {}
+    from realm.population.laborers import TICKS_PER_GAME_DAY
+
+    game_day = int(world.tick) // TICKS_PER_GAME_DAY
+    entry = next((e for e in plot_history if int(e.get("day", -1)) == game_day - 1), None)
+    if entry is None and plot_history:
+        entry = plot_history[-1]
+    if entry is None:
+        return {}
+    raw = entry.get("sales") or {}
+    return {str(k): int(v) for k, v in raw.items() if int(v) > 0}
 
 
 def _deliver_store_party_inventory_to_shelf(world: World, town_id: str) -> None:
@@ -588,11 +680,13 @@ def _store_party_for_plot(world: World, plot_id: str) -> PartyId:
 
 
 def tick_store_restock(world: World) -> None:
-    """Daily: post exchange bids for low stock and shelve filled bid inventory."""
+    """Daily: reinvest shelf revenue, post exchange bids for low stock, shelve inventory."""
     if int(world.tick) % STORE_RESTOCK_INTERVAL_TICKS != 0:
         return
     if not world.towns:
         return
+
+    tick_store_revenue_reinvest(world)
 
     for town in world.towns.values():
         _deliver_store_party_inventory_to_shelf(world, town.town_id)
