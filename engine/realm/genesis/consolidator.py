@@ -231,62 +231,29 @@ def _ev_seller(ev: dict) -> str:
 
 
 def _trade_volume_by_material_window(world: World, *, window_ticks: int) -> dict[str, int]:
-    """Sum traded quantity per material in the recent window (from event_log).
+    from realm.economy.trade_volume_index import trade_volume_by_material_window
 
-    We prefer ``market_match`` events (one per fill) and ignore ``market_buy``
-    aggregates when matches for the same material exist in the window, to
-    avoid double-counting.
-    """
-    cutoff = int(world.tick) - int(window_ticks)
-    totals: dict[str, int] = {}
-    for ev in reversed(world.event_log):
-        if int(ev.get("tick", 0)) < cutoff:
-            break
-        if ev.get("kind") not in _TRADE_KINDS:
-            continue
-        mid = ev.get("material")
-        if not mid:
-            continue
-        qty = _ev_trade_qty(ev)
-        if qty <= 0:
-            continue
-        totals[str(mid)] = totals.get(str(mid), 0) + qty
-    return totals
+    return trade_volume_by_material_window(world, window_ticks=window_ticks)
 
 
 def _trade_volume_by_party_for_material(
     world: World, material: str, *, window_ticks: int
 ) -> dict[str, int]:
-    """Per-seller trade volume for ``material`` in the window."""
-    cutoff = int(world.tick) - int(window_ticks)
-    totals: dict[str, int] = {}
-    for ev in reversed(world.event_log):
-        if int(ev.get("tick", 0)) < cutoff:
-            break
-        if ev.get("kind") not in _TRADE_KINDS:
-            continue
-        if str(ev.get("material") or "") != material:
-            continue
-        qty = _ev_trade_qty(ev)
-        if qty <= 0:
-            continue
-        seller = _ev_seller(ev)
-        if not seller:
-            continue
-        totals[seller] = totals.get(seller, 0) + qty
-    return totals
+    from realm.economy.trade_volume_index import trade_volume_by_party_for_material
+
+    return trade_volume_by_party_for_material(world, material, window_ticks=window_ticks)
 
 
 def consolidator_market_share_bps(world: World, material: MaterialId) -> int:
     """Kessler's share of recent trade volume for ``material`` (bps; 10_000 = 100 %)."""
-    per_party = _trade_volume_by_party_for_material(
-        world, str(material), window_ticks=_VOLUME_WINDOW_TICKS
+    from realm.economy.trade_volume_index import party_trade_share_bps
+
+    return party_trade_share_bps(
+        world,
+        str(CONSOLIDATOR_PARTY_ID),
+        str(material),
+        window_ticks=_VOLUME_WINDOW_TICKS,
     )
-    total = sum(per_party.values())
-    if total <= 0:
-        return 0
-    mine = per_party.get(str(CONSOLIDATOR_PARTY_ID), 0)
-    return (mine * 10_000) // total
 
 
 def _recipe_for_output(material: MaterialId) -> tuple[str, dict] | None:

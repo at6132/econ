@@ -111,33 +111,9 @@ def _producer_volumes(
     world: World, window_ticks: int
 ) -> dict[str, dict[str, int]]:
     """``{material: {seller_party: qty}}`` over the window using match events."""
-    cutoff = max(0, int(world.tick) - int(window_ticks))
-    out: dict[str, dict[str, int]] = {}
-    for ev in reversed(world.event_log):
-        if int(ev.get("tick", 0)) < cutoff:
-            break
-        if str(ev.get("kind", "")) != "market_match":
-            continue
-        material = str(ev.get("material") or "")
-        seller = str(ev.get("seller") or "")
-        if not material or not seller:
-            continue
-        qty = 0
-        for k in ("qty", "filled", "fill_qty"):
-            v = ev.get(k)
-            if v is None:
-                continue
-            try:
-                qty = int(v)
-            except (TypeError, ValueError):
-                qty = 0
-            if qty > 0:
-                break
-        if qty <= 0:
-            continue
-        bucket = out.setdefault(material, {})
-        bucket[seller] = bucket.get(seller, 0) + qty
-    return out
+    from realm.economy.trade_volume_index import match_seller_volumes_by_material_window
+
+    return match_seller_volumes_by_material_window(world, window_ticks=window_ticks)
 
 
 def _label_party(world: World, party: PartyId) -> str:

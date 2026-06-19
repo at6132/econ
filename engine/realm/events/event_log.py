@@ -22,6 +22,10 @@ def log_event(world: World, kind: str, message: str, **fields: Any) -> None:
     world.event_log.append(row)
     if len(world.event_log) > _MAX_EVENTS:
         world.event_log = world.event_log[-_MAX_EVENTS:]
+    if kind in ("market_match", "market_buy", "market_sell"):
+        from realm.economy.trade_volume_index import note_trade_event
+
+        note_trade_event(world, row)
     if kind == "world_feed":
         world.world_feed_log.append(copy.deepcopy(row))
         if len(world.world_feed_log) > _MAX_WORLD_FEED_EVENTS:
