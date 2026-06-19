@@ -186,10 +186,10 @@ def _parse_recent_events(world: World) -> ParsedEvents:
     bid_prices: dict[str, list[tuple[int, int]]] = {}
     list_parties_by_material: dict[str, set[str]] = {}
 
-    for ev in world.event_log:
+    for ev in reversed(world.event_log):
         tick = int(ev.get("tick", 0))
         if tick < cutoff:
-            continue
+            break
         kind = str(ev.get("kind", ""))
         if kind not in _EVENT_KINDS:
             continue

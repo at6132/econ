@@ -145,17 +145,28 @@ def tick_genesis_feed_tick_scan(world: World) -> None:
     _emit_first_building_opened_this_tick(world)
 
 
+def _buildings_completing_at_tick(world: World, tick: int) -> list[dict]:
+    """Cached once per tick — avoids rescanning ``plot_buildings`` in multiple hooks."""
+    from realm.world.runtime_cache import bucket
+
+    cache = bucket(world).get("_buildings_completing_at")
+    if isinstance(cache, dict) and int(cache.get("tick", -1)) == int(tick):
+        return list(cache.get("rows") or [])
+    rows = [
+        b
+        for b in world.plot_buildings
+        if b.get("completes_at_tick") is not None and int(b["completes_at_tick"]) == int(tick)
+    ]
+    bucket(world)["_buildings_completing_at"] = {"tick": int(tick), "rows": rows}
+    return rows
+
+
 def _emit_first_building_opened_this_tick(world: World) -> None:
     """Headline when a workshop type becomes operational for the first time in the world."""
     if world.scenario_id != "genesis":
         return
     t = world.tick
-    for b in world.plot_buildings:
-        c = b.get("completes_at_tick")
-        if c is None:
-            continue
-        if int(c) != t:
-            continue
+    for b in _buildings_completing_at_tick(world, t):
         if not building_operational(b, at_tick=t):
             continue
         bid = str(b.get("building_id", ""))
